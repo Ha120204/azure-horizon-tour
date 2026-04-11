@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* 1. Cấu hình bộ màu Azure Horizon */
+@theme inline {
+  --color-primary: #003f87;
+  --color-primary-container: #0056b3;
+  --color-on-primary: #ffffff;
+  --color-surface: #f9f9ff;
+  --color-on-surface: #191c21;
+  --color-surface-container-low: #f2f3fc;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-surface-variant: #424752;
+  --color-outline: #727784;
+  --color-outline-variant: #c2c6d4;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-error: #ba1a1a;
+  --color-secondary-fixed: #ffdcc3;
+
+  --color-hero-gradient-from: #003f87;
+  --color-hero-gradient-to: #0056b3;
+  --color-secondary-container: #fd8b00;
+
+  --font-headline: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-label: 'Inter', sans-serif;
+}
+
+/* 2. Đưa CSS tĩnh vào đây */
+@layer utilities {
+
+  .editorial-shadow,
+  .ambient-glow {
+    box-shadow: 0 8px 32px rgba(25, 28, 33, 0.04);
+  }
+
+  /*Trang chủ*/
+  .ambient-shadow {
+    box-shadow: 0 8px 32px 0 rgba(25, 28, 33, 0.04);
+  }
+
+  .editorial-gradient {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-container) 100%);
+  }
+
+  /* Tạo class gradient để dùng cho nút Create Account */
+  .hero-gradient {
+    background: linear-gradient(135deg, var(--color-hero-gradient-from) 0%, var(--color-hero-gradient-to) 100%);
+  }
+
+  .editorial-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 2rem;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-container) 100%);
+  }
+
+  .editorial-shadow {
+    box-shadow: 0 8px 32px -4px rgba(25, 28, 33, 0.04);
+  }
+
+  .hero-gradient {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-container) 100%);
+  }
+}

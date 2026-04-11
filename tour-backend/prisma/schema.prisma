@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+// Thiết kế bảng User
+model User {
+  id        Int      @id @default(autoincrement()) 
+  email     String   @unique                        
+  password  String                                  
+  fullName  String
+  phone     String?                                 
+  avatarUrl String?
+  role      Role     @default(CUSTOMER)             
+  createdAt DateTime @default(now())               
+  updatedAt DateTime @updatedAt                     
+  bookings  Booking[]                               
+}
+model Destination {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique 
+  slug        String?  @unique // URL thân thiện (vd: da-nang)
+  description String?  @db.Text
+  imageUrl    String?  
+  region      String?  
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tours       Tour[]   
+}
+// Bảng Tour du lịch
+model Tour {
+  id             Int         @id @default(autoincrement())
+  tourCode       String      @unique @default(uuid())
+  name           String
+  description    String      @db.Text
+  price          Float
+  
+  destinationId  Int
+  destination    Destination @relation(fields: [destinationId], references: [id])
+  
+  startDate      DateTime
+  duration       String      @default("Chưa xác định")
+  availableSeats Int
+  imageUrl       String?
+  
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  bookings       Booking[]
+}
+
+// --- CÁC ENUM CHO ĐẶT TOUR ---
+enum BookingStatus {
+  PENDING   // Chờ xác nhận
+  CONFIRMED // Đã chốt
+  CANCELLED // Đã hủy
+}
+
+enum PaymentStatus {
+  UNPAID      // Chưa thanh toán
+  PROCESSING  // Đang chờ VNPAY xử lý
+  PAID        // Đã thanh toán thành công
+  FAILED      // Thanh toán thất bại
+}
+
+// --- BẢNG ĐẶT TOUR (BOOKING) ---
+model Booking {
+  id             Int           @id @default(autoincrement())
+  bookingCode    String        @unique @default(uuid()) // [BỔ SUNG]: Mã Đơn Hàng (VD: BKG-260324-X9F2)
+  userId         Int
+  tourId         Int
+  numberOfPeople Int
+  totalPrice     Float
+  
+  status         BookingStatus @default(PENDING)
+  paymentStatus  PaymentStatus @default(UNPAID)
+  vnpayTxnRef    String?       // Mã giao dịch từ VNPAY để đối soát
+  
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Kết nối (Relations)
+  user           User          @relation(fields: [userId], references: [id])
+  tour           Tour          @relation(fields: [tourId], references: [id])
+}
+
+// --- BẢNG NHẬT KÝ HỆ THỐNG (DÀNH CHO SUPER ADMIN) ---
+model SystemLog {
+  id          Int      @id @default(autoincrement())
+  adminId     Int      // ID của Admin/Staff thực hiện hành động
+  action      String   // Tên hành động (VD: CANCEL_BOOKING)
+  description String   @db.Text // Mô tả chi tiết
+  ipAddress   String?  // Ghi lại IP 
+  createdAt   DateTime @default(now())
+}

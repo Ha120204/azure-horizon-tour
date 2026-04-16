@@ -9,13 +9,18 @@ import { PaymentModule } from './payment/payment.module';
 import { MailModule } from './mail/mail.module';
 import { ConfigModule } from '@nestjs/config';
 import { SearchModule } from './search/search.module';
+import { VoucherModule } from './voucher/voucher.module';
+import { ArticleModule } from './article/article.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [PrismaModule, AuthModule, TourModule, BookingModule, PaymentModule, MailModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    SearchModule,],
+    ScheduleModule.forRoot(),
+    SearchModule, VoucherModule, ArticleModule, AiModule,],
   controllers: [AppController],
   providers: [AppService],
 })

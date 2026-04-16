@@ -29,7 +29,8 @@ model User {
   role      Role     @default(CUSTOMER)             
   createdAt DateTime @default(now())               
   updatedAt DateTime @updatedAt                     
-  bookings  Booking[]                               
+  bookings  Booking[]
+  userVouchers UserVoucher[]
 }
 model Destination {
   id          Int      @id @default(autoincrement())
@@ -92,6 +93,9 @@ model Booking {
   paymentStatus  PaymentStatus @default(UNPAID)
   vnpayTxnRef    String?       // Mã giao dịch từ VNPAY để đối soát
   
+  voucherCode    String?       // Mã voucher đã áp dụng (nếu có)
+  discountAmount Float         @default(0) // Số tiền đã giảm (USD)
+
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -108,4 +112,57 @@ model SystemLog {
   description String   @db.Text // Mô tả chi tiết
   ipAddress   String?  // Ghi lại IP 
   createdAt   DateTime @default(now())
+}
+
+// --- HỆ THỐNG VOUCHER ---
+enum DiscountType {
+  PERCENTAGE    // Giảm theo %
+  FIXED_AMOUNT  // Giảm số tiền cố định (USD)
+}
+
+model Voucher {
+  id            Int           @id @default(autoincrement())
+  code          String        @unique           // Mã voucher: AZURE2026
+  label         String                          // "Premium Escape"
+  description   String        @db.Text          // Mô tả điều kiện
+  discountType  DiscountType                    // PERCENTAGE hoặc FIXED_AMOUNT
+  discountValue Float                           // 15 (= 15%) hoặc 500 (= $500)
+  minOrderValue Float         @default(0)       // Giá trị đơn tối thiểu để dùng
+  maxUses       Int           @default(100)     // Tổng lượt sử dụng toàn hệ thống
+  usedCount     Int           @default(0)       // Đã dùng bao nhiêu lần
+  expiresAt     DateTime                        // Ngày hết hạn
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+
+  userVouchers  UserVoucher[]
+}
+
+model UserVoucher {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  voucherId  Int
+  isUsed     Boolean   @default(false)         // Đã sử dụng chưa
+  savedAt    DateTime  @default(now())         // Ngày lưu vào ví
+
+  user       User      @relation(fields: [userId], references: [id])
+  voucher    Voucher   @relation(fields: [voucherId], references: [id])
+
+  @@unique([userId, voucherId])                // Mỗi user chỉ lưu mỗi voucher 1 lần
+}
+
+// --- HỆ THỐNG BÀI VIẾT (JOURNAL / BLOG) ---
+model Article {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique               // URL thân thiện: "whispers-of-the-highlands"
+  category    String                          // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
+  title       String
+  excerpt     String   @db.Text              // Tóm tắt ngắn hiển thị trên card
+  content     String   @db.Text              // Nội dung đầy đủ (HTML)
+  imageUrl    String
+  author      String
+  readTime    Int      @default(5)           // Thời gian đọc (phút)
+  isFeatured  Boolean  @default(false)       // Bài nổi bật hiện trên hero
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

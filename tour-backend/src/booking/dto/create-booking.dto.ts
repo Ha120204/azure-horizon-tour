@@ -1,4 +1,4 @@
-import { IsInt, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateBookingDto {
     @IsInt()
@@ -7,4 +7,8 @@ export class CreateBookingDto {
     @IsInt()
     @Min(1, { message: 'Số người đi phải ít nhất là 1' })
     numberOfPeople: number;
-}
+
+    @IsOptional()
+    @IsString()
+    voucherCode?: string;
+}

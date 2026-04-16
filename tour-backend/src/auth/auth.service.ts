@@ -42,12 +42,12 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Sai email hoặc mật khẩu');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const isMatch = await bcrypt.compare(pass, user.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Sai email hoặc mật khẩu');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const { password, ...result } = user;
@@ -130,13 +130,13 @@ export class AuthService {
     try {
       payload = this.jwtService.verify(refreshToken);
     } catch (error) {
-      throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.');
+      throw new UnauthorizedException('Invalid or expired refresh token. Please log in again.');
     }
 
     // Truy vấn DB lấy thông tin user mới nhất (đề phòng role đã thay đổi)
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) {
-      throw new UnauthorizedException('Người dùng không tồn tại.');
+      throw new UnauthorizedException('User not found.');
     }
 
     // Sinh access_token mới (kế thừa TTL 1h từ JwtModule.register)
@@ -150,7 +150,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng!');
+      throw new NotFoundException('User not found!');
     }
 
     // Tách password ra để bảo mật, chỉ trả về thông tin cần thiết
@@ -163,7 +163,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng!');
+      throw new NotFoundException('User not found!');
     }
 
     // 2. Cập nhật thông tin bằng Prisma
@@ -185,7 +185,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng!');
+      throw new NotFoundException('User not found!');
     }
 
     const updatedUser = await this.prisma.user.update({

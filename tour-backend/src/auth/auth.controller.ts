@@ -80,14 +80,14 @@ export class AuthController {
     fileFilter: (req, file, cb) => {
       // Chặn các file không phải là ảnh
       if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-        return cb(new BadRequestException('Chỉ chấp nhận file ảnh!'), false);
+        return cb(new BadRequestException('Only image files are allowed!'), false);
       }
       cb(null, true);
     }
   }))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Request() req) {
     if (!file) {
-      throw new BadRequestException('Vui lòng chọn ảnh');
+      throw new BadRequestException('Please select an image');
     }
 
     const userId = req.user.userId;
@@ -100,7 +100,7 @@ export class AuthController {
     await this.authService.updateAvatar(userId, avatarUrl);
 
     return {
-      message: 'Upload ảnh đại diện thành công',
+      message: 'Avatar uploaded successfully',
       data: { avatarUrl }
     };
   }

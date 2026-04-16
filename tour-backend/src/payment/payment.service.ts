@@ -1,88 +1,51 @@
 import { Injectable } from '@nestjs/common';
-import * as crypto from 'crypto';
-import moment from 'moment';
-import qs from 'qs';
+import { ConfigService } from '@nestjs/config';
+import { PayOS } from '@payos/node';
 import 'dotenv/config';
 
 @Injectable()
 export class PaymentService {
+    private payos: PayOS;
 
-    createPaymentUrl(bookingCode: string, amount: number, ipAddr: string): string {
-        const tmnCode = process.env.VNP_TMNCODE;
-        const secretKey = process.env.VNP_HASHSECRET || '';
-        let vnpUrl = process.env.VNP_URL || '';
-        const returnUrl = process.env.VNP_RETURNURL || '';
-
-        const date = new Date();
-        const createDate = moment(date).format('YYYYMMDDHHmmss');
-
-        // Gắn giờ-phút-giây vào sau mã Booking (VD: BKG-290326-X8A2_143025)
-        const txnRef = `${bookingCode}_${moment(date).format('HHmmss')}`;
-
-        const exchangeRate = 10000;
-        const amountVND = Math.round(amount * exchangeRate);
-        const vnp_Params: Record<string, any> = {
-            vnp_Version: '2.1.0',
-            vnp_Command: 'pay',
-            vnp_TmnCode: tmnCode,
-            vnp_Locale: 'vn',
-            vnp_CurrCode: 'VND',
-            vnp_TxnRef: txnRef,
-            vnp_OrderInfo: `Thanh toan don dat tour ${bookingCode}`,
-            vnp_OrderType: 'other',
-            // Truyền số tiền đã quy đổi VNĐ nhân 100 vào VNPAY
-            vnp_Amount: amountVND * 100,
-            vnp_ReturnUrl: returnUrl,
-            vnp_IpAddr: ipAddr || '127.0.0.1',
-            vnp_CreateDate: createDate,
-        };
-
-        // 1. Sắp xếp các tham số theo bảng chữ cái
-        const sortedParams = this.sortObject(vnp_Params);
-
-        // 2. Ép kiểu thành chuỗi Query String
-        const signData = qs.stringify(sortedParams, { encode: false });
-
-        // 3. Băm chữ ký điện tử bằng thuật toán SHA512
-        const hmac = crypto.createHmac('sha512', secretKey);
-        const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-        // 4. Nhét chữ ký vào URL và trả về
-        sortedParams['vnp_SecureHash'] = signed;
-        vnpUrl += '?' + qs.stringify(sortedParams, { encode: false });
-
-        return vnpUrl;
+    constructor(private readonly configService: ConfigService) {
+        this.payos = new PayOS({
+            clientId: process.env.PAYOS_CLIENT_ID,
+            apiKey: process.env.PAYOS_API_KEY,
+            checksumKey: process.env.PAYOS_CHECKSUM_KEY,
+        });
     }
 
-    // Hàm xác thực URL trả về từ VNPAY (GIỮ NGUYÊN)
-    verifyReturnUrl(vnpayParams: any): boolean {
-        const secureHash = vnpayParams['vnp_SecureHash'];
-        delete vnpayParams['vnp_SecureHash'];
-        delete vnpayParams['vnp_SecureHashType'];
+    /**
+     * Tạo link thanh toán PayOS (VietQR)
+     * @param orderCode - Mã đơn hàng (sử dụng Booking.id kiểu số nguyên)
+     * @param amount - Số tiền VNĐ (kiểu số nguyên, không có phần thập phân)
+     * @param description - Mô tả đơn hàng (tối đa 25 ký tự hiển thị trên mã QR ngân hàng)
+     */
+    async createPaymentLink(orderCode: number, amount: number, description: string): Promise<string> {
+        const backendUrl = this.configService.get<string>('BACKEND_URL', 'http://localhost:3000');
 
-        const secretKey = process.env.VNP_HASHSECRET || '';
-        const sortedParams = this.sortObject(vnpayParams);
-        const signData = qs.stringify(sortedParams, { encode: false });
+        const paymentLink = await this.payos.paymentRequests.create({
+            orderCode,
+            amount,
+            description: description.substring(0, 25), // PayOS giới hạn 25 ký tự
+            returnUrl: `${backendUrl}/booking/payos-return`,
+            cancelUrl: `${backendUrl}/booking/payos-return`,
+        });
 
-        const hmac = crypto.createHmac('sha512', secretKey);
-        const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-        return secureHash === signed;
+        return paymentLink.checkoutUrl;
     }
 
-    // Hàm phụ trợ: Sắp xếp Object (GIỮ NGUYÊN)
-    private sortObject(obj: Record<string, any>): Record<string, string> {
-        const sorted: Record<string, string> = {};
-        const str: string[] = [];
-        for (const key in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                str.push(encodeURIComponent(key));
-            }
-        }
-        str.sort();
-        for (let i = 0; i < str.length; i++) {
-            sorted[str[i]] = encodeURIComponent(obj[str[i]]).replace(/%20/g, '+');
-        }
-        return sorted;
+    /**
+     * Gọi PayOS API để lấy trạng thái thực tế của đơn hàng (PAID / CANCELLED / PENDING)
+     */
+    async getPaymentInfo(orderCode: number) {
+        return this.payos.paymentRequests.get(orderCode);
+    }
+
+    /**
+     * Xác thực dữ liệu Webhook từ server PayOS gửi về
+     */
+    async verifyWebhook(webhookBody: any) {
+        return this.payos.webhooks.verify(webhookBody);
     }
 }

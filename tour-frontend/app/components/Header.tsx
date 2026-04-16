@@ -1,8 +1,10 @@
-'use client'; // Bắt buộc vì có dùng useState, useEffect, useRouter
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useLocale } from '@/app/context/LocaleContext';
+import LocaleSwitcher from './LocaleSwitcher';
 
 interface SearchResult {
     destinations: { id: number; name: string; type?: string; region?: string }[];
@@ -11,6 +13,8 @@ interface SearchResult {
 
 export default function Header() {
     const router = useRouter();
+    const pathname = usePathname();
+    const { t, language, currency, formatPrice } = useLocale();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [userName, setUserName] = useState('');
     const [logoutMsg, setLogoutMsg] = useState('');
@@ -21,6 +25,9 @@ export default function Header() {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [searchResults, setSearchResults] = useState<SearchResult>({ destinations: [], tours: [] });
+
+    // Locale Switcher State
+    const [isLocaleOpen, setIsLocaleOpen] = useState(false);
 
     const searchInputRef = useRef<HTMLInputElement>(null);
     const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -43,7 +50,7 @@ export default function Header() {
 
         // Lắng nghe sự kiện để cập nhật không cần reload
         window.addEventListener('auth-change', checkAuth);
-        
+
         // Clean up
         return () => window.removeEventListener('auth-change', checkAuth);
     }, []);
@@ -73,7 +80,6 @@ export default function Header() {
             if (searchQuery.trim().length >= 2) {
                 setIsLoading(true);
                 try {
-                    // Nhớ đổi cổng 3000 thành cổng NestJS của bạn nếu khác
                     const res = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(searchQuery)}`);
                     if (res.ok) {
                         const data = await res.json();
@@ -89,7 +95,7 @@ export default function Header() {
                 setSearchResults({ destinations: [], tours: [] });
                 setIsDropdownOpen(false);
             }
-        }, 300); // Đợi 300ms sau khi ngừng gõ mới gọi API
+        }, 300);
 
         return () => clearTimeout(delayDebounceFn);
     }, [searchQuery]);
@@ -112,7 +118,7 @@ export default function Header() {
         // Bắn event báo hiệu để Header cập nhật lại state lặp tức
         window.dispatchEvent(new Event('auth-change'));
 
-        // Chuyển về trang chủ (nếu đang ở trang khác)
+        // Chuyển về trang chủ
         router.push('/');
     };
 
@@ -122,6 +128,10 @@ export default function Header() {
         setSearchQuery('');
         router.push(path);
     };
+
+    // Label hiển thị trên nút Globe: "EN · $" hoặc "VI · ₫"
+    const localeLabel = `${language.toUpperCase()} · ${currency === 'VND' ? '₫' : '$'}`;
+
     return (
         <>
             {logoutMsg && (
@@ -131,7 +141,7 @@ export default function Header() {
                             <span className="material-symbols-outlined text-2xl">check_circle</span>
                         </div>
                         <div>
-                            <h4 className="text-sm font-bold text-slate-800 font-headline">Goodbye!</h4>
+                            <h4 className="text-sm font-bold text-slate-800 font-headline">{t('nav.goodbye')}</h4>
                             <p className="text-xs text-slate-500 mt-0.5">{logoutMsg}</p>
                         </div>
                     </div>
@@ -147,27 +157,27 @@ export default function Header() {
                     </Link>
 
                     {/* 2. MAIN NAVIGATION */}
-                    <div className="hidden md:flex items-center gap-8 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight">
-                        <Link href="/destinations" className="text-slate-600 hover:text-blue-800 transition-all duration-300 relative group py-2">
-                            Destinations
-                            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-800 transition-all duration-300 group-hover:w-full"></span>
+                    <div className="hidden md:flex items-center gap-8 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight" suppressHydrationWarning>
+                        <Link href="/destinations" className={`transition-all duration-300 relative group py-2 ${pathname.includes('/destinations') ? 'text-blue-800' : 'text-slate-600 hover:text-blue-800'}`}>
+                            {t('nav.destinations')}
+                            <span className={`absolute bottom-0 left-0 h-0.5 bg-blue-800 transition-all duration-300 ${pathname.includes('/destinations') ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
                         </Link>
-                        <Link href="/tailor-made" className="text-slate-600 hover:text-blue-800 transition-all duration-300 relative group py-2">
-                            Tailor-made
-                            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-800 transition-all duration-300 group-hover:w-full"></span>
+                        <Link href="/promotions" className={`transition-all duration-300 relative group py-2 ${pathname.includes('/promotions') ? 'text-blue-800' : 'text-slate-600 hover:text-blue-800'}`}>
+                            {t('nav.promotions')}
+                            <span className={`absolute bottom-0 left-0 h-0.5 bg-blue-800 transition-all duration-300 ${pathname.includes('/promotions') ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
                         </Link>
-                        <Link href="/journal" className="text-slate-600 hover:text-blue-800 transition-all duration-300 relative group py-2">
-                            Journal
-                            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-800 transition-all duration-300 group-hover:w-full"></span>
+                        <Link href="/journal" className={`transition-all duration-300 relative group py-2 ${pathname.includes('/journal') ? 'text-blue-800' : 'text-slate-600 hover:text-blue-800'}`}>
+                            {t('nav.journal')}
+                            <span className={`absolute bottom-0 left-0 h-0.5 bg-blue-800 transition-all duration-300 ${pathname.includes('/journal') ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
                         </Link>
-                        <Link href="/about" className="text-slate-600 hover:text-blue-800 transition-all duration-300 relative group py-2">
-                            About
-                            <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-800 transition-all duration-300 group-hover:w-full"></span>
+                        <Link href="/about" className={`transition-all duration-300 relative group py-2 ${pathname.includes('/about') ? 'text-blue-800' : 'text-slate-600 hover:text-blue-800'}`}>
+                            {t('nav.about')}
+                            <span className={`absolute bottom-0 left-0 h-0.5 bg-blue-800 transition-all duration-300 ${pathname.includes('/about') ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
                         </Link>
                     </div>
 
                     {/* 3. USER TOOLS */}
-                    <div className="flex items-center gap-5">
+                    <div className="flex items-center gap-3">
 
                         {/* Search Component */}
                         <div className="relative flex items-center" ref={searchContainerRef}>
@@ -180,7 +190,7 @@ export default function Header() {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Tìm kiếm..."
+                                    placeholder={t('nav.search')}
                                     className="w-full bg-transparent border-none text-sm text-slate-700 focus:ring-0 outline-none py-2 placeholder:text-slate-400"
                                 />
                             </form>
@@ -216,7 +226,7 @@ export default function Header() {
                                             {/* Destinations */}
                                             {searchResults.destinations.length > 0 && (
                                                 <div className="py-2">
-                                                    <h3 className="px-4 py-2 text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Destinations</h3>
+                                                    <h3 className="px-4 py-2 text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">{t('nav.destinations')}</h3>
                                                     {searchResults.destinations.map(dest => (
                                                         <div
                                                             key={`dest-${dest.id}`}
@@ -250,7 +260,7 @@ export default function Header() {
                                                             <span className="material-symbols-outlined text-slate-400 text-lg">explore</span>
                                                             <div>
                                                                 <p className="text-sm font-semibold text-slate-800 truncate w-56">{tour.name}</p>
-                                                                <p className="text-xs font-medium text-blue-800 mt-0.5">{tour.price.toLocaleString()}đ</p>
+                                                                <p className="text-xs font-medium text-blue-800 mt-0.5">{formatPrice(tour.price)}</p>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -260,14 +270,14 @@ export default function Header() {
                                             {/* Trống */}
                                             {searchResults.destinations.length === 0 && searchResults.tours.length === 0 && (
                                                 <div className="p-6 text-center text-sm text-slate-500">
-                                                    No results found for "{searchQuery}"
+                                                    {t('nav.noResults')} "{searchQuery}"
                                                 </div>
                                             )}
 
                                             {/* Footer See All */}
                                             <div className="bg-slate-50 p-3 text-center border-t border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleQuickSearch()}>
                                                 <p className="text-xs font-semibold text-blue-800 flex items-center justify-center gap-1">
-                                                    View all results
+                                                    {t('nav.viewAllResults')}
                                                     <span className="material-symbols-outlined text-[1rem]">arrow_forward</span>
                                                 </p>
                                             </div>
@@ -276,6 +286,15 @@ export default function Header() {
                                 </div>
                             )}
                         </div>
+
+                        {/* 🌐 Locale Switcher Button */}
+                        <button
+                            onClick={() => setIsLocaleOpen(true)}
+                            className="hidden md:flex items-center gap-1.5 text-slate-600 hover:text-blue-800 transition-colors px-3 py-1.5 rounded-full hover:bg-slate-50 border border-transparent hover:border-slate-200"
+                        >
+                            <span className="material-symbols-outlined text-lg">language</span>
+                            <span className="text-xs font-bold tracking-wide">{localeLabel}</span>
+                        </button>
 
                         <div className="h-6 w-px bg-slate-200/80 mx-1 hidden md:block"></div>
 
@@ -289,10 +308,10 @@ export default function Header() {
 
                                 {/* Dropdown Menu */}
                                 <div className="absolute top-12 right-0 w-48 bg-white rounded-xl shadow-lg border border-slate-100 p-2 opacity-0 group-hover:opacity-100 transition-all invisible group-hover:visible z-20">
-                                    <button onClick={() => router.push('/profile')} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium rounded-lg">Profile</button>
-                                    <button onClick={() => router.push('/my-bookings')} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium rounded-lg">My Bookings</button>
+                                    <button onClick={() => router.push('/profile')} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium rounded-lg">{t('nav.profile')}</button>
+                                    <button onClick={() => router.push('/my-bookings')} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium rounded-lg">{t('nav.myBookings')}</button>
                                     <div className="h-px bg-slate-100 my-1 w-full"></div>
-                                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg">Sign Out</button>
+                                    <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg">{t('nav.signOut')}</button>
                                 </div>
                             </div>
                         ) : (
@@ -300,12 +319,15 @@ export default function Header() {
                                 href="/login"
                                 className="px-6 py-2 rounded-full bg-blue-800 text-white font-headline font-semibold text-sm active:scale-95 transition-transform shadow-md hover:opacity-90"
                             >
-                                Sign In
+                                {t('nav.signIn')}
                             </Link>
                         )}
                     </div>
                 </div>
             </nav>
+
+            {/* Locale Switcher Modal */}
+            <LocaleSwitcher isOpen={isLocaleOpen} onClose={() => setIsLocaleOpen(false)} />
         </>
     );
 }

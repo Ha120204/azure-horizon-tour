@@ -1,18 +1,26 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { PaymentService } from '../payment/payment.service';
+import { VoucherService } from '../voucher/voucher.service';
+import { MailService } from '../mail/mail.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { Response } from 'express';
+
 @Injectable()
 export class BookingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
+    private readonly voucherService: VoucherService,
+    private readonly mailService: MailService,
     private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
   ) { }
+
   // Hàm hỗ trợ tạo mã Booking chuyên nghiệp
   private generateBookingCode(): string {
     const prefix = 'BKG';
@@ -33,78 +41,254 @@ export class BookingService {
 
     return `${prefix}-${dateString}-${randomString}`;
   }
+
   async create(userId: number, dto: CreateBookingDto, ip: string) {
-    const tour = await this.prisma.tour.findUnique({
-      where: { id: dto.tourId },
-    });
+    // ============== INTERACTIVE TRANSACTION ==============
+    // Bọc toàn bộ logic trong 1 transaction để đảm bảo tính nguyên tử:
+    // Nếu BẤT KỲ bước nào bên trong lỗi → rollback TẤT CẢ, không mất ghế.
+    const booking = await this.prisma.$transaction(async (tx) => {
+      // 1. Tìm tour và khóa dòng dữ liệu
+      const tour = await tx.tour.findUnique({
+        where: { id: dto.tourId },
+      });
 
-    if (!tour) {
-      throw new NotFoundException('Không tìm thấy tour');
-    }
+      if (!tour) {
+        throw new NotFoundException('Tour not found');
+      }
 
-    if (tour.availableSeats < dto.numberOfPeople) {
-      throw new BadRequestException('Không đủ chỗ trống');
-    }
+      if (tour.availableSeats < dto.numberOfPeople) {
+        throw new BadRequestException('Not enough seats available');
+      }
 
-    const totalPrice = tour.price * dto.numberOfPeople;
+      let totalPrice = tour.price * dto.numberOfPeople;
+      let discountAmount = 0;
+      let voucherCode: string | null = null;
 
-    await this.prisma.tour.update({
-      where: { id: tour.id },
-      data: { availableSeats: tour.availableSeats - dto.numberOfPeople },
-    });
+      // 2. Xác thực Voucher (nếu có)
+      if (dto.voucherCode) {
+        const voucherResult = await this.voucherService.validateVoucher(
+          dto.voucherCode,
+          totalPrice,
+        );
+        discountAmount = voucherResult.discountAmount;
+        totalPrice = voucherResult.finalPrice;
+        voucherCode = dto.voucherCode;
+      }
 
-    // 👇 BƯỚC MỚI: TẠO MÃ BOOKING CHUYÊN NGHIỆP 👇
-    const newBookingCode = this.generateBookingCode();
+      // 3. Trừ ghế bằng Atomic Decrement (an toàn khi nhiều người đặt cùng lúc)
+      await tx.tour.update({
+        where: { id: tour.id },
+        data: { availableSeats: { decrement: dto.numberOfPeople } },
+      });
 
-    const booking = await this.prisma.booking.create({
-      data: {
-        bookingCode: newBookingCode, // BƠM VÀO DATABASE Ở ĐÂY
-        userId,
-        tourId: dto.tourId,
-        numberOfPeople: dto.numberOfPeople,
-        totalPrice,
-      },
-    });
+      // 4. Tạo mã Booking chuyên nghiệp
+      const newBookingCode = this.generateBookingCode();
 
-    // Code mới: Truyền hẳn bookingCode (chuỗi) sang VNPAY
-    const paymentUrl = this.paymentService.createPaymentUrl(booking.bookingCode, booking.totalPrice, ip);
+      // 5. Tạo record Booking
+      const newBooking = await tx.booking.create({
+        data: {
+          bookingCode: newBookingCode,
+          userId,
+          tourId: dto.tourId,
+          numberOfPeople: dto.numberOfPeople,
+          totalPrice,
+          voucherCode,
+          discountAmount,
+        },
+      });
 
-    return { message: 'Đặt tour thành công, vui lòng thanh toán', booking, paymentUrl };
+      // 6. Cập nhật lượt dùng Voucher & ví trực tiếp trong Transaction để chống Race Condition
+      if (voucherCode) {
+        const voucherToUpdate = await tx.voucher.findUnique({
+          where: { code: voucherCode },
+        });
+
+        if (voucherToUpdate) {
+          // Tăng lượt sử dụng một cách an toàn
+          const updatedVoucher = await tx.voucher.update({
+            where: { id: voucherToUpdate.id },
+            data: { usedCount: { increment: 1 } },
+          });
+
+          // (Tùy chọn nâng cao): Nếu vượt quá maxUses sau khi increment, ép rollback!
+          if (updatedVoucher.usedCount > updatedVoucher.maxUses) {
+            throw new BadRequestException('Voucher đã hết lượt sử dụng ngay khoảnh khắc bạn đặt hàng!');
+          }
+
+          // Cập nhật trong ví của user (nếu đã lưu)
+          const userVoucher = await tx.userVoucher.findUnique({
+            where: { userId_voucherId: { userId, voucherId: voucherToUpdate.id } },
+          });
+
+          if (userVoucher) {
+            await tx.userVoucher.update({
+              where: { id: userVoucher.id },
+              data: { isUsed: true },
+            });
+          }
+        }
+      }
+
+      return newBooking;
+    }); // ← Nếu có exception → toàn bộ rollback tự động
+
+
+
+    // ============== PAYOS INTEGRATION ==============
+    // Quy đổi USD → VNĐ từ biến môi trường (đồng bộ với Frontend)
+    const exchangeRate = this.configService.get<number>('USD_TO_VND_RATE', 26335);
+    const amountVND = Math.round(booking.totalPrice * exchangeRate);
+
+    // Mô tả hiển thị trên mã QR ngân hàng (tối đa 25 ký tự)
+    const description = `AH ${booking.bookingCode}`;
+
+    // Dùng booking.id (số nguyên tự tăng) làm orderCode cho PayOS
+    const checkoutUrl = await this.paymentService.createPaymentLink(
+      booking.id,
+      amountVND,
+      description,
+    );
+
+    return { message: 'Booking successful, please proceed to payment', booking, paymentUrl: checkoutUrl };
   }
 
-  async updatePaymentStatus(txnRef: string, responseCode: string, vnpayTxnNo: string) {
-    // 1. Tách lấy bookingCode (Để nguyên dạng chuỗi, KHÔNG ép sang Number nữa)
-    const bookingCode = txnRef.split('_')[0];
+  /**
+   * Xử lý khi người dùng quay về từ trang PayOS (hoặc Webhook gọi)
+   * Gọi thẳng API PayOS để xác nhận trạng thái thực tế, không tin query params
+   */
+  async handlePayosReturn(orderCode: number) {
+    // 1. Gọi PayOS API để lấy trạng thái thanh toán thực
+    const paymentInfo = await this.paymentService.getPaymentInfo(orderCode);
 
-    // 2. Tìm đơn hàng theo bookingCode thay vì id
+    // 2. Tìm booking theo ID (orderCode = booking.id)
     const booking = await this.prisma.booking.findUnique({
-      where: { bookingCode: bookingCode }, // TÌM BẰNG CODE
+      where: { id: orderCode },
     });
 
     if (!booking) {
-      throw new NotFoundException('Không tìm thấy đơn đặt tour');
+      throw new NotFoundException('Booking not found');
     }
 
-    // 3. Cập nhật trạng thái dựa vào mã phản hồi VNPAY
-    if (responseCode === '00') {
+    // Nếu booking đã xử lý rồi (CONFIRMED hoặc CANCELLED) → bỏ qua, tránh xử lý trùng
+    if (booking.status === 'CONFIRMED' || booking.status === 'CANCELLED') {
+      return paymentInfo;
+    }
+
+    // 3. Cập nhật trạng thái dựa vào kết quả từ PayOS
+    if (paymentInfo.status === 'PAID') {
       await this.prisma.booking.update({
-        where: { bookingCode: bookingCode }, // CẬP NHẬT BẰNG CODE
+        where: { id: orderCode },
         data: {
           paymentStatus: 'PAID',
           status: 'CONFIRMED',
-          vnpayTxnRef: vnpayTxnNo,
+          // Lưu mã tham chiếu giao dịch ngân hàng từ PayOS
+          vnpayTxnRef: paymentInfo.transactions?.[0]?.reference || `PAYOS-${orderCode}`,
         },
       });
-    } else {
-      await this.prisma.booking.update({
-        where: { bookingCode: bookingCode }, // CẬP NHẬT BẰNG CODE
+
+      // ── GỬI EMAIL XÁC NHẬN ──
+      try {
+        const fullBooking = await this.prisma.booking.findUnique({
+          where: { id: orderCode },
+          include: { user: true, tour: true },
+        });
+
+        if (fullBooking?.user?.email) {
+          await this.mailService.sendBookingConfirmation({
+            to: fullBooking.user.email,
+            customerName: fullBooking.user.fullName,
+            bookingCode: fullBooking.bookingCode,
+            tourName: fullBooking.tour.name,
+            startDate: fullBooking.tour.startDate.toLocaleDateString('vi-VN'),
+            duration: fullBooking.tour.duration,
+            numberOfPeople: fullBooking.numberOfPeople,
+            totalPrice: `$${fullBooking.totalPrice.toLocaleString()}`,
+            discountAmount: fullBooking.discountAmount > 0 ? `$${fullBooking.discountAmount.toLocaleString()}` : undefined,
+          });
+        }
+      } catch (emailError) {
+        console.error('[EMAIL] Lỗi gửi email xác nhận:', emailError);
+        // Không throw — email lỗi không ảnh hưởng luồng thanh toán chính
+      }
+    } else if (paymentInfo.status === 'CANCELLED' || paymentInfo.status === 'EXPIRED') {
+      // Hủy booking + hoàn trả ghế cho Tour
+      await this.cancelAndRestoreSeats(booking.id, booking.tourId, booking.numberOfPeople);
+    }
+    // Nếu status === 'PENDING' → Chưa thanh toán, không thay đổi gì
+
+    return paymentInfo;
+  }
+
+  /**
+   * Tìm booking theo ID (orderCode của PayOS)
+   */
+  async findByOrderCode(orderCode: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: orderCode },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    return booking;
+  }
+
+  // ============ HELPER: Hủy Booking + Hoàn Trả Ghế ============
+
+  /**
+   * Hủy 1 booking cụ thể và cộng lại số ghế vào Tour.
+   * Dùng chung cho: PayOS cancel, Webhook cancel, và Cron job tự hủy.
+   */
+  private async cancelAndRestoreSeats(bookingId: number, tourId: number, numberOfPeople: number) {
+    await this.prisma.$transaction([
+      this.prisma.booking.update({
+        where: { id: bookingId },
         data: {
           paymentStatus: 'FAILED',
           status: 'CANCELLED',
         },
-      });
-    }
+      }),
+      this.prisma.tour.update({
+        where: { id: tourId },
+        data: {
+          availableSeats: { increment: numberOfPeople },
+        },
+      }),
+    ]);
   }
+
+  /**
+   * CRON JOB: Quét đơn hàng PENDING quá 15 phút và tự động hủy + hoàn trả ghế.
+   * Được gọi bởi @nestjs/schedule mỗi 5 phút.
+   */
+  async cancelExpiredBookings() {
+    const EXPIRY_MINUTES = 15;
+    const expiryTime = new Date(Date.now() - EXPIRY_MINUTES * 60 * 1000);
+
+    // Tìm tất cả đơn PENDING đã tạo quá 15 phút
+    const expiredBookings = await this.prisma.booking.findMany({
+      where: {
+        status: 'PENDING',
+        paymentStatus: 'UNPAID',
+        createdAt: { lt: expiryTime },
+      },
+    });
+
+    if (expiredBookings.length === 0) return;
+
+    console.log(`[CRON] Tìm thấy ${expiredBookings.length} đơn hàng PENDING quá hạn. Đang hủy...`);
+
+    for (const booking of expiredBookings) {
+      await this.cancelAndRestoreSeats(booking.id, booking.tourId, booking.numberOfPeople);
+      console.log(`[CRON] Đã hủy booking #${booking.id} (${booking.bookingCode}) và hoàn ${booking.numberOfPeople} ghế cho tour #${booking.tourId}`);
+    }
+
+    console.log(`[CRON] Hoàn tất dọn dẹp ${expiredBookings.length} đơn hàng.`);
+  }
+
+  // ============ CÁC HÀM CŨ GIỮ NGUYÊN ============
+
   async getMyBookings(userId: number) {
     return this.prisma.booking.findMany({
       where: { userId },
@@ -133,7 +317,7 @@ export class BookingService {
     });
 
     if (!booking) {
-      throw new NotFoundException('Không tìm thấy đơn hàng này');
+      throw new NotFoundException('Booking not found');
     }
 
     // Bọc trong object { data: ... } để khớp 100% với Frontend của em
@@ -159,7 +343,7 @@ export class BookingService {
 
     } catch (error) {
       console.error('Lỗi khi proxy ảnh:', error.message);
-      throw new NotFoundException('Không thể tải ảnh từ nguồn gốc');
+      throw new NotFoundException('Failed to proxy image');
     }
   }
 

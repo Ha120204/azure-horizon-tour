@@ -1,44 +1,89 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Ip, Query, Req, Res, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { PaymentService } from '../payment/payment.service';
+
 @Controller('booking')
 export class BookingController {
   constructor(
     private readonly bookingService: BookingService,
     private readonly paymentService: PaymentService,
+    private readonly configService: ConfigService,
   ) { }
 
-  @Get('vnpay-return')
-  async vnpayReturn(@Query() query: any, @Res() res: Response) {
-    const isValid = this.paymentService.verifyReturnUrl(query);
+  // ============== PAYOS PAYMENT FLOW ==============
 
-    // 1. Chữ ký sai -> Đá về trang checkout kèm báo lỗi
-    if (!isValid) {
-      return res.redirect('http://localhost:3001/checkout?error=invalid_signature');
+  /**
+   * PayOS Return Handler
+   * Khi khách hàng quét mã QR xong (hoặc bấm hủy), PayOS sẽ redirect trình duyệt
+   * về URL này. Ta gọi PayOS API để xác nhận trạng thái, sau đó đá khách về Frontend.
+   */
+  @Get('payos-return')
+  async payosReturn(@Query() query: any, @Res() res: Response) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3001');
+
+    try {
+      const orderCode = Number(query.orderCode);
+      const isCancelled = query.cancel === 'true';
+      const status = query.status;
+
+      // Nếu khách bấm "Hủy" trên trang PayOS → Hoàn trả ghế rồi redirect
+      if (isCancelled || status === 'CANCELLED') {
+        if (orderCode) {
+          try {
+            await this.bookingService.handlePayosReturn(orderCode);
+          } catch (e) {
+            console.error('Lỗi hoàn trả ghế khi hủy thanh toán:', e);
+          }
+        }
+        return res.redirect(`${frontendUrl}/checkout?error=payment_cancelled`);
+      }
+
+      // Gọi PayOS API xác nhận trạng thái thanh toán thực tế
+      const paymentInfo = await this.bookingService.handlePayosReturn(orderCode);
+
+      if (paymentInfo.status === 'PAID') {
+        // Thanh toán thành công → Lấy bookingCode để hiển thị vé điện tử
+        const booking = await this.bookingService.findByOrderCode(orderCode);
+        return res.redirect(`${frontendUrl}/success?bookingId=${booking.bookingCode}`);
+      }
+
+      // Thanh toán thất bại hoặc chưa hoàn tất
+      return res.redirect(`${frontendUrl}/checkout?error=payment_failed`);
+
+    } catch (error) {
+      console.error('PayOS Return Error:', error);
+      return res.redirect(`${frontendUrl}/checkout?error=payment_failed`);
     }
-
-    // LẤY MÃ BOOKING CODE (Cắt bỏ phần giờ phút giây bị dư)
-    const bookingCode = query.vnp_TxnRef.split('_')[0];
-
-    // 2. Chữ ký đúng -> Cập nhật DB (Truyền bookingCode vào đây)
-    await this.bookingService.updatePaymentStatus(
-      bookingCode,
-      query.vnp_ResponseCode,
-      query.vnp_TransactionNo
-    );
-
-    // 3. Trạng thái thành công ('00') -> Đá sang trang Vé điện tử
-    if (query.vnp_ResponseCode === '00') {
-      return res.redirect(`http://localhost:3001/success?bookingId=${bookingCode}`);
-    }
-
-    // 4. Thanh toán thất bại -> Đá về trang Checkout báo lỗi
-    return res.redirect('http://localhost:3001/checkout?error=payment_failed');
   }
+
+  /**
+   * PayOS Webhook Handler
+   * PayOS server tự động POST dữ liệu tới endpoint này khi có biến động thanh toán.
+   * Đây là kênh xác nhận đáng tin cậy nhất (server-to-server, không qua trình duyệt).
+   * Lưu ý: Cần expose port 3000 ra internet (Ngrok) để PayOS gọi được.
+   */
+  @Post('payos-webhook')
+  async payosWebhook(@Body() body: any) {
+    try {
+      // Xác thực chữ ký webhook từ PayOS
+      const webhookData = await this.paymentService.verifyWebhook(body);
+
+      // Cập nhật trạng thái đơn hàng trong Database
+      await this.bookingService.handlePayosReturn(webhookData.orderCode);
+
+      return { success: true };
+    } catch (error) {
+      console.error('PayOS Webhook Error:', error);
+      return { success: false };
+    }
+  }
+
+  // ============== BOOKING CRUD ==============
 
   @UseGuards(AuthGuard('jwt'))
   @Post()
@@ -51,7 +96,7 @@ export class BookingController {
   async getMyBookings(@Req() req: any) {
     // Lấy danh sách booking của đúng user đang đăng nhập
     const bookings = await this.bookingService.getMyBookings(req.user.userId);
-    return { message: 'Thành công', data: bookings };
+    return { message: 'Success', data: bookings };
   }
 
   @Get('code/:bookingCode')
@@ -65,11 +110,11 @@ export class BookingController {
     const booking = await this.bookingService.getBookingById(Number(id));
 
     if (!booking) {
-      return { message: 'Không tìm thấy đơn đặt tour' };
+      return { message: 'Booking not found' };
     }
 
     return {
-      message: 'Thành công',
+      message: 'Success',
       data: booking
     };
   }
@@ -80,7 +125,7 @@ export class BookingController {
     @Res() res: Response // Dùng Response của Express để stream dữ liệu
   ) {
     if (!imageUrl) {
-      throw new BadRequestException('Vui lòng cung cấp link ảnh');
+      throw new BadRequestException('Please provide an image URL');
     }
     return this.bookingService.proxyImage(imageUrl, res);
   }
@@ -88,11 +133,6 @@ export class BookingController {
   @Get()
   findAll() {
     return this.bookingService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.bookingService.findOne(+id);
   }
 
   @Patch(':id')

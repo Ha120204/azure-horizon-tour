@@ -2,31 +2,25 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale } from '@/app/context/LocaleContext';
 
 const SUGGESTED_DESTINATIONS = [
-    { id: 1, name: 'Đà Nẵng', type: 'Điểm đến', image: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&q=80&w=100' },
-    { id: 2, name: 'Hạ Long', type: 'Điểm đến', image: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&q=80&w=100' },
-    { id: 3, name: 'Lễ hội pháo hoa quốc tế Đà Nẵng (DIFF)', type: 'Điểm tham quan' },
-    { id: 4, name: 'Paris', type: 'Điểm đến', image: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&q=80&w=100' },
-    { id: 5, name: 'Kyoto', type: 'Điểm đến', image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&q=80&w=100' }
-];
-
-const BUDGET_OPTIONS = [
-    { label: 'Từ $5,000+', value: '5000' },
-    { label: 'Từ $10,000+', value: '10000' },
-    { label: 'Từ $25,000+', value: '25000' },
-    { label: 'Không giới hạn', value: 'unlimited' }
+    { id: 1, name: 'Đà Nẵng', type: 'dest', image: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&q=80&w=100' },
+    { id: 2, name: 'Hạ Long', type: 'dest', image: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&q=80&w=100' },
+    { id: 3, name: 'Lễ hội pháo hoa quốc tế Đà Nẵng (DIFF)', type: 'attraction' },
+    { id: 4, name: 'Paris', type: 'dest', image: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&q=80&w=100' },
+    { id: 5, name: 'Kyoto', type: 'dest', image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&q=80&w=100' }
 ];
 
 export default function HeroSearch() {
     const router = useRouter();
+    const { t, formatPrice, language } = useLocale();
 
     const [destination, setDestination] = useState('');
     const [date, setDate] = useState('');
 
     // State riêng cho Budget
     const [budget, setBudget] = useState('');
-    const [budgetLabel, setBudgetLabel] = useState('');
 
     // State điều khiển đóng/mở Dropdown
     const [isDestFocused, setIsDestFocused] = useState(false);
@@ -39,8 +33,8 @@ export default function HeroSearch() {
         item.name.toLowerCase().includes(destination.toLowerCase())
     );
 
-    const destSuggestions = filteredSuggestions.filter(item => item.type === 'Điểm đến');
-    const attractionSuggestions = filteredSuggestions.filter(item => item.type === 'Điểm tham quan');
+    const destSuggestions = filteredSuggestions.filter(item => item.type === 'dest');
+    const attractionSuggestions = filteredSuggestions.filter(item => item.type === 'attraction');
 
     // Tự động đóng Dropdown khi click ra vùng viền
     useEffect(() => {
@@ -57,10 +51,9 @@ export default function HeroSearch() {
         setIsDestFocused(false);
     };
 
-    const handleSelectBudget = (value: string, label: string) => {
+    const handleSelectBudget = (value: string) => {
         setBudget(value);
-        setBudgetLabel(label);
-        setIsBudgetOpen(false); // Chọn xong thì tự động đóng lại
+        setIsBudgetOpen(false);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -72,6 +65,16 @@ export default function HeroSearch() {
         router.push(`/destinations?${params.toString()}`);
     };
 
+    const BUDGET_OPTIONS = [
+        { label: t('search.under5k'), value: '0-200' },
+        { label: t('search.5kTo10k'), value: '200-400' },
+        { label: t('search.10kTo25k'), value: '400-800' },
+        { label: t('search.above25k'), value: '800-unlimited' },
+    ];
+
+    // Dynamic label to correctly react to locale changes
+    const currentBudgetLabel = budget ? BUDGET_OPTIONS.find(o => o.value === budget)?.label : '';
+
     return (
         <form
             onSubmit={handleSearch}
@@ -81,11 +84,11 @@ export default function HeroSearch() {
             <div ref={destRef} className="flex-1 flex items-center gap-4 px-6 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative">
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">location_on</span>
                 <div className="flex flex-col flex-1 relative w-full">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Destination</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{t('search.destination')}</label>
                     <div className="flex items-center">
                         <input
                             type="text"
-                            placeholder="Where to?"
+                            placeholder={t('search.whereTo')}
                             value={destination}
                             onChange={(e) => setDestination(e.target.value)}
                             onFocus={() => setIsDestFocused(true)}
@@ -98,12 +101,12 @@ export default function HeroSearch() {
                         )}
                     </div>
 
-                    {/* Hộp gợi ý Điểm đến (Sửa z-index siêu cao) */}
+                    {/* Hộp gợi ý Điểm đến */}
                     {isDestFocused && destination && filteredSuggestions.length > 0 && (
                         <div className="absolute top-[calc(100%+24px)] left-[-40px] md:left-0 w-[calc(100%+80px)] md:w-[400px] bg-white rounded-2xl shadow-xl border border-slate-100 py-4 z-[100] animate-fade-in-up">
                             {destSuggestions.length > 0 && (
                                 <div className="mb-4">
-                                    <div className="px-5 text-sm font-bold text-slate-800 mb-2">Điểm đến</div>
+                                    <div className="px-5 text-sm font-bold text-slate-800 mb-2">{t('search.destinations')}</div>
                                     {destSuggestions.map(item => (
                                         <div key={item.id} onClick={() => handleSelectSuggestion(item.name)} className="px-5 py-2.5 hover:bg-slate-50 flex items-center gap-4 cursor-pointer transition-colors">
                                             {item.image ? (
@@ -118,7 +121,7 @@ export default function HeroSearch() {
                             )}
                             {attractionSuggestions.length > 0 && (
                                 <div>
-                                    <div className="px-5 text-sm font-bold text-slate-800 mb-2">Điểm tham quan</div>
+                                    <div className="px-5 text-sm font-bold text-slate-800 mb-2">{t('search.attractions')}</div>
                                     {attractionSuggestions.map(item => (
                                         <div key={item.id} onClick={() => handleSelectSuggestion(item.name)} className="px-5 py-2.5 hover:bg-slate-50 flex items-center gap-4 cursor-pointer transition-colors">
                                             <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-200">
@@ -144,7 +147,7 @@ export default function HeroSearch() {
             <div className="flex-1 flex items-center gap-4 px-6 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group">
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">calendar_today</span>
                 <div className="flex flex-col flex-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Dates</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{t('search.dates')}</label>
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none text-slate-500 w-full" />
                 </div>
             </div>
@@ -152,14 +155,14 @@ export default function HeroSearch() {
             {/* Divider */}
             <div className="hidden md:block w-px h-10 bg-slate-200"></div>
 
-            {/* 3. Budget (CUSTOM DROPDOWN MỚI) */}
+            {/* 3. Budget (CUSTOM DROPDOWN) */}
             <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex-1 flex items-center gap-4 px-6 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative">
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">account_balance_wallet</span>
                 <div className="flex flex-col flex-1 w-full">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Budget</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{t('search.budget')}</label>
                     <div className="flex items-center justify-between">
-                        <span className={`text-sm font-bold ${budgetLabel ? 'text-slate-800' : 'text-slate-300'}`}>
-                            {budgetLabel || 'Select budget'}
+                        <span className={`text-sm font-bold ${currentBudgetLabel ? 'text-slate-800' : 'text-slate-300'}`}>
+                            {currentBudgetLabel || t('search.selectBudget')}
                         </span>
                         <span className="material-symbols-outlined text-slate-400 text-[18px]">
                             {isBudgetOpen ? 'expand_less' : 'expand_more'}
@@ -175,7 +178,7 @@ export default function HeroSearch() {
                                 key={idx}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    handleSelectBudget(opt.value, opt.label);
+                                    handleSelectBudget(opt.value);
                                 }}
                                 className={`px-5 py-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-colors ${budget === opt.value ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
                             >
@@ -191,7 +194,7 @@ export default function HeroSearch() {
 
             {/* Submit Button */}
             <button type="submit" className="w-full md:w-auto mt-2 md:mt-0 bg-primary text-white rounded-full px-8 py-4 font-bold tracking-wide hover:bg-primary-container transition-all active:scale-95 whitespace-nowrap shadow-md shadow-primary/20">
-                Search Path
+                {t('search.searchPath')}
             </button>
         </form>
     );

@@ -26,11 +26,15 @@ model User {
   fullName  String
   phone     String?                                 
   avatarUrl String?
+  dob       String?
+  gender    String?
   role      Role     @default(CUSTOMER)             
   createdAt DateTime @default(now())               
   updatedAt DateTime @updatedAt                     
   bookings  Booking[]
   userVouchers UserVoucher[]
+  chatSessions ChatSession[]
+  reviews   Review[]
 }
 model Destination {
   id          Int      @id @default(autoincrement())
@@ -64,6 +68,7 @@ model Tour {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   bookings       Booking[]
+  reviews        Review[]
 }
 
 // --- CÁC ENUM CHO ĐẶT TOUR ---
@@ -75,7 +80,7 @@ enum BookingStatus {
 
 enum PaymentStatus {
   UNPAID      // Chưa thanh toán
-  PROCESSING  // Đang chờ VNPAY xử lý
+  PROCESSING  // Đang chờ xử lý
   PAID        // Đã thanh toán thành công
   FAILED      // Thanh toán thất bại
 }
@@ -165,4 +170,43 @@ model Article {
   publishedAt DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// --- HỢP PHẦN AI CONCIERGE (LƯU TRỮ LỊCH SỬ CHAT) ---
+model ChatSession {
+  id        String   @id @default(uuid())
+  userId    Int?     // Thuộc về User nào (có thể null nếu khách chưa đăng nhập)
+  user      User?    @relation(fields: [userId], references: [id])
+  
+  messages  ChatMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  role      String   // 'user' | 'model' | 'system'
+  content   String   @db.Text
+  
+  createdAt DateTime @default(now())
+}
+
+// --- HỆ THỐNG ĐÁNH GIÁ (REVIEWS) ---
+model Review {
+  id        Int      @id @default(autoincrement())
+  rating    Int      // Từ 1 đến 5 sao
+  content   String   @db.Text
+  imageUrls String[] // Danh sách các ảnh đính kèm (Lưu mảng trên Postgres)
+  
+  tourId    Int
+  tour      Tour     @relation(fields: [tourId], references: [id])
+  
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

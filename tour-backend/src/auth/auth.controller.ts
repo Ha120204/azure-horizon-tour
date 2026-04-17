@@ -55,7 +55,7 @@ export class AuthController {
   @Patch('profile')
   async updateProfile(
     @Request() req,
-    @Body() body: { fullName: string, phone?: string }
+    @Body() body: { fullName?: string, phone?: string, dob?: string, gender?: string }
   ) {
     const userId = req.user.userId;
     return this.authService.updateProfile(userId, body);
@@ -103,5 +103,15 @@ export class AuthController {
       message: 'Avatar uploaded successfully',
       data: { avatarUrl }
     };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('change-password')
+  async changePassword(
+    @Request() req,
+    @Body() body: { currentPassword: string; newPassword: string }
+  ) {
+    const userId = req.user.userId;
+    return this.authService.changePassword(userId, body.currentPassword, body.newPassword);
   }
 }

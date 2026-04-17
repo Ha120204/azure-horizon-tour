@@ -158,7 +158,7 @@ export class AuthService {
     return safeUserInfo;
   }
   // Thêm hàm Cập nhật Profile
-  async updateProfile(userId: number, updateData: { fullName: string, phone?: string }) {
+  async updateProfile(userId: number, updateData: { fullName?: string, phone?: string, dob?: string, gender?: string }) {
     // 1. Tìm user trong Database
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
@@ -170,8 +170,10 @@ export class AuthService {
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: {
-        fullName: updateData.fullName,
-        phone: updateData.phone,
+        ...(updateData.fullName && { fullName: updateData.fullName }),
+        ...(updateData.phone !== undefined && { phone: updateData.phone }),
+        ...(updateData.dob !== undefined && { dob: updateData.dob }),
+        ...(updateData.gender !== undefined && { gender: updateData.gender })
       },
     });
 
@@ -195,5 +197,26 @@ export class AuthService {
 
     const { password, ...safeUserInfo } = updatedUser;
     return safeUserInfo;
+  }
+
+  // Thêm hàm Đổi mật khẩu
+  async changePassword(userId: number, currentPass: string, newPass: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found!');
+    }
+
+    const isMatch = await bcrypt.compare(currentPass, user.password);
+    if (!isMatch) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPass, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password updated successfully' };
   }
 }

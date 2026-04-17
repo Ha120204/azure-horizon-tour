@@ -21,6 +21,8 @@ export default function ProfilePage() {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
+    const [dob, setDob] = useState('');
+    const [gender, setGender] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
 
     const [isAvatarUploading, setIsAvatarUploading] = useState(false);
@@ -30,6 +32,16 @@ export default function ProfilePage() {
     const [recentBookings, setRecentBookings] = useState<any[]>([]);
     const [myVouchers, setMyVouchers] = useState<any[]>([]);
     const [showAllVouchers, setShowAllVouchers] = useState(false);
+
+    // State cho đổi mật khẩu
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmNewPassword, setConfirmNewPassword] = useState('');
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [isChangePasswordVisible, setIsChangePasswordVisible] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -48,6 +60,8 @@ export default function ProfilePage() {
                     setName(data.fullName || '');
                     setPhone(data.phone || '');
                     setEmail(data.email || '');
+                    setDob(data.dob || '');
+                    setGender(data.gender || '');
                     setAvatarUrl(data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200");
                 }
 
@@ -71,6 +85,8 @@ export default function ProfilePage() {
                 setName('Đào Thanh Hà (Bản Demo)');
                 setPhone('+84 90 123 4567');
                 setEmail('ha.dt@azurehorizon.com');
+                setDob('1990-01-01');
+                setGender('Female');
                 setAvatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200");
                 setToast({ msg: t('profile.mockWarning'), type: 'error' });
             } finally {
@@ -87,7 +103,7 @@ export default function ProfilePage() {
             const res = await fetchWithAuth('http://localhost:3000/auth/profile', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fullName: name, phone: phone })
+                body: JSON.stringify({ fullName: name, phone: phone, dob, gender })
             });
             if (res.ok) {
                 // Đồng bộ tên mới lên localStorage → Header cập nhật ngay
@@ -99,6 +115,37 @@ export default function ProfilePage() {
         } catch (err) {
             setToast({ msg: t('profile.serverError'), type: 'error' });
         } finally {
+            setTimeout(() => setToast(null), 3000);
+        }
+    };
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newPassword !== confirmNewPassword) {
+            setToast({ msg: t('profile.passwordMismatch') || 'Mật khẩu xác nhận không khớp', type: 'error' });
+            return;
+        }
+        setIsChangingPassword(true);
+        try {
+            const res = await fetchWithAuth('http://localhost:3000/auth/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+
+            if (res.ok) {
+                setToast({ msg: t('profile.passwordSuccess') || 'Đổi mật khẩu thành công', type: 'success' });
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmNewPassword('');
+            } else {
+                const result = await res.json();
+                setToast({ msg: result.message || t('profile.passwordFail') || 'Đổi mật khẩu thất bại', type: 'error' });
+            }
+        } catch (err) {
+            setToast({ msg: t('profile.serverError') || 'Lỗi kết nối', type: 'error' });
+        } finally {
+            setIsChangingPassword(false);
             setTimeout(() => setToast(null), 3000);
         }
     };
@@ -211,25 +258,127 @@ export default function ProfilePage() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="bg-surface-container-lowest p-8 rounded-xl ambient-shadow space-y-6 h-fit">
-                            <h2 className="text-xl font-headline font-bold text-on-surface">{t('profile.personalInfo')}</h2>
-                            <form className="space-y-5" onSubmit={handleUpdateInfo}>
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.fullNameLbl')}</label>
-                                    <input className="w-full bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('profile.fullNamePlace')} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.phoneLbl')}</label>
-                                    <input className="w-full bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('profile.phonePlace')} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.emailLbl')}</label>
-                                    <input className="w-full bg-surface-container-low/60 border-none rounded-lg p-3 text-sm outline-none text-slate-500 cursor-not-allowed" type="email" value={email} readOnly />
-                                </div>
-                                <button type="submit" className="w-full py-3.5 bg-primary text-white rounded-full font-headline font-bold text-sm shadow-md hover:opacity-90 transition-opacity active:scale-95">
-                                    {t('profile.updateBtn')}
-                                </button>
-                            </form>
+                        <div className="bg-surface-container-lowest p-8 rounded-xl ambient-shadow space-y-8 h-fit">
+                            {/* Thông tin cá nhân */}
+                            <div className="space-y-6">
+                                <h2 className="text-xl font-headline font-bold text-on-surface">{t('profile.personalInfo')}</h2>
+                                <form className="space-y-5" onSubmit={handleUpdateInfo}>
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.fullNameLbl') || 'HỌ VÀ TÊN'}</label>
+                                        <input className="w-full bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('profile.fullNamePlace')} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.dobLbl') || 'NGÀY SINH'}</label>
+                                        <input className="w-full bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.genderLbl') || 'GIỚI TÍNH'}</label>
+                                        <select className="w-full bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none" value={gender} onChange={(e) => setGender(e.target.value)}>
+                                            <option value="">{t('checkout.selectGender') || 'Chọn giới tính'}</option>
+                                            <option value="Male">{t('checkout.male') || 'Nam'}</option>
+                                            <option value="Female">{t('checkout.female') || 'Nữ'}</option>
+                                            <option value="Other">{t('checkout.other') || 'Khác'}</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.phoneLbl') || 'SỐ ĐIỆN THOẠI'}</label>
+                                        <input className="w-full bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('profile.phonePlace')} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.emailLbl')}</label>
+                                        <input className="w-full bg-surface-container-low/60 border-none rounded-lg p-3 text-sm outline-none text-slate-500 cursor-not-allowed" type="email" value={email} readOnly />
+                                    </div>
+                                    <button type="submit" className="w-full py-3.5 bg-primary text-white rounded-full font-headline font-bold text-sm shadow-md hover:opacity-90 transition-opacity active:scale-95">
+                                        {t('profile.updateBtn')}
+                                    </button>
+                                </form>
+                            </div>
+
+                            <hr className="border-outline-variant/30" />
+
+                            {/* Thay đổi mật khẩu Toggle */}
+                            <div className="space-y-6">
+                                {!isChangePasswordVisible ? (
+                                    <button
+                                        onClick={() => setIsChangePasswordVisible(true)}
+                                        type="button"
+                                        className="w-full py-3.5 bg-surface-container-low text-on-surface rounded-full font-headline font-bold text-sm hover:bg-outline-variant/20 transition-colors active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <span className="material-symbols-outlined text-lg">lock</span>
+                                        {t('profile.changePassword') || 'Thay đổi mật khẩu'}
+                                    </button>
+                                ) : (
+                                    <form className="space-y-5 animate-in fade-in slide-in-from-top-4 duration-300" onSubmit={handleChangePassword}>
+                                        <div className="flex items-center justify-between px-1 mb-2">
+                                            <h3 className="text-[14px] font-headline font-bold text-on-surface uppercase tracking-wider">{t('profile.changePassword') || 'Thay đổi mật khẩu'}</h3>
+                                            <button type="button" onClick={() => setIsChangePasswordVisible(false)} className="text-outline hover:text-error transition-colors flex items-center">
+                                                <span className="material-symbols-outlined text-lg">close</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.currentPassword') || 'Mật khẩu hiện tại'}</label>
+                                            <div className="flex items-center bg-surface-container-low rounded-lg px-3 focus-within:ring-1 focus-within:ring-primary focus-within:bg-white transition-all">
+                                                <input
+                                                    type={showCurrentPassword ? 'text' : 'password'}
+                                                    className="w-full bg-transparent border-none outline-none py-3 text-sm"
+                                                    value={currentPassword}
+                                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                                    placeholder="••••••••"
+                                                    required
+                                                />
+                                                <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="text-slate-400 hover:text-primary">
+                                                    <span className="material-symbols-outlined text-xl">{showCurrentPassword ? 'visibility' : 'visibility_off'}</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.newPassword') || 'Mật khẩu mới'}</label>
+                                            <div className="flex items-center bg-surface-container-low rounded-lg px-3 focus-within:ring-1 focus-within:ring-primary focus-within:bg-white transition-all">
+                                                <input
+                                                    type={showNewPassword ? 'text' : 'password'}
+                                                    className="w-full bg-transparent border-none outline-none py-3 text-sm"
+                                                    value={newPassword}
+                                                    onChange={(e) => setNewPassword(e.target.value)}
+                                                    placeholder="••••••••"
+                                                    required
+                                                />
+                                                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="text-slate-400 hover:text-primary">
+                                                    <span className="material-symbols-outlined text-xl">{showNewPassword ? 'visibility' : 'visibility_off'}</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.confirmNewPassword') || 'Xác nhận mật khẩu mới'}</label>
+                                            <div className={`flex items-center rounded-lg px-3 focus-within:ring-1 transition-all border ${confirmNewPassword && confirmNewPassword !== newPassword ? 'border-error/50 focus-within:ring-error bg-error/5 focus-within:bg-error/10' : 'border-transparent bg-surface-container-low focus-within:ring-primary focus-within:bg-white'}`}>
+                                                <input
+                                                    type={showConfirmNewPassword ? 'text' : 'password'}
+                                                    className={`w-full bg-transparent border-none outline-none py-3 text-sm ${confirmNewPassword && confirmNewPassword !== newPassword ? 'text-error' : ''}`}
+                                                    value={confirmNewPassword}
+                                                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                                    placeholder="••••••••"
+                                                    required
+                                                />
+                                                <button type="button" onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)} className={`text-slate-400 hover:text-primary ${confirmNewPassword && confirmNewPassword !== newPassword ? 'text-error/70 hover:text-error' : ''}`}>
+                                                    <span className="material-symbols-outlined text-xl">{showConfirmNewPassword ? 'visibility' : 'visibility_off'}</span>
+                                                </button>
+                                            </div>
+                                            {confirmNewPassword && confirmNewPassword !== newPassword && (
+                                                <p className="text-error text-xs flex items-center gap-1 mt-1">
+                                                    <span className="material-symbols-outlined text-[14px]">error</span>
+                                                    {t('profile.passwordNotMatch') || 'Passwords do not match'}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <button disabled={isChangingPassword} type="submit" className={`w-full py-3.5 bg-primary text-white rounded-full font-headline font-bold text-sm shadow-md hover:opacity-90 transition-opacity active:scale-95 ${isChangingPassword ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                                            {isChangingPassword ? '...' : (t('profile.updatePasswordBtn') || 'Cập nhật mật khẩu')}
+                                        </button>
+                                    </form>
+                                )}
+                            </div>
                         </div>
 
                         {/* Voucher Wallet Section */}

@@ -144,26 +144,32 @@ export default function RegisterPage() {
                             <div className="space-y-2 w-full">
                                 <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">Confirm Password</label>
 
-                                <div className="flex items-center bg-slate-50/50 rounded-lg px-3 focus-within:ring-1 focus-within:ring-primary focus-within:bg-white transition-all border border-slate-100">
-                                    <span className="material-symbols-outlined text-slate-400 mr-2 flex-shrink-0">lock_reset</span>
+                                <div className={`flex items-center rounded-lg px-3 focus-within:ring-1 transition-all border ${confirmPassword && confirmPassword !== password ? 'border-error/50 focus-within:ring-error bg-error/5 focus-within:bg-error/10' : 'border-slate-100 bg-slate-50/50 focus-within:ring-primary focus-within:bg-white'}`}>
+                                    <span className={`material-symbols-outlined mr-2 flex-shrink-0 ${confirmPassword && confirmPassword !== password ? 'text-error' : 'text-slate-400'}`}>lock_reset</span>
 
                                     <input
                                         type={showConfirmPassword ? 'text' : 'password'}
-                                        className="flex-1 bg-transparent border-none outline-none py-3 text-sm min-w-0 text-slate-700"
+                                        className={`flex-1 bg-transparent border-none outline-none py-3 text-sm min-w-0 ${confirmPassword && confirmPassword !== password ? 'text-error' : 'text-slate-700'}`}
                                         placeholder="Confirm password"
-                                        value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} // Bật lại biến của em
+                                        value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                                     />
 
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="text-slate-400 hover:text-primary ml-2 flex-shrink-0 transition-colors"
+                                        className={`ml-2 flex-shrink-0 transition-colors ${confirmPassword && confirmPassword !== password ? 'text-error/70 hover:text-error' : 'text-slate-400 hover:text-primary'}`}
                                     >
                                         <span className="material-symbols-outlined text-xl">
                                             {showConfirmPassword ? 'visibility' : 'visibility_off'}
                                         </span>
                                     </button>
                                 </div>
+                                {confirmPassword && confirmPassword !== password && (
+                                    <p className="text-error text-xs flex items-center gap-1 mt-1">
+                                        <span className="material-symbols-outlined text-[14px]">error</span>
+                                        Passwords do not match
+                                    </p>
+                                )}
                             </div>
 
                         </div>

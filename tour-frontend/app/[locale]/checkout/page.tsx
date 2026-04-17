@@ -39,17 +39,18 @@ function CheckoutContent() {
     const [tourData, setTourData] = useState<any>(null);
     const [isLoadingTour, setIsLoadingTour] = useState(true);
 
-    const [contactInfo, setContactInfo] = useState({ fullName: '', email: '', phone: '' });
+    const [contactInfo, setContactInfo] = useState({ fullName: '', email: '', phone: '', dob: '', gender: '' });
     const [leadTraveler, setLeadTraveler] = useState({ fullName: '', dob: '', gender: '', notes: '' });
 
     const [passengers, setPassengers] = useState<Passenger[]>([]);
+    const [isBookForMyself, setIsBookForMyself] = useState(true);
     const [activeFormType, setActiveFormType] = useState<PassengerType | null>(null);
     const [tempFormData, setTempFormData] = useState({ fullName: '', dob: '', gender: '' });
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
-    
+
     // Toast Alert State
     const [errorMsg, setErrorMsg] = useState('');
-    
+
     const showError = (msg: string) => {
         setErrorMsg(msg);
         setTimeout(() => setErrorMsg(''), 4000);
@@ -87,8 +88,19 @@ function CheckoutContent() {
                     const resUser = await fetchWithAuth('http://localhost:3000/auth/profile');
                     if (resUser.ok) {
                         const uData = await resUser.json();
-                        setContactInfo({ fullName: uData.fullName || '', email: uData.email || '', phone: uData.phone || '' });
-                        setLeadTraveler(prev => ({ ...prev, fullName: uData.fullName || '' }));
+                        setContactInfo({ 
+                            fullName: uData.fullName || '', 
+                            email: uData.email || '', 
+                            phone: uData.phone || '',
+                            dob: uData.dob || '',
+                            gender: uData.gender || ''
+                        });
+                        setLeadTraveler(prev => ({ 
+                            ...prev, 
+                            fullName: uData.fullName || '',
+                            dob: uData.dob || '',
+                            gender: uData.gender || ''
+                        }));
                     }
                 } catch (error) {
                     console.error("Lỗi khi tải thông tin user:", error);
@@ -125,7 +137,7 @@ function CheckoutContent() {
     const subtotal = (adultCount * PRICES['Adult (12+)']) +
         (childCount * PRICES['Child (4-11)']) +
         (infantCount * PRICES['Infant (<4)']) + TAXES;
-    
+
     const discountAmount = appliedVoucher?.discountAmount || 0;
     const totalPrice = Math.max(0, subtotal - discountAmount);
 
@@ -158,16 +170,16 @@ function CheckoutContent() {
                 setVoucherCode(data.code);
                 setVoucherError('');
             } else {
-                let errorMsg = data.message || 'Mã voucher không hợp lệ';
+                let errorMsg = data.message || t('checkout.invalidVoucher');
                 if (typeof errorMsg === 'string' && errorMsg.startsWith('MIN_ORDER:')) {
                     const minVal = Number(errorMsg.split(':')[1]);
-                    errorMsg = `Đơn hàng phải tối thiểu ${formatPrice(minVal)} để sử dụng voucher này`;
+                    errorMsg = t('checkout.minOrder', { amount: formatPrice(minVal) });
                 }
                 setVoucherError(errorMsg);
                 setAppliedVoucher(null);
             }
         } catch {
-            setVoucherError('Lỗi kết nối server');
+            setVoucherError(t('checkout.serverError'));
         } finally {
             setIsValidating(false);
         }
@@ -179,6 +191,25 @@ function CheckoutContent() {
         setVoucherError('');
     };
 
+
+    const handleToggleBookForMyself = (checked: boolean) => {
+        setIsBookForMyself(checked);
+        if (checked) {
+            setLeadTraveler(prev => ({ 
+                ...prev, 
+                fullName: contactInfo.fullName,
+                dob: contactInfo.dob,
+                gender: contactInfo.gender
+            }));
+        } else {
+            setLeadTraveler(prev => ({ 
+                ...prev, 
+                fullName: '',
+                dob: '',
+                gender: ''
+            }));
+        }
+    };
 
     const handleOpenForm = (type: PassengerType | null) => {
         setActiveFormType(type);
@@ -289,7 +320,7 @@ function CheckoutContent() {
 
     return (
         <main className="pt-28 pb-20 px-4 md:px-8 max-w-screen-2xl mx-auto flex-grow w-full">
-            
+
             {/* Custom Error Toast */}
             {errorMsg && (
                 <div className="fixed top-28 right-8 z-[100] animate-modalSlideUp">
@@ -298,7 +329,7 @@ function CheckoutContent() {
                             <span className="material-symbols-outlined text-2xl">priority_high</span>
                         </div>
                         <div className="max-w-xs">
-                            <h4 className="text-sm font-bold text-slate-800 font-headline uppercase tracking-wide">Lỗi Thông Tin</h4>
+                            <h4 className="text-sm font-bold text-slate-800 font-headline uppercase tracking-wide">{t('checkout.infoError')}</h4>
                             <p className="text-[13px] text-slate-500 mt-1 leading-snug">{errorMsg}</p>
                         </div>
                         <button onClick={() => setErrorMsg('')} className="ml-2 text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors w-9 h-9 flex items-center justify-center">
@@ -307,7 +338,7 @@ function CheckoutContent() {
                     </div>
                 </div>
             )}
-            
+
             <div className="mb-8 md:mb-12 flex items-center justify-start gap-4 md:gap-12">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-full primary-gradient flex items-center justify-center text-white font-bold text-sm md:text-base shadow-md">1</div>
@@ -337,7 +368,13 @@ function CheckoutContent() {
                                     type="text"
                                     placeholder={t('checkout.enterFullName')}
                                     value={contactInfo.fullName}
-                                    onChange={(e) => setContactInfo({ ...contactInfo, fullName: e.target.value })}
+                                    onChange={(e) => {
+                                        const newVal = e.target.value;
+                                        setContactInfo({ ...contactInfo, fullName: newVal });
+                                        if (isBookForMyself) {
+                                            setLeadTraveler(prev => ({ ...prev, fullName: newVal }));
+                                        }
+                                    }}
                                 />
                             </div>
                             <div>
@@ -363,6 +400,25 @@ function CheckoutContent() {
                             </div>
                         </div>
                     </section>
+
+                    <label className="flex items-center justify-between bg-primary/5 rounded-xl p-4 md:p-5 border border-primary/20 cursor-pointer shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                        <div className="flex items-center gap-4 pl-2 md:pl-4">
+                            <div className="relative flex items-center justify-center">
+                                <input
+                                    type="checkbox"
+                                    checked={isBookForMyself}
+                                    onChange={(e) => handleToggleBookForMyself(e.target.checked)}
+                                    className="w-6 h-6 appearance-none border-2 border-primary/50 rounded-md flex-shrink-0 checked:bg-primary checked:border-primary transition-colors cursor-pointer group-hover:border-primary outline-none"
+                                />
+                                <span className={`material-symbols-outlined text-white text-[18px] font-bold absolute pointer-events-none transition-opacity ${isBookForMyself ? 'opacity-100' : 'opacity-0'}`}>check</span>
+                            </div>
+                            <div>
+                                <span className="text-[15px] md:text-base font-bold text-primary block">{t('checkout.bookForMyself')}</span>
+                            </div>
+                        </div>
+                        <span className="material-symbols-outlined text-primary/30 group-hover:text-primary/70 transition-colors hidden sm:block text-3xl">post_add</span>
+                    </label>
 
                     {/* 2. Passenger Information Card */}
                     <section className="bg-white rounded-xl p-6 md:p-8 ambient-shadow ghost-border">
@@ -451,7 +507,7 @@ function CheckoutContent() {
                                     {(['Adult (12+)', 'Child (4-11)', 'Infant (<4)'] as PassengerType[]).map((type) => {
                                         const isActive = activeFormType === type;
                                         const icon = type.includes('Child') ? 'child_care' : type.includes('Infant') ? 'baby_changing_station' : 'person';
-                                        
+
                                         const translatedType = type === 'Adult (12+)' ? t('checkout.adult') : type === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant');
 
                                         return (
@@ -590,7 +646,7 @@ function CheckoutContent() {
                             <div className="pt-4 border-t border-dashed border-outline-variant/40">
                                 <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-1.5">
                                     <span className="material-symbols-outlined text-sm text-primary">confirmation_number</span>
-                                    Mã giảm giá
+                                    {t('checkout.voucherTitle')}
                                 </p>
 
                                 {appliedVoucher ? (
@@ -605,27 +661,43 @@ function CheckoutContent() {
                                             </button>
                                         </div>
                                         <div className="flex justify-between items-center mt-3 pt-3 border-t border-tertiary/10">
-                                            <span className="text-xs text-on-surface-variant">Giảm giá</span>
+                                            <span className="text-xs text-on-surface-variant">{t('checkout.discount')}</span>
                                             <span className="font-bold text-tertiary text-sm">-{formatPrice(appliedVoucher.discountAmount)}</span>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="relative">
                                         <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={voucherCode}
-                                                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                                                placeholder="Nhập mã voucher"
-                                                className="flex-grow bg-surface-container-low border border-outline-variant/20 rounded-lg px-4 py-3 text-sm font-mono focus:ring-1 focus:ring-primary outline-none uppercase"
-                                                onKeyDown={(e) => e.key === 'Enter' && handleApplyVoucher()}
-                                            />
+                                            <div className="relative flex-grow">
+                                                <input
+                                                    type="text"
+                                                    value={voucherCode}
+                                                    onChange={(e) => {
+                                                        setVoucherCode(e.target.value.toUpperCase());
+                                                        if (voucherError) setVoucherError('');
+                                                    }}
+                                                    placeholder={t('checkout.enterVoucher')}
+                                                    className="w-full bg-surface-container-low border border-outline-variant/20 rounded-lg pl-4 pr-10 py-3 text-sm font-mono focus:ring-1 focus:ring-primary outline-none uppercase"
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleApplyVoucher()}
+                                                />
+                                                {voucherCode && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setVoucherCode('');
+                                                            setVoucherError('');
+                                                        }}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-outline hover:text-error transition-colors flex items-center justify-center p-1 rounded-full"
+                                                    >
+                                                        <span className="material-symbols-outlined text-base">close</span>
+                                                    </button>
+                                                )}
+                                            </div>
                                             <button
                                                 onClick={() => handleApplyVoucher()}
                                                 disabled={isValidating || !voucherCode.trim()}
                                                 className="px-5 py-3 bg-primary text-white rounded-lg font-bold text-sm hover:opacity-90 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                                             >
-                                                {isValidating ? '...' : 'Áp dụng'}
+                                                {isValidating ? '...' : t('checkout.apply')}
                                             </button>
                                         </div>
                                         {voucherError && (
@@ -643,7 +715,7 @@ function CheckoutContent() {
                                                     className="text-xs text-primary font-bold flex items-center gap-1 hover:underline underline-offset-4"
                                                 >
                                                     <span className="material-symbols-outlined text-sm">wallet</span>
-                                                    Chọn từ ví ({myWalletVouchers.length})
+                                                    {t('checkout.chooseFromWallet')} ({myWalletVouchers.length})
                                                     <span className={`material-symbols-outlined text-sm transition-transform ${showWalletDropdown ? 'rotate-180' : ''}`}>expand_more</span>
                                                 </button>
                                                 {showWalletDropdown && (
@@ -677,13 +749,13 @@ function CheckoutContent() {
                             <div className="pt-4 mt-2 border-t-2 border-primary/10">
                                 {appliedVoucher && (
                                     <div className="flex justify-between items-center mb-2 text-sm">
-                                        <span className="text-on-surface-variant">Tạm tính</span>
+                                        <span className="text-on-surface-variant">{t('checkout.subtotal')}</span>
                                         <span className="text-on-surface-variant">{formatPrice(subtotal)}</span>
                                     </div>
                                 )}
                                 {appliedVoucher && (
                                     <div className="flex justify-between items-center mb-3 text-sm">
-                                        <span className="text-tertiary font-medium">Giảm giá voucher</span>
+                                        <span className="text-tertiary font-medium">{t('checkout.voucherDiscount')}</span>
                                         <span className="text-tertiary font-bold">-{formatPrice(discountAmount)}</span>
                                     </div>
                                 )}

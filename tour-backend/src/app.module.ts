@@ -13,6 +13,7 @@ import { VoucherModule } from './voucher/voucher.module';
 import { ArticleModule } from './article/article.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AiModule } from './ai/ai.module';
+import { ReviewModule } from './review/review.module';
 
 @Module({
   imports: [PrismaModule, AuthModule, TourModule, BookingModule, PaymentModule, MailModule,
@@ -20,7 +21,7 @@ import { AiModule } from './ai/ai.module';
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
-    SearchModule, VoucherModule, ArticleModule, AiModule,],
+    SearchModule, VoucherModule, ArticleModule, AiModule, ReviewModule,],
   controllers: [AppController],
   providers: [AppService],
 })

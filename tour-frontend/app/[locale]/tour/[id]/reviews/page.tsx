@@ -5,9 +5,11 @@ import { useState, useRef, useEffect } from 'react';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
 import ReviewModal from '@/app/components/ReviewModal';
+import { useParams } from 'next/navigation';
 import { useLocale } from '@/app/context/LocaleContext';
 
 export default function ReviewsPage() {
+    const params = useParams();
     const { t } = useLocale();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [activeFilter, setActiveFilter] = useState('all');
@@ -287,6 +289,7 @@ export default function ReviewsPage() {
             <ReviewModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
+                tourId={Number(params.id)}
             />
         </div>
     );

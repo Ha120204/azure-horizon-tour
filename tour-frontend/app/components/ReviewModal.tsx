@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { useLocale } from '@/app/context/LocaleContext';
+import { fetchWithAuth } from '@/app/utils/fetchWithAuth';
 
 type ReviewModalProps = {
     isOpen: boolean;
     onClose: () => void;
+    tourId: number;
+    onSuccess?: () => void;
 };
 
-export default function ReviewModal({ isOpen, onClose }: ReviewModalProps) {
+export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: ReviewModalProps) {
     const { t } = useLocale();
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState('');
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
     const [images, setImages] = useState<string[]>([]);
 
     if (!isOpen) return null;
@@ -20,6 +25,7 @@ export default function ReviewModal({ isOpen, onClose }: ReviewModalProps) {
         setImages([]);
         setRating(5);
         setComment('');
+        setErrorMsg('');
         onClose();
     };
 
@@ -34,16 +40,38 @@ export default function ReviewModal({ isOpen, onClose }: ReviewModalProps) {
         setImages(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Giả lập gọi API gửi đánh giá
-        setTimeout(() => {
-            setIsSubmitted(true);
-            setTimeout(() => {
-                setIsSubmitted(false);
-                handleCloseModal();
-            }, 2000);
-        }, 500);
+        setIsSubmitting(true);
+        setErrorMsg('');
+
+        try {
+            const res = await fetchWithAuth(`http://localhost:3000/tour/${tourId}/reviews`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rating,
+                    content: comment,
+                    imageUrls: [] // Placeholder until image upload logic is handled
+                })
+            });
+
+            if (res.ok) {
+                setIsSubmitted(true);
+                if (onSuccess) onSuccess();
+                setTimeout(() => {
+                    setIsSubmitted(false);
+                    handleCloseModal();
+                }, 2000);
+            } else {
+                const data = await res.json();
+                setErrorMsg(data.message || t('reviews.errorSubmit') || 'Gửi đánh giá không thành công.');
+            }
+        } catch (error) {
+            setErrorMsg(t('reviews.errorSubmit') || 'Có lỗi xảy ra.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -70,6 +98,12 @@ export default function ReviewModal({ isOpen, onClose }: ReviewModalProps) {
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            {errorMsg && (
+                                <div className="p-4 bg-error/10 text-error rounded-xl text-sm font-semibold flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-lg">error</span>
+                                    {errorMsg}
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-bold text-on-surface mb-3">
                                     {t('reviews.ratingLabel')}
@@ -141,8 +175,10 @@ export default function ReviewModal({ isOpen, onClose }: ReviewModalProps) {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 py-3 px-4 rounded-full font-bold text-sm text-on-primary bg-primary hover:bg-primary/90 transition-colors"
+                                    disabled={isSubmitting}
+                                    className="flex-1 py-3 px-4 rounded-full font-bold text-sm text-on-primary bg-primary hover:bg-primary/90 transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
                                 >
+                                    {isSubmitting && <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>}
                                     {t('reviews.submit')}
                                 </button>
                             </div>

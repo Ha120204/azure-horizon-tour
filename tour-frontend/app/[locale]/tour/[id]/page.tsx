@@ -25,6 +25,22 @@ export default function TourDetailPage() {
     const [tiers, setTiers] = useState(ACCOMMODATION_TIERS);
     const [selectedTier, setSelectedTier] = useState(ACCOMMODATION_TIERS[0]);
 
+    const [reviews, setReviews] = useState<any[]>([]);
+    const [reviewStats, setReviewStats] = useState<any>({ averageRating: 0, totalReviews: 0 });
+
+    const fetchReviews = async () => {
+        try {
+            const res = await fetch(`http://localhost:3000/tour/${params.id}/reviews?limit=2`);
+            if (res.ok) {
+                const data = await res.json();
+                setReviews(data.data || []);
+                setReviewStats(data.stats || { averageRating: 0, totalReviews: 0 });
+            }
+        } catch (error) {
+            console.error("Lỗi tải reviews:", error);
+        }
+    };
+
     useEffect(() => {
         const fetchTourDetail = async () => {
             try {
@@ -48,7 +64,10 @@ export default function TourDetailPage() {
             }
         };
 
-        if (params.id) fetchTourDetail();
+        if (params.id) {
+            fetchTourDetail();
+            fetchReviews();
+        }
     }, [params.id]);
 
     const handleTierChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -114,7 +133,8 @@ export default function TourDetailPage() {
                                 <span className="bg-secondary-container/10 text-secondary-container px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase border border-secondary-container/20">{t('tour_detail.premiumExp')}</span>
                                 <div className="flex items-center text-secondary-container">
                                     <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                                    <span className="text-sm font-bold ml-1 text-on-surface">{t('tour_detail.excellent')}</span>
+                                    <span className="text-sm font-bold ml-1 text-on-surface">{reviewStats.averageRating || '5.0'}</span>
+                                    <span className="text-xs text-outline ml-1">({reviewStats.totalReviews || 0} reviews)</span>
                                 </div>
                             </div>
 
@@ -206,8 +226,8 @@ export default function TourDetailPage() {
                                     <h2 className="text-2xl font-bold font-headline mb-1">{t('tour_detail.storiesTitle')}</h2>
                                     <p className="text-on-surface-variant text-sm md:text-base">{t('tour_detail.storiesSub')}</p>
                                 </div>
-                                <button 
-                                    onClick={() => setIsReviewModalOpen(true)} 
+                                <button
+                                    onClick={() => setIsReviewModalOpen(true)}
                                     className="group relative inline-flex items-center text-[15px] font-semibold text-on-surface hover:text-primary transition-colors pb-1"
                                 >
                                     {t('tour_detail.writeReview')}
@@ -215,36 +235,27 @@ export default function TourDetailPage() {
                                 </button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-outline-variant/20">
-                                    <div className="flex gap-1 text-secondary-container mb-3">
-                                        {[...Array(5)].map((_, i) => <span key={i} className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>)}
-                                    </div>
-                                    <p className="text-on-surface-variant italic mb-6 text-sm">{t('tour_detail.review1Text')}</p>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0">
-                                            <img className="w-full h-full object-cover" alt="Elena Rodriguez" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150" />
+                                {reviews.length > 0 ? reviews.map(r => (
+                                    <div key={r.id} className="bg-white p-6 rounded-xl shadow-sm border border-outline-variant/20">
+                                        <div className="flex gap-1 text-secondary-container mb-3">
+                                            {[...Array(5)].map((_, i) => <span key={i} className="material-symbols-outlined text-sm" style={{ fontVariationSettings: i < r.rating ? "'FILL' 1" : "'FILL' 0" }}>star</span>)}
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-sm text-on-surface">{t('tour_detail.review1Author')}</p>
-                                            <p className="text-[10px] uppercase tracking-wider text-outline">{t('tour_detail.review1Date')}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-6 rounded-xl shadow-sm border border-outline-variant/20">
-                                    <div className="flex gap-1 text-secondary-container mb-3">
-                                        {[...Array(5)].map((_, i) => <span key={i} className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>)}
-                                    </div>
-                                    <p className="text-on-surface-variant italic mb-6 text-sm">{t('tour_detail.review2Text')}</p>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0">
-                                            <img className="w-full h-full object-cover" alt="David Chen" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150" />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-sm text-on-surface">{t('tour_detail.review2Author')}</p>
-                                            <p className="text-[10px] uppercase tracking-wider text-outline">{t('tour_detail.review2Date')}</p>
+                                        <p className="text-on-surface-variant italic mb-6 text-sm line-clamp-3">{r.content}</p>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0">
+                                                <img className="w-full h-full object-cover" alt={r.user?.fullName} src={r.user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"} />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-sm text-on-surface">{r.user?.fullName}</p>
+                                                <p className="text-[10px] uppercase tracking-wider text-outline">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</p>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                )) : (
+                                    <div className="col-span-2 text-center py-6 text-outline-variant italic">
+                                        {t('reviews.noReviewsYet') || 'Chưa có đánh giá nào. Hãy là người đầu tiên trải nghiệm!'}
+                                    </div>
+                                )}
                             </div>
                             <div className="mt-8 flex justify-center">
                                 <Link href={`/tour/${params.id}/reviews`} className="text-primary font-bold text-sm md:text-base flex items-center gap-2 hover:bg-surface-container-low px-6 py-3 rounded-full transition-colors">
@@ -344,9 +355,13 @@ export default function TourDetailPage() {
 
             <Footer />
 
-            <ReviewModal 
+            <ReviewModal
                 isOpen={isReviewModalOpen}
                 onClose={() => setIsReviewModalOpen(false)}
+                tourId={tour.id}
+                onSuccess={() => {
+                    fetchReviews();
+                }}
             />
         </div>
     );

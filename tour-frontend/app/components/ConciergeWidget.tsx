@@ -38,6 +38,27 @@ export default function ConciergeWidget() {
         }
     }, [messages, isTyping, isOpen]);
 
+    // Lấy lịch sử chat khi mở widget
+    useEffect(() => {
+        const loadHistory = async () => {
+            const sessionId = localStorage.getItem('aiSessionId');
+            if (sessionId) {
+                try {
+                    const res = await fetch(`http://localhost:3000/ai/chat/${sessionId}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.messages && data.messages.length > 0) {
+                            setMessages(data.messages);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Lỗi tải lịch sử:', e);
+                }
+            }
+        };
+        loadHistory();
+    }, []);
+
     // Cooldown chống spam (3 giây giữa mỗi lần gửi)
     const [cooldown, setCooldown] = useState(false);
 
@@ -55,28 +76,32 @@ export default function ConciergeWidget() {
         setTimeout(() => setCooldown(false), 3000);
 
         try {
-            // Lấy tối đa 6 tin nhắn cuối để tiết kiệm token Gemini
-            const history = messages
-                .filter(m => m.text || m.textKey)
-                .slice(-6)
-                .map(m => ({
-                    role: m.role,
-                    text: m.text || (m.textKey ? t(m.textKey) : ''),
-                }));
+            // Không cần gửi history từ frontend nữa vì server dùng sessionId
+            const sessionId = localStorage.getItem('aiSessionId');
+            const token = localStorage.getItem('accessToken');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
 
             const res = await fetch('http://localhost:3000/ai/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text, history }),
+                headers,
+                body: JSON.stringify({ message: text, sessionId: sessionId || undefined }),
             });
 
             const data = await res.json();
+            
+            if (data.sessionId) {
+                localStorage.setItem('aiSessionId', data.sessionId);
+            }
 
             setIsTyping(false);
             setMessages(prev => [...prev, {
                 id: (Date.now() + 1).toString(),
                 role: 'ai',
                 text: data.reply || 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
+                tourCard: data.tourCard
             }]);
         } catch (error) {
             console.error('AI Chat Error:', error);

@@ -58,12 +58,52 @@ export class AiService {
         }));
     }
 
+    /**
+     * Tool: Kiểm tra đơn hàng của user
+     */
+    private async executeCheckMyBookings(args: any, userId: number | null) {
+        if (!userId) {
+            return { message: "Khách hàng chưa đăng nhập. Vui lòng nhắc họ đăng nhập để kiểm tra đơn đặt tour cá nhân." };
+        }
+
+        const statusFilter = args.status; // Optional
+
+        let whereClause: any = { userId };
+        if (statusFilter && statusFilter !== 'ALL') {
+             whereClause.status = statusFilter;
+        }
+
+        const bookings = await this.prisma.booking.findMany({
+            where: whereClause,
+            include: { tour: true },
+            orderBy: { createdAt: 'desc' },
+            take: 3
+        });
+
+        if (bookings.length === 0) {
+            return { message: "Không tìm thấy chuyến đi nào của bạn trong hệ thống." };
+        }
+
+        return bookings.map(b => ({
+            bookingCode: b.bookingCode,
+            tourName: b.tour.name,
+            departureDate: b.tour.startDate.toISOString().split('T')[0],
+            numberOfPeople: b.numberOfPeople,
+            totalPrice: b.totalPrice,
+            status: b.status,
+            paymentStatus: b.paymentStatus
+        }));
+    }
+
     private buildSystemPrompt(): string {
         return `Bạn là "Azure Horizon AI Concierge" — trợ lý du lịch cao cấp của nền tảng đặt tour Azure Horizon.
 
 NHIỆM VỤ CỐT LÕI:
 - Tư vấn du lịch, gợi ý tour phù hợp dựa trên sở thích, ngân sách và lịch trình của khách.
-- Khi khách hỏi tìm tour, hãy CHỦ ĐỘNG GỌI TOOL "search_tours" để truy xuất dữ liệu từ hệ thống! Tuyệt đối không bịa ra thông tin.
+- Khách hàng có thể là đang ẩn danh, hoặc đã đăng nhập. Bạn có ngữ cảnh lịch sử trò chuyện.
+- Khi khách hỏi tìm tour, hãy CHỦ ĐỘNG GỌI TOOL "search_tours" để truy xuất dữ liệu từ hệ thống!
+- Khi khách hỏi về lịch trình CHUYẾN ĐI CỦA HỌ, hãy CHỦ ĐỘNG GỌI TOOL "check_my_bookings" để tra cứu đơn đặt tour cá nhân.
+- Tuyệt đối không bịa ra thông tin.
 
 ĐỊNH DẠNG TRẢ LỜI CÓ CHỨA "THẺ TOUR" (RICH UI):
 Nếu bạn tìm thấy 1 tour rất phù hợp và muốn "Chốt" giới thiệu nó cho khách, hãy chèn thêm 1 đoạn mã JSON với cấu trúc chính xác như sau vào cuối câu trả lời của bạn:
@@ -93,7 +133,7 @@ LƯU Ý:
 - Giữ câu trả lời văn bản ngắn gọn, thân thiện (tiếng Việt hoặc English tùy khách dùng).`;
     }
 
-    async chat(userMessage: string, conversationHistory: { role: string; text: string }[]): Promise<{ reply: string, tourCard?: any }> {
+    async chat(userMessage: string, sessionId?: string, userId?: number | null): Promise<{ reply: string, tourCard?: any, sessionId?: string }> {
         const tools: any = [
             {
                 functionDeclarations: [
@@ -115,8 +155,60 @@ LƯU Ý:
                         }
                     }
                 ]
+            },
+            {
+                functionDeclarations: [
+                    {
+                        name: "check_my_bookings",
+                        description: "Tìm kiếm và lấy thông tin các đơn đặt tour (booking) của người dùng hiện tại đang chat với bạn.",
+                        parameters: {
+                            type: "OBJECT",
+                            properties: {
+                                status: {
+                                    type: "STRING",
+                                    description: "Lọc theo trạng thái đơn hàng (ví dụ: 'CONFIRMED', 'PENDING', 'CANCELLED', hoặc 'ALL'). Mặc định là 'ALL'."
+                                }
+                            }
+                        }
+                    }
+                ]
             }
         ];
+
+        let currentSessionId = sessionId;
+
+        // Lưu / Lấy lịch sử chat
+        let dbHistory: any[] = [];
+        if (currentSessionId) {
+            const session = await this.prisma.chatSession.findUnique({
+                where: { id: currentSessionId },
+                include: { messages: { orderBy: { createdAt: 'asc' } } }
+            });
+            if (session) {
+                dbHistory = session.messages.map(msg => ({
+                    role: msg.role === 'model' ? 'model' : 'user',
+                    text: msg.content
+                }));
+            } else {
+                currentSessionId = undefined; // Session ID không tồn tại
+            }
+        }
+
+        if (!currentSessionId) {
+            const newSession = await this.prisma.chatSession.create({
+                data: { userId: userId || null }
+            });
+            currentSessionId = newSession.id;
+        }
+
+        // Lưu câu hỏi của User vào DB
+        await this.prisma.chatMessage.create({
+            data: {
+                sessionId: currentSessionId,
+                role: 'user',
+                content: userMessage
+            }
+        });
 
         const MAX_RETRIES = 1;
 
@@ -131,10 +223,10 @@ LƯU Ý:
                 });
 
                 // Lọc ra các text null/undefined để tránh API throw error
-                const historyClean: any[] = conversationHistory
+                const historyClean: any[] = dbHistory
                     .filter(msg => msg.text && msg.text.trim() !== '')
                     .map(msg => ({
-                        role: msg.role === 'ai' ? 'model' : 'user',
+                        role: msg.role === 'model' ? 'model' : 'user',
                         parts: [{ text: msg.text }],
                     }));
 
@@ -153,6 +245,8 @@ LƯU Ý:
 
                     if (functionCall.name === 'search_tours') {
                         fnResult = await this.executeSearchTours(functionCall.args);
+                    } else if (functionCall.name === 'check_my_bookings') {
+                        fnResult = await this.executeCheckMyBookings(functionCall.args, userId || null);
                     }
 
                     // Chèn thêm content Model call
@@ -192,7 +286,16 @@ LƯU Ý:
                     }
                 }
 
-                return { reply: reply || 'Xin lỗi, tôi không thể trả lời lúc này.', tourCard };
+                // Lưu câu trả lời của AI vào DB
+                await this.prisma.chatMessage.create({
+                    data: {
+                        sessionId: currentSessionId,
+                        role: 'model',
+                        content: rawText // Lưu nguyên bản có cả thẻ TOUR_CARD
+                    }
+                });
+
+                return { reply: reply || 'Xin lỗi, tôi không thể trả lời lúc này.', tourCard, sessionId: currentSessionId };
 
             } catch (error: any) {
                 const errorMsg = error?.message || String(error);
@@ -207,15 +310,49 @@ LƯU Ý:
                     }
 
                     // Hết lần retry
-                    return { reply: '⏳ Trợ lý AI hiện đang sử dụng phiên bản API miễn phí và đã đạt giới hạn truy vấn của Google. Vui lòng chờ vài phút rồi nhắn lại nhé!' };
+                    return { reply: '⏳ Trợ lý AI hiện đang sử dụng phiên bản API miễn phí và đã đạt giới hạn truy vấn của Google. Vui lòng chờ vài phút rồi nhắn lại nhé!', sessionId: currentSessionId };
                 }
 
                 console.error('[AI] Lỗi kết nối Gemini API:', errorMsg);
                 // Nếu lỗi khác (không phải 429), trả về lỗi ngay không retry
-                return { reply: '❌ Không thể kết nối đến Trợ lý AI. Vui lòng thử lại sau.' };
+                return { reply: '❌ Không thể kết nối đến Trợ lý AI. Vui lòng thử lại sau.', sessionId: currentSessionId };
             }
         }
         
-        return { reply: '❌ Đã có lỗi không xác định xảy ra.' };
+        return { reply: '❌ Đã có lỗi không xác định xảy ra.', sessionId: currentSessionId };
+    }
+
+    async getHistory(sessionId: string) {
+        const session = await this.prisma.chatSession.findUnique({
+            where: { id: sessionId },
+            include: { messages: { orderBy: { createdAt: 'asc' } } }
+        });
+        if (!session) return { messages: [] };
+        
+        return {
+            messages: session.messages.map(msg => {
+                let text = msg.content;
+                let tourCard = undefined;
+                
+                if (msg.role === 'model') {
+                    const cardMatch = text.match(/<<<TOUR_CARD>>>([\s\S]*?)<<<END_TOUR_CARD>>>/);
+                    if (cardMatch && cardMatch[1]) {
+                        try {
+                            tourCard = JSON.parse(cardMatch[1].trim());
+                            text = text.replace(cardMatch[0], '').trim();
+                        } catch (e) {
+                            console.error('Lỗi parse json trong getHistory:', e);
+                        }
+                    }
+                }
+                
+                return {
+                    id: msg.id.toString(),
+                    role: msg.role === 'model' ? 'ai' : 'user',
+                    text: text,
+                    tourCard: tourCard
+                };
+            })
+        };
     }
 }

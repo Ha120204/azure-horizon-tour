@@ -18,24 +18,32 @@ enum Role {
   CUSTOMER
 }
 
-// Thiết kế bảng User
+// =============================================
+// BẢNG NGƯỜI DÙNG (USER)
+// =============================================
 model User {
-  id        Int      @id @default(autoincrement()) 
-  email     String   @unique                        
+  id        Int       @id @default(autoincrement()) 
+  email     String    @unique                        
   password  String                                  
   fullName  String
   phone     String?                                 
   avatarUrl String?
   dob       String?
   gender    String?
-  role      Role     @default(CUSTOMER)             
-  createdAt DateTime @default(now())               
-  updatedAt DateTime @updatedAt                     
-  bookings  Booking[]
+  role      Role      @default(CUSTOMER)             
+  createdAt DateTime  @default(now())               
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // [PHASE 1] Soft Delete                     
+
+  bookings     Booking[]
   userVouchers UserVoucher[]
   chatSessions ChatSession[]
-  reviews   Review[]
+  reviews      Review[]
 }
+
+// =============================================
+// BẢNG ĐIỂM ĐẾN (DESTINATION)
+// =============================================
 model Destination {
   id          Int      @id @default(autoincrement())
   name        String   @unique 
@@ -49,7 +57,10 @@ model Destination {
   
   tours       Tour[]   
 }
-// Bảng Tour du lịch
+
+// =============================================
+// BẢNG TOUR DU LỊCH
+// =============================================
 model Tour {
   id             Int         @id @default(autoincrement())
   tourCode       String      @unique @default(uuid())
@@ -64,11 +75,33 @@ model Tour {
   duration       String      @default("Chưa xác định")
   availableSeats Int
   imageUrl       String?
+  averageRating  Float       @default(0)
+  tourType       String      @default("Luxury Retreat")
   
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?   // [PHASE 1] Soft Delete
+
   bookings       Booking[]
   reviews        Review[]
+  itinerary      TourItinerary[] // [PHASE 1] Lịch trình theo ngày
+
+  @@index([destinationId, startDate])  // [PHASE 1] Index tăng tốc filter
+  @@index([tourType, price])           // [PHASE 1] Index tăng tốc filter
+}
+
+// =============================================
+// BẢNG LỊCH TRÌNH TOUR THEO NGÀY (PHASE 1 - MỚI)
+// =============================================
+model TourItinerary {
+  id          Int    @id @default(autoincrement())
+  tourId      Int
+  tour        Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  dayNumber   Int    // Ngày thứ mấy (1, 2, 3...)
+  title       String // "Khám phá Hội An cổ kính"
+  description String @db.Text // Mô tả chi tiết hoạt động trong ngày
+
+  @@index([tourId, dayNumber])
 }
 
 // --- CÁC ENUM CHO ĐẶT TOUR ---
@@ -85,28 +118,56 @@ enum PaymentStatus {
   FAILED      // Thanh toán thất bại
 }
 
-// --- BẢNG ĐẶT TOUR (BOOKING) ---
+// =============================================
+// BẢNG ĐẶT TOUR (BOOKING)
+// =============================================
 model Booking {
-  id             Int           @id @default(autoincrement())
-  bookingCode    String        @unique @default(uuid()) // [BỔ SUNG]: Mã Đơn Hàng (VD: BKG-260324-X9F2)
-  userId         Int
-  tourId         Int
-  numberOfPeople Int
-  totalPrice     Float
+  id               Int           @id @default(autoincrement())
+  bookingCode      String        @unique @default(uuid()) // Mã Đơn Hàng (VD: BKG-260324-X9F2)
+  userId           Int
+  tourId           Int
+  numberOfPeople   Int
+  totalPrice       Float
+  unitPriceAtBooking Float?      // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
   
-  status         BookingStatus @default(PENDING)
-  paymentStatus  PaymentStatus @default(UNPAID)
-  vnpayTxnRef    String?       // Mã giao dịch từ VNPAY để đối soát
+  status           BookingStatus @default(PENDING)
+  paymentStatus    PaymentStatus @default(UNPAID)
+  vnpayTxnRef      String?       // Mã giao dịch từ cổng thanh toán để đối soát
   
-  voucherCode    String?       // Mã voucher đã áp dụng (nếu có)
-  discountAmount Float         @default(0) // Số tiền đã giảm (USD)
+  voucherCode      String?       // Mã voucher đã áp dụng (nếu có)
+  discountAmount   Float         @default(0) // Số tiền đã giảm (USD)
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?     // [PHASE 1] Soft Delete
 
   // Kết nối (Relations)
-  user           User          @relation(fields: [userId], references: [id])
-  tour           Tour          @relation(fields: [tourId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
+  tour             Tour          @relation(fields: [tourId], references: [id])
+  transactions     PaymentTransaction[] // [PHASE 1] Log thanh toán
+
+  @@index([userId, status])                  // [PHASE 1] Index: lịch sử booking user
+  @@index([status, paymentStatus, createdAt]) // [PHASE 1] Index: cron job quét đơn hết hạn
+}
+
+// =============================================
+// BẢNG LOG THANH TOÁN (PHASE 1 - MỚI)
+// Lưu toàn bộ lịch sử giao dịch với cổng thanh toán
+// =============================================
+model PaymentTransaction {
+  id             Int      @id @default(autoincrement())
+  bookingId      Int
+  booking        Booking  @relation(fields: [bookingId], references: [id])
+  
+  gateway        String   // "PAYOS" | "SEPAY" | "MANUAL"
+  transactionRef String?  // Mã tham chiếu từ cổng thanh toán
+  amount         Float    // Số tiền giao dịch (VNĐ)
+  status         String   // "PENDING" | "SUCCESS" | "FAILED"
+  rawPayload     String?  @db.Text // JSON payload gốc từ webhook để đối soát
+  
+  createdAt      DateTime @default(now())
+
+  @@index([bookingId])
 }
 
 // --- BẢNG NHẬT KÝ HỆ THỐNG (DÀNH CHO SUPER ADMIN) ---
@@ -209,4 +270,6 @@ model Review {
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tourId, rating]) // [PHASE 1] Index tăng tốc filter review
 }

@@ -46,13 +46,16 @@ export default function TourDetailPage() {
             try {
                 const res = await fetch(`http://localhost:3000/tour/${params.id}`);
                 if (res.ok) {
-                    const data = await res.json();
-                    setTour(data);
+                    const json = await res.json();
+                    // The backend returns { statusCode, message, data } via TransformInterceptor
+                    const tourData = json.data || json;
+                    
+                    setTour(tourData);
 
                     const updatedTiers = [
-                        { id: 'luxury_villa', name: 'Luxury Villa', price: data.price },
-                        { id: 'boutique_hotel', name: 'Boutique Hotel', price: data.price * 0.9 },
-                        { id: 'ocean_suite', name: 'Ocean Suite', price: data.price * 1.2 },
+                        { id: 'luxury_villa', name: 'Luxury Villa', price: tourData.price },
+                        { id: 'boutique_hotel', name: 'Boutique Hotel', price: tourData.price * 0.9 },
+                        { id: 'ocean_suite', name: 'Ocean Suite', price: tourData.price * 1.2 },
                     ];
                     setTiers(updatedTiers);
                     setSelectedTier(updatedTiers[0]);
@@ -167,7 +170,7 @@ export default function TourDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-outline">{t('tour_detail.destinationLbl')}</p>
-                                        <p className="font-semibold text-sm md:text-base text-on-surface">{tour.destination}</p>
+                                        <p className="font-semibold text-sm md:text-base text-on-surface">{tour.destination?.name}</p>
                                     </div>
                                 </div>
                             </div>
@@ -240,7 +243,16 @@ export default function TourDetailPage() {
                                         <div className="flex gap-1 text-secondary-container mb-3">
                                             {[...Array(5)].map((_, i) => <span key={i} className="material-symbols-outlined text-sm" style={{ fontVariationSettings: i < r.rating ? "'FILL' 1" : "'FILL' 0" }}>star</span>)}
                                         </div>
-                                        <p className="text-on-surface-variant italic mb-6 text-sm line-clamp-3">{r.content}</p>
+                                        <p className="text-on-surface-variant italic mb-4 text-sm line-clamp-3">{r.content}</p>
+                                        
+                                        {r.imageUrls && r.imageUrls.length > 0 && (
+                                            <div className="flex gap-2 mb-6 overflow-x-auto pb-1 scrollbar-thin">
+                                                {r.imageUrls.map((url: string, idx: number) => (
+                                                    <img key={idx} src={url} className="w-16 h-16 object-cover rounded-lg border border-outline-variant/20 shrink-0" alt="review photo" />
+                                                ))}
+                                            </div>
+                                        )}
+
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0">
                                                 <img className="w-full h-full object-cover" alt={r.user?.fullName} src={r.user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"} />

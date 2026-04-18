@@ -1,7 +1,7 @@
 'use client'; // Required vì có dùng State, Effect, Event
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from '@/i18n/routing';
 import Link from 'next/link';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
@@ -55,7 +55,8 @@ export default function ProfilePage() {
                 const resProfile = await fetchWithAuth('http://localhost:3000/auth/profile');
 
                 if (resProfile.ok) {
-                    const data = await resProfile.json();
+                    const payload = await resProfile.json();
+                    const data = payload.data !== undefined ? payload.data : payload;
                     setUserData(data);
                     setName(data.fullName || '');
                     setPhone(data.phone || '');
@@ -76,7 +77,8 @@ export default function ProfilePage() {
                 const resVouchers = await fetchWithAuth('http://localhost:3000/voucher/my-wallet');
                 if (resVouchers.ok) {
                     const voucherData = await resVouchers.json();
-                    setMyVouchers(voucherData || []);
+                    const arr = voucherData.data || voucherData || [];
+                    setMyVouchers(Array.isArray(arr) ? arr : []);
                 }
 
             } catch (err) {

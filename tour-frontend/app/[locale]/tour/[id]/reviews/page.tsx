@@ -16,6 +16,37 @@ export default function ReviewsPage() {
     const [isSortOpen, setIsSortOpen] = useState(false);
     const [sortOption, setSortOption] = useState('newest');
     const sortRef = useRef<HTMLDivElement>(null);
+    const [reviews, setReviews] = useState<any[]>([]);
+    const [stats, setStats] = useState<any>(null);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchReviews = async () => {
+        setIsLoading(true);
+        try {
+            const limit = 5;
+            const sort = sortOption === 'highest' ? 'rating_desc' : sortOption === 'lowest' ? 'rating_asc' : 'newest';
+            const filter = activeFilter === 'all' ? '' : activeFilter === 'photos' ? 'photos' : activeFilter;
+            // Dù backend chưa support sort & filter chi tiết, nhưng ta gửi lên cho cấu trúc hoàn chỉnh.
+            const res = await fetch(`http://localhost:3000/tour/${params.id}/reviews?page=${page}&limit=${limit}&sortBy=${sort}&filter=${filter}`);
+            const json = await res.json();
+            if (json.data) {
+                setReviews(json.data);
+                setStats(json.stats);
+                setTotalPages(json.meta?.totalPages || 1);
+            }
+        } catch (error) {
+            console.error('Lỗi fetch reviews:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchReviews();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [params.id, page, isModalOpen, sortOption, activeFilter]);
 
     // Đóng dropdown khi click ra ngoài
     useEffect(() => {
@@ -27,6 +58,15 @@ export default function ReviewsPage() {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    const avgRating = stats?.averageRating || 0;
+    const totalReviews = stats?.totalReviews || 0;
+    const breakdown = stats?.breakdown || { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+
+    const getPercent = (stars: number) => {
+        if (totalReviews === 0) return 0;
+        return Math.round(((breakdown[stars] || 0) / totalReviews) * 100);
+    };
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
@@ -44,54 +84,26 @@ export default function ReviewsPage() {
                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-center bg-surface-container-lowest p-8 md:p-12 rounded-xl ambient-shadow">
                     {/* Left: Rating Summary */}
                     <div className="flex flex-col items-center lg:items-start space-y-2">
-                        <span className="text-7xl font-extrabold font-headline text-primary tracking-tighter">4.9</span>
+                        <span className="text-7xl font-extrabold font-headline text-primary tracking-tighter">{avgRating.toFixed(1)}</span>
                         <div className="flex items-center text-secondary-container space-x-1">
-                            <span className="material-symbols-outlined fill-icon">star</span>
-                            <span className="material-symbols-outlined fill-icon">star</span>
-                            <span className="material-symbols-outlined fill-icon">star</span>
-                            <span className="material-symbols-outlined fill-icon">star</span>
-                            <span className="material-symbols-outlined fill-icon">star</span>
+                            {Array.from({ length: 5 }).map((_, i) => (
+                                <span key={i} className={`material-symbols-outlined ${i < Math.round(avgRating) ? 'fill-icon' : ''}`}>star</span>
+                            ))}
                         </div>
-                        <p className="text-on-surface-variant font-label text-xs uppercase tracking-widest pt-2">{t('reviews.basedOn')}</p>
+                        <p className="text-on-surface-variant font-label text-xs uppercase tracking-widest pt-2">{totalReviews} {t('reviews.basedOn')}</p>
                     </div>
 
                     {/* Middle: Breakdown Bars */}
                     <div className="space-y-3 w-full">
-                        <div className="flex items-center space-x-4">
-                            <span className="text-xs font-medium w-12 text-on-surface-variant">{t('reviews.5stars')}</span>
-                            <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                                <div className="h-full bg-secondary-container w-[92%] rounded-full"></div>
+                        {[5, 4, 3, 2, 1].map(stars => (
+                            <div key={stars} className="flex items-center space-x-4">
+                                <span className="text-xs font-medium w-12 text-on-surface-variant">{stars === 1 ? t('reviews.star') : t('reviews.stars', { count: stars }).replace('{count}', stars.toString())}</span>
+                                <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                                    <div className="h-full bg-secondary-container rounded-full" style={{ width: `${getPercent(stars)}%` }}></div>
+                                </div>
+                                <span className="text-xs font-medium w-8 text-right text-on-surface-variant">{getPercent(stars)}%</span>
                             </div>
-                            <span className="text-xs font-medium w-8 text-right text-on-surface-variant">92%</span>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <span className="text-xs font-medium w-12 text-on-surface-variant">{t('reviews.4stars')}</span>
-                            <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                                <div className="h-full bg-secondary-container w-[6%] rounded-full"></div>
-                            </div>
-                            <span className="text-xs font-medium w-8 text-right text-on-surface-variant">6%</span>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <span className="text-xs font-medium w-12 text-on-surface-variant">3 {t('reviews.stars')}</span>
-                            <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                                <div className="h-full bg-secondary-container w-[2%] rounded-full"></div>
-                            </div>
-                            <span className="text-xs font-medium w-8 text-right text-on-surface-variant">2%</span>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <span className="text-xs font-medium w-12 text-on-surface-variant">2 {t('reviews.stars')}</span>
-                            <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                                <div className="h-full bg-secondary-container w-[0%] rounded-full"></div>
-                            </div>
-                            <span className="text-xs font-medium w-8 text-right text-on-surface-variant">0%</span>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <span className="text-xs font-medium w-12 text-on-surface-variant">1 {t('reviews.star')}</span>
-                            <div className="flex-1 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                                <div className="h-full bg-secondary-container w-[0%] rounded-full"></div>
-                            </div>
-                            <span className="text-xs font-medium w-8 text-right text-on-surface-variant">0%</span>
-                        </div>
+                        ))}
                     </div>
 
                     {/* Right: Action */}
@@ -118,13 +130,31 @@ export default function ReviewsPage() {
                             onClick={() => setActiveFilter('5stars')}
                             className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${activeFilter === '5stars' ? 'bg-primary border-primary text-white' : 'text-on-surface-variant hover:bg-surface-variant hover:text-on-surface'}`}
                         >
-                            {t('reviews.5stars')}
+                            5 {t('reviews.stars')}
                         </button>
                         <button
                             onClick={() => setActiveFilter('4stars')}
                             className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${activeFilter === '4stars' ? 'bg-primary border-primary text-white' : 'text-on-surface-variant hover:bg-surface-variant hover:text-on-surface'}`}
                         >
-                            {t('reviews.4stars')}
+                            4 {t('reviews.stars')}
+                        </button>
+                        <button
+                            onClick={() => setActiveFilter('3stars')}
+                            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${activeFilter === '3stars' ? 'bg-primary border-primary text-white' : 'text-on-surface-variant hover:bg-surface-variant hover:text-on-surface'}`}
+                        >
+                            3 {t('reviews.stars')}
+                        </button>
+                        <button
+                            onClick={() => setActiveFilter('2stars')}
+                            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${activeFilter === '2stars' ? 'bg-primary border-primary text-white' : 'text-on-surface-variant hover:bg-surface-variant hover:text-on-surface'}`}
+                        >
+                            2 {t('reviews.stars')}
+                        </button>
+                        <button
+                            onClick={() => setActiveFilter('1star')}
+                            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${activeFilter === '1star' ? 'bg-primary border-primary text-white' : 'text-on-surface-variant hover:bg-surface-variant hover:text-on-surface'}`}
+                        >
+                            1 {t('reviews.star')}
                         </button>
                         <button
                             onClick={() => setActiveFilter('photos')}
@@ -171,117 +201,95 @@ export default function ReviewsPage() {
 
                 {/* 3. Review List */}
                 <section className="space-y-0 bg-surface-container-lowest rounded-xl ambient-shadow overflow-hidden">
-                    {/* Sample 1 */}
-                    <article className="p-8 md:p-12 border-b border-outline-variant/15 last:border-0 hover:bg-surface-bright transition-colors">
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                            <div className="flex items-center space-x-4">
-                                <img className="w-14 h-14 rounded-full object-cover" alt="Elena Rodriguez" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqWtmpcYtI8hDCrGDQ8o726b9tL0_xOtjSjLqwnE-5sR1Go_v6lsDrXSdspQm90hFXDGBZ--5WS-ABwJuoPY6Wt2anWBsq5y2RhAu0IoZ8sYZWYWvJdvJRUmZxatR-4B9GpYCgbZ45RZe77HS-qjaCHCzueVF4n4LfnKCmJQPaCxJld37ucDrKxogXnsk4OrJgRoUgQgjr3hJCyNt-ky8ctTUwPlqwi5exLMVKafuXi1Zi6Ny4url5Lzj0kk5_IIf4948z4qKV9iD-" />
-                                <div>
-                                    <h4 className="font-headline font-bold text-lg text-on-surface">Elena Rodriguez</h4>
-                                    <div className="flex items-center text-tertiary-container space-x-1 pt-0.5">
-                                        <span className="material-symbols-outlined text-[16px]">verified</span>
-                                        <span className="text-[10px] font-bold uppercase tracking-wider">{t('reviews.authenticatedTraveler')}</span>
+                    {isLoading ? (
+                        <div className="p-12 text-center text-outline-variant font-medium">Loading reviews...</div>
+                    ) : reviews.length > 0 ? (
+                        reviews.map((review) => (
+                            <article key={review.id} className="p-8 md:p-12 border-b border-outline-variant/15 last:border-0 hover:bg-surface-bright transition-colors">
+                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                                    <div className="flex items-center space-x-4">
+                                        {review.user?.avatarUrl ? (
+                                            <img className="w-14 h-14 rounded-full object-cover" alt={review.user?.fullName} src={review.user.avatarUrl} />
+                                        ) : (
+                                            <div className="w-14 h-14 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-xl uppercase">
+                                                {review.user?.fullName?.substring(0, 2) || 'U'}
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h4 className="font-headline font-bold text-lg text-on-surface">{review.user?.fullName || 'Anonymous'}</h4>
+                                            <div className="flex items-center text-tertiary-container space-x-1 pt-0.5">
+                                                <span className="material-symbols-outlined text-[16px]">verified</span>
+                                                <span className="text-[10px] font-bold uppercase tracking-wider">{t('reviews.authenticatedTraveler')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-start md:items-end gap-1">
+                                        <div className="flex text-secondary-container">
+                                            {Array.from({ length: 5 }).map((_, i) => (
+                                                <span key={i} className={`material-symbols-outlined text-sm ${i < review.rating ? 'fill-icon' : ''}`}>star</span>
+                                            ))}
+                                        </div>
+                                        <span className="text-xs text-on-surface-variant font-label">
+                                            {new Date(review.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                        </span>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="flex flex-col items-start md:items-end gap-1">
-                                <div className="flex text-secondary-container">
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                </div>
-                                <span className="text-xs text-on-surface-variant font-label">October 2024</span>
-                            </div>
-                        </div>
-                        <div className="mt-6 max-w-3xl">
-                            <p className="text-on-surface leading-relaxed text-[0.9375rem] font-light">
-                                Our stay was absolutely transcendent. Azure Horizon didn't just book a room; they curated an entire sensory experience. From the private balcony breakfast overlooking the Amalfi coast to the hidden vineyard tour, every detail was polished to perfection. The attention to our specific dietary preferences was a touch of true luxury.
-                            </p>
-                        </div>
-                    </article>
+                                <div className="mt-6 max-w-3xl">
+                                    <p className="text-on-surface leading-relaxed text-[0.9375rem] font-light">
+                                        {review.content}
+                                    </p>
 
-                    {/* Sample 2 (With Photos) */}
-                    <article className="p-8 md:p-12 border-b border-outline-variant/15 last:border-0 hover:bg-surface-bright transition-colors">
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-14 h-14 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-xl">JM</div>
-                                <div>
-                                    <h4 className="font-headline font-bold text-lg text-on-surface">Julian Mercer</h4>
-                                    <div className="flex items-center text-tertiary-container space-x-1 pt-0.5">
-                                        <span className="material-symbols-outlined text-[16px]">verified</span>
-                                        <span className="text-[10px] font-bold uppercase tracking-wider">{t('reviews.authenticatedTraveler')}</span>
-                                    </div>
+                                    {review.imageUrls && review.imageUrls.length > 0 && (
+                                        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                            {review.imageUrls.map((url: string, index: number) => (
+                                                <div key={index} className="relative aspect-square overflow-hidden rounded-lg group cursor-zoom-in">
+                                                    <img className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Review photo" src={url} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                            <div className="flex flex-col items-start md:items-end gap-1">
-                                <div className="flex text-secondary-container">
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                </div>
-                                <span className="text-xs text-on-surface-variant font-label">September 2024</span>
-                            </div>
-                        </div>
-                        <div className="mt-6 max-w-3xl">
-                            <p className="text-on-surface leading-relaxed text-[0.9375rem] font-light">
-                                The "Visual Memories" package is worth every penny. The photographer they arranged captured the sunset at Oia in a way that truly feels like a cinematic dream. We've used many concierge services, but the editorial quality of this trip was unparalleled.
-                            </p>
-
-                            {/* Visual Memories Grid */}
-                            <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                <div className="relative aspect-square overflow-hidden rounded-lg group cursor-zoom-in">
-                                    <img className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="stunning sunset over white architecture of Santorini with deep blue Aegean sea in the background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvABLwzdjP_5ByE-BR_ClHUhTOQq2SxbOJK-tOQjcZYGTf8dpyjuFqKRBqccjXhNvNFQcFJZ72o-f56rQsQ4vnQSgQdZluFpGVOwSlU4rO5ZwRGXlE9F87SVVarluf32Y58fK2eqAiik41DLhjkhDIZuj5fx8LbNvfL_16sES0y0CJn_ULvwDJoX63y0ro5yfGaowPT33NFERn62qJcyhOx_viWNe7ChQfynB7Z3AUcCLrt9qpPCFPhZbUNDMUlrBgEvw0ovlpc4iE" />
-                                </div>
-                                <div className="relative aspect-square overflow-hidden rounded-lg group cursor-zoom-in">
-                                    <img className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="close-up of luxury breakfast spread on a balcony with blue water and hills in the soft focus distance" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuBTCFGBdGQ8dEUIBtbjN7GWRpCF9V0fI2j1woU6JKj6b2MsuD1_ItQLn23fFwAis3xViS0aUmFwOF6qrmnYqUH0gdoOD3WctXIb2j7DGJGnQquTZHfcTU_MtuL85Fia4U4Zztxa6koHf2oI0onyUo6yPMU9eLL4MsmLetSuxLZw6RVT4IcncCNPRoKZOnZfQ0S0lKAL0qgDyU3kokmpLYMTAUirjq0nsBOlJMIp5o2KzlkqtIRSbEC2MFMIJhRQdzScaqzNh695dp" />
-                                </div>
-                            </div>
-                        </div>
-                    </article>
-
-                    {/* Sample 3 */}
-                    <article className="p-8 md:p-12 border-b border-outline-variant/15 last:border-0 hover:bg-surface-bright transition-colors">
-                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                            <div className="flex items-center space-x-4">
-                                <img className="w-14 h-14 rounded-full object-cover" alt="middle-aged man with beard wearing premium linen shirt in a bright airy Mediterranean setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMC1TJh0ZH66zq561ePcuNSjKldqPwvgOuRa66D5QQcun7drQNLOwy977BGmhrvdrMtFGXT6NOHcLrlaKPJp5DrMq_Ppa14qbcEYHsG3YHDlb8fRCfeKAVsBxHQgQ4K8sQpSGRi6-RiNvgvAwRnoFAuUEzBia2ufZNfeuOgGdjMSGgEfqIJfuBc7HLV8mxJwAFyfoOjv0-Kv9UbaHzLiY9Cuczp2jaIb8QromutdTGNYAwDfVv76dU2lc5seo6PeAVD2o0xAgKlgGt" />
-                                <div>
-                                    <h4 className="font-headline font-bold text-lg text-on-surface">David Chen</h4>
-                                    <div className="flex items-center text-tertiary-container space-x-1 pt-0.5">
-                                        <span className="material-symbols-outlined text-[16px]">verified</span>
-                                        <span className="text-[10px] font-bold uppercase tracking-wider">{t('reviews.authenticatedTraveler')}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex flex-col items-start md:items-end gap-1">
-                                <div className="flex text-secondary-container">
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined fill-icon text-sm">star</span>
-                                    <span className="material-symbols-outlined text-sm">star</span>
-                                </div>
-                                <span className="text-xs text-on-surface-variant font-label">August 2024</span>
-                            </div>
-                        </div>
-                        <div className="mt-6 max-w-3xl">
-                            <p className="text-on-surface leading-relaxed text-[0.9375rem] font-light">
-                                Azure Horizon understands that luxury is found in the quiet moments. They arranged a private transfer that was seamless, and the hotel staff treated us like royalty from the moment we stepped off the boat. A 5-star experience through and through.
-                            </p>
-                        </div>
-                    </article>
+                            </article>
+                        ))
+                    ) : (
+                        <div className="p-12 text-center text-outline-variant font-medium">No reviews found.</div>
+                    )}
                 </section>
 
                 {/* 4. Pagination */}
-                <div className="flex justify-center pb-12">
-                    <button className="group flex items-center space-x-3 text-primary font-headline font-semibold text-sm tracking-wide py-4 px-8 hover:bg-surface-container-low rounded-full transition-all">
-                        <span>{t('reviews.showMore')}</span>
-                        <span className="material-symbols-outlined group-hover:translate-y-1 transition-transform">expand_more</span>
-                    </button>
-                </div>
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-center space-x-2 pb-12">
+                        <button 
+                            disabled={page === 1}
+                            onClick={() => setPage(page - 1)}
+                            className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-high text-on-surface hover:bg-primary hover:text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <span className="material-symbols-outlined text-sm">chevron_left</span>
+                        </button>
+                        
+                        {Array.from({ length: totalPages }).map((_, i) => {
+                            const p = i + 1;
+                            const isActive = p === page;
+                            return (
+                                <button 
+                                    key={p}
+                                    onClick={() => setPage(p)}
+                                    className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold transition-all duration-300 ${isActive ? 'bg-primary text-white shadow-md' : 'bg-surface-container-lowest text-on-surface hover:bg-surface-container-high'}`}
+                                >
+                                    {p}
+                                </button>
+                            );
+                        })}
+
+                        <button 
+                            disabled={page === totalPages}
+                            onClick={() => setPage(page + 1)}
+                            className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-lowest text-on-surface hover:bg-primary hover:text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <span className="material-symbols-outlined text-sm">chevron_right</span>
+                        </button>
+                    </div>
+                )}
             </main>
 
             <Footer />

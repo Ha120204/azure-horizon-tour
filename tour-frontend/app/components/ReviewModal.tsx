@@ -21,7 +21,6 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
     if (!isOpen) return null;
 
     const handleCloseModal = () => {
-        images.forEach(url => URL.revokeObjectURL(url));
         setImages([]);
         setRating(5);
         setComment('');
@@ -29,10 +28,19 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
         onClose();
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            const filesArray = Array.from(e.target.files).map(file => URL.createObjectURL(file));
-            setImages(prev => [...prev, ...filesArray]);
+            const filesArray = Array.from(e.target.files);
+            const base64Promises = filesArray.map(file => {
+                return new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            });
+            const base64Strings = await Promise.all(base64Promises);
+            setImages(prev => [...prev, ...base64Strings]);
         }
     };
 
@@ -52,7 +60,7 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                 body: JSON.stringify({
                     rating,
                     content: comment,
-                    imageUrls: [] // Placeholder until image upload logic is handled
+                    imageUrls: images
                 })
             });
 

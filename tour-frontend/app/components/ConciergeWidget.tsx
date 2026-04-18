@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useLocale } from '@/app/context/LocaleContext';
 
 // Cấu trúc dữ liệu tin nhắn
@@ -18,7 +19,11 @@ type Message = {
 
 export default function ConciergeWidget() {
     const { t } = useLocale();
+    const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
+
+    // Ẩn widget trên trang Admin
+    if (pathname?.includes('/admin')) return null;
     const [inputValue, setInputValue] = useState("");
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);

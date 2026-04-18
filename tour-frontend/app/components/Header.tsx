@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname } from '@/i18n/routing';
 import Link from 'next/link';
 import { useLocale } from '@/app/context/LocaleContext';
 import LocaleSwitcher from './LocaleSwitcher';
@@ -42,6 +42,11 @@ export default function Header() {
             } else {
                 setIsLoggedIn(false);
                 setUserName('');
+            }
+            
+            // Clean up old insecure refreshToken if it still exists from previous version
+            if (localStorage.getItem('refreshToken')) {
+                localStorage.removeItem('refreshToken');
             }
         };
 
@@ -110,9 +115,18 @@ export default function Header() {
         }
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        try {
+            // Gọi API để Backend xóa thẻ HttpOnly Cookie (refresh token)
+            await fetch('http://localhost:3000/auth/logout', { 
+                method: 'POST',
+                credentials: 'include' 
+            });
+        } catch (err) {
+            console.error("Lỗi khi đăng xuất:", err);
+        }
+
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         localStorage.removeItem('userName');
 
         // Bắn event báo hiệu để Header cập nhật lại state lặp tức

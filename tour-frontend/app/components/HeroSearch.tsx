@@ -1,23 +1,41 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/app/context/LocaleContext';
 
-const SUGGESTED_DESTINATIONS = [
-    { id: 1, name: 'Đà Nẵng', type: 'dest', image: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&q=80&w=100' },
-    { id: 2, name: 'Hạ Long', type: 'dest', image: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&q=80&w=100' },
-    { id: 3, name: 'Lễ hội pháo hoa quốc tế Đà Nẵng (DIFF)', type: 'attraction' },
-    { id: 4, name: 'Paris', type: 'dest', image: 'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&q=80&w=100' },
-    { id: 5, name: 'Kyoto', type: 'dest', image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&q=80&w=100' }
-];
+// Kiểu dữ liệu từ API
+interface Destination {
+    id: number;
+    name: string;
+    imageUrl: string | null;
+    region: string | null;
+}
+
+interface TourResult {
+    id: number;
+    name: string;
+    price: number;
+}
+
+interface PriceRange {
+    min: number;
+    max: number;
+}
 
 export default function HeroSearch() {
     const router = useRouter();
     const { t, formatPrice, language } = useLocale();
 
     const [destination, setDestination] = useState('');
-    const [date, setDate] = useState('');
+
+    // Mặc định ngày đi = ngày mai
+    const getTomorrow = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    };
+    const [date, setDate] = useState(getTomorrow);
 
     // State riêng cho Budget
     const [budget, setBudget] = useState('');
@@ -26,17 +44,76 @@ export default function HeroSearch() {
     const [isDestFocused, setIsDestFocused] = useState(false);
     const [isBudgetOpen, setIsBudgetOpen] = useState(false);
 
+    // Dữ liệu từ API
+    const [allDestinations, setAllDestinations] = useState<Destination[]>([]);
+    const [searchDestinations, setSearchDestinations] = useState<Destination[]>([]);
+    const [searchTours, setSearchTours] = useState<TourResult[]>([]);
+    const [priceRange, setPriceRange] = useState<PriceRange>({ min: 0, max: 1000 });
+    const [isSearching, setIsSearching] = useState(false);
+
     const destRef = useRef<HTMLDivElement>(null);
     const budgetRef = useRef<HTMLDivElement>(null);
+    const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-    const filteredSuggestions = SUGGESTED_DESTINATIONS.filter(item =>
-        item.name.toLowerCase().includes(destination.toLowerCase())
-    );
+    // ═══ Fetch dữ liệu lần đầu khi mount ═══
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            try {
+                const [destRes, priceRes] = await Promise.all([
+                    fetch('http://localhost:3000/search/destinations'),
+                    fetch('http://localhost:3000/search/price-range'),
+                ]);
+                const destJson = await destRes.json();
+                const priceJson = await priceRes.json();
 
-    const destSuggestions = filteredSuggestions.filter(item => item.type === 'dest');
-    const attractionSuggestions = filteredSuggestions.filter(item => item.type === 'attraction');
+                // API có thể bọc trong { data: ... } từ TransformInterceptor
+                setAllDestinations(destJson.data || destJson);
+                setPriceRange(priceJson.data || priceJson);
+            } catch (error) {
+                console.error('Lỗi fetch dữ liệu search:', error);
+            }
+        };
+        fetchInitialData();
+    }, []);
 
-    // Tự động đóng Dropdown khi click ra vùng viền
+    // ═══ Live search — gọi API khi user gõ (debounce 300ms) ═══
+    const performSearch = useCallback(async (query: string) => {
+        if (query.length < 2) {
+            setSearchDestinations([]);
+            setSearchTours([]);
+            return;
+        }
+        setIsSearching(true);
+        try {
+            const res = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(query)}`);
+            const json = await res.json();
+            const data = json.data || json;
+            setSearchDestinations(data.destinations || []);
+            setSearchTours(data.tours || []);
+        } catch (error) {
+            console.error('Lỗi tìm kiếm:', error);
+        } finally {
+            setIsSearching(false);
+        }
+    }, []);
+
+    const handleDestinationChange = (value: string) => {
+        setDestination(value);
+        // Debounce live search
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            performSearch(value);
+        }, 300);
+    };
+
+    // Cleanup debounce on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, []);
+
+    // ═══ Click outside đóng dropdown ═══
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (destRef.current && !destRef.current.contains(event.target as Node)) setIsDestFocused(false);
@@ -46,6 +123,7 @@ export default function HeroSearch() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // ═══ Chọn gợi ý ═══
     const handleSelectSuggestion = (name: string) => {
         setDestination(name);
         setIsDestFocused(false);
@@ -56,24 +134,49 @@ export default function HeroSearch() {
         setIsBudgetOpen(false);
     };
 
+    // ═══ Submit — BẮT BUỘC phải chọn điểm đến ═══
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!destination.trim()) return;
         const params = new URLSearchParams();
-        if (destination) params.append('dest', destination);
+        params.append('dest', destination);
         if (date) params.append('date', date);
         if (budget) params.append('budget', budget);
         router.push(`/destinations?${params.toString()}`);
     };
 
-    const BUDGET_OPTIONS = [
-        { label: t('search.under5k'), value: '0-200' },
-        { label: t('search.5kTo10k'), value: '200-400' },
-        { label: t('search.10kTo25k'), value: '400-800' },
-        { label: t('search.above25k'), value: '800-unlimited' },
-    ];
+    const canSearch = !!destination.trim();
+
+    // ═══ Tính Budget Options từ price range thực ═══
+    const generateBudgetOptions = () => {
+        const { min, max } = priceRange;
+        if (max <= 0) return [];
+
+        // Chia khoảng giá thành 4 tier đều nhau (USD)
+        const step = Math.ceil(max / 4);
+        const tier1 = step;
+        const tier2 = step * 2;
+        const tier3 = step * 3;
+
+        return [
+            { label: `${formatPrice(min)} – ${formatPrice(tier1)}`, value: `${min}-${tier1}` },
+            { label: `${formatPrice(tier1)} – ${formatPrice(tier2)}`, value: `${tier1}-${tier2}` },
+            { label: `${formatPrice(tier2)} – ${formatPrice(tier3)}`, value: `${tier2}-${tier3}` },
+            { label: `${formatPrice(tier3)}+`, value: `${tier3}-unlimited` },
+        ];
+    };
+
+    const BUDGET_OPTIONS = generateBudgetOptions();
 
     // Dynamic label to correctly react to locale changes
     const currentBudgetLabel = budget ? BUDGET_OPTIONS.find(o => o.value === budget)?.label : '';
+
+    // ═══ Quyết định hiển thị gì trong dropdown ═══
+    // Nếu user chưa gõ gì: hiện tất cả destinations
+    // Nếu user đã gõ: hiện kết quả search (destinations + tours)
+    const hasSearchQuery = destination.length >= 2;
+    const displayDestinations = hasSearchQuery ? searchDestinations : allDestinations;
+    const displayTours = hasSearchQuery ? searchTours : [];
 
     return (
         <form
@@ -90,47 +193,68 @@ export default function HeroSearch() {
                             type="text"
                             placeholder={t('search.whereTo')}
                             value={destination}
-                            onChange={(e) => setDestination(e.target.value)}
+                            onChange={(e) => handleDestinationChange(e.target.value)}
                             onFocus={() => setIsDestFocused(true)}
                             className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none placeholder:text-slate-300 w-full truncate"
                         />
                         {destination && (
-                            <span onClick={() => setDestination('')} className="material-symbols-outlined text-[16px] text-slate-400 hover:text-slate-600 cursor-pointer ml-2 bg-slate-100 rounded-full">
+                            <span onClick={() => { setDestination(''); setSearchDestinations([]); setSearchTours([]); }} className="material-symbols-outlined text-[16px] text-slate-400 hover:text-slate-600 cursor-pointer ml-2 bg-slate-100 rounded-full">
                                 cancel
                             </span>
                         )}
                     </div>
 
                     {/* Hộp gợi ý Điểm đến */}
-                    {isDestFocused && destination && filteredSuggestions.length > 0 && (
-                        <div className="absolute top-[calc(100%+24px)] left-[-40px] md:left-0 w-[calc(100%+80px)] md:w-[400px] bg-white rounded-2xl shadow-xl border border-slate-100 py-4 z-[100] animate-fade-in-up">
-                            {destSuggestions.length > 0 && (
-                                <div className="mb-4">
-                                    <div className="px-5 text-sm font-bold text-slate-800 mb-2">{t('search.destinations')}</div>
-                                    {destSuggestions.map(item => (
-                                        <div key={item.id} onClick={() => handleSelectSuggestion(item.name)} className="px-5 py-2.5 hover:bg-slate-50 flex items-center gap-4 cursor-pointer transition-colors">
-                                            {item.image ? (
-                                                <img src={item.image} alt={item.name} className="w-10 h-10 rounded-md object-cover" />
+                    {isDestFocused && (displayDestinations.length > 0 || displayTours.length > 0) && (
+                        <div className="absolute top-[calc(100%+24px)] left-[-40px] md:left-0 w-[calc(100%+80px)] md:w-[400px] bg-white rounded-2xl shadow-xl border border-slate-100 py-4 z-[100] animate-fade-in-up max-h-[360px] overflow-y-auto">
+                            {/* Loading indicator */}
+                            {isSearching && (
+                                <div className="px-5 py-2 text-sm text-slate-400 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                                    {language === 'vi' ? 'Đang tìm...' : 'Searching...'}
+                                </div>
+                            )}
+
+                            {/* Destinations */}
+                            {displayDestinations.length > 0 && (
+                                <div className="mb-2">
+                                    <div className="px-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t('search.destinations')}</div>
+                                    {displayDestinations.map(item => (
+                                        <div key={`dest-${item.id}`} onClick={() => handleSelectSuggestion(item.name)} className="px-5 py-2.5 hover:bg-slate-50 flex items-center gap-4 cursor-pointer transition-colors">
+                                            {item.imageUrl ? (
+                                                <img src={item.imageUrl} alt={item.name} className="w-10 h-10 rounded-md object-cover" />
                                             ) : (
                                                 <div className="w-10 h-10 rounded-md bg-slate-100 flex items-center justify-center"><span className="material-symbols-outlined text-slate-400">location_city</span></div>
                                             )}
-                                            <span className="text-sm font-bold text-primary">{item.name}</span>
+                                            <div>
+                                                <span className="text-sm font-bold text-primary block">{item.name}</span>
+                                                {item.region && <span className="text-[11px] text-slate-400">{item.region}</span>}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
-                            {attractionSuggestions.length > 0 && (
-                                <div>
-                                    <div className="px-5 text-sm font-bold text-slate-800 mb-2">{t('search.attractions')}</div>
-                                    {attractionSuggestions.map(item => (
-                                        <div key={item.id} onClick={() => handleSelectSuggestion(item.name)} className="px-5 py-2.5 hover:bg-slate-50 flex items-center gap-4 cursor-pointer transition-colors">
+
+                            {/* Tours (chỉ khi đang search) */}
+                            {displayTours.length > 0 && (
+                                <div className="border-t border-slate-100 pt-2">
+                                    <div className="px-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t('search.attractions')}</div>
+                                    {displayTours.map(item => (
+                                        <div key={`tour-${item.id}`} onClick={() => handleSelectSuggestion(item.name)} className="px-5 py-2.5 hover:bg-slate-50 flex items-center gap-4 cursor-pointer transition-colors">
                                             <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-200">
                                                 <span className="material-symbols-outlined text-slate-500 text-[20px]">pin_drop</span>
                                             </div>
-                                            <span
-                                                className="text-sm font-medium text-slate-600 truncate"
-                                                dangerouslySetInnerHTML={{ __html: item.name.replace(new RegExp(destination, 'gi'), (match) => `<span class="text-primary font-bold">${match}</span>`) }}
-                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <span
+                                                    className="text-sm font-medium text-slate-600 truncate block"
+                                                    dangerouslySetInnerHTML={{
+                                                        __html: destination
+                                                            ? item.name.replace(new RegExp(destination, 'gi'), (match) => `<span class="text-primary font-bold">${match}</span>`)
+                                                            : item.name
+                                                    }}
+                                                />
+                                                <span className="text-[11px] text-slate-400">{formatPrice(item.price)}</span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -172,7 +296,7 @@ export default function HeroSearch() {
 
                 {/* Hộp thả xuống của Budget */}
                 {isBudgetOpen && (
-                    <div className="absolute top-[calc(100%+24px)] left-0 w-full md:w-[250px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] animate-fade-in-up">
+                    <div className="absolute top-[calc(100%+24px)] left-0 w-full md:w-[280px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] animate-fade-in-up">
                         {BUDGET_OPTIONS.map((opt, idx) => (
                             <div
                                 key={idx}
@@ -193,7 +317,15 @@ export default function HeroSearch() {
             </div>
 
             {/* Submit Button */}
-            <button type="submit" className="w-full md:w-auto mt-2 md:mt-0 bg-primary text-white rounded-full px-8 py-4 font-bold tracking-wide hover:bg-primary-container transition-all active:scale-95 whitespace-nowrap shadow-md shadow-primary/20">
+            <button
+                type="submit"
+                disabled={!canSearch}
+                className={`w-full md:w-auto mt-2 md:mt-0 rounded-full px-8 py-4 font-bold tracking-wide transition-all whitespace-nowrap shadow-md
+                    ${canSearch
+                        ? 'bg-primary text-white hover:bg-primary-container active:scale-95 shadow-primary/20'
+                        : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    }`}
+            >
                 {t('search.searchPath')}
             </button>
         </form>

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -12,6 +12,8 @@ import { Response } from 'express';
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
@@ -49,7 +51,7 @@ export class BookingService {
     const booking = await this.prisma.$transaction(async (tx) => {
       // 1. Tìm tour và khóa dòng dữ liệu
       const tour = await tx.tour.findUnique({
-        where: { id: dto.tourId },
+        where: { id: dto.tourId, deletedAt: null }, // [PHASE 1] Không cho đặt tour đã xóa
       });
 
       if (!tour) {
@@ -92,6 +94,7 @@ export class BookingService {
           tourId: dto.tourId,
           numberOfPeople: dto.numberOfPeople,
           totalPrice,
+          unitPriceAtBooking: tour.price, // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
           voucherCode,
           discountAmount,
         },
@@ -132,8 +135,6 @@ export class BookingService {
       return newBooking;
     }); // ← Nếu có exception → toàn bộ rollback tự động
 
-
-
     // ============== PAYOS INTEGRATION ==============
     // Quy đổi USD → VNĐ từ biến môi trường (đồng bộ với Frontend)
     const exchangeRate = this.configService.get<number>('USD_TO_VND_RATE', 26335);
@@ -148,6 +149,16 @@ export class BookingService {
       amountVND,
       description,
     );
+
+    // [PHASE 1] Ghi log PaymentTransaction khi tạo link thanh toán
+    await this.prisma.paymentTransaction.create({
+      data: {
+        bookingId: booking.id,
+        gateway: 'PAYOS',
+        amount: amountVND,
+        status: 'PENDING',
+      },
+    });
 
     return { message: 'Booking successful, please proceed to payment', booking, paymentUrl: checkoutUrl };
   }
@@ -176,13 +187,27 @@ export class BookingService {
 
     // 3. Cập nhật trạng thái dựa vào kết quả từ PayOS
     if (paymentInfo.status === 'PAID') {
+      const txnRef = paymentInfo.transactions?.[0]?.reference || `PAYOS-${orderCode}`;
+
       await this.prisma.booking.update({
         where: { id: orderCode },
         data: {
           paymentStatus: 'PAID',
           status: 'CONFIRMED',
           // Lưu mã tham chiếu giao dịch ngân hàng từ PayOS
-          vnpayTxnRef: paymentInfo.transactions?.[0]?.reference || `PAYOS-${orderCode}`,
+          vnpayTxnRef: txnRef,
+        },
+      });
+
+      // [PHASE 1] Ghi log thanh toán thành công vào PaymentTransaction
+      await this.prisma.paymentTransaction.create({
+        data: {
+          bookingId: orderCode,
+          gateway: 'PAYOS',
+          transactionRef: txnRef,
+          amount: paymentInfo.amount || 0,
+          status: 'SUCCESS',
+          rawPayload: JSON.stringify(paymentInfo),
         },
       });
 
@@ -207,12 +232,23 @@ export class BookingService {
           });
         }
       } catch (emailError) {
-        console.error('[EMAIL] Lỗi gửi email xác nhận:', emailError);
+        this.logger.error('[EMAIL] Lỗi gửi email xác nhận:', emailError);
         // Không throw — email lỗi không ảnh hưởng luồng thanh toán chính
       }
     } else if (paymentInfo.status === 'CANCELLED' || paymentInfo.status === 'EXPIRED') {
       // Hủy booking + hoàn trả ghế cho Tour
       await this.cancelAndRestoreSeats(booking.id, booking.tourId, booking.numberOfPeople);
+
+      // [PHASE 1] Ghi log thanh toán thất bại
+      await this.prisma.paymentTransaction.create({
+        data: {
+          bookingId: orderCode,
+          gateway: 'PAYOS',
+          amount: paymentInfo.amount || 0,
+          status: 'FAILED',
+          rawPayload: JSON.stringify(paymentInfo),
+        },
+      });
     }
     // Nếu status === 'PENDING' → Chưa thanh toán, không thay đổi gì
 
@@ -271,27 +307,28 @@ export class BookingService {
       where: {
         status: 'PENDING',
         paymentStatus: 'UNPAID',
+        deletedAt: null, // [PHASE 1] Bỏ qua booking đã xóa mềm
         createdAt: { lt: expiryTime },
       },
     });
 
     if (expiredBookings.length === 0) return;
 
-    console.log(`[CRON] Tìm thấy ${expiredBookings.length} đơn hàng PENDING quá hạn. Đang hủy...`);
+    this.logger.log(`[CRON] Tìm thấy ${expiredBookings.length} đơn hàng PENDING quá hạn. Đang hủy...`);
 
     for (const booking of expiredBookings) {
       await this.cancelAndRestoreSeats(booking.id, booking.tourId, booking.numberOfPeople);
-      console.log(`[CRON] Đã hủy booking #${booking.id} (${booking.bookingCode}) và hoàn ${booking.numberOfPeople} ghế cho tour #${booking.tourId}`);
+      this.logger.log(`[CRON] Đã hủy booking #${booking.id} (${booking.bookingCode}) và hoàn ${booking.numberOfPeople} ghế cho tour #${booking.tourId}`);
     }
 
-    console.log(`[CRON] Hoàn tất dọn dẹp ${expiredBookings.length} đơn hàng.`);
+    this.logger.log(`[CRON] Hoàn tất dọn dẹp ${expiredBookings.length} đơn hàng.`);
   }
 
   // ============ CÁC HÀM CŨ GIỮ NGUYÊN ============
 
   async getMyBookings(userId: number) {
     return this.prisma.booking.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null }, // [PHASE 1] Filter soft delete
       include: { tour: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -342,7 +379,7 @@ export class BookingService {
       response.data.pipe(res);
 
     } catch (error) {
-      console.error('Lỗi khi proxy ảnh:', error.message);
+      this.logger.error('Lỗi khi proxy ảnh:', error.message);
       throw new NotFoundException('Failed to proxy image');
     }
   }
@@ -363,3 +400,4 @@ export class BookingService {
     return `This action removes a #${id} booking`;
   }
 }
+

@@ -22,7 +22,7 @@ export class ReviewService {
       where: { userId, tourId, status: 'CONFIRMED' }
     });
 
-    return this.prisma.review.create({
+    const newReview = await this.prisma.review.create({
       data: {
         userId,
         tourId,
@@ -34,27 +34,63 @@ export class ReviewService {
         user: { select: { fullName: true, avatarUrl: true } }
       }
     });
+
+    const aggregations = await this.prisma.review.aggregate({
+      where: { tourId },
+      _avg: { rating: true }
+    });
+
+    await this.prisma.tour.update({
+      where: { id: tourId },
+      data: { averageRating: Number((aggregations._avg.rating || 0).toFixed(1)) }
+    });
+
+    return newReview;
   }
 
-  async getTourReviews(tourId: number, page: number = 1, limit: number = 5) {
+  async getTourReviews(tourId: number, page: number = 1, limit: number = 5, sortBy?: string, filter?: string) {
     const skip = (page - 1) * limit;
 
-    const [reviews, totalCount, aggregations] = await Promise.all([
+    let whereClause: any = { tourId };
+    if (filter === '5stars') whereClause.rating = 5;
+    else if (filter === '4stars') whereClause.rating = 4;
+    else if (filter === '3stars') whereClause.rating = 3;
+    else if (filter === '2stars') whereClause.rating = 2;
+    else if (filter === '1star') whereClause.rating = 1;
+    else if (filter === 'photos') whereClause.imageUrls = { isEmpty: false };
+
+    let orderByClause: any = { createdAt: 'desc' }; // default newest
+    if (sortBy === 'rating_desc') orderByClause = { rating: 'desc' };
+    else if (sortBy === 'rating_asc') orderByClause = { rating: 'asc' };
+
+    const [reviews, totalCount, aggregations, groupByRatings] = await Promise.all([
       this.prisma.review.findMany({
-        where: { tourId },
-        orderBy: { createdAt: 'desc' },
+        where: whereClause,
+        orderBy: orderByClause,
         skip,
         take: limit,
         include: {
           user: { select: { fullName: true, avatarUrl: true } }
         }
       }),
-      this.prisma.review.count({ where: { tourId } }),
+      this.prisma.review.count({ where: whereClause }),
       this.prisma.review.aggregate({
-        where: { tourId },
+        where: { tourId }, // aggregate always for all reviews
         _avg: { rating: true }
+      }),
+      this.prisma.review.groupBy({
+        by: ['rating'],
+        _count: { rating: true },
+        where: { tourId }
       })
     ]);
+
+    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    groupByRatings.forEach(group => {
+      if (group.rating >= 1 && group.rating <= 5) {
+        breakdown[group.rating as keyof typeof breakdown] = group._count.rating;
+      }
+    });
 
     return {
       data: reviews,
@@ -67,7 +103,8 @@ export class ReviewService {
       },
       stats: {
         averageRating: Number((aggregations._avg.rating || 0).toFixed(1)),
-        totalReviews: totalCount
+        totalReviews: totalCount,
+        breakdown
       }
     };
   }

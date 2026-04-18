@@ -25,29 +25,20 @@ export async function fetchWithAuth(
   // Gọi request ban đầu
   let response = await fetch(url, { ...options, headers });
 
-  // Nếu 401 Unauthorized → thử refresh token
+  // Nếu 401 Unauthorized → thử refresh token ngầm bằng HttpOnly Cookie
   if (response.status === 401) {
-    const refreshToken = localStorage.getItem('refreshToken');
-
-    if (!refreshToken) {
-      // Không có refresh token → buộc đăng nhập lại
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('userName');
-      window.location.href = '/login';
-      return response;
-    }
 
     try {
       // Gọi endpoint refresh
       const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: 'include', // Bắt buộc để trình duyệt đính kèm HttpOnly Cookie
       });
 
       if (refreshRes.ok) {
-        const data = await refreshRes.json();
+        const payload = await refreshRes.json();
+        const data = payload.data || payload;
 
         // Lưu access token mới
         localStorage.setItem('accessToken', data.access_token);
@@ -56,17 +47,16 @@ export async function fetchWithAuth(
         const retryHeaders = new Headers(options.headers || {});
         retryHeaders.set('Authorization', `Bearer ${data.access_token}`);
         response = await fetch(url, { ...options, headers: retryHeaders });
-      } else {
-        // Refresh token cũng hết hạn → buộc đăng nhập lại
+        // Refresh token cũng hết hạn hoặc lỗi → buộc đăng nhập lại
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         localStorage.removeItem('userName');
+        // Tuỳ chọn: gọi API logout để xóa cookie trên Server
+        await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
         window.location.href = '/login';
       }
     } catch (error) {
       console.error('Lỗi khi refresh token:', error);
       localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('userName');
       window.location.href = '/login';
     }

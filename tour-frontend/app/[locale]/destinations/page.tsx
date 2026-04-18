@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/app/components/Header';
 import Footer from '@/app/components/Footer';
@@ -23,7 +23,6 @@ function DestinationsContent() {
     const [budget, setBudget] = useState(initialBudget);
 
     // 3. State lưu dữ liệu API
-    const [allTours, setAllTours] = useState<any[]>([]);
     const [filteredTours, setFilteredTours] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -34,70 +33,116 @@ function DestinationsContent() {
     const [showMobileFilter, setShowMobileFilter] = useState(false);
     const [sortBy, setSortBy] = useState('recommended');
 
-    // 5. Gọi API lấy Tour
-    useEffect(() => {
-        const fetchTours = async () => {
-            try {
-                const res = await fetch('http://localhost:3000/tour');
-                const data = await res.json();
-                setAllTours(data);
-                applyFilter(data, initialDest, initialBudget);
-            } catch (error) {
-                console.error('Lỗi lấy danh sách tour:', error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchTours();
-    }, [initialDest, initialBudget]);
+    // 4b. State cho dynamic sidebar search suggestions & price range
+    const [allDestinations, setAllDestinations] = useState<any[]>([]);
+    const [sidebarSuggestions, setSidebarSuggestions] = useState<any[]>([]);
+    const [isSidebarDestFocused, setIsSidebarDestFocused] = useState(false);
+    const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 1000 });
+    const sidebarDebounceRef = useRef<NodeJS.Timeout | null>(null);
+    const sidebarDestRef = useRef<HTMLDivElement>(null);
 
-    // 6. Logic lọc tour
-    const applyFilter = (tours: any[], searchDest: string, searchBudget: string) => {
-        let result = tours;
-        if (searchDest) {
-            const keyword = searchDest.toLowerCase();
-            result = result.filter(t =>
-                t.name.toLowerCase().includes(keyword) ||
-                (t.destination && t.destination.toLowerCase().includes(keyword))
-            );
-        }
-        if (searchBudget && searchBudget !== 'unlimited') {
-            const parts = searchBudget.split('-');
+    // 5. State Phân trang
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const limit = 6;
+
+    const buildQueryString = () => {
+        const query = new URLSearchParams();
+        if (dest) query.append('dest', dest);
+        if (date) query.append('date', date);
+        if (sidebarBudget && sidebarBudget !== 'unlimited') {
+            const parts = sidebarBudget.split('-');
             if (parts.length === 2) {
-                const min = parseInt(parts[0]) || 0;
-                const max = parts[1] === 'unlimited' ? Infinity : parseInt(parts[1]);
-                result = result.filter(t => t.price >= min && t.price <= max);
+                query.append('minPrice', parts[0]);
+                query.append('maxPrice', parts[1]);
             } else {
-                const budgetValue = parseInt(searchBudget);
-                result = result.filter(t => t.price >= budgetValue);
+                query.append('minPrice', sidebarBudget);
             }
         }
-        
-        if (sortBy === 'priceLowHigh') {
-            result.sort((a, b) => a.price - b.price);
-        } else if (sortBy === 'priceHighLow') {
-            result.sort((a, b) => b.price - a.price);
-        } else {
-            result.sort((a, b) => a.id - b.id);
+        if (selectedRatings.length > 0) {
+            query.append('ratings', selectedRatings.join(','));
         }
-        
-        setFilteredTours(result);
+        if (selectedTypes.length > 0) {
+            query.append('types', selectedTypes.join(','));
+        }
+        query.append('sortBy', sortBy);
+        query.append('page', page.toString());
+        query.append('limit', limit.toString());
+        return query.toString();
     };
 
-    // Theo dõi thay đổi sortBy để sắp xếp lại mảng đã lọc
-    useEffect(() => {
-        setFilteredTours(prev => {
-            const sorted = [...prev];
-            if (sortBy === 'priceLowHigh') {
-                sorted.sort((a, b) => a.price - b.price);
-            } else if (sortBy === 'priceHighLow') {
-                sorted.sort((a, b) => b.price - a.price);
+    // 6. Gọi API lấy Tour
+    const fetchTours = async () => {
+        setIsLoading(true);
+        try {
+            const qs = buildQueryString();
+            const res = await fetch(`http://localhost:3000/tour?${qs}`);
+            const json = await res.json();
+            if (json.data) {
+                setFilteredTours(json.data);
+                setTotalPages(json.meta?.totalPages || 1);
             } else {
-                sorted.sort((a, b) => a.id - b.id);
+                setFilteredTours(Array.isArray(json) ? json : []);
             }
-            return sorted;
-        });
-    }, [sortBy]);
+        } catch (error) {
+            console.error('Lỗi lấy danh sách tour:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchTours();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, sortBy]);
+
+    // 6b. Fetch destinations & price range on mount
+    useEffect(() => {
+        const fetchFilterData = async () => {
+            try {
+                const [destRes, priceRes] = await Promise.all([
+                    fetch('http://localhost:3000/search/destinations'),
+                    fetch('http://localhost:3000/search/price-range'),
+                ]);
+                const destJson = await destRes.json();
+                const priceJson = await priceRes.json();
+                setAllDestinations(destJson.data || destJson);
+                setPriceRange(priceJson.data || priceJson);
+            } catch (error) {
+                console.error('Lỗi fetch dữ liệu filter:', error);
+            }
+        };
+        fetchFilterData();
+    }, []);
+
+    // 6c. Sidebar destination search (debounce)
+    const handleSidebarDestChange = useCallback((value: string) => {
+        setDest(value);
+        if (sidebarDebounceRef.current) clearTimeout(sidebarDebounceRef.current);
+        if (value.length < 2) {
+            setSidebarSuggestions([]);
+            return;
+        }
+        sidebarDebounceRef.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(value)}`);
+                const json = await res.json();
+                const data = json.data || json;
+                setSidebarSuggestions(data.destinations || []);
+            } catch (e) { /* ignore */ }
+        }, 300);
+    }, []);
+
+    // 6d. Click-outside handler for sidebar destination dropdown
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (sidebarDestRef.current && !sidebarDestRef.current.contains(event.target as Node)) {
+                setIsSidebarDestFocused(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // 7. Toggle star rating
     const toggleRating = (rating: number) => {
@@ -120,40 +165,13 @@ function DestinationsContent() {
         setSidebarBudget('');
         setSelectedRatings([]);
         setSelectedTypes([]);
+        setPage(1);
     };
 
     // 10. Apply sidebar filters
     const handleApplyFilters = () => {
-        let result = allTours;
-
-        // Filter by search keyword
-        if (dest) {
-            const keyword = dest.toLowerCase();
-            result = result.filter(t =>
-                t.name.toLowerCase().includes(keyword) ||
-                (t.destination && t.destination.toLowerCase().includes(keyword))
-            );
-        }
-
-        // Filter by budget
-        if (sidebarBudget && sidebarBudget !== 'unlimited') {
-            const parts = sidebarBudget.split('-');
-            if (parts.length === 2) {
-                const min = parseInt(parts[0]) || 0;
-                const max = parts[1] === 'unlimited' ? Infinity : parseInt(parts[1]);
-                result = result.filter(t => t.price >= min && t.price <= max);
-            }
-        }
-
-        if (sortBy === 'priceLowHigh') {
-            result.sort((a, b) => a.price - b.price);
-        } else if (sortBy === 'priceHighLow') {
-            result.sort((a, b) => b.price - a.price);
-        } else {
-            result.sort((a, b) => a.id - b.id);
-        }
-
-        setFilteredTours(result);
+        setPage(1);
+        fetchTours();
         setShowMobileFilter(false);
     };
 
@@ -190,15 +208,45 @@ function DestinationsContent() {
                     <span className="material-symbols-outlined text-sm text-primary">search</span>
                     {t('search.whereTo')}
                 </h3>
-                <div className="relative">
+                <div ref={sidebarDestRef} className="relative">
                     <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-lg">location_on</span>
                     <input
                         className="w-full bg-surface-container-low border border-outline-variant/15 rounded-xl pl-11 pr-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary/30 focus:bg-white transition-all placeholder:text-outline-variant outline-none"
                         placeholder={t('search.whereTo')}
                         type="text"
                         value={dest}
-                        onChange={(e) => setDest(e.target.value)}
+                        onChange={(e) => handleSidebarDestChange(e.target.value)}
+                        onFocus={() => setIsSidebarDestFocused(true)}
                     />
+
+                    {/* Dropdown gợi ý destination */}
+                    {isSidebarDestFocused && (() => {
+                        const suggestions = dest.length >= 2 ? sidebarSuggestions : allDestinations;
+                        if (suggestions.length === 0) return null;
+                        return (
+                            <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-[100] max-h-[240px] overflow-y-auto">
+                                {suggestions.map((item: any) => (
+                                    <div
+                                        key={item.id}
+                                        onClick={() => { setDest(item.name); setIsSidebarDestFocused(false); }}
+                                        className="px-4 py-2.5 hover:bg-slate-50 flex items-center gap-3 cursor-pointer transition-colors"
+                                    >
+                                        {item.imageUrl ? (
+                                            <img src={item.imageUrl} alt={item.name} className="w-8 h-8 rounded-md object-cover" />
+                                        ) : (
+                                            <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center">
+                                                <span className="material-symbols-outlined text-slate-400 text-sm">location_city</span>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <span className="text-sm font-bold text-primary block">{item.name}</span>
+                                            {item.region && <span className="text-[10px] text-slate-400">{item.region}</span>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -219,7 +267,7 @@ function DestinationsContent() {
                 </div>
             </div>
 
-            {/* Price Range Section */}
+            {/* Price Range Section — dynamic from DB */}
             <div className="px-6 py-6 border-b border-outline-variant/10">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold text-[11px] text-on-surface uppercase tracking-widest flex items-center gap-2">
@@ -228,35 +276,44 @@ function DestinationsContent() {
                     </h3>
                 </div>
                 <div className="space-y-2">
-                    {[
-                        { label: t('search.under5k'), value: '0-200' },
-                        { label: t('search.5kTo10k'), value: '200-400' },
-                        { label: t('search.10kTo25k'), value: '400-800' },
-                        { label: t('search.above25k'), value: '800-unlimited' },
-                    ].map((option) => {
-                        const isActive = sidebarBudget === option.value;
-                        return (
-                            <button
-                                key={option.value}
-                                onClick={() => setSidebarBudget(option.value)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 group active:scale-[0.98]
-                                    ${isActive
-                                        ? 'bg-primary/5 border-primary/25'
-                                        : 'border-outline-variant/15 bg-white hover:border-primary/15'
-                                    }`}
-                            >
-                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all
-                                    ${isActive ? 'border-primary' : 'border-outline-variant/30 group-hover:border-primary/50'}`}>
-                                    {isActive && (
-                                        <div className="w-2.5 h-2.5 rounded-full bg-primary"></div>
-                                    )}
-                                </div>
-                                <span className={`text-sm font-semibold leading-tight ${isActive ? 'text-primary' : 'text-on-surface'}`}>
-                                    {option.label}
-                                </span>
-                            </button>
-                        );
-                    })}
+                    {(() => {
+                        const { min, max } = priceRange;
+                        if (max <= 0) return null;
+                        const step = Math.ceil(max / 4);
+                        const tier1 = step;
+                        const tier2 = step * 2;
+                        const tier3 = step * 3;
+                        const options = [
+                            { label: `${formatPrice(min)} – ${formatPrice(tier1)}`, value: `${min}-${tier1}` },
+                            { label: `${formatPrice(tier1)} – ${formatPrice(tier2)}`, value: `${tier1}-${tier2}` },
+                            { label: `${formatPrice(tier2)} – ${formatPrice(tier3)}`, value: `${tier2}-${tier3}` },
+                            { label: `${formatPrice(tier3)}+`, value: `${tier3}-unlimited` },
+                        ];
+                        return options.map((option) => {
+                            const isActive = sidebarBudget === option.value;
+                            return (
+                                <button
+                                    key={option.value}
+                                    onClick={() => setSidebarBudget(isActive ? '' : option.value)}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 group active:scale-[0.98]
+                                        ${isActive
+                                            ? 'bg-primary/5 border-primary/25'
+                                            : 'border-outline-variant/15 bg-white hover:border-primary/15'
+                                        }`}
+                                >
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all
+                                        ${isActive ? 'border-primary' : 'border-outline-variant/30 group-hover:border-primary/50'}`}>
+                                        {isActive && (
+                                            <div className="w-2.5 h-2.5 rounded-full bg-primary"></div>
+                                        )}
+                                    </div>
+                                    <span className={`text-sm font-semibold leading-tight ${isActive ? 'text-primary' : 'text-on-surface'}`}>
+                                        {option.label}
+                                    </span>
+                                </button>
+                            );
+                        });
+                    })()}
                 </div>
             </div>
 
@@ -485,16 +542,39 @@ function DestinationsContent() {
                             )}
 
                             {/* Pagination */}
-                            <div className="mt-16 flex items-center justify-center space-x-2">
-                                <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-high text-on-surface hover:bg-primary hover:text-white transition-all duration-300">
-                                    <span className="material-symbols-outlined text-sm">chevron_left</span>
-                                </button>
-                                <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-white font-bold transition-all duration-300 shadow-md">1</button>
-                                <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-lowest text-on-surface font-bold hover:bg-surface-container-high transition-all duration-300">2</button>
-                                <button className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-lowest text-on-surface hover:bg-primary hover:text-white transition-all duration-300">
-                                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                                </button>
-                            </div>
+                            {totalPages > 1 && (
+                                <div className="mt-16 flex items-center justify-center space-x-2">
+                                    <button 
+                                        disabled={page === 1}
+                                        onClick={() => setPage(page - 1)}
+                                        className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-high text-on-surface hover:bg-primary hover:text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">chevron_left</span>
+                                    </button>
+                                    
+                                    {Array.from({ length: totalPages }).map((_, i) => {
+                                        const p = i + 1;
+                                        const isActive = p === page;
+                                        return (
+                                            <button 
+                                                key={p}
+                                                onClick={() => setPage(p)}
+                                                className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold transition-all duration-300 ${isActive ? 'bg-primary text-white shadow-md' : 'bg-surface-container-lowest text-on-surface hover:bg-surface-container-high'}`}
+                                            >
+                                                {p}
+                                            </button>
+                                        );
+                                    })}
+
+                                    <button 
+                                        disabled={page === totalPages}
+                                        onClick={() => setPage(page + 1)}
+                                        className="w-10 h-10 flex items-center justify-center rounded-lg bg-surface-container-lowest text-on-surface hover:bg-primary hover:text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">chevron_right</span>
+                                    </button>
+                                </div>
+                            )}
                         </section>
                     </div>
                 </div>

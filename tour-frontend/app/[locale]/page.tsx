@@ -18,7 +18,8 @@ export default function HomePage() {
       try {
         const res = await fetch('http://localhost:3000/tour');
         const data = await res.json();
-        setTours(data);
+        // The backend findAll returns { data: [...], meta: {...} }
+        setTours(data.data || []);
       } catch (error) {
         console.error('Lỗi lấy danh sách tour:', error);
       }

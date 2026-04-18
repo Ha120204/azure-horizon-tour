@@ -166,10 +166,12 @@ export default function PromotionsPage() {
     const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
-        // Fetch public vouchers
         fetch('http://localhost:3000/voucher')
             .then(res => res.json())
-            .then((data: Voucher[]) => setVouchers(data))
+            .then((resData: any) => {
+                const arr = resData.data || resData || [];
+                setVouchers(Array.isArray(arr) ? arr : []);
+            })
             .catch(console.error);
 
         // Fetch user's saved vouchers (if logged in)
@@ -177,8 +179,10 @@ export default function PromotionsPage() {
         if (token) {
             fetchWithAuth('http://localhost:3000/voucher/my-wallet')
                 .then(res => res.json())
-                .then((data: any[]) => {
-                    const ids = new Set(data.map((uv: any) => uv.voucherId));
+                .then((resData: any) => {
+                    const arr = resData.data || resData || [];
+                    const dataArray = Array.isArray(arr) ? arr : [];
+                    const ids = new Set(dataArray.map((uv: any) => uv.voucherId));
                     setSavedIds(ids);
                 })
                 .catch(() => { });

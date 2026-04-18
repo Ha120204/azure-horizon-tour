@@ -37,12 +37,14 @@ export default function JournalPage() {
                     fetch('http://localhost:3000/article/featured'),
                 ]);
                 if (articlesRes.ok) {
-                    const data = await articlesRes.json();
-                    setArticles(data);
+                    const payload = await articlesRes.json();
+                    const extracted = payload.data !== undefined ? payload.data : payload;
+                    setArticles(Array.isArray(extracted) ? extracted : []);
                 }
                 if (featuredRes.ok) {
-                    const data = await featuredRes.json();
-                    setFeatured(data);
+                    const payload = await featuredRes.json();
+                    const extracted = payload.data !== undefined ? payload.data : payload;
+                    setFeatured(extracted);
                 }
             } catch (err) {
                 console.error('Error fetching articles:', err);
@@ -54,10 +56,11 @@ export default function JournalPage() {
     }, []);
 
     // Filter articles by active category (exclude featured from main grid)
+    const safeArticles = Array.isArray(articles) ? articles : [];
     const filteredArticles = (activeCategory === "ALL"
-        ? articles
-        : articles.filter(a => a.category === activeCategory)
-    ).filter(a => !a.isFeatured);
+        ? safeArticles
+        : safeArticles.filter(a => a?.category === activeCategory)
+    ).filter(a => !a?.isFeatured);
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString(
@@ -128,7 +131,7 @@ export default function JournalPage() {
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent"></div>
                                         <div className="relative z-10 p-8 md:p-16 lg:p-20 w-full max-w-4xl">
                                             <span className="inline-block px-4 py-1.5 bg-blue-100 text-blue-900 text-[10px] font-bold tracking-[0.15em] rounded-full mb-6">
-                                                {t(`journal.categories.${featured.category}`)}
+                                                {t(`journal.categories.${featured.category || 'ALL'}`)}
                                             </span>
                                             <h2 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
                                                 {featured.title}
@@ -170,7 +173,7 @@ export default function JournalPage() {
                                                     />
                                                     <div className="absolute top-6 left-6">
                                                         <span className="bg-white/95 backdrop-blur px-3 py-1.5 text-[10px] font-bold tracking-widest rounded-full shadow-sm text-slate-800">
-                                                            {t(`journal.categories.${article.category}`)}
+                                                            {t(`journal.categories.${article.category || 'ALL'}`)}
                                                         </span>
                                                     </div>
                                                 </div>

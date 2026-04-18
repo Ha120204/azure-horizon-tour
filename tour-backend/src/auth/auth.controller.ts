@@ -1,4 +1,6 @@
-import { Controller, Post, Body, Get, UseGuards, Request, Patch, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, Patch, UseInterceptors, UploadedFile, BadRequestException, Res, Req } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import type { Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -12,6 +14,7 @@ import { extname } from 'path';
 export class AuthController {
   constructor(private readonly authService: AuthService) { }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(
@@ -21,12 +24,24 @@ export class AuthController {
     );
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(
+  async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    const data = await this.authService.login(
       loginDto.email,
       loginDto.password,
     );
+    
+    res.cookie('refreshToken', data.refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    const { refresh_token, ...result } = data;
+    return result;
   }
 
   @Post('forgot-password')
@@ -40,8 +55,18 @@ export class AuthController {
   }
 
   @Post('refresh')
-  async refresh(@Body() body: { refresh_token: string }) {
-    return this.authService.refreshToken(body.refresh_token);
+  async refresh(@Req() req: ExpressRequest) {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      throw new BadRequestException('Refresh token missing from cookies');
+    }
+    return this.authService.refreshToken(refreshToken);
+  }
+
+  @Post('logout')
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('refreshToken', { path: '/' });
+    return { message: 'Logged out successfully' };
   }
 
   @UseGuards(AuthGuard('jwt'))

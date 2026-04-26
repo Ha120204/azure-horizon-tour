@@ -5,7 +5,8 @@ const nextConfig = {
   webpack(config) {
     config.resolve.alias['next-intl/config'] = path.resolve('./i18n/request.ts');
     return config;
-  }
+  },
+  turbopack: {}
 };
 
 export default nextConfig;

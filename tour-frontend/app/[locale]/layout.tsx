@@ -4,8 +4,8 @@ import "../globals.css";
 import { LocaleProvider } from "../context/LocaleContext";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
-import SuppressHydrationWarning from '../components/SuppressHydrationWarning';
-import ConciergeWidget from '../components/ConciergeWidget'; // Xử lý lỗi HMR
+import SuppressHydrationWarning from '../components/ui/SuppressHydrationWarning';
+import ConciergeWidget from '../components/features/concierge/ConciergeWidget'; // Xử lý lỗi HMR
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

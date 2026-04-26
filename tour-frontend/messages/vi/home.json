@@ -1,0 +1,49 @@
+{
+  "hero": {
+    "badge": "Hành Trình Do Chuyên Gia Thiết Kế",
+    "title1": "Du lịch",
+    "title2": "vượt tầm",
+    "subtitle": "Khám phá những điểm đến phi thường nhất cùng Azure Horizon. Trải nghiệm dịch vụ đẳng cấp thế giới và những hành trình khó quên được dành riêng cho bạn.",
+    "statTours": "Tour du lịch",
+    "statDestinations": "Điểm đến",
+    "statTravelers": "Lượt khách hài lòng",
+    "statRating": "Xếp hạng"
+  },
+  "featured": {
+    "title": "Bộ Sưu Tập Nổi Bật",
+    "subtitle": "Những trải nghiệm được tuyển chọn kỹ lưỡng, đại diện cho đỉnh cao của du lịch sang trọng.",
+    "exploreAll": "Khám phá tất cả điểm đến",
+    "perPerson": "Mỗi người",
+    "viewDetails": "Xem chi tiết",
+    "loading": "Đang tải tour...",
+    "days": "NGÀY"
+  },
+  "philosophy": {
+    "badge": "Triết Lý Của Chúng Tôi",
+    "title": "Nghệ Thuật Hành Trình.",
+    "desc": "Chúng tôi không chỉ đặt chuyến đi — chúng tôi kiến tạo trải nghiệm. Mỗi hành trình là một câu chuyện được dệt nên từ những bí mật địa phương, kỳ quan kiến trúc và những khoảnh khắc tĩnh lặng định hình cả một đời kỷ niệm.",
+    "accommodation": "Chỗ Ở Cao Cấp",
+    "accommodationDesc": "Nghỉ tại những nơi kể lên câu chuyện.",
+    "concierge": "Hướng Dẫn Địa Phương",
+    "conciergeDesc": "Tiếp cận những điều không thể.",
+    "cta": "Khám Phá Câu Chuyện"
+  },
+  "conciergeApp": {
+    "btn": "Trợ lý ảo Azure AI",
+    "title1": "Trợ Lý Của Chúng Tôi.",
+    "title2": "Trải Nghiệm Riêng Của Bạn.",
+    "desc": "Trao đổi với chuyên gia hoặc sử dụng AI để nhận hỗ trợ thiết kế lịch trình cá nhân hóa ngay lập tức.",
+    "header": "Gặp Gỡ Trợ Lý Du Lịch AI Cá Nhân Của Bạn.",
+    "subheader": "Chào mừng đến với Azure Horizon. Bạn muốn khám phá nơi nào tiếp theo?",
+    "inputPlaceholder": "Mô tả chuyến đi trong mơ của bạn...",
+    "disclaimer": "Hệ thống AI có thể tưởng tượng ra một số điểm đến. Vui lòng luôn xác minh lại lịch trình.",
+    "prompt1": "Cần tìm tuần trăng mật 4 ngày ở Maldives",
+    "prompt2": "Chuyến đi gia đình cao cấp ở Đông Nam Á",
+    "prompt3": "Tìm cho tôi một kỳ nghỉ cuối tuần ở vùng biển",
+    "aiGreeting": "Chào buổi chiều. Tôi là Trợ lý Azure của bạn. Tôi có thể kiến tạo những hành trình thiết kế riêng, tìm kiếm những viên ngọc quý ẩn giấu, hoặc xử lý các đặt phòng. Tôi có thể giúp gì cho chuyến khởi hành tiếp theo của bạn?",
+    "aiResponse": "Kyoto vô cùng tinh tế vào mùa xuân. Tôi đã tuyển chọn các biệt thự tư nhân và quyền đi vào các khu vườn độc quyền cho bạn. Đây là lịch trình đề xuất:",
+    "aiCardTitle": "Hành trình đề xuất: 4 ngày tại Kyoto",
+    "viewItinerary": "Xem Toàn Bộ Lịch Trình",
+    "tourDesc": "Tham quan khu vườn Zen tư nhân, dùng bữa tối Kaiseki với nhà sử học địa phương, và tham gia các buổi trà đạo độc quyền."
+  }
+}

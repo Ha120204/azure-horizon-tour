@@ -132,6 +132,24 @@
     animation: fadeInUp 0.6s ease-out forwards;
   }
 
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-slide-up {
+    animation: fadeSlideUp 0.35s ease-out forwards;
+  }
+
+  @keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
   /* Ẩn thanh cuộn ngang (scrollbar) cho thanh Filter trên Mobile */
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
@@ -142,5 +160,26 @@
     /* IE and Edge */
     scrollbar-width: none;
     /* Firefox */
+  }
+
+  /* Header entrance animation */
+  @keyframes headerSlideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Respect user motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

@@ -1,0 +1,49 @@
+{
+  "hero": {
+    "badge": "Expertly Authored Journeys",
+    "title1": "Travel that",
+    "title2": "transcends",
+    "subtitle": "Discover the most extraordinary destinations with Azure Horizon. Experience world-class service and unforgettable journeys curated just for you.",
+    "statTours": "Tour Packages",
+    "statDestinations": "Destinations",
+    "statTravelers": "Happy Travelers",
+    "statRating": "Rating"
+  },
+  "featured": {
+    "title": "Featured Collections",
+    "subtitle": "Handpicked experiences representing the pinnacle of luxury travel.",
+    "exploreAll": "Explore All Destinations",
+    "perPerson": "Per Person",
+    "viewDetails": "View Details",
+    "loading": "Loading tours...",
+    "days": "DAYS"
+  },
+  "philosophy": {
+    "badge": "Our Philosophy",
+    "title": "The Art of the Path.",
+    "desc": "We don't just book trips — we craft experiences. Every journey is a story woven from local secrets, architectural wonders, and quiet moments that shape a lifetime of memories.",
+    "accommodation": "Curated Accommodations",
+    "accommodationDesc": "Stay in places that tell a story.",
+    "concierge": "Local Concierge",
+    "conciergeDesc": "Access to the inaccessible.",
+    "cta": "Discover Our Story"
+  },
+  "conciergeApp": {
+    "btn": "Azure AI Concierge",
+    "title1": "Our Concierge.",
+    "title2": "Your Rare Experience.",
+    "desc": "Speak with our experts or use our AI for immediate, personalized itinerary assistance.",
+    "header": "Meet Your Personal AI Travel Concierge.",
+    "subheader": "Welcome to Azure Horizon. Where would you like to escape to next?",
+    "inputPlaceholder": "Describe your dream journey...",
+    "disclaimer": "Azure AI may hallucinate dream-like destinations. Always verify itineraries.",
+    "prompt1": "Plan a 4-day honeymoon in Maldives",
+    "prompt2": "Luxury family trips in SE Asia",
+    "prompt3": "Find me a weekend coastal retreat",
+    "aiGreeting": "Good afternoon. I am your Azure Concierge. I can craft bespoke journeys, find hidden gems, or handle reservations. How may I assist your next departure?",
+    "aiResponse": "Kyoto is exquisite in the spring. I have curated a selection of private villas and exclusive garden access for you. Here is a proposed itinerary:",
+    "aiCardTitle": "Proposed Itinerary: 4 Days in Kyoto",
+    "viewItinerary": "View Full Itinerary",
+    "tourDesc": "Private Zen garden tours, Kaiseki dining with a local historian, and exclusive tea ceremonies."
+  }
+}

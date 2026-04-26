@@ -56,3 +56,8 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Debug & compiler output files
+compile_err.txt
+out.txt
+tsc_out.txt

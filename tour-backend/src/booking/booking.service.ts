@@ -58,11 +58,37 @@ export class BookingService {
         throw new NotFoundException('Tour not found');
       }
 
-      if (tour.availableSeats < dto.numberOfPeople) {
-        throw new BadRequestException('Not enough seats available');
+      // 1b. Validate departure (nếu có) và kiểm tra ghế của departure đó
+      let selectedDeparture: any = null;
+      if (dto.departureId) {
+        selectedDeparture = await tx.tourDeparture.findUnique({
+          where: { id: dto.departureId },
+        });
+        if (!selectedDeparture || selectedDeparture.tourId !== tour.id) {
+          throw new BadRequestException('Invalid departure');
+        }
+        if (selectedDeparture.availableSeats < dto.numberOfPeople) {
+          throw new BadRequestException('Not enough seats for this departure');
+        }
+      } else {
+        // Fallback: kiểm tra ghế trên tour
+        if (tour.availableSeats < dto.numberOfPeople) {
+          throw new BadRequestException('Not enough seats available');
+        }
       }
 
-      let totalPrice = tour.price * dto.numberOfPeople;
+      let basePrice = selectedDeparture?.price ?? tour.price;
+      let selectedPackage: any = null;
+      if (dto.packageId) {
+        selectedPackage = await tx.tourPackage.findUnique({ where: { id: dto.packageId } });
+        if (!selectedPackage || selectedPackage.tourId !== tour.id) {
+          throw new BadRequestException('Invalid tour package');
+        }
+        // [PHASE 2] Phụ thu giá gói vào giá gốc của ngày khởi hành
+        basePrice += selectedPackage.price;
+      }
+
+      let totalPrice = basePrice * dto.numberOfPeople;
       let discountAmount = 0;
       let voucherCode: string | null = null;
 
@@ -77,11 +103,19 @@ export class BookingService {
         voucherCode = dto.voucherCode;
       }
 
-      // 3. Trừ ghế bằng Atomic Decrement (an toàn khi nhiều người đặt cùng lúc)
+      // 3. Trừ ghế bằng Atomic Decrement
       await tx.tour.update({
         where: { id: tour.id },
         data: { availableSeats: { decrement: dto.numberOfPeople } },
       });
+
+      // Trừ ghế trên TourDeparture nếu có chọn ngày khởi hành
+      if (dto.departureId) {
+        await tx.tourDeparture.update({
+          where: { id: dto.departureId },
+          data: { availableSeats: { decrement: dto.numberOfPeople } },
+        });
+      }
 
       // 4. Tạo mã Booking chuyên nghiệp
       const newBookingCode = this.generateBookingCode();
@@ -94,9 +128,13 @@ export class BookingService {
           tourId: dto.tourId,
           numberOfPeople: dto.numberOfPeople,
           totalPrice,
-          unitPriceAtBooking: tour.price, // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
+          unitPriceAtBooking: basePrice, // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
           voucherCode,
           discountAmount,
+          departureId: dto.departureId,
+          packageId: dto.packageId,
+          contactInfo: dto.contactInfo ? (dto.contactInfo as any) : null,
+          passengers: dto.passengers ? (dto.passengers as any) : null,
         },
       });
 
@@ -136,19 +174,35 @@ export class BookingService {
     }); // ← Nếu có exception → toàn bộ rollback tự động
 
     // ============== PAYOS INTEGRATION ==============
-    // Quy đổi USD → VNĐ từ biến môi trường (đồng bộ với Frontend)
-    const exchangeRate = this.configService.get<number>('USD_TO_VND_RATE', 26335);
-    const amountVND = Math.round(booking.totalPrice * exchangeRate);
+    // totalPrice đã là VNĐ (frontend gửi VNĐ, DB lưu VNĐ)
+    // PayOS yêu cầu số nguyên VNĐ — làm tròn để loại bỏ số thập phân nếu có
+    const amountVND = Math.round(booking.totalPrice);
 
     // Mô tả hiển thị trên mã QR ngân hàng (tối đa 25 ký tự)
     const description = `AH ${booking.bookingCode}`;
 
     // Dùng booking.id (số nguyên tự tăng) làm orderCode cho PayOS
-    const checkoutUrl = await this.paymentService.createPaymentLink(
-      booking.id,
-      amountVND,
-      description,
-    );
+    let checkoutUrl: string;
+    try {
+      checkoutUrl = await this.paymentService.createPaymentLink(
+        booking.id,
+        amountVND,
+        description,
+      );
+    } catch (payosError: any) {
+      // PayOS lỗi 231: Link thanh toán đã tồn tại → lấy lại link cũ thay vì tạo mới
+      if (payosError?.code === '231') {
+        this.logger.warn(`[BOOKING] PayOS order #${booking.id} đã tồn tại, lấy lại checkout URL.`);
+        const existing = await this.paymentService.getPaymentInfo(booking.id);
+        if (!existing?.id) {
+          throw new BadRequestException('Không thể tạo liên kết thanh toán. Vui lòng thử lại sau.');
+        }
+        // PaymentLink.id là paymentLinkId, dùng để tạo URL checkout
+        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
+      } else {
+        throw payosError;
+      }
+    }
 
     // [PHASE 1] Ghi log PaymentTransaction khi tạo link thanh toán
     await this.prisma.paymentTransaction.create({
@@ -326,12 +380,217 @@ export class BookingService {
 
   // ============ CÁC HÀM CŨ GIỮ NGUYÊN ============
 
+  /**
+   * Admin: Xác nhận thủ công booking PENDING
+   * Dùng khi khách đã thanh toán ngoài hệ thống (chuyển khoản sai nội dung, tiền mặt, v.v.)
+   */
+  async confirmManual(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+      include: {
+        user: { select: { id: true, fullName: true, email: true } },
+        tour: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.status === 'CONFIRMED') throw new BadRequestException('Đơn hàng đã được xác nhận trước đó');
+    if (booking.status === 'CANCELLED') throw new BadRequestException('Không thể xác nhận đơn hàng đã hủy');
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: 'CONFIRMED', paymentStatus: 'PAID' },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+        tour: { select: { id: true, name: true, imageUrl: true, tourCode: true } },
+      },
+    });
+
+    this.logger.log(`[ADMIN MANUAL] Đã xác nhận thủ công booking #${bookingId} (${booking.bookingCode})`);
+
+    return {
+      ...updated,
+      totalPrice: Number(updated.totalPrice),
+      unitPriceAtBooking: Number(updated.unitPriceAtBooking),
+      discountAmount: Number(updated.discountAmount),
+    };
+  }
+
   async getMyBookings(userId: number) {
     return this.prisma.booking.findMany({
-      where: { userId, deletedAt: null }, // [PHASE 1] Filter soft delete
+      where: {
+        userId,
+        deletedAt: null,
+        status: { not: 'CANCELLED' }, // Ẩn booking đã hủy khỏi lịch sử khách hàng
+      },
       include: { tour: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * Admin: Lấy toàn bộ danh sách booking (có filter tùy chọn)
+   */
+  async getAllBookings(
+    status?: string,
+    paymentStatus?: string,
+    search?: string,
+    dateFrom?: string,
+    dateTo?: string,
+    page = 1,
+    limit = 10,
+  ) {
+    const where: any = {
+      deletedAt: null,
+    };
+
+    // Không ẩn cancelled nữa ở admin — admin cần thấy để quản lý
+    if (status && status !== 'ALL') {
+      where.status = status.toUpperCase();
+    }
+    if (paymentStatus && paymentStatus !== 'ALL') {
+      where.paymentStatus = paymentStatus.toUpperCase();
+    }
+    if (search) {
+      where.OR = [
+        { bookingCode: { contains: search, mode: 'insensitive' } },
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+        { tour: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [bookings, total] = await Promise.all([
+      this.prisma.booking.findMany({
+        where,
+        include: {
+          tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, destination: { select: { name: true } } } },
+          user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.booking.count({ where }),
+    ]);
+
+    // Thống kê tổng hợp (toàn bộ, không bị ảnh hưởng bởi filter)
+    const [globalStats, revenueResult] = await Promise.all([
+      this.prisma.booking.groupBy({
+        by: ['status'],
+        where: { deletedAt: null },
+        _count: { status: true },
+      }),
+      this.prisma.booking.aggregate({
+        where: { deletedAt: null, paymentStatus: 'PAID' },
+        _sum: { totalPrice: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    const statsMap: Record<string, number> = {};
+    for (const s of globalStats) {
+      statsMap[s.status] = s._count.status;
+    }
+
+    return {
+      bookings: bookings.map(b => ({
+        ...b,
+        totalPrice: Number(b.totalPrice),
+        unitPriceAtBooking: Number(b.unitPriceAtBooking),
+        discountAmount: Number(b.discountAmount),
+      })),
+      stats: {
+        pending: statsMap['PENDING'] || 0,
+        confirmed: statsMap['CONFIRMED'] || 0,
+        cancelled: statsMap['CANCELLED'] || 0,
+        total: (statsMap['PENDING'] || 0) + (statsMap['CONFIRMED'] || 0),
+        totalRevenue: Number(revenueResult._sum.totalPrice || 0),
+        paidCount: revenueResult._count.id,
+      },
+      meta: {
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    };
+  }
+
+  /**
+   * Khách hàng thanh toán lại booking PENDING (chưa quá 15 phút)
+   * Tạo lại PayOS payment link và trả về checkoutUrl
+   */
+  async retryPayment(bookingId: number, userId: number) {
+    const EXPIRY_MINUTES = 15;
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { tour: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    // Chỉ cho phép chủ booking thực hiện
+    if (booking.userId !== userId) {
+      throw new BadRequestException('Không có quyền truy cập booking này');
+    }
+
+    // Chỉ cho retry nếu booking vẫn PENDING và chưa thanh toán
+    if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
+      throw new BadRequestException('Booking này không ở trạng thái chờ thanh toán');
+    }
+
+    // Kiểm tra xem booking đã quá 15 phút chưa
+    const expiryTime = new Date(booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000);
+    if (new Date() > expiryTime) {
+      throw new BadRequestException('Booking đã hết hạn thanh toán (quá 15 phút). Vui lòng đặt tour mới.');
+    }
+
+    // Lấy lại checkout URL từ PayOS thay vì tạo mới (tránh lỗi 231 "order đã tồn tại")
+    const amountVND = Math.round(booking.totalPrice);
+    const description = `AH ${booking.bookingCode}`;
+    let checkoutUrl: string;
+    try {
+      // Thử tạo mới trước
+      checkoutUrl = await this.paymentService.createPaymentLink(
+        booking.id,
+        amountVND,
+        description,
+      );
+    } catch (payosError: any) {
+      // PayOS lỗi 231: đã tồn tại PayOS order này → lấy lại link cũ
+      if (payosError?.code === '231') {
+        this.logger.warn(`[RETRY] PayOS order #${booking.id} đã tồn tại, lấy lại checkout URL.`);
+        const existing = await this.paymentService.getPaymentInfo(booking.id);
+        if (!existing?.id) {
+          throw new BadRequestException(
+            'Không thể lấy liên kết thanh toán. Link có thể đã hết hạn. Vui lòng đặt tour mới.'
+          );
+        }
+        // PaymentLink.id là paymentLinkId, dùng để tạo URL checkout
+        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
+      } else {
+        throw payosError;
+      }
+    }
+
+    this.logger.log(`[RETRY] Tạo lại link thanh toán cho booking #${booking.id} (${booking.bookingCode})`);
+
+    return { checkoutUrl, expiresAt: expiryTime.toISOString() };
   }
 
   async getBookingById(bookingId: number) {

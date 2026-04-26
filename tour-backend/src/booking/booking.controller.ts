@@ -6,6 +6,7 @@ import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { PaymentService } from '../payment/payment.service';
+import { AuditLog } from '../common/decorators/audit-log.decorator';
 
 @Controller('booking')
 export class BookingController {
@@ -99,6 +100,39 @@ export class BookingController {
     return { message: 'Success', data: bookings };
   }
 
+  /**
+   * Admin: Lấy toàn bộ booking (có filter)
+   * GET /booking/admin/all?status=PENDING&paymentStatus=UNPAID&search=BKG
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Get('admin/all')
+  async getAllBookings(
+    @Query('status') status?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('search') search?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const result = await this.bookingService.getAllBookings(
+      status, paymentStatus, search, dateFrom, dateTo,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
+    );
+    return { message: 'Success', ...result };
+  }
+
+  /**
+   * Khách hàng thanh toán lại booking PENDING chưa hết hạn 15 phút
+   * POST /booking/:id/retry-payment
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post(':id/retry-payment')
+  async retryPayment(@Param('id') id: string, @Req() req: any) {
+    return this.bookingService.retryPayment(Number(id), req.user.userId);
+  }
+
   @Get('code/:bookingCode')
   findByBookingCode(@Param('bookingCode') bookingCode: string) {
     return this.bookingService.findByBookingCode(bookingCode);
@@ -135,12 +169,25 @@ export class BookingController {
     return this.bookingService.findAll();
   }
 
+  /**
+   * Admin: Xác nhận thủ công booking PENDING khi khách đã thanh toán ngoài hệ thống
+   * PATCH /booking/admin/:id/confirm-manual
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('admin/:id/confirm-manual')
+  @AuditLog('UPDATE', 'Booking')
+  async confirmManual(@Param('id') id: string) {
+    return this.bookingService.confirmManual(Number(id));
+  }
+
   @Patch(':id')
+  @AuditLog('UPDATE', 'Booking')
   update(@Param('id') id: string, @Body() updateBookingDto: UpdateBookingDto) {
     return this.bookingService.update(+id, updateBookingDto);
   }
 
   @Delete(':id')
+  @AuditLog('DELETE', 'Booking')
   remove(@Param('id') id: string) {
     return this.bookingService.remove(+id);
   }

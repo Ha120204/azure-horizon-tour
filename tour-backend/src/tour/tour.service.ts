@@ -24,7 +24,6 @@ export class TourService {
     const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
 
-    // [PHASE 1] Luôn filter bỏ tour đã bị xóa mềm
     const where: any = { deletedAt: null };
 
     if (dest) {
@@ -65,7 +64,10 @@ export class TourService {
         orderBy,
         skip,
         take: limitNum,
-        include: { destination: { select: { name: true } } }
+        include: {
+          destination: { select: { name: true } },
+          departures: { select: { price: true }, where: { isActive: true } }
+        }
       }),
       this.prisma.tour.count({ where })
     ]);
@@ -84,13 +86,21 @@ export class TourService {
 
   async findOne(id: number) {
     const tour = await this.prisma.tour.findUnique({
-      where: { id, deletedAt: null }, // [PHASE 1] Không trả tour đã xóa mềm
-      // [PHASE 1] Include đầy đủ relations cho Frontend Tour Detail page
+      where: { id, deletedAt: null },
       include: {
         destination: true,
-        itinerary: {
-          orderBy: { dayNumber: 'asc' },
+        itinerary: { orderBy: { dayNumber: 'asc' } },
+        packages: {
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' },
         },
+        departures: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }],
+        },
+        images: { orderBy: { sortOrder: 'asc' } },
+        highlights: { orderBy: { sortOrder: 'asc' } },
+        faqs: { orderBy: { sortOrder: 'asc' } },
         reviews: {
           take: 5,
           orderBy: { createdAt: 'desc' },
@@ -109,7 +119,7 @@ export class TourService {
   update(id: number, updateTourDto: UpdateTourDto) {
     const { destinationId, ...rest } = updateTourDto;
     return this.prisma.tour.update({
-      where: { id, deletedAt: null }, // [PHASE 1] Không cho update tour đã xóa
+      where: { id, deletedAt: null },
       data: {
         ...rest,
         ...(destinationId !== undefined && {
@@ -119,7 +129,6 @@ export class TourService {
     });
   }
 
-  // [PHASE 1] Soft Delete: đặt deletedAt thay vì xóa vật lý
   async remove(id: number) {
     const tour = await this.prisma.tour.findUnique({
       where: { id, deletedAt: null },
@@ -127,10 +136,160 @@ export class TourService {
     if (!tour) {
       throw new NotFoundException(`Tour with ID ${id} not found`);
     }
-
     return this.prisma.tour.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+  }
+
+  // ── Gallery ──────────────────────────────────────────────────
+
+  async addGalleryImages(tourId: number, urls: string[]) {
+    const existing = await this.prisma.tourImage.findMany({
+      where: { tourId },
+      orderBy: { sortOrder: 'desc' },
+      take: 1,
+    });
+    const baseOrder = existing.length > 0 ? existing[0].sortOrder + 1 : 0;
+    const data = urls.map((url, i) => ({ tourId, url, sortOrder: baseOrder + i }));
+    await this.prisma.tourImage.createMany({ data });
+    return this.findOne(tourId);
+  }
+
+  async removeGalleryImage(tourId: number, imageId: number) {
+    await this.prisma.tourImage.delete({ where: { id: imageId, tourId } });
+    return { message: 'Image removed' };
+  }
+
+  // ── Highlights ────────────────────────────────────────────────
+
+  async upsertHighlights(tourId: number, highlights: { content: string; icon?: string; sortOrder?: number }[]) {
+    await this.prisma.tourHighlight.deleteMany({ where: { tourId } });
+    if (highlights.length > 0) {
+      await this.prisma.tourHighlight.createMany({
+        data: highlights.map((h, i) => ({
+          tourId,
+          content: h.content,
+          icon: h.icon ?? 'auto_awesome',
+          sortOrder: h.sortOrder ?? i,
+        })),
+      });
+    }
+    return this.prisma.tourHighlight.findMany({ where: { tourId }, orderBy: { sortOrder: 'asc' } });
+  }
+
+  // ── FAQs ──────────────────────────────────────────────────────
+
+  async upsertFaqs(tourId: number, faqs: { question: string; answer: string; sortOrder?: number }[]) {
+    await this.prisma.tourFAQ.deleteMany({ where: { tourId } });
+    if (faqs.length > 0) {
+      await this.prisma.tourFAQ.createMany({
+        data: faqs.map((f, i) => ({
+          tourId,
+          question: f.question,
+          answer: f.answer,
+          sortOrder: f.sortOrder ?? i,
+        })),
+      });
+    }
+    return this.prisma.tourFAQ.findMany({ where: { tourId }, orderBy: { sortOrder: 'asc' } });
+  }
+
+  // ── Itinerary Day Update ───────────────────────────────────────
+
+  async updateItineraryDay(tourId: number, dayId: number, data: {
+    title?: string;
+    description?: string;
+    mealsBreakfast?: boolean;
+    mealsLunch?: boolean;
+    mealsDinner?: boolean;
+    accommodation?: string;
+    transport?: string;
+    activities?: string[];
+    imageUrl?: string;
+    timeline?: any[];
+  }) {
+    const day = await this.prisma.tourItinerary.findFirst({ where: { id: dayId, tourId } });
+    if (!day) throw new NotFoundException(`Itinerary day ${dayId} not found for tour ${tourId}`);
+    return this.prisma.tourItinerary.update({ where: { id: dayId }, data });
+  }
+
+  // ── Rating Stats ──────────────────────────────────────────────
+
+  async getRatingStats(tourId: number) {
+    const reviews = await this.prisma.review.findMany({
+      where: { tourId, isHidden: false },
+      select: { rating: true },
+    });
+    const total = reviews.length;
+    const breakdown: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    let sum = 0;
+    for (const r of reviews) {
+      breakdown[r.rating] = (breakdown[r.rating] ?? 0) + 1;
+      sum += r.rating;
+    }
+    const averageRating = total > 0 ? Math.round((sum / total) * 10) / 10 : 0;
+    return {
+      averageRating,
+      totalReviews: total,
+      breakdown: [5, 4, 3, 2, 1].map(star => ({
+        star,
+        count: breakdown[star] ?? 0,
+        percent: total > 0 ? Math.round(((breakdown[star] ?? 0) / total) * 100) : 0,
+      })),
+    };
+  }
+
+  // ── Sale Deals ────────────────────────────────────────────────
+  async getSaleDeals() {
+    const saleTypes = ['FLASH_SALE', 'EARLY_BIRD', 'LAST_MINUTE'];
+
+    const departures = await this.prisma.tourDeparture.findMany({
+      where: {
+        note: { in: saleTypes },
+        isActive: true,
+        tour: { deletedAt: null },
+      },
+      include: {
+        tour: {
+          include: { destination: { select: { name: true } } },
+        },
+      },
+      orderBy: { departureDate: 'asc' },
+    });
+
+    return departures.map(dep => {
+      const tour = dep.tour as any;
+      const salePrice = dep.price ?? tour.price;
+      const originalPrice = tour.price;
+      const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+
+      const categoryMap: Record<string, string> = {
+        FLASH_SALE:  'flash',
+        EARLY_BIRD:  'early',
+        LAST_MINUTE: 'lastminute',
+      };
+      const badgeMap: Record<string, string> = {
+        FLASH_SALE:  'FLASH SALE',
+        EARLY_BIRD:  'ĐẶT SỚM',
+        LAST_MINUTE: 'GIỜ CHÓT',
+      };
+
+      return {
+        id: dep.id,
+        tourId: tour.id,
+        name: tour.name,
+        image: tour.imageUrl,
+        badge: `${badgeMap[dep.note!] ?? dep.note} -${discountPct}%`,
+        rating: tour.averageRating,
+        duration: tour.duration,
+        newPrice: salePrice,
+        oldPrice: originalPrice,
+        availableSeats: dep.availableSeats,
+        departureDate: dep.departureDate,
+        category: categoryMap[dep.note!] ?? 'all',
+        destination: tour.destination?.name ?? '',
+      };
     });
   }
 }

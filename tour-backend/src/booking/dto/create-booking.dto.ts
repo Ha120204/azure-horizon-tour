@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, IsNumber, IsObject, IsArray } from 'class-validator';
 
 export class CreateBookingDto {
     @IsInt()
@@ -11,4 +11,24 @@ export class CreateBookingDto {
     @IsOptional()
     @IsString()
     voucherCode?: string;
+
+    @IsOptional()
+    @IsInt()
+    packageId?: number;
+
+    @IsOptional()
+    @IsInt()
+    departureId?: number;  // ID của TourDeparture đã chọn
+
+    @IsOptional()
+    @IsNumber()
+    totalAmount?: number;
+
+    @IsOptional()
+    @IsObject()
+    contactInfo?: Record<string, any>;
+
+    @IsOptional()
+    @IsArray()
+    passengers?: any[];
 }

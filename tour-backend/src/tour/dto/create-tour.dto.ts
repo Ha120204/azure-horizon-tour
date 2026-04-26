@@ -42,4 +42,8 @@ export class CreateTourDto {
   @IsOptional()
   @IsString()
   tourType?: string;
+
+  @IsOptional()
+  @IsString()
+  departurePoint?: string;
 }

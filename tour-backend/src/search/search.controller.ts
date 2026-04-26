@@ -1,5 +1,8 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service'; // Chỉnh đường dẫn cho đúng
+import { Controller, Get, Post, Body, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('search')
 export class SearchController {
@@ -18,6 +21,45 @@ export class SearchController {
                 region: true,
             },
             orderBy: { name: 'asc' },
+        });
+    }
+
+    /**
+     * Tạo Destination mới (dùng trong TourFormModal khi không tìm thấy điểm đến)
+     */
+    @UseGuards(AuthGuard('jwt'), RolesGuard)
+    @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+    @Post('destinations')
+    async createDestination(@Body() body: { name: string }) {
+        const name = (body.name || '').trim();
+        if (!name) throw new BadRequestException('Tên điểm đến không được để trống');
+        
+        // Check if destination already exists (case insensitive)
+        const existingDestination = await this.prisma.destination.findFirst({
+            where: {
+                name: {
+                    equals: name,
+                    mode: 'insensitive'
+                }
+            }
+        });
+
+        if (existingDestination) {
+            throw new BadRequestException(`Điểm đến "${name}" đã tồn tại.`);
+        }
+
+        // Auto-generate slug from name
+        const slug = name
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd').replace(/Đ/g, 'd')
+            .replace(/[^a-z0-9\s-]/g, '')
+            .trim()
+            .replace(/\s+/g, '-');
+        return this.prisma.destination.create({
+            data: { name, slug: `${slug}-${Date.now()}` },
+            select: { id: true, name: true },
         });
     }
 

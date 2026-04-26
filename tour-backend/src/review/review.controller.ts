@@ -1,13 +1,32 @@
 import {
-  Controller, Post, Get, Body, Param, Query, UseGuards, Req,
-  ParseIntPipe, DefaultValuePipe, UseInterceptors, UploadedFiles,
-  ParseFilePipe, MaxFileSizeValidator, FileTypeValidator,
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Req,
+  ParseIntPipe,
+  DefaultValuePipe,
+  UseInterceptors,
+  UploadedFiles,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ReviewService } from './review.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { AdminQueryReviewDto, AdminReplyDto } from './dto/admin-query-review.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+
+// ─── Customer Routes: /tour/:tourId/reviews ───────────────────────────────────
 
 @Controller('tour/:tourId/reviews')
 export class ReviewController {
@@ -27,15 +46,9 @@ export class ReviewController {
     return this.reviewService.getTourReviews(tourId, page, limit, sortBy, filter);
   }
 
-  /**
-   * Tạo Review mới.
-   * - Nếu gửi JSON thuần với mảng imageUrls string → hoạt động như cũ.
-   * - Nếu gửi multipart/form-data kèm file ảnh (field 'images', tối đa 5 file)
-   *   → upload lên Cloudinary, mỗi file tối đa 5MB, chỉ nhận .jpg/.jpeg/.png
-   */
   @UseGuards(AuthGuard('jwt'))
   @Post()
-  @UseInterceptors(FilesInterceptor('images', 5)) // Tối đa 5 ảnh
+  @UseInterceptors(FilesInterceptor('images', 5))
   async createReview(
     @Param('tourId', ParseIntPipe) tourId: number,
     @Req() req: any,
@@ -43,24 +56,84 @@ export class ReviewController {
     @UploadedFiles(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5 MB
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
           new FileTypeValidator({ fileType: /(jpg|jpeg|png)$/ }),
         ],
-        fileIsRequired: false, // Cho phép không gửi file (dùng imageUrls string cũ)
+        fileIsRequired: false,
       }),
     )
     files?: Express.Multer.File[],
   ) {
-    // Nếu có file upload, đẩy lên Cloudinary và gộp vào imageUrls
-
     if (files && files.length > 0) {
-      const uploadedUrls = await this.cloudinaryService.uploadFiles(files, 'azure-horizon/reviews');
-      // Gộp URLs từ Cloudinary với imageUrls có sẵn từ body (nếu có)
+      const uploadedUrls = await this.cloudinaryService.uploadFiles(
+        files,
+        'azure-horizon/reviews',
+      );
       createReviewDto.imageUrls = [
         ...(createReviewDto.imageUrls || []),
         ...uploadedUrls,
       ];
     }
     return this.reviewService.createReview(req.user.userId, tourId, createReviewDto);
+  }
+}
+
+// ─── Admin Routes: /review/admin ─────────────────────────────────────────────
+
+@UseGuards(AuthGuard('jwt'))
+@Controller('review/admin')
+export class ReviewAdminController {
+  constructor(private readonly reviewService: ReviewService) {}
+
+  /** GET /review/admin/stats — Thống kê tổng quan */
+  @Get('stats')
+  getStats() {
+    return this.reviewService.getAdminStats();
+  }
+
+  /** GET /review/admin/all — Lấy tất cả reviews với filter, paginate */
+  @Get('all')
+  getAllReviews(@Query() query: AdminQueryReviewDto) {
+    return this.reviewService.getAllReviewsAdmin(query);
+  }
+
+  /** PATCH /review/admin/:id/visibility — Toggle ẩn/hiện */
+  @Patch(':id/visibility')
+  toggleVisibility(@Param('id', ParseIntPipe) id: number) {
+    return this.reviewService.toggleVisibility(id);
+  }
+
+  /** PATCH /review/admin/:id/reply — Admin phản hồi review */
+  @Patch(':id/reply')
+  replyReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminReplyDto,
+  ) {
+    return this.reviewService.replyReview(id, dto.content);
+  }
+
+  /** DELETE /review/admin/:id — Xóa review */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  deleteReview(@Param('id', ParseIntPipe) id: number) {
+    return this.reviewService.deleteReview(id);
+  }
+
+  /** POST /review/admin/bulk/hide — Ẩn nhiều review */
+  @Post('bulk/hide')
+  bulkHide(@Body('ids') ids: number[]) {
+    return this.reviewService.bulkToggleVisibility(ids, true);
+  }
+
+  /** POST /review/admin/bulk/show — Hiện nhiều review */
+  @Post('bulk/show')
+  bulkShow(@Body('ids') ids: number[]) {
+    return this.reviewService.bulkToggleVisibility(ids, false);
+  }
+
+  /** POST /review/admin/bulk/delete — Xóa nhiều review */
+  @Post('bulk/delete')
+  bulkDelete(@Body('ids') ids: number[]) {
+    return this.reviewService.bulkDelete(ids);
   }
 }

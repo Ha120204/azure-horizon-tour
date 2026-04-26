@@ -1,26 +1,28 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { AdminQueryReviewDto } from './dto/admin-query-review.dto';
 
 @Injectable()
 export class ReviewService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ─── Customer APIs ────────────────────────────────────────────────────────
 
   async createReview(userId: number, tourId: number, dto: CreateReviewDto) {
     const tour = await this.prisma.tour.findUnique({ where: { id: tourId } });
     if (!tour) throw new NotFoundException('Tour not found');
 
     const existingReview = await this.prisma.review.findFirst({
-      where: { userId, tourId }
+      where: { userId, tourId },
     });
     if (existingReview) {
       throw new BadRequestException('Bạn đã đánh giá trải nghiệm này rồi.');
     }
-
-    // Optional: check if booking exists to "verify" the purchase
-    const booking = await this.prisma.booking.findFirst({
-      where: { userId, tourId, status: 'CONFIRMED' }
-    });
 
     const newReview = await this.prisma.review.create({
       data: {
@@ -31,27 +33,24 @@ export class ReviewService {
         imageUrls: dto.imageUrls || [],
       },
       include: {
-        user: { select: { fullName: true, avatarUrl: true } }
-      }
+        user: { select: { fullName: true, avatarUrl: true } },
+      },
     });
 
-    const aggregations = await this.prisma.review.aggregate({
-      where: { tourId },
-      _avg: { rating: true }
-    });
-
-    await this.prisma.tour.update({
-      where: { id: tourId },
-      data: { averageRating: Number((aggregations._avg.rating || 0).toFixed(1)) }
-    });
-
+    await this._recalcTourRating(tourId);
     return newReview;
   }
 
-  async getTourReviews(tourId: number, page: number = 1, limit: number = 5, sortBy?: string, filter?: string) {
+  async getTourReviews(
+    tourId: number,
+    page: number = 1,
+    limit: number = 5,
+    sortBy?: string,
+    filter?: string,
+  ) {
     const skip = (page - 1) * limit;
 
-    let whereClause: any = { tourId };
+    let whereClause: any = { tourId, isHidden: false };
     if (filter === '5stars') whereClause.rating = 5;
     else if (filter === '4stars') whereClause.rating = 4;
     else if (filter === '3stars') whereClause.rating = 3;
@@ -59,36 +58,38 @@ export class ReviewService {
     else if (filter === '1star') whereClause.rating = 1;
     else if (filter === 'photos') whereClause.imageUrls = { isEmpty: false };
 
-    let orderByClause: any = { createdAt: 'desc' }; // default newest
+    let orderByClause: any = { createdAt: 'desc' };
     if (sortBy === 'rating_desc') orderByClause = { rating: 'desc' };
     else if (sortBy === 'rating_asc') orderByClause = { rating: 'asc' };
 
-    const [reviews, totalCount, aggregations, groupByRatings] = await Promise.all([
-      this.prisma.review.findMany({
-        where: whereClause,
-        orderBy: orderByClause,
-        skip,
-        take: limit,
-        include: {
-          user: { select: { fullName: true, avatarUrl: true } }
-        }
-      }),
-      this.prisma.review.count({ where: whereClause }),
-      this.prisma.review.aggregate({
-        where: { tourId }, // aggregate always for all reviews
-        _avg: { rating: true }
-      }),
-      this.prisma.review.groupBy({
-        by: ['rating'],
-        _count: { rating: true },
-        where: { tourId }
-      })
-    ]);
+    const [reviews, totalCount, aggregations, groupByRatings] =
+      await Promise.all([
+        this.prisma.review.findMany({
+          where: whereClause,
+          orderBy: orderByClause,
+          skip,
+          take: limit,
+          include: {
+            user: { select: { fullName: true, avatarUrl: true } },
+          },
+        }),
+        this.prisma.review.count({ where: whereClause }),
+        this.prisma.review.aggregate({
+          where: { tourId, isHidden: false },
+          _avg: { rating: true },
+        }),
+        this.prisma.review.groupBy({
+          by: ['rating'],
+          _count: { rating: true },
+          where: { tourId, isHidden: false },
+        }),
+      ]);
 
     const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-    groupByRatings.forEach(group => {
+    groupByRatings.forEach((group) => {
       if (group.rating >= 1 && group.rating <= 5) {
-        breakdown[group.rating as keyof typeof breakdown] = group._count.rating;
+        breakdown[group.rating as keyof typeof breakdown] =
+          group._count.rating;
       }
     });
 
@@ -104,8 +105,171 @@ export class ReviewService {
       stats: {
         averageRating: Number((aggregations._avg.rating || 0).toFixed(1)),
         totalReviews: totalCount,
-        breakdown
-      }
+        breakdown,
+      },
     };
+  }
+
+  // ─── Admin APIs ───────────────────────────────────────────────────────────
+
+  async getAdminStats() {
+    const [total, hidden, aggregations, groupByRatings] = await Promise.all([
+      this.prisma.review.count(),
+      this.prisma.review.count({ where: { isHidden: true } }),
+      this.prisma.review.aggregate({ _avg: { rating: true } }),
+      this.prisma.review.groupBy({
+        by: ['rating'],
+        _count: { rating: true },
+      }),
+    ]);
+
+    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    groupByRatings.forEach((group) => {
+      if (group.rating >= 1 && group.rating <= 5) {
+        breakdown[group.rating as keyof typeof breakdown] =
+          group._count.rating;
+      }
+    });
+
+    const fiveStarCount = breakdown[5];
+    const fiveStarRate = total > 0 ? Math.round((fiveStarCount / total) * 100) : 0;
+
+    return {
+      total,
+      hidden,
+      averageRating: Number((aggregations._avg.rating || 0).toFixed(1)),
+      fiveStarRate,
+      breakdown,
+    };
+  }
+
+  async getAllReviewsAdmin(query: AdminQueryReviewDto) {
+    const { page = 1, limit = 10, search, rating, status, tourId, sortBy } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status === 'hidden') where.isHidden = true;
+    else if (status === 'visible') where.isHidden = false;
+    if (rating) where.rating = Number(rating);
+    if (tourId) where.tourId = Number(tourId);
+    if (search) {
+      where.OR = [
+        { content: { contains: search, mode: 'insensitive' } },
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+        { tour: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    let orderBy: any = { createdAt: 'desc' };
+    if (sortBy === 'oldest') orderBy = { createdAt: 'asc' };
+    else if (sortBy === 'rating_desc') orderBy = { rating: 'desc' };
+    else if (sortBy === 'rating_asc') orderBy = { rating: 'asc' };
+
+    const [reviews, totalItems] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        orderBy,
+        skip,
+        take: Number(limit),
+        include: {
+          user: { select: { id: true, fullName: true, avatarUrl: true, email: true } },
+          tour: { select: { id: true, name: true, tourCode: true } },
+        },
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    return {
+      data: reviews,
+      meta: {
+        totalItems,
+        itemCount: reviews.length,
+        itemsPerPage: Number(limit),
+        totalPages: Math.ceil(totalItems / Number(limit)),
+        currentPage: Number(page),
+      },
+    };
+  }
+
+  async toggleVisibility(id: number) {
+    const review = await this.prisma.review.findUnique({ where: { id } });
+    if (!review) throw new NotFoundException('Review không tồn tại');
+
+    const updated = await this.prisma.review.update({
+      where: { id },
+      data: { isHidden: !review.isHidden },
+      include: {
+        user: { select: { id: true, fullName: true, avatarUrl: true, email: true } },
+        tour: { select: { id: true, name: true, tourCode: true } },
+      },
+    });
+
+    // Cập nhật avgRating của tour (chỉ tính review visible)
+    await this._recalcTourRating(review.tourId);
+    return updated;
+  }
+
+  async deleteReview(id: number) {
+    const review = await this.prisma.review.findUnique({ where: { id } });
+    if (!review) throw new NotFoundException('Review không tồn tại');
+
+    await this.prisma.review.delete({ where: { id } });
+    await this._recalcTourRating(review.tourId);
+    return { message: 'Đã xóa đánh giá thành công' };
+  }
+
+  async replyReview(id: number, content: string) {
+    const review = await this.prisma.review.findUnique({ where: { id } });
+    if (!review) throw new NotFoundException('Review không tồn tại');
+
+    return this.prisma.review.update({
+      where: { id },
+      data: { adminReply: content },
+      include: {
+        user: { select: { id: true, fullName: true, avatarUrl: true, email: true } },
+        tour: { select: { id: true, name: true, tourCode: true } },
+      },
+    });
+  }
+
+  async bulkToggleVisibility(ids: number[], isHidden: boolean) {
+    await this.prisma.review.updateMany({
+      where: { id: { in: ids } },
+      data: { isHidden },
+    });
+    // Recalc ratings for all affected tours
+    const reviews = await this.prisma.review.findMany({
+      where: { id: { in: ids } },
+      select: { tourId: true },
+    });
+    const tourIds = [...new Set(reviews.map((r) => r.tourId))];
+    await Promise.all(tourIds.map((tId) => this._recalcTourRating(tId)));
+    return { message: `Đã cập nhật ${ids.length} đánh giá` };
+  }
+
+  async bulkDelete(ids: number[]) {
+    const reviews = await this.prisma.review.findMany({
+      where: { id: { in: ids } },
+      select: { tourId: true },
+    });
+    await this.prisma.review.deleteMany({ where: { id: { in: ids } } });
+    const tourIds = [...new Set(reviews.map((r) => r.tourId))];
+    await Promise.all(tourIds.map((tId) => this._recalcTourRating(tId)));
+    return { message: `Đã xóa ${ids.length} đánh giá` };
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  private async _recalcTourRating(tourId: number) {
+    const agg = await this.prisma.review.aggregate({
+      where: { tourId, isHidden: false },
+      _avg: { rating: true },
+    });
+    await this.prisma.tour.update({
+      where: { id: tourId },
+      data: {
+        averageRating: Number((agg._avg.rating || 0).toFixed(1)),
+      },
+    });
   }
 }

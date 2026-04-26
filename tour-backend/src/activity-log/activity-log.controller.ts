@@ -1,0 +1,43 @@
+import { Controller, Get, Param, Query, Res, ParseIntPipe, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { AuthGuard } from '@nestjs/passport';
+import { ActivityLogService, LogQueryDto } from './activity-log.service';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+
+@Controller('admin/logs')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
+export class ActivityLogController {
+    constructor(private readonly logService: ActivityLogService) {}
+
+    // GET /admin/logs/stats — KPI summary
+    @Get('stats')
+    async getStats() {
+        const stats = await this.logService.getStats();
+        return { data: stats };
+    }
+
+    // GET /admin/logs/export — Download CSV
+    @Get('export')
+    async exportCsv(@Query() query: LogQueryDto, @Res() res: Response) {
+        const csv = await this.logService.exportCsv(query);
+        const fileName = `nhat-ky-${new Date().toISOString().slice(0, 10)}.csv`;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.send(csv);
+    }
+
+    // GET /admin/logs — Danh sách với filter + pagination
+    @Get()
+    async findAll(@Query() query: LogQueryDto) {
+        return this.logService.findAll(query);
+    }
+
+    // GET /admin/logs/:id — Chi tiết 1 log
+    @Get(':id')
+    async findOne(@Param('id', ParseIntPipe) id: number) {
+        const log = await this.logService.findOne(id);
+        return { data: log };
+    }
+}

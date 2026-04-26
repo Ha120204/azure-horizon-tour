@@ -31,7 +31,7 @@ export class AuthController {
       loginDto.email,
       loginDto.password,
     );
-    
+
     res.cookie('refreshToken', data.refresh_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

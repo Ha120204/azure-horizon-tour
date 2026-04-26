@@ -50,6 +50,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Kiểm tra tài khoản đã bị vô hiệu hóa chưa
+    if (user.deletedAt) {
+      throw new UnauthorizedException('Your account has been deactivated. Please contact an administrator.');
+    }
+
     const { password, ...result } = user;
 
     const payload = { sub: user.id, email: user.email, role: user.role };

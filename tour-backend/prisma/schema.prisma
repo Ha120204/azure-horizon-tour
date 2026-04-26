@@ -39,6 +39,7 @@ model User {
   userVouchers UserVoucher[]
   chatSessions ChatSession[]
   reviews      Review[]
+  systemLogs   SystemLog[]
 }
 
 // =============================================
@@ -77,6 +78,7 @@ model Tour {
   imageUrl       String?
   averageRating  Float       @default(0)
   tourType       String      @default("Luxury Retreat")
+  departurePoint String?                             // Điểm khởi hành mặc định (VD: "TP. Hồ Chí Minh")
   
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -85,6 +87,11 @@ model Tour {
   bookings       Booking[]
   reviews        Review[]
   itinerary      TourItinerary[] // [PHASE 1] Lịch trình theo ngày
+  packages       TourPackage[]   // Các gói tour (Tiêu Chuẩn / Cao Cấp / Luxury)
+  departures     TourDeparture[] // Các ngày khởi hành (mỗi ngày có giá và ghế riêng)
+  images         TourImage[]     // [PHASE 2] Bộ ảnh gallery của tour
+  highlights     TourHighlight[] // [PHASE 2] Điểm nổi bật của tour
+  faqs           TourFAQ[]       // [PHASE 2] Câu hỏi thường gặp
 
   @@index([destinationId, startDate])  // [PHASE 1] Index tăng tốc filter
   @@index([tourType, price])           // [PHASE 1] Index tăng tốc filter
@@ -94,14 +101,114 @@ model Tour {
 // BẢNG LỊCH TRÌNH TOUR THEO NGÀY (PHASE 1 - MỚI)
 // =============================================
 model TourItinerary {
-  id          Int    @id @default(autoincrement())
-  tourId      Int
-  tour        Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
-  dayNumber   Int    // Ngày thứ mấy (1, 2, 3...)
-  title       String // "Khám phá Hội An cổ kính"
-  description String @db.Text // Mô tả chi tiết hoạt động trong ngày
+  id              Int      @id @default(autoincrement())
+  tourId          Int
+  tour            Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  dayNumber       Int      // Ngày thứ mấy (1, 2, 3...)
+  title           String   // "Khám phá Hội An cổ kính"
+  description     String   @db.Text // Mô tả chi tiết hoạt động trong ngày
+
+  // [PHASE 2] Thông tin chi tiết theo ngày
+  mealsBreakfast  Boolean  @default(false) // Bữa sáng included
+  mealsLunch      Boolean  @default(false) // Bữa trưa included
+  mealsDinner     Boolean  @default(false) // Bữa tối included
+  accommodation   String?                  // "Vinpearl Resort 5⭐"
+  transport       String?                  // "Xe du lịch 45 chỗ"
+  activities      String[]                 // ["Lặn ngắm san hô", "Tắm biển Hòn Tằm"]
+  imageUrl        String?                  // Ảnh minh họa cho ngày
+  timeline        Json?                    // [{"time":"08:00","activity":"Ăn sáng tại KS"}, ...]
 
   @@index([tourId, dayNumber])
+}
+
+// =============================================
+// BẢNG ĐIỂM NỔI BẬT TOUR (PHASE 2 - MỚI)
+// =============================================
+model TourHighlight {
+  id        Int    @id @default(autoincrement())
+  tourId    Int
+  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  content   String // "Lặn ngắm san hô tại Hòn Mun — 10 vịnh đẹp nhất thế giới"
+  icon      String @default("auto_awesome") // Material Symbol icon name
+  sortOrder Int    @default(0)
+
+  @@index([tourId, sortOrder])
+}
+
+// =============================================
+// BẢNG CÂU HỎI THƯỜNG GẶP (PHASE 2 - MỚI)
+// =============================================
+model TourFAQ {
+  id        Int    @id @default(autoincrement())
+  tourId    Int
+  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  question  String
+  answer    String @db.Text
+  sortOrder Int    @default(0)
+
+  @@index([tourId, sortOrder])
+}
+
+// =============================================
+// BẢNG ẢNH GALLERY TOUR (PHASE 2)
+// =============================================
+model TourImage {
+  id        Int    @id @default(autoincrement())
+  tourId    Int
+  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  url       String // Cloudinary secure_url
+  altText   String @default("") // Alt text cho SEO
+  sortOrder Int    @default(0)  // Thứ tự hiển thị (0 = ảnh đầu tiên / ảnh bìa)
+
+  @@index([tourId, sortOrder])
+}
+
+// =============================================
+// BẢNG GÓI TOUR (TOUR PACKAGE)
+// =============================================
+model TourPackage {
+  id          Int      @id @default(autoincrement())
+  tourId      Int
+  tour        Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
+
+  name        String   // "Gói Tiêu Chuẩn" | "Gói Cao Cấp" | "Gói Luxury"
+  description String?  @db.Text // Mô tả ngắn về gói
+  price       Float    // Giá/người cho gói này
+  badge       String?  // "POPULAR" | "BEST VALUE" | "LUXURY" | null
+
+  // Lưu dạng JSON string array: ["Vé máy bay khứ hồi", "Khách sạn 4★"]
+  includes    String[] // Danh sách dịch vụ bao gồm
+  excludes    String[] // Danh sách không bao gồm
+
+  sortOrder   Int      @default(0) // Thứ tự hiển thị
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tourId, sortOrder])
+}
+
+// =============================================
+// BẢNG NGÀY KHỞI HÀNH (TOUR DEPARTURE)
+// =============================================
+model TourDeparture {
+  id             Int      @id @default(autoincrement())
+  tourId         Int
+  tour           Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
+
+  departureDate  DateTime              // Ngày khởi hành cụ thể
+  price          Float?                // Null = dùng tour.price làm fallback
+  availableSeats Int      @default(0)  // Số ghế còn lại cho ngày này
+  note           String?               // Ghi chú (VD: "Giá ưu đãi cuối tuần")
+
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tourId, departureDate])
 }
 
 // --- CÁC ENUM CHO ĐẶT TOUR ---
@@ -130,12 +237,17 @@ model Booking {
   totalPrice       Float
   unitPriceAtBooking Float?      // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
   
+  departureId      Int?          // [PHASE 2] Liên kết đến Lịch khởi hành
+  packageId        Int?          // [PHASE 2] Liên kết đến Gói Tour
+  contactInfo      Json?         // [PHASE 2] Thông tin liên hệ người đặt (tên, email, phone)
+  passengers       Json?         // [PHASE 2] Danh sách hành khách
+  
   status           BookingStatus @default(PENDING)
   paymentStatus    PaymentStatus @default(UNPAID)
   vnpayTxnRef      String?       // Mã giao dịch từ cổng thanh toán để đối soát
   
   voucherCode      String?       // Mã voucher đã áp dụng (nếu có)
-  discountAmount   Float         @default(0) // Số tiền đã giảm (USD)
+  discountAmount   Float         @default(0) // Số tiền đã giảm (VNĐ)
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -170,20 +282,33 @@ model PaymentTransaction {
   @@index([bookingId])
 }
 
-// --- BẢNG NHẬT KÝ HỆ THỐNG (DÀNH CHO SUPER ADMIN) ---
+// --- BẢNG NHẬT KÝ HÀNH ĐỘNG (AUDIT LOG) ---
 model SystemLog {
   id          Int      @id @default(autoincrement())
-  adminId     Int      // ID của Admin/Staff thực hiện hành động
-  action      String   // Tên hành động (VD: CANCEL_BOOKING)
-  description String   @db.Text // Mô tả chi tiết
-  ipAddress   String?  // Ghi lại IP 
+  action      String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | ROLE_CHANGE | CANCEL_BOOKING | EXPORT
+  resource    String   // 'Tour' | 'Booking' | 'User' | 'Voucher' | 'Article' | 'Review' | 'Auth'
+  resourceId  String?  // ID của object bị tác động
+  targetName  String?  // Tên hiển thị của object (VD: "Tour Hội An Heritage Walk")
+  description String   @db.Text // Mô tả hành động (human-readable)
+  oldData     Json?    // Snapshot dữ liệu trước khi thay đổi
+  newData     Json?    // Snapshot dữ liệu sau khi thay đổi
+  ipAddress   String?  // IP của người thực hiện
+  userAgent   String?  // Browser/OS info
+  userId      Int?     // ID Admin/Staff thực hiện (null = system)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+  @@index([createdAt])
 }
+
 
 // --- HỆ THỐNG VOUCHER ---
 enum DiscountType {
   PERCENTAGE    // Giảm theo %
-  FIXED_AMOUNT  // Giảm số tiền cố định (USD)
+  FIXED_AMOUNT  // Giảm số tiền cố định (VNĐ)
 }
 
 model Voucher {
@@ -192,7 +317,7 @@ model Voucher {
   label         String                          // "Premium Escape"
   description   String        @db.Text          // Mô tả điều kiện
   discountType  DiscountType                    // PERCENTAGE hoặc FIXED_AMOUNT
-  discountValue Float                           // 15 (= 15%) hoặc 500 (= $500)
+  discountValue Float                           // 15 (= 15%) hoặc 500000 (= 500.000 VNĐ)
   minOrderValue Float         @default(0)       // Giá trị đơn tối thiểu để dùng
   maxUses       Int           @default(100)     // Tổng lượt sử dụng toàn hệ thống
   usedCount     Int           @default(0)       // Đã dùng bao nhiêu lần
@@ -257,19 +382,47 @@ model ChatMessage {
 
 // --- HỆ THỐNG ĐÁNH GIÁ (REVIEWS) ---
 model Review {
-  id        Int      @id @default(autoincrement())
-  rating    Int      // Từ 1 đến 5 sao
-  content   String   @db.Text
-  imageUrls String[] // Danh sách các ảnh đính kèm (Lưu mảng trên Postgres)
-  
+  id         Int      @id @default(autoincrement())
+  rating     Int      // Từ 1 đến 5 sao
+  content    String   @db.Text
+  imageUrls  String[] // Danh sách các ảnh đính kèm (Lưu mảng trên Postgres)
+
+  isHidden   Boolean  @default(false) // Admin ẩn review
+  adminReply String?  @db.Text        // Admin phản hồi review
+
   tourId    Int
   tour      Tour     @relation(fields: [tourId], references: [id])
-  
+
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([tourId, rating]) // [PHASE 1] Index tăng tốc filter review
+  @@index([tourId, rating])   // Index tăng tốc filter review
+  @@index([isHidden])         // Index cho admin filter ẩn/hiện
+}
+
+// =============================================
+// BẢNG NGƯỜI ĐĂNG KÝ NHẬN TIN (NEWSLETTER)
+// =============================================
+model Subscriber {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// =============================================
+// BẢNG CÀI ĐẶT HỆ THỐNG (KEY-VALUE STORE)
+// =============================================
+model SystemSetting {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique   // VD: "company_name", "booking_hold_minutes"
+  value       String   @db.Text  // Giá trị (luôn lưu dạng String)
+  label       String             // Tên hiển thị: "Tên công ty"
+  description String?            // Mô tả thêm
+  group       String             // Nhóm: "company" | "booking" | "announcement"
+  updatedAt   DateTime @updatedAt
+  updatedBy   Int?               // ID admin đã chỉnh sửa lần cuối
 }

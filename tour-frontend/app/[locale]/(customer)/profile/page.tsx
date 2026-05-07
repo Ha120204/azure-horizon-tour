@@ -11,6 +11,8 @@ import ProfileHeader from '@/app/components/profile/ProfileHeader';
 import PersonalInfoForm from '@/app/components/profile/PersonalInfoForm';
 import ChangePasswordForm from '@/app/components/profile/ChangePasswordForm';
 import VoucherWallet from '@/app/components/profile/VoucherWallet';
+import SupportTicketList, { type SupportTicket } from '@/app/components/profile/SupportTicketList';
+import SupportTicketDetail from '@/app/components/profile/SupportTicketDetail';
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -36,6 +38,9 @@ export default function ProfilePage() {
     const [recentBookings, setRecentBookings] = useState<any[]>([]);
     const [myVouchers, setMyVouchers] = useState<any[]>([]);
     const [showAllVouchers, setShowAllVouchers] = useState(false);
+    const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
+    const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+    const [activeTab, setActiveTab] = useState<'bookings' | 'support'>('bookings');
 
     // State cho đổi mật khẩu
     const [currentPassword, setCurrentPassword] = useState('');
@@ -83,6 +88,15 @@ export default function ProfilePage() {
                     const voucherData = await resVouchers.json();
                     const arr = voucherData.data || voucherData || [];
                     setMyVouchers(Array.isArray(arr) ? arr : []);
+                }
+
+                // Fetch support tickets
+                const resTickets = await fetchWithAuth('http://localhost:3000/support/customer/my-tickets');
+                if (resTickets.ok) {
+                    const ticketData = await resTickets.json();
+                    // API trả về { data: [...] } hoặc trực tiếp array
+                    const tickets = ticketData?.data ?? ticketData;
+                    setMyTickets(Array.isArray(tickets) ? tickets : []);
                 }
 
             } catch (err) {
@@ -270,57 +284,104 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="lg:col-span-2 space-y-8">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-3xl font-headline font-extrabold tracking-tight text-on-surface">{t('profile.myBookings')}</h2>
-                            <Link href="/my-bookings" className="text-sm font-bold text-primary hover:underline underline-offset-4 flex items-center gap-1">
-                                {t('profile.viewAllHistory')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                            </Link>
+                        {/* Tab switcher */}
+                        <div className="flex items-center gap-1 bg-surface-container-low p-1.5 rounded-2xl w-fit">
+                            <button
+                                onClick={() => setActiveTab('bookings')}
+                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                    activeTab === 'bookings'
+                                        ? 'bg-surface-container-lowest text-primary shadow-sm'
+                                        : 'text-outline hover:text-on-surface'
+                                }`}
+                            >
+                                <span className="flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-sm">luggage</span>
+                                    {t('profile.myBookings')}
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('support')}
+                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                    activeTab === 'support'
+                                        ? 'bg-surface-container-lowest text-primary shadow-sm'
+                                        : 'text-outline hover:text-on-surface'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-sm">support_agent</span>
+                                    Yêu cầu hỗ trợ
+                                    {myTickets.filter(t => t.status !== 'RESOLVED').length > 0 && (
+                                        <span className="bg-primary text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                                            {myTickets.filter(t => t.status !== 'RESOLVED').length}
+                                        </span>
+                                    )}
+                                </span>
+                            </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {recentBookings.length === 0 ? (
-                                <div className="col-span-full py-10 text-center bg-surface-container-lowest rounded-xl ambient-shadow">
-                                    <p className="text-outline font-medium">{t('profile.noTrips')}</p>
-                                    <Link href="/destinations" className="text-primary font-bold hover:underline mt-2 inline-block">{t('profile.exploreNow')}</Link>
-                                </div>
-                            ) : (
-                                recentBookings.slice(0, 4).map((booking) => {
-                                    const isPaid = booking.paymentStatus === 'PAID';
-                                    return (
-                                        <div key={booking.id} className="group bg-surface-container-lowest rounded-xl overflow-hidden ambient-shadow transition-all duration-300 hover:-translate-y-1">
-                                            <div className="relative h-48 overflow-hidden">
-                                                <img alt={booking.tour?.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src={booking.tour?.imageUrl || "https://images.unsplash.com/photo-1610574138412-7bf28ade0222?w=600&auto=format&fit=crop&q=60"} />
-                                                <div className="absolute top-4 left-4">
-                                                    <span className={`px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-full shadow-lg ${isPaid ? 'bg-tertiary-container text-white' : 'bg-secondary-container text-on-secondary-container'}`}>
-                                                        {isPaid ? t('profile.confirmedBadge') : t('profile.unpaidBadge')}
-                                                    </span>
+                        {/* Bookings Tab */}
+                        {activeTab === 'bookings' && (
+                          <>
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-headline font-extrabold tracking-tight text-on-surface">{t('profile.myBookings')}</h2>
+                                <Link href="/my-bookings" className="text-sm font-bold text-primary hover:underline underline-offset-4 flex items-center gap-1">
+                                    {t('profile.viewAllHistory')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                </Link>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {recentBookings.length === 0 ? (
+                                    <div className="col-span-full py-10 text-center bg-surface-container-lowest rounded-xl ambient-shadow">
+                                        <p className="text-outline font-medium">{t('profile.noTrips')}</p>
+                                        <Link href="/destinations" className="text-primary font-bold hover:underline mt-2 inline-block">{t('profile.exploreNow')}</Link>
+                                    </div>
+                                ) : (
+                                    recentBookings.slice(0, 4).map((booking) => {
+                                        const isPaid = booking.paymentStatus === 'PAID';
+                                        return (
+                                            <div key={booking.id} className="group bg-surface-container-lowest rounded-xl overflow-hidden ambient-shadow transition-all duration-300 hover:-translate-y-1">
+                                                <div className="relative h-48 overflow-hidden">
+                                                    <img alt={booking.tour?.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src={booking.tour?.imageUrl || "https://images.unsplash.com/photo-1610574138412-7bf28ade0222?w=600&auto=format&fit=crop&q=60"} />
+                                                    <div className="absolute top-4 left-4">
+                                                        <span className={`px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-full shadow-lg ${isPaid ? 'bg-tertiary-container text-white' : 'bg-secondary-container text-on-secondary-container'}`}>
+                                                            {isPaid ? t('profile.confirmedBadge') : t('profile.unpaidBadge')}
+                                                        </span>
+                                                    </div>
+                                                    <div className="absolute -bottom-4 right-4 bg-white px-4 py-2 rounded-lg shadow-xl border border-surface-container">
+                                                        <span className="text-lg font-bold font-headline text-primary">{formatPrice(booking.totalPrice)}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="absolute -bottom-4 right-4 bg-white px-4 py-2 rounded-lg shadow-xl border border-surface-container">
-                                                    <span className="text-lg font-bold font-headline text-primary">{formatPrice(booking.totalPrice)}</span>
+                                                <div className="p-6 pt-8 space-y-4">
+                                                    <div>
+                                                        <h3 className="text-lg font-headline font-bold text-on-surface line-clamp-1" title={booking.tour?.name}>{booking.tour?.name}</h3>
+                                                        <p className="text-xs text-outline font-medium flex items-center gap-1 mt-1">
+                                                            <span className="material-symbols-outlined text-sm">calendar_today</span>
+                                                            {t('profile.bookingDate')}: {new Date(booking.createdAt).toLocaleDateString('vi-VN')}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className={`text-xs font-semibold px-2 py-1 rounded ${isPaid ? 'text-tertiary-container bg-tertiary-container/10' : 'text-amber-600 bg-amber-50'}`}>
+                                                            {isPaid ? t('profile.paidLbl') : t('profile.incompleteLbl')}
+                                                        </span>
+                                                        <Link href={`/my-bookings/${booking.id}`} className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
+                                                            <span className="material-symbols-outlined">arrow_forward</span>
+                                                        </Link>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="p-6 pt-8 space-y-4">
-                                                <div>
-                                                    <h3 className="text-lg font-headline font-bold text-on-surface line-clamp-1" title={booking.tour?.name}>{booking.tour?.name}</h3>
-                                                    <p className="text-xs text-outline font-medium flex items-center gap-1 mt-1">
-                                                        <span className="material-symbols-outlined text-sm">calendar_today</span>
-                                                        {t('profile.bookingDate')}: {new Date(booking.createdAt).toLocaleDateString('vi-VN')}
-                                                    </p>
-                                                </div>
-                                                <div className="flex justify-between items-center">
-                                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${isPaid ? 'text-tertiary-container bg-tertiary-container/10' : 'text-amber-600 bg-amber-50'}`}>
-                                                        {isPaid ? t('profile.paidLbl') : t('profile.incompleteLbl')}
-                                                    </span>
-                                                    <Link href={`/my-bookings/${booking.id}`} className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
-                                                        <span className="material-symbols-outlined">arrow_forward</span>
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                          </>
+                        )}
+
+                        {/* Support Tab */}
+                        {activeTab === 'support' && (
+                          <SupportTicketList
+                            tickets={myTickets}
+                            onSelectTicket={setSelectedTicket}
+                          />
+                        )}
                     </div>
                 </div>
 
@@ -344,6 +405,18 @@ export default function ProfilePage() {
             </main>
 
             <Footer />
+
+            {/* Support Ticket Detail Modal */}
+            {selectedTicket && (
+                <SupportTicketDetail
+                    ticket={selectedTicket}
+                    onClose={() => setSelectedTicket(null)}
+                    onTicketUpdate={(updated) => {
+                        setMyTickets(prev => prev.map(t => t.id === updated.id ? updated : t));
+                        setSelectedTicket(updated);
+                    }}
+                />
+            )}
         </div>
     );
 }

@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 import { SendContactDto } from './dto/create-contact.dto';
+import { SupportService } from '../support/support.service';
+
 
 const SUBJECT_LABELS: Record<string, string> = {
   booking: 'Hỗ trợ đặt tour / Booking Assistance',
@@ -19,9 +21,10 @@ export class ContactService {
   constructor(
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
+    private readonly supportService: SupportService,
   ) {}
 
-  async sendContactEmail(dto: SendContactDto): Promise<{ message: string }> {
+  async sendContactEmail(dto: SendContactDto): Promise<{ message: string; ticketId: number }> {
     const adminEmail = this.configService.get<string>('MAIL_USER');
     const subjectLabel = SUBJECT_LABELS[dto.subject] ?? dto.subject;
     const fullPhone = `${dto.phonePrefix} ${dto.phone}`;
@@ -111,6 +114,82 @@ export class ContactService {
     });
 
     this.logger.log(`✅ Contact email sent: ${dto.name} <${dto.email}>`);
-    return { message: 'Message sent successfully' };
+
+    // ── Lưu ticket vào DB để Staff theo dõi ──────────────────────────────────
+    type TicketCat = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
+    const CATEGORY_MAP: Record<string, TicketCat> = {
+      booking:      'booking',
+      payment:      'payment',
+      cancellation: 'reschedule',
+      complaint:    'complaint',
+      general:      'general',
+      partnership:  'general',
+    };
+
+    let ticketId = 0;
+    try {
+      const ticket = await this.supportService.createFromContact({
+        customerName:  dto.name,
+        customerEmail: dto.email,
+        customerPhone: `${dto.phonePrefix} ${dto.phone}`.trim(),
+        bookingRef:    dto.reference,
+        subject:       subjectLabel,
+        message:       dto.message,
+        category:      CATEGORY_MAP[dto.subject] ?? 'general',
+        userId:        dto.userId ? Number(dto.userId) : undefined,
+      });
+      ticketId = ticket.id;
+      this.logger.log(`📋 Support ticket #${ticketId} created for: ${dto.email}`);
+
+      // Gửi email xác nhận có kèm link theo dõi ticket
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
+      const trackingUrl = `${frontendUrl}/support/track?id=${ticketId}&email=${encodeURIComponent(dto.email)}`;
+
+      await this.mailService['transporter'].sendMail({
+        from: `"Azure Horizon" <${adminEmail}>`,
+        to: dto.email,
+        subject: 'Chúng tôi đã nhận được tin nhắn của bạn — Azure Horizon',
+        html: `
+          <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;border-radius:16px;overflow:hidden;">
+            <div style="background:linear-gradient(135deg,#003f87,#0066cc);padding:40px 30px;text-align:center;">
+              <h1 style="color:white;margin:0;font-size:26px;font-weight:700;">Azure Horizon</h1>
+            </div>
+            <div style="padding:36px 30px;">
+              <h2 style="color:#1a1a2e;margin:0 0 12px;font-size:20px;">Cảm ơn bạn, ${dto.name}!</h2>
+              <p style="color:#64748b;line-height:1.7;margin:0 0 20px;">
+                Chúng tôi đã nhận được tin nhắn của bạn liên quan đến <strong>${subjectLabel}</strong>.
+                Đội ngũ concierge sẽ phản hồi trong vòng <strong>2 giờ làm việc</strong>.
+              </p>
+
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;margin-bottom:24px;text-align:center;">
+                <p style="color:#64748b;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Mã yêu cầu hỗ trợ của bạn</p>
+                <p style="color:#1e3a8a;font-size:28px;font-weight:800;margin:0;font-family:'Courier New',monospace;">#${ticketId}</p>
+              </div>
+
+              <div style="background:#f0f6ff;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+                <p style="color:#64748b;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Nội dung bạn đã gửi:</p>
+                <p style="color:#1e293b;margin:0;font-size:14px;line-height:1.6;white-space:pre-wrap;">${dto.message}</p>
+              </div>
+
+              <div style="text-align:center;margin-bottom:20px;">
+                <a href="${trackingUrl}" style="display:inline-block;background:linear-gradient(135deg,#003f87,#0056b3);color:white;text-decoration:none;padding:14px 32px;border-radius:50px;font-weight:700;font-size:15px;">
+                  📍 Theo dõi tiến trình xử lý
+                </a>
+              </div>
+
+              <p style="color:#94a3b8;font-size:13px;text-align:center;">Nếu cần hỗ trợ khẩn cấp: <strong>support@azurehorizon.com</strong></p>
+            </div>
+            <div style="background:#f1f5f9;padding:20px 30px;text-align:center;border-top:1px solid #e2e8f0;">
+              <p style="color:#94a3b8;font-size:12px;margin:0;">© 2026 Azure Horizon. All rights reserved.</p>
+            </div>
+          </div>
+        `,
+      });
+    } catch (err) {
+      // Không để lỗi DB phá vỡ luồng gửi mail chính
+      this.logger.error('Failed to create support ticket or send tracking email', err);
+    }
+
+    return { message: 'Message sent successfully', ticketId };
   }
 }

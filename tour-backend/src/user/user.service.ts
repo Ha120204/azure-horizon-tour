@@ -301,12 +301,15 @@ export class UserService {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    // Chỉ thống kê CUSTOMER — đồng bộ với bảng danh sách
+    const customerWhere = { role: 'CUSTOMER' as any };
+
     const [totalUsers, activeUsers, newThisMonth, roleBreakdown] =
       await Promise.all([
-        this.prisma.user.count(),
-        this.prisma.user.count({ where: { deletedAt: null } }),
+        this.prisma.user.count({ where: customerWhere }),
+        this.prisma.user.count({ where: { ...customerWhere, deletedAt: null } }),
         this.prisma.user.count({
-          where: { createdAt: { gte: firstDayOfMonth } },
+          where: { ...customerWhere, createdAt: { gte: firstDayOfMonth } },
         }),
         this.prisma.user.groupBy({
           by: ['role'],

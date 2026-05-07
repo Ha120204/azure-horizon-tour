@@ -33,4 +33,7 @@ export class SendContactDto {
   @IsOptional()
   @IsString()
   attachmentName?: string;
+
+  @IsOptional()
+  userId?: number; // Liên kết ticket với tài khoản user (nếu đã đăng nhập)
 }

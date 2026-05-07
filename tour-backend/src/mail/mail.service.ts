@@ -239,4 +239,243 @@ export class MailService {
       // Không throw — email thất bại không nên ảnh hưởng luồng chính
     }
   }
+
+  /**
+   * Email xác nhận đã nhận yêu cầu hủy tour (gửi cho khách hàng)
+   */
+  async sendCancelRequestConfirmation(data: {
+    to: string;
+    customerName: string;
+    bookingCode: string;
+    tourName: string;
+    cancelReason: string;
+    refundAmount: number;
+    refundNote: string; // "Hoàn 100%" | "Hoàn 50%" | "Không hoàn"
+  }) {
+    const formattedRefund = data.refundAmount > 0
+      ? data.refundAmount.toLocaleString('vi-VN') + 'đ'
+      : 'Không hoàn tiền (theo chính sách hủy tour)';
+
+    const mailOptions = {
+      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+      to: data.to,
+      subject: `⏳ Yêu Cầu Hủy Tour Đã Được Ghi Nhận — ${data.bookingCode}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+          <div style="background: linear-gradient(135deg, #003f87, #0066cc); padding: 40px 32px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 700;">Azure Horizon</h1>
+            <p style="color: rgba(255,255,255,0.7); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 2px;">Yêu Cầu Hủy Tour</p>
+          </div>
+          <div style="padding: 36px 32px;">
+            <div style="text-align: center; margin-bottom: 28px;">
+              <div style="width: 64px; height: 64px; background: #fef3c7; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                <span style="font-size: 32px;">⏳</span>
+              </div>
+              <h2 style="color: #1a1a2e; margin: 0; font-size: 20px; font-weight: 700;">Yêu Cầu Hủy Đã Được Ghi Nhận</h2>
+              <p style="color: #64748b; margin: 8px 0 0; font-size: 14px;">Xin chào <strong>${data.customerName}</strong>, chúng tôi đã nhận được yêu cầu hủy tour của bạn.</p>
+            </div>
+
+            <div style="background: #f0f6ff; border: 2px dashed #003f87; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
+              <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 6px;">Mã Đặt Tour</p>
+              <p style="color: #003f87; font-size: 24px; font-weight: 800; letter-spacing: 2px; margin: 0; font-family: 'Courier New', monospace;">${data.bookingCode}</p>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+              <tr>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #94a3b8; font-size: 13px; width: 160px;">Tour</td>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px; font-weight: 600;">${data.tourName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #94a3b8; font-size: 13px;">Lý Do Hủy</td>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px;">${data.cancelReason}</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #94a3b8; font-size: 13px;">Chính Sách Hoàn Tiền</td>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px;">${data.refundNote}</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 0; color: ${data.refundAmount > 0 ? '#003f87' : '#dc2626'}; font-size: 14px; font-weight: 700;">Dự Kiến Hoàn Tiền</td>
+                <td style="padding: 12px 0; color: ${data.refundAmount > 0 ? '#003f87' : '#dc2626'}; font-size: 18px; font-weight: 800;">${formattedRefund}</td>
+              </tr>
+            </table>
+
+            <div style="background: #fef3c7; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;">
+              <p style="color: #92400e; font-size: 13px; margin: 0; line-height: 1.6;">
+                ⚠️ <strong>Lưu ý:</strong> Yêu cầu hủy của bạn đang chờ được xem xét bởi đội ngũ Azure Horizon. 
+                Chúng tôi sẽ xử lý và thông báo kết quả trong vòng <strong>1–3 ngày làm việc</strong>.
+              </p>
+            </div>
+
+            <p style="color: #94a3b8; font-size: 12px; text-align: center; line-height: 1.6;">
+              Mọi thắc mắc xin liên hệ hotline: <strong>+84 900 888 999</strong><br/>
+              hoặc gửi yêu cầu hỗ trợ tại website của chúng tôi.
+            </p>
+          </div>
+          <div style="background: #f8fafc; padding: 20px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="color: #94a3b8; font-size: 11px; margin: 0;">© 2026 Azure Horizon. All rights reserved.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('✅ Cancel request email sent to:', data.to);
+    } catch (error) {
+      console.error('❌ Error sending cancel request email:', error);
+    }
+  }
+
+  /**
+   * Email thông báo yêu cầu hủy được DUYỆT (Admin approve)
+   */
+  async sendCancellationApproved(data: {
+    to: string;
+    customerName: string;
+    bookingCode: string;
+    tourName: string;
+    refundAmount: number;
+    adminNote?: string;
+  }) {
+    const formattedRefund = data.refundAmount > 0
+      ? data.refundAmount.toLocaleString('vi-VN') + 'đ'
+      : 'Không hoàn tiền (theo chính sách hủy tour)';
+
+    const mailOptions = {
+      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+      to: data.to,
+      subject: `✅ Yêu Cầu Hủy Tour Được Chấp Thuận — ${data.bookingCode}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+          <div style="background: linear-gradient(135deg, #003f87, #0066cc); padding: 40px 32px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 700;">Azure Horizon</h1>
+            <p style="color: rgba(255,255,255,0.7); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 2px;">Xác Nhận Hủy Tour</p>
+          </div>
+          <div style="padding: 36px 32px;">
+            <div style="text-align: center; margin-bottom: 28px;">
+              <div style="width: 64px; height: 64px; background: #d1fae5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                <span style="font-size: 32px;">✅</span>
+              </div>
+              <h2 style="color: #1a1a2e; margin: 0; font-size: 20px; font-weight: 700;">Yêu Cầu Hủy Đã Được Chấp Thuận</h2>
+              <p style="color: #64748b; margin: 8px 0 0; font-size: 14px;">Xin chào <strong>${data.customerName}</strong>, tour của bạn đã được hủy thành công.</p>
+            </div>
+
+            <div style="background: #f0f6ff; border: 2px dashed #003f87; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
+              <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 6px;">Mã Đặt Tour</p>
+              <p style="color: #003f87; font-size: 24px; font-weight: 800; letter-spacing: 2px; margin: 0; font-family: 'Courier New', monospace;">${data.bookingCode}</p>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+              <tr>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #94a3b8; font-size: 13px; width: 160px;">Tour Đã Hủy</td>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px; font-weight: 600;">${data.tourName}</td>
+              </tr>
+              ${data.adminNote ? `
+              <tr>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #94a3b8; font-size: 13px;">Ghi Chú</td>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px;">${data.adminNote}</td>
+              </tr>` : ''}
+              <tr>
+                <td style="padding: 12px 0; color: ${data.refundAmount > 0 ? '#16a34a' : '#dc2626'}; font-size: 14px; font-weight: 700;">Số Tiền Hoàn Lại</td>
+                <td style="padding: 12px 0; color: ${data.refundAmount > 0 ? '#16a34a' : '#dc2626'}; font-size: 20px; font-weight: 800;">${formattedRefund}</td>
+              </tr>
+            </table>
+
+            ${data.refundAmount > 0 ? `
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;">
+              <p style="color: #166534; font-size: 13px; margin: 0; line-height: 1.6;">
+                💳 Số tiền <strong>${formattedRefund}</strong> sẽ được hoàn về phương thức thanh toán ban đầu của bạn trong vòng <strong>3–7 ngày làm việc</strong>.
+              </p>
+            </div>` : ''}
+
+            <p style="color: #94a3b8; font-size: 12px; text-align: center; line-height: 1.6;">
+              Cảm ơn bạn đã sử dụng dịch vụ của Azure Horizon.<br/>
+              Chúng tôi mong được phục vụ bạn trong những chuyến đi tiếp theo! 🌟
+            </p>
+          </div>
+          <div style="background: #f8fafc; padding: 20px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="color: #94a3b8; font-size: 11px; margin: 0;">© 2026 Azure Horizon. All rights reserved.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('✅ Cancellation approved email sent to:', data.to);
+    } catch (error) {
+      console.error('❌ Error sending cancellation approved email:', error);
+    }
+  }
+
+  /**
+   * Email thông báo yêu cầu hủy bị TỪ CHỐI (Admin reject)
+   */
+  async sendCancellationRejected(data: {
+    to: string;
+    customerName: string;
+    bookingCode: string;
+    tourName: string;
+    rejectReason: string;
+  }) {
+    const mailOptions = {
+      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+      to: data.to,
+      subject: `❌ Yêu Cầu Hủy Tour Bị Từ Chối — ${data.bookingCode}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+          <div style="background: linear-gradient(135deg, #003f87, #0066cc); padding: 40px 32px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 700;">Azure Horizon</h1>
+            <p style="color: rgba(255,255,255,0.7); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 2px;">Kết Quả Yêu Cầu Hủy</p>
+          </div>
+          <div style="padding: 36px 32px;">
+            <div style="text-align: center; margin-bottom: 28px;">
+              <div style="width: 64px; height: 64px; background: #fee2e2; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                <span style="font-size: 32px;">❌</span>
+              </div>
+              <h2 style="color: #1a1a2e; margin: 0; font-size: 20px; font-weight: 700;">Yêu Cầu Hủy Bị Từ Chối</h2>
+              <p style="color: #64748b; margin: 8px 0 0; font-size: 14px;">Xin chào <strong>${data.customerName}</strong>, đây là thông báo về yêu cầu hủy tour của bạn.</p>
+            </div>
+
+            <div style="background: #f0f6ff; border: 2px dashed #003f87; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
+              <p style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 6px;">Mã Đặt Tour</p>
+              <p style="color: #003f87; font-size: 24px; font-weight: 800; letter-spacing: 2px; margin: 0; font-family: 'Courier New', monospace;">${data.bookingCode}</p>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+              <tr>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #94a3b8; font-size: 13px; width: 160px;">Tour</td>
+                <td style="padding: 12px 0; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px; font-weight: 600;">${data.tourName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 0; color: #dc2626; font-size: 13px; font-weight: 600;">Lý Do Từ Chối</td>
+                <td style="padding: 12px 0; color: #1e293b; font-size: 14px;">${data.rejectReason}</td>
+              </tr>
+            </table>
+
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;">
+              <p style="color: #991b1b; font-size: 13px; margin: 0; line-height: 1.6;">
+                ℹ️ Đặt tour của bạn vẫn còn hiệu lực. Nếu bạn có thắc mắc về quyết định này, vui lòng liên hệ đội ngũ hỗ trợ của chúng tôi.
+              </p>
+            </div>
+
+            <p style="color: #94a3b8; font-size: 12px; text-align: center; line-height: 1.6;">
+              Hotline: <strong>+84 900 888 999</strong><br/>
+              Chúng tôi luôn sẵn sàng hỗ trợ bạn!
+            </p>
+          </div>
+          <div style="background: #f8fafc; padding: 20px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="color: #94a3b8; font-size: 11px; margin: 0;">© 2026 Azure Horizon. All rights reserved.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log('✅ Cancellation rejected email sent to:', data.to);
+    } catch (error) {
+      console.error('❌ Error sending cancellation rejected email:', error);
+    }
+  }
 }

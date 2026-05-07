@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { TourStatus } from '@prisma/client';
 import { CreateTourDto } from './dto/create-tour.dto';
 import { FilterTourDto } from './dto/filter-tour.dto';
 import { UpdateTourDto } from './dto/update-tour.dto';
@@ -8,23 +9,50 @@ import { PrismaService } from '../prisma/prisma.service';
 export class TourService {
   constructor(private readonly prisma: PrismaService) { }
 
-  create(createTourDto: CreateTourDto) {
-    const { destinationId, ...rest } = createTourDto;
+  // ── Create ────────────────────────────────────────────────────────────
+
+  create(createTourDto: CreateTourDto, creatorId?: number, creatorRole?: string) {
+    const { destinationId, status: dtoStatus, ...rest } = createTourDto;
+
+    // Admin/SuperAdmin tạo thẳng PUBLISHED; Staff tạo DRAFT (bản nháp — tự chỉnh sửa trước khi gửi duyệt)
+    const isAdminRole = creatorRole === 'SUPER_ADMIN' || creatorRole === 'ADMIN';
+    const finalStatus: TourStatus = isAdminRole
+      ? (dtoStatus ?? TourStatus.PUBLISHED)
+      : TourStatus.DRAFT;
+
     return this.prisma.tour.create({
       data: {
         ...rest,
         destination: { connect: { id: destinationId } },
+        status: finalStatus,
+        publishedAt: finalStatus === TourStatus.PUBLISHED ? new Date() : null,
+        ...(creatorId && { createdBy: { connect: { id: creatorId } } }),
       },
     });
   }
 
-  async findAll(query: FilterTourDto = {}) {
-    const { dest, minPrice, maxPrice, date, ratings, types, sortBy, page = "1", limit = "10" } = query;
+  // ── FindAll ───────────────────────────────────────────────────────────
+
+  async findAll(query: FilterTourDto = {}, requesterId?: number, requesterRole?: string) {
+    const { dest, minPrice, maxPrice, date, ratings, types, sortBy, status, page = "1", limit = "10" } = query;
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = { deletedAt: null };
+
+    // Visibility: Staff chỉ thấy tour của mình; Admin thấy tất cả; Public chỉ thấy PUBLISHED
+    if (requesterRole === 'STAFF' && requesterId) {
+      where.createdById = requesterId;
+      // Staff không được dùng status filter (security)
+    } else if (requesterRole !== 'SUPER_ADMIN' && requesterRole !== 'ADMIN') {
+      // Public request — chỉ PUBLISHED
+      where.status = TourStatus.PUBLISHED;
+    } else if (status && Object.values(TourStatus).includes(status as TourStatus)) {
+      // Admin có thể filter theo status cụ thể
+      where.status = status as TourStatus;
+    }
+    // Admin/SuperAdmin không có status param: thấy tất cả
 
     if (dest) {
       where.OR = [
@@ -66,7 +94,8 @@ export class TourService {
         take: limitNum,
         include: {
           destination: { select: { name: true } },
-          departures: { select: { price: true }, where: { isActive: true } }
+          departures: { select: { price: true }, where: { isActive: true } },
+          createdBy: { select: { id: true, fullName: true } },
         }
       }),
       this.prisma.tour.count({ where })
@@ -83,6 +112,8 @@ export class TourService {
       }
     };
   }
+
+  // ── FindOne ───────────────────────────────────────────────────────────
 
   async findOne(id: number) {
     const tour = await this.prisma.tour.findUnique({
@@ -108,6 +139,8 @@ export class TourService {
             user: { select: { fullName: true, avatarUrl: true } },
           },
         },
+        createdBy: { select: { id: true, fullName: true } },
+        reviewedBy: { select: { id: true, fullName: true } },
       },
     });
     if (!tour) {
@@ -116,10 +149,30 @@ export class TourService {
     return tour;
   }
 
-  update(id: number, updateTourDto: UpdateTourDto) {
+  // ── Update ────────────────────────────────────────────────────────────
+
+  async update(id: number, updateTourDto: UpdateTourDto, requesterId?: number, requesterRole?: string) {
+    const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
+    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+
+    const isAdminRole = requesterRole === 'SUPER_ADMIN' || requesterRole === 'ADMIN';
+    if (!isAdminRole) {
+      // Staff: chỉ được sửa tour của chính mình & đang ở DRAFT hoặc REJECTED
+      if (tour.createdById !== requesterId) {
+        throw new ForbiddenException('Bạn không có quyền chỉnh sửa tour này');
+      }
+      if (tour.status !== TourStatus.DRAFT && tour.status !== TourStatus.REJECTED) {
+        throw new ForbiddenException('Chỉ có thể chỉnh sửa tour ở trạng thái Bản nháp hoặc Bị từ chối');
+      }
+    }
+
     const { destinationId, ...rest } = updateTourDto;
+
+    // Nếu Staff sửa tour bị REJECTED → giữ nguyên REJECTED cho đến khi gửi duyệt lại
+    // (submitForReview mới là chỗ chuyển sang PENDING_REVIEW)
+
     return this.prisma.tour.update({
-      where: { id, deletedAt: null },
+      where: { id },
       data: {
         ...rest,
         ...(destinationId !== undefined && {
@@ -129,20 +182,133 @@ export class TourService {
     });
   }
 
+  // ── Remove ────────────────────────────────────────────────────────────
+
   async remove(id: number) {
-    const tour = await this.prisma.tour.findUnique({
-      where: { id, deletedAt: null },
-    });
-    if (!tour) {
-      throw new NotFoundException(`Tour with ID ${id} not found`);
-    }
+    const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
+    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
     return this.prisma.tour.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
   }
 
-  // ── Gallery ──────────────────────────────────────────────────
+  // ── Trash: Get / Restore / Permanent Delete ────────────────────────────────
+
+  async getTrashedTours(page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+    const [tours, totalItems] = await Promise.all([
+      this.prisma.tour.findMany({
+        where: { deletedAt: { not: null } },
+        orderBy: { deletedAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          destination: { select: { name: true } },
+          createdBy: { select: { id: true, fullName: true } },
+        },
+      }),
+      this.prisma.tour.count({ where: { deletedAt: { not: null } } }),
+    ]);
+    return {
+      data: tours,
+      meta: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: page,
+        itemsPerPage: limit,
+      },
+    };
+  }
+
+  async restoreTour(id: number) {
+    const tour = await this.prisma.tour.findFirst({ where: { id, deletedAt: { not: null } } });
+    if (!tour) throw new NotFoundException(`Tour ${id} not found in trash`);
+    return this.prisma.tour.update({
+      where: { id },
+      data: {
+        deletedAt: null,
+        // Khôi phục vào hàng chờ duyệt để Admin kiểm tra lại
+        status: TourStatus.PENDING_REVIEW,
+      },
+    });
+  }
+
+  async permanentDelete(id: number) {
+    const tour = await this.prisma.tour.findFirst({ where: { id, deletedAt: { not: null } } });
+    if (!tour) throw new NotFoundException(`Tour ${id} not found in trash`);
+    // Xóa cứng — cascade sẽ xóa luôn images, packages, departures, reviews liên quan
+    await this.prisma.tour.delete({ where: { id } });
+    return { message: `Tour "${tour.name}" đã bị xóa vĩnh viễn.` };
+  }
+
+  // ── Submit for Review (Staff) ─────────────────────────────────────────
+
+  async submitForReview(id: number, requesterId: number) {
+    const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
+    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+
+    if (tour.createdById !== requesterId) {
+      throw new ForbiddenException('Bạn không có quyền gửi duyệt tour này');
+    }
+    // Cho phép gửi từ DRAFT (lần đầu) hoặc REJECTED (gửi lại sau khi bị từ chối)
+    if (tour.status !== TourStatus.DRAFT && tour.status !== TourStatus.REJECTED) {
+      throw new BadRequestException(`Tour đang ở trạng thái "${tour.status}", không thể gửi duyệt`);
+    }
+
+    return this.prisma.tour.update({
+      where: { id },
+      data: {
+        status: TourStatus.PENDING_REVIEW,
+        reviewNote: null,
+      },
+    });
+  }
+
+  // ── Review Tour (Admin) ───────────────────────────────────────────────
+
+  async reviewTour(id: number, reviewerId: number, action: 'approve' | 'reject', note?: string) {
+    const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
+    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+
+    if (tour.status !== TourStatus.PENDING_REVIEW) {
+      throw new BadRequestException(`Tour đang ở trạng thái "${tour.status}", không thể duyệt`);
+    }
+    if (action === 'reject' && !note?.trim()) {
+      throw new BadRequestException('Vui lòng nhập lý do từ chối');
+    }
+
+    const newStatus = action === 'approve' ? TourStatus.PUBLISHED : TourStatus.REJECTED;
+
+    return this.prisma.tour.update({
+      where: { id },
+      data: {
+        status: newStatus,
+        reviewedById: reviewerId,
+        reviewNote: action === 'reject' ? note?.trim() : null,
+        publishedAt: action === 'approve' ? new Date() : null,
+      },
+    });
+  }
+
+  // ── Get Pending Tours (Admin) ─────────────────────────────────────────
+
+  async getPendingTours() {
+    const [tours, count] = await Promise.all([
+      this.prisma.tour.findMany({
+        where: { status: TourStatus.PENDING_REVIEW, deletedAt: null },
+        orderBy: { updatedAt: 'asc' }, // FIFO — cũ nhất duyệt trước
+        include: {
+          destination: { select: { name: true } },
+          createdBy: { select: { id: true, fullName: true, avatarUrl: true } },
+        },
+      }),
+      this.prisma.tour.count({ where: { status: TourStatus.PENDING_REVIEW, deletedAt: null } }),
+    ]);
+    return { data: tours, count };
+  }
+
+  // ── Gallery ──────────────────────────────────────────────────────────
 
   async addGalleryImages(tourId: number, urls: string[]) {
     const existing = await this.prisma.tourImage.findMany({
@@ -161,7 +327,7 @@ export class TourService {
     return { message: 'Image removed' };
   }
 
-  // ── Highlights ────────────────────────────────────────────────
+  // ── Highlights ────────────────────────────────────────────────────────
 
   async upsertHighlights(tourId: number, highlights: { content: string; icon?: string; sortOrder?: number }[]) {
     await this.prisma.tourHighlight.deleteMany({ where: { tourId } });
@@ -178,7 +344,7 @@ export class TourService {
     return this.prisma.tourHighlight.findMany({ where: { tourId }, orderBy: { sortOrder: 'asc' } });
   }
 
-  // ── FAQs ──────────────────────────────────────────────────────
+  // ── FAQs ──────────────────────────────────────────────────────────────
 
   async upsertFaqs(tourId: number, faqs: { question: string; answer: string; sortOrder?: number }[]) {
     await this.prisma.tourFAQ.deleteMany({ where: { tourId } });
@@ -195,7 +361,7 @@ export class TourService {
     return this.prisma.tourFAQ.findMany({ where: { tourId }, orderBy: { sortOrder: 'asc' } });
   }
 
-  // ── Itinerary Day Update ───────────────────────────────────────
+  // ── Itinerary Day Update ──────────────────────────────────────────────
 
   async updateItineraryDay(tourId: number, dayId: number, data: {
     title?: string;
@@ -214,7 +380,7 @@ export class TourService {
     return this.prisma.tourItinerary.update({ where: { id: dayId }, data });
   }
 
-  // ── Rating Stats ──────────────────────────────────────────────
+  // ── Rating Stats ──────────────────────────────────────────────────────
 
   async getRatingStats(tourId: number) {
     const reviews = await this.prisma.review.findMany({
@@ -240,7 +406,8 @@ export class TourService {
     };
   }
 
-  // ── Sale Deals ────────────────────────────────────────────────
+  // ── Sale Deals ────────────────────────────────────────────────────────
+
   async getSaleDeals() {
     const saleTypes = ['FLASH_SALE', 'EARLY_BIRD', 'LAST_MINUTE'];
 
@@ -248,7 +415,7 @@ export class TourService {
       where: {
         note: { in: saleTypes },
         isActive: true,
-        tour: { deletedAt: null },
+        tour: { deletedAt: null, status: TourStatus.PUBLISHED },
       },
       include: {
         tour: {

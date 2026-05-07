@@ -1,6 +1,7 @@
-import { IsDate, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDate, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsFutureDate } from '../../common/validators/is-future-date.validator';
+import { TourStatus } from '@prisma/client';
 
 export class CreateTourDto {
   @IsString()
@@ -46,4 +47,8 @@ export class CreateTourDto {
   @IsOptional()
   @IsString()
   departurePoint?: string;
+
+  @IsOptional()
+  @IsEnum(TourStatus)
+  status?: TourStatus;
 }

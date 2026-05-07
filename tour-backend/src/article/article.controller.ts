@@ -1,58 +1,86 @@
 import {
   Controller, Get, Post, Patch, Delete,
   Param, Query, Body, UseGuards, ParseIntPipe,
-  UploadedFile, UseInterceptors, BadRequestException
+  UploadedFile, UseInterceptors, BadRequestException, Req,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { ArticleService } from './article.service';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+import { AuditLog } from '../common/decorators/audit-log.decorator';
 
 @Controller('article')
 export class ArticleController {
   constructor(
     private readonly articleService: ArticleService,
-    private readonly cloudinaryService: CloudinaryService
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   // ─── Public endpoints ─────────────────────────────────────────────────────
 
-  /** GET /article — Lấy danh sách bài viết (hỗ trợ ?category=GUIDES) */
+  /** GET /article — Bài viết đã PUBLISHED (trang khách) */
   @Get()
   async findAll(@Query('category') category?: string) {
     return this.articleService.findAll(category);
   }
 
-  /** GET /article/featured — Lấy bài viết nổi bật */
+  /** GET /article/featured — Bài nổi bật */
   @Get('featured')
   async findFeatured() {
     return this.articleService.findFeatured();
   }
 
-  // ─── Admin endpoints ──────────────────────────────────────────────────────
+  // ─── Static routes phải TRƯỚC :slug ─────────────────────────────────────
+
+  /** GET /article/admin/pending — Đếm bài chờ duyệt */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Get('admin/pending')
+  async getPendingCount() {
+    return this.articleService.getPendingCount();
+  }
+
+  /** GET /article/admin/stats — KPI: pending + rejected */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+  @Get('admin/stats')
+  async getAdminStats(@Req() req: any) {
+    return this.articleService.getAdminStats(req.user?.id, req.user?.role);
+  }
 
   /** GET /article/admin/all — Danh sách phân trang, filter, search */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Get('admin/all')
   async adminFindAll(
+    @Req() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('category') category?: string,
     @Query('isFeatured') isFeatured?: string,
+    @Query('status') status?: string,
   ) {
-    return this.articleService.adminFindAll({ page: Number(page), limit: Number(limit), search, category, isFeatured });
+    return this.articleService.adminFindAll(
+      { page: Number(page), limit: Number(limit), search, category, isFeatured, status },
+      req.user?.id,
+      req.user?.role,
+    );
   }
 
   /** GET /article/admin/:id — Chi tiết bài viết (kèm content) */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Get('admin/:id')
   async adminFindById(@Param('id', ParseIntPipe) id: number) {
     return this.articleService.adminFindById(id);
   }
 
-  /** POST /article/admin/upload — Upload ảnh bìa/nội dung qua Cloudinary */
-  @UseGuards(AuthGuard('jwt'))
+  /** POST /article/admin/upload — Upload ảnh qua Cloudinary */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Post('admin/upload')
   @UseInterceptors(FileInterceptor('file'))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
@@ -61,46 +89,119 @@ export class ArticleController {
     return { url: result.secure_url };
   }
 
-  /** POST /article/admin — Tạo bài viết mới */
-  @UseGuards(AuthGuard('jwt'))
+  /** POST /article/admin — Admin tạo PUBLISHED; Staff tạo DRAFT */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Post('admin')
-  async adminCreate(@Body() dto: {
-    title: string; category: string; excerpt: string;
-    content: string; imageUrl: string; author: string;
-    readTime?: number; isFeatured?: boolean;
-  }) {
-    return this.articleService.adminCreate(dto);
+  @AuditLog('CREATE', 'Article')
+  async adminCreate(
+    @Req() req: any,
+    @Body() dto: {
+      title: string; category: string; excerpt: string;
+      content: string; imageUrl: string; author: string;
+      readTime?: number; isFeatured?: boolean;
+    },
+  ) {
+    return this.articleService.adminCreate(dto, req.user?.id, req.user?.role);
+  }
+
+  /** POST /article/admin/:id/submit — Staff gửi DRAFT/REJECTED → PENDING_REVIEW */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('STAFF')
+  @Post('admin/:id/submit')
+  @AuditLog('UPDATE', 'Article')
+  async submitForReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.articleService.submitForReview(id, req.user?.id);
+  }
+
+  /** PATCH /article/admin/:id/review — Admin duyệt hoặc từ chối */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('admin/:id/review')
+  @AuditLog('UPDATE', 'Article')
+  async reviewArticle(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Body() body: { action: 'approve' | 'reject'; note?: string },
+  ) {
+    return this.articleService.reviewArticle(id, req.user?.id, body.action, body.note);
   }
 
   /** PATCH /article/admin/:id — Cập nhật bài viết */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Patch('admin/:id')
+  @AuditLog('UPDATE', 'Article')
   async adminUpdate(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
     @Body() dto: {
       title?: string; category?: string; excerpt?: string;
       content?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
     },
   ) {
-    return this.articleService.adminUpdate(id, dto);
+    return this.articleService.adminUpdate(id, dto, req.user?.id, req.user?.role);
   }
 
   /** PATCH /article/admin/:id/toggle-featured — Bật/tắt nổi bật */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch('admin/:id/toggle-featured')
+  @AuditLog('UPDATE', 'Article')
   async adminToggleFeatured(@Param('id', ParseIntPipe) id: number) {
     return this.articleService.adminToggleFeatured(id);
   }
 
   /** DELETE /article/admin/:id — Xóa bài viết */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Delete('admin/:id')
-  async adminDelete(@Param('id', ParseIntPipe) id: number) {
-    return this.articleService.adminDelete(id);
+  @AuditLog('DELETE', 'Article')
+  async adminDelete(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    return this.articleService.adminDelete(id, req.user?.id, req.user?.role);
   }
 
-  /** GET /article/:slug — Lấy chi tiết theo slug (public) — ĐẶT CUỐI để tránh conflict */
+  // ─── Trash endpoints ──────────────────────────────────────────────────────
+
+  /** GET /article/admin/trash — Danh sách thùng rác */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Get('admin/trash')
+  async getTrash(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.articleService.getTrash({ page: Number(page), limit: Number(limit), search });
+  }
+
+  /** PATCH /article/admin/:id/restore — Khôi phục từ thùng rác */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('admin/:id/restore')
+  @AuditLog('UPDATE', 'Article')
+  async restoreArticle(@Param('id', ParseIntPipe) id: number) {
+    return this.articleService.restoreArticle(id);
+  }
+
+  /** DELETE /article/admin/:id/hard-delete — Xóa vĩnh viễn khỏi thùng rác */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Delete('admin/:id/hard-delete')
+  @AuditLog('DELETE', 'Article')
+  async hardDelete(@Param('id', ParseIntPipe) id: number) {
+    return this.articleService.hardDelete(id);
+  }
+
+  // ─── Public :slug route phải CUỐI ────────────────────────────────────────
+  /** GET /article/:slug — Chi tiết bài viết public (chỉ PUBLISHED) */
   @Get(':slug')
   async findBySlug(@Param('slug') slug: string) {
     return this.articleService.findBySlug(slug);

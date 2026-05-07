@@ -5,14 +5,15 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthGuard } from '@nestjs/passport';
-
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(
+    private readonly authService: AuthService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) { }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
@@ -87,46 +88,37 @@ export class AuthController {
   }
 
   // =========================================================
-  // [THÊM MỚI]: API XỬ LÝ UPLOAD ẢNH ĐẠI DIỆN
+  // [AVATAR UPLOAD]: Dùng Cloudinary (nhất quán với Tour images)
   // =========================================================
   @UseGuards(AuthGuard('jwt'))
   @Post('avatar')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      // Nơi lưu ảnh (Nhớ tạo thư mục public/uploads/avatars ở Backend nhé)
-      destination: './public/uploads/avatars',
-      filename: (req, file, cb) => {
-        // Đổi tên ảnh để không bị trùng (vd: avatar-123456789.jpg)
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const ext = extname(file.originalname);
-        cb(null, `avatar-${uniqueSuffix}${ext}`);
-      }
-    }),
-    fileFilter: (req, file, cb) => {
-      // Chặn các file không phải là ảnh
-      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-        return cb(new BadRequestException('Only image files are allowed!'), false);
-      }
-      cb(null, true);
-    }
-  }))
+  @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Request() req) {
     if (!file) {
       throw new BadRequestException('Please select an image');
     }
 
+    // Kiểm tra định dạng file trước khi upload
+    if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+      throw new BadRequestException('Only image files are allowed (jpg, jpeg, png, gif, webp)');
+    }
+
+    // Kiểm tra kích thước (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new BadRequestException('File size must be less than 5MB');
+    }
+
     const userId = req.user.userId;
 
-    // Tạo link ảnh trả về cho Frontend hiển thị
-    const avatarUrl = `http://localhost:3000/uploads/avatars/${file.filename}`;
+    // Upload lên Cloudinary thay vì lưu local disk
+    const result = await this.cloudinaryService.uploadFile(file, 'azure-horizon/avatars');
+    const avatarUrl = result.secure_url;
 
-    // LƯU Ý: Em có thể vào file auth.service.ts viết thêm cái hàm updateAvatar 
-    // để lưu cái avatarUrl này vào Database của user đó nhé!
     await this.authService.updateAvatar(userId, avatarUrl);
 
     return {
       message: 'Avatar uploaded successfully',
-      data: { avatarUrl }
+      data: { avatarUrl },
     };
   }
 

@@ -351,10 +351,10 @@ export default function Header() {
                                 </div>
 
                                 {/* Dropdown — slide + fade entrance */}
-                                <div className="absolute top-[calc(100%+12px)] right-0 w-52 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100/80 p-1.5
+                                <div className="absolute top-full right-0 w-52 pt-3 z-30
                                     opacity-0 group-hover:opacity-100 invisible group-hover:visible
-                                    translate-y-2 group-hover:translate-y-0
-                                    transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] z-30">
+                                    transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]">
+                                    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100/80 p-1.5 translate-y-1 group-hover:translate-y-0 transition-transform duration-200">
                                     {/* User info header */}
                                     <div className="px-3 py-2.5 mb-1">
                                         <p className="text-xs font-bold text-slate-800 truncate">{userName}</p>
@@ -377,6 +377,7 @@ export default function Header() {
                                         <span className="material-symbols-outlined text-[16px]">logout</span>
                                         {t('nav.signOut')}
                                     </button>
+                                    </div>
                                 </div>
                             </div>
                         ) : (

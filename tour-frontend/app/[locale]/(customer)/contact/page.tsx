@@ -44,6 +44,7 @@ export default function ContactPage() {
     const [errors, setErrors]             = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted]   = useState(false);
+    const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
     const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
     const phoneDropdownRef = useRef<HTMLDivElement>(null);
     const fileInputRef     = useRef<HTMLInputElement>(null);
@@ -116,12 +117,25 @@ export default function ContactPage() {
             Object.entries(formData).forEach(([k, v]) => body.append(k, v));
             if (selectedFile) body.append('attachment', selectedFile);
 
+            // Gửi userId nếu user đã đăng nhập để liên kết ticket với tài khoản
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                try {
+                    // Decode JWT payload để lấy userId (không cần verify)
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const userId = payload.sub ?? payload.id;
+                    if (userId) body.append('userId', String(userId));
+                } catch { /* bỏ qua nếu token không decode được */ }
+            }
+
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contact/send`, {
                 method: 'POST',
                 body,
             });
 
             if (!res.ok) throw new Error('Server error');
+            const data = await res.json();
+            setSubmittedTicketId(data.ticketId ?? 0);
             setIsSubmitted(true);
         } catch {
             setErrors({ submit: 'Gửi thất bại. Vui lòng thử lại.' });
@@ -228,22 +242,42 @@ export default function ContactPage() {
 
                             {isSubmitted ? (
                                 /* Success state */
-                                <div className="text-center py-10">
-                                    <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
+                                <div className="text-center py-8 px-4">
+                                    <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-5 text-primary">
                                         <span className="material-symbols-outlined text-4xl">check_circle</span>
                                     </div>
-                                    <h3 className="text-2xl font-bold font-headline text-on-surface mb-3">
-                                        {t('contact.successMessage').split('!')[0]}!
-                                    </h3>
-                                    <p className="text-on-surface-variant leading-relaxed max-w-sm mx-auto">
-                                        {t('contact.successMessage').split('!').slice(1).join('!').trim()}
+                                    <h3 className="text-2xl font-bold font-headline text-on-surface mb-2">Yêu cầu đã được gửi!</h3>
+                                    <p className="text-on-surface-variant leading-relaxed max-w-sm mx-auto text-sm mb-6">
+                                        Đội ngũ hỗ trợ Azure Horizon sẽ phản hồi trong vòng 2 giờ làm việc.
                                     </p>
-                                    <button
-                                        onClick={resetForm}
-                                        className="mt-8 px-8 py-3 bg-surface-container-low text-primary font-bold rounded-full hover:bg-surface-container transition-colors"
-                                    >
-                                        {t('contact.sendAnother')}
-                                    </button>
+
+                                    {/* Ticket ID Badge */}
+                                    {submittedTicketId > 0 && (
+                                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 mb-6 mx-auto max-w-xs">
+                                            <p className="text-xs text-on-surface-variant uppercase tracking-widest font-label mb-1">Mã yêu cầu hỗ trợ của bạn</p>
+                                            <p className="text-4xl font-mono font-bold text-primary">#{submittedTicketId}</p>
+                                            <p className="text-xs text-outline mt-2">Lưu lại mã này để theo dõi tiến trình xử lý</p>
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col gap-3">
+                                        {submittedTicketId > 0 && (
+                                            <a
+                                                href={`/support/track?id=${submittedTicketId}&email=${encodeURIComponent(formData.email)}`}
+                                                className="w-full text-white py-3.5 rounded-full font-headline font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                                                style={{ background: 'linear-gradient(135deg,#003f87 0%,#0056b3 100%)' }}
+                                            >
+                                                <span className="material-symbols-outlined text-sm">search</span>
+                                                Theo dõi tiến trình xử lý
+                                            </a>
+                                        )}
+                                        <button
+                                            onClick={resetForm}
+                                            className="w-full px-8 py-3.5 bg-surface-container-low text-on-surface-variant font-bold rounded-full hover:bg-surface-container transition-colors text-sm"
+                                        >
+                                            Gửi yêu cầu khác
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
                                 /* Contact form */

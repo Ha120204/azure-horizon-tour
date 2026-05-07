@@ -46,7 +46,7 @@ export default function HomePage() {
           className="absolute inset-0 w-full h-full object-cover z-0"
           style={{ filter: 'brightness(1.05) saturate(1.1)' }}
         >
-          <source src="https://res.cloudinary.com/dfonotyfb/video/upload/v1775585556/dds3_1_rqhg7x.mp4" type="video/mp4" />
+          <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_170732_8a9ccda6-5cff-4628-b164-059c500a2b41.mp4" type="video/mp4" />
         </video>
 
         {/* 2. Cinematic gradient overlay */}

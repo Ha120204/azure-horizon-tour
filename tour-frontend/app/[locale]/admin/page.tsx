@@ -9,6 +9,7 @@ import { API_BASE_URL } from '@/app/lib/constants';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import Link from 'next/link';
 import { useRouter } from '@/i18n/routing';
+import StaffDashboard from '@/app/components/admin/StaffDashboard';
 
 // ─── Preset Config ────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ const PIE_COLORS = ['#3B82F6', '#F59E0B', '#EF4444'];
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function Skeleton({ className = '' }: { className?: string }) {
-    return <div className={`bg-slate-100 rounded-xl animate-pulse ${className}`} />;
+    return <div className={`bg-slate-200/80 rounded-xl animate-pulse ${className}`} />;
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
@@ -94,9 +95,9 @@ function KpiCard({ icon, title, value, change, sub, gradient }: KpiCardProps) {
     const isUp = change >= 0;
     const isZero = change === 0;
     return (
-        <div className={`relative rounded-2xl p-6 overflow-hidden group transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${gradient
-            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/20'
-            : 'bg-white shadow-sm border border-slate-100'}`}>
+        <div className={`relative rounded-2xl p-6 overflow-hidden group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-default ${gradient
+            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25'
+            : 'bg-white shadow-sm border border-slate-100 hover:shadow-slate-200/80 hover:border-slate-200'}`}>
             <div className={`absolute -right-6 -top-6 w-28 h-28 rounded-full blur-2xl ${gradient ? 'bg-white/10' : 'bg-blue-50/60'}`} />
             <div className="relative z-10">
                 <div className="flex justify-between items-start mb-5">
@@ -149,6 +150,25 @@ function RevenueTooltip({ active, payload, label }: any) {
 
 export default function AdminDashboardPage() {
     const router = useRouter();
+
+    // ── Role detection ──
+    const [userRole, setUserRole] = useState<string>('');
+    const [userName, setUserName] = useState<string>('');
+    const [roleLoaded, setRoleLoaded] = useState(false);
+
+    useEffect(() => {
+        fetchWithAuth(`${API_BASE_URL}/auth/profile`)
+            .then(r => r.json())
+            .then(data => {
+                const profile = data.data ?? data;
+                setUserRole(profile.role ?? '');
+                setUserName(profile.fullName ?? 'Nhân viên');
+            })
+            .catch(() => {})
+            .finally(() => setRoleLoaded(true));
+    }, []);
+
+    // ── Admin state ──
     const today = new Date().toISOString().split('T')[0];
     const [activeDays, setActiveDays] = useState<number>(30);
     const [customFrom, setCustomFrom] = useState('');
@@ -198,7 +218,25 @@ export default function AdminDashboardPage() {
         setDateRange({ from: customFrom, to: customTo });
     };
 
-    useEffect(() => { fetchAll(); }, [fetchAll]);
+    useEffect(() => { if (userRole && userRole !== 'STAFF') fetchAll(); }, [fetchAll, userRole]);
+
+    // ── Render Staff view early ──
+    if (!roleLoaded) {
+        return (
+            <main className="flex-1 pt-8 px-8 min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                        <span className="material-symbols-outlined text-white text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
+                    </div>
+                    <p className="text-slate-400 text-sm">Đang tải dashboard...</p>
+                </div>
+            </main>
+        );
+    }
+
+    if (userRole === 'STAFF') {
+        return <StaffDashboard staffName={userName} />;
+    }
 
     const { from, to } = dateRange;
     const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
@@ -443,7 +481,7 @@ export default function AdminDashboardPage() {
                                 <th className="px-6 py-3.5 font-semibold">Ngày đặt</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
+                        <tbody className="divide-y divide-slate-100">
                             {loading ? (
                                 Array.from({ length: 5 }).map((_, i) => (
                                     <tr key={i} className="animate-pulse">

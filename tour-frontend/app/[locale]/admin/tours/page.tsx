@@ -1,13 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import type React from 'react';
 import TourFormModal from '@/app/components/admin/TourFormModal';
 import TourContentDrawer from '@/app/components/admin/TourContentDrawer';
+import ReviewTourModal from '@/app/components/admin/ReviewTourModal';
 import AdminPagination from '@/app/components/admin/AdminPagination';
 import { API_BASE_URL } from '@/app/lib/constants';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 
 // ── Types ────────────────────────────────────────────────────────────
+type TourStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
+
 interface Tour {
     id: number;
     name: string;
@@ -19,6 +23,15 @@ interface Tour {
     averageRating: number;
     startDate: string;
     destination: { id: number; name: string };
+    status: TourStatus;
+    reviewNote?: string;
+    createdById?: number;
+    createdBy?: { id: number; fullName: string };
+}
+
+/** Tour đã bị soft-delete — có thêm `deletedAt` từ backend */
+interface TrashedTour extends Tour {
+    deletedAt: string | null;
 }
 
 interface Destination { id: number; name: string; }
@@ -35,7 +48,7 @@ const formatCurrency = (n: number) =>
 // Format compact for KPI card: 1,5 tr ₫ / 2 tỷ ₫
 const formatCurrencyCompact = (n: number): string => {
     if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tỷ ₫`;
-    if (n >= 1_000_000)     return `${(n / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tr ₫`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tr ₫`;
     return formatCurrency(n);
 };
 
@@ -44,8 +57,17 @@ const formatDate = (d: string) =>
 
 const getStatusLabel = (seats: number): { label: string; cls: string } => {
     if (seats === 0) return { label: 'Full', cls: 'bg-error/10 text-error' };
-    if (seats <= 5)  return { label: 'Sắp đầy', cls: 'bg-amber-500/10 text-amber-600' };
+    if (seats <= 5) return { label: 'Sắp đầy', cls: 'bg-amber-500/10 text-amber-600' };
     return { label: 'Available', cls: 'bg-tertiary/10 text-tertiary' };
+};
+
+const getTourStatusBadge = (status: TourStatus): { label: string; cls: string; icon: string } => {
+    switch (status) {
+        case 'DRAFT': return { label: 'Nháp', cls: 'bg-surface-container text-on-surface-variant border border-outline-variant/20', icon: 'edit_note' };
+        case 'PENDING_REVIEW': return { label: 'Chờ duyệt', cls: 'bg-amber-500/10 text-amber-700 border border-amber-300/40', icon: 'pending' };
+        case 'PUBLISHED': return { label: 'Đã duyệt', cls: 'bg-emerald-500/10 text-emerald-700 border border-emerald-300/40', icon: 'check_circle' };
+        case 'REJECTED': return { label: 'Bị từ chối', cls: 'bg-error/10 text-error border border-error/20', icon: 'cancel' };
+    }
 };
 
 // ── Main Component ───────────────────────────────────────────────────
@@ -69,7 +91,7 @@ export default function AdminToursPage() {
     // State: UI
     const [modalMode, setModalMode] = useState<ModalMode>(null);
     const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
-    const [contentDrawerTour, setContentDrawerTour] = useState<any>(null);
+    const [contentDrawerTour, setContentDrawerTour] = useState<Tour | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Tour | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [toast, setToast] = useState<ToastState | null>(null);
@@ -78,8 +100,34 @@ export default function AdminToursPage() {
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-    // State: Aggregate stats (tính trên toàn bộ hệ thống, không chỉ trang hiện tại)
+    // State: Aggregate stats
     const [tourStats, setTourStats] = useState({ active: 0, totalSeats: 0, avgPrice: 0, loaded: false });
+
+    // State: Workflow
+    const [pendingCount, setPendingCount] = useState(0);
+    const [rejectedCount, setRejectedCount] = useState(0);
+    const [reviewTarget, setReviewTarget] = useState<{ tour: Tour; action: 'approve' | 'reject' } | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
+
+    // State: Trash tab
+    const [activeTab, setActiveTab] = useState<'active' | 'trash'>('active');
+    const [trashedTours, setTrashedTours] = useState<TrashedTour[]>([]);
+    const [trashMeta, setTrashMeta] = useState({ totalItems: 0, totalPages: 1, currentPage: 1 });
+    const [trashPage, setTrashPage] = useState(1);
+    const [isLoadingTrash, setIsLoadingTrash] = useState(false);
+    const [restoring, setRestoring] = useState<number | null>(null);
+    const [permDeleteTarget, setPermDeleteTarget] = useState<Tour | null>(null);
+    const [isPermDeleting, setIsPermDeleting] = useState(false);
+
+    // State: Bulk confirm dialog
+    const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+    // Role-based access
+    const [userRole, setUserRole] = useState<string>('');
+    const [userId, setUserId] = useState<number | null>(null);
+    const isStaff = userRole === 'STAFF';
+    const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    const isSuperAdmin = userRole === 'SUPER_ADMIN';
 
     // ── Fetch ──────────────────────────────────────────────────────
     const fetchTours = useCallback(async () => {
@@ -88,13 +136,17 @@ export default function AdminToursPage() {
             const qs = new URLSearchParams();
             if (search) qs.append('dest', search);
             if (filterDest) qs.append('dest', filterDest);
+            if (filterStatus) qs.append('status', filterStatus);
             qs.append('sortBy', sortBy);
             qs.append('page', String(page));
             qs.append('limit', String(pageSize));
 
-            const res = await fetch(`${API_BASE_URL}/tour?${qs}`);
+            // Dùng fetchWithAuth để gửi JWT token:
+            // - STAFF: backend trả tour của mình (DRAFT/PENDING/REJECTED)
+            // - ADMIN: backend trả tất cả tour
+            // - Nếu dùng fetch thường → backend nghĩ là public → chỉ trả PUBLISHED
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour?${qs}`);
             const json = await res.json();
-            // Interceptor: service trả { data: Tour[], meta } → interceptor pull lên, nên json.data = Tour[]
             const data = json.data ?? (Array.isArray(json) ? json : []);
             setTours(data);
             if (json.meta) setMeta(json.meta);
@@ -103,7 +155,7 @@ export default function AdminToursPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [search, filterDest, sortBy, page, pageSize]);
+    }, [search, filterDest, filterStatus, sortBy, page, pageSize]);
 
 
     useEffect(() => { fetchTours(); }, [fetchTours]);
@@ -118,32 +170,104 @@ export default function AdminToursPage() {
     }, [searchInput]);
 
     // Fetch aggregate stats (toàn bộ hệ thống — chỉ gọi 1 lần khi mount)
+    // Dùng fetchWithAuth để Admin thấy đúng số liệu toàn bộ (kể cả DRAFT)
     useEffect(() => {
-        fetch(`${API_BASE_URL}/tour?limit=9999&sortBy=recommended`)
+        fetchWithAuth(`${API_BASE_URL}/tour?limit=9999&sortBy=recommended`)
             .then(r => r.json())
             .then(json => {
                 const all: Tour[] = json.data ?? [];
                 setTourStats({
-                    active:     all.filter(t => t.availableSeats > 0).length,
+                    active: all.filter(t => t.availableSeats > 0).length,
                     totalSeats: all.reduce((s, t) => s + t.availableSeats, 0),
-                    avgPrice:   all.length > 0 ? all.reduce((s, t) => s + t.price, 0) / all.length : 0,
-                    loaded:     true,
+                    avgPrice: all.length > 0 ? all.reduce((s, t) => s + t.price, 0) / all.length : 0,
+                    loaded: true,
                 });
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
+
+    // Fetch role từ API thay vì localStorage để tránh spoof qua DevTools
+    // Backend verify JWT → trả role thực sự từ DB, không thể giả mạo
+    useEffect(() => {
+        fetchWithAuth(`${API_BASE_URL}/auth/profile`)
+            .then(r => r.json())
+            .then(d => {
+                const profile = d?.data ?? d;
+                if (profile?.role) setUserRole(profile.role);
+                if (profile?.id) setUserId(profile.id);
+            })
+            .catch(() => {
+                // Fallback: đọc localStorage nếu API lỗi (offline, network issue)
+                const savedRole = localStorage.getItem('userRole');
+                if (savedRole) setUserRole(savedRole);
+                const savedUserId = localStorage.getItem('userId');
+                if (savedUserId) setUserId(Number(savedUserId));
+            });
+    }, []);
+
+    // Fetch pending + rejected counts for Admin KPIs
+    const fetchPendingCount = useCallback(async () => {
+        if (userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') return;
+        try {
+            const [pendingRes, rejectedRes] = await Promise.all([
+                fetchWithAuth(`${API_BASE_URL}/tour/pending`),
+                fetchWithAuth(`${API_BASE_URL}/tour?status=REJECTED&limit=1`),
+            ]);
+            const pendingJson = await pendingRes.json();
+            const rejectedJson = await rejectedRes.json();
+            setPendingCount(pendingJson?.count ?? pendingJson?.data?.length ?? 0);
+            setRejectedCount(rejectedJson?.meta?.totalItems ?? 0);
+        } catch { /* silent */ }
+    }, [userRole]);
+
+    useEffect(() => { fetchPendingCount(); }, [fetchPendingCount]);
 
     useEffect(() => {
         fetch(`${API_BASE_URL}/search/destinations`)
             .then(r => r.json())
             .then(j => setDestinations(j.data ?? j))
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     // ── Toast ──────────────────────────────────────────────────────
     const showToast = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3500);
+    };
+
+    // ── Workflow Handlers ───────────────────────────────────────────
+    const handleSubmitForReview = async (tourId: number) => {
+        setIsSubmitting(tourId);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}/submit`, { method: 'POST' });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || 'Gửi duyệt thất bại');
+            }
+            showToast('Đã gửi tour để Admin duyệt!');
+            fetchTours();
+        } catch (e: any) {
+            showToast(e.message || 'Gửi duyệt thất bại', 'error');
+        } finally {
+            setIsSubmitting(null);
+        }
+    };
+
+    const handleReviewTour = async (action: 'approve' | 'reject', note?: string) => {
+        if (!reviewTarget) return;
+        const res = await fetchWithAuth(`${API_BASE_URL}/tour/${reviewTarget.tour.id}/review`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, note }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || 'Thao tác thất bại');
+        }
+        showToast(action === 'approve' ? 'Đã duyệt và phát hành tour!' : 'Đã từ chối tour.');
+        setReviewTarget(null);
+        fetchTours();
+        fetchPendingCount();
     };
 
     // ── Delete ─────────────────────────────────────────────────────
@@ -157,7 +281,11 @@ export default function AdminToursPage() {
             if (!res.ok) throw new Error();
             showToast(`Đã xóa tour "${deleteTarget.name}" thành công!`);
             setDeleteTarget(null);
+            // Cập nhật lại danh sách và KPI
             fetchTours();
+            fetchPendingCount();
+            // Tự động chuyển sang tab Thùng rác để user thấy tour vừa xóa
+            setActiveTab('trash');
         } catch {
             showToast('Xóa tour thất bại. Vui lòng thử lại.', 'error');
         } finally {
@@ -192,17 +320,66 @@ export default function AdminToursPage() {
     const totalTours = meta.totalItems;
 
     const kpis = [
-        { icon: 'travel_explore', label: 'Tổng Số Tour',
-          value: String(totalTours), unit: null, color: 'bg-primary/10 text-primary' },
-        { icon: 'check_circle', label: 'Đang Hoạt Động',
-          value: tourStats.loaded ? String(tourStats.active) : '…',
-          unit: null, color: 'bg-tertiary/10 text-tertiary' },
-        { icon: 'airline_seat_recline_normal', label: 'Ghế Còn Trống',
-          value: tourStats.loaded ? String(tourStats.totalSeats) : '…',
-          unit: null, color: 'bg-secondary/10 text-secondary' },
-        { icon: 'payments', label: 'Giá Trung Bình',
-          value: tourStats.loaded ? formatCurrencyCompact(tourStats.avgPrice) : '…',
-          unit: 'VNĐ', color: 'bg-amber-500/10 text-amber-600' },
+        {
+            icon: 'travel_explore', label: 'Tổng Số Tour',
+            value: String(totalTours), unit: null, color: 'bg-primary/10 text-primary', highlight: false, onClick: null
+        },
+        {
+            icon: 'check_circle', label: 'Đang Hoạt Động',
+            value: tourStats.loaded ? String(tourStats.active) : '…',
+            unit: null, color: 'bg-tertiary/10 text-tertiary', highlight: false, onClick: null
+        },
+        {
+            icon: 'airline_seat_recline_normal', label: 'Ghế Còn Trống',
+            value: tourStats.loaded ? String(tourStats.totalSeats) : '…',
+            unit: null, color: 'bg-secondary/10 text-secondary', highlight: false, onClick: null
+        },
+        {
+            icon: 'payments', label: 'Giá Trung Bình',
+            value: tourStats.loaded ? formatCurrencyCompact(tourStats.avgPrice) : '…',
+            unit: 'VNĐ', color: 'bg-amber-500/10 text-amber-600', highlight: false, onClick: null
+        },
+        ...(isAdmin ? [
+            {
+                icon: 'pending_actions', label: 'Chờ Duyệt',
+                value: String(pendingCount), unit: null,
+                color: pendingCount > 0 ? 'bg-amber-500/15 text-amber-700' : 'bg-surface-container text-on-surface-variant',
+                highlight: pendingCount > 0,
+                // Toggle: nếu đang lọc thì bỏ lọc, ngược lại thì lọc
+                onClick: (pendingCount > 0 || filterStatus === 'PENDING_REVIEW')
+                    ? () => { setFilterStatus(f => f === 'PENDING_REVIEW' ? '' : 'PENDING_REVIEW'); setPage(1); setActiveTab('active'); }
+                    : null
+            },
+            {
+                icon: 'cancel', label: 'Bị Từ Chối',
+                value: String(rejectedCount), unit: null,
+                color: rejectedCount > 0 ? 'bg-error/10 text-error' : 'bg-surface-container text-on-surface-variant',
+                highlight: false,
+                onClick: (rejectedCount > 0 || filterStatus === 'REJECTED')
+                    ? () => { setFilterStatus(f => f === 'REJECTED' ? '' : 'REJECTED'); setPage(1); setActiveTab('active'); }
+                    : null
+            },
+        ] : []),
+        ...(isStaff ? [
+            {
+                icon: 'edit_note', label: 'Bản Nháp',
+                value: String(tours.filter(t => t.status === 'DRAFT').length),
+                unit: null,
+                color: 'bg-surface-container text-on-surface-variant',
+                highlight: false,
+                onClick: (filterStatus === 'DRAFT' || tours.some(t => t.status === 'DRAFT'))
+                    ? () => { setFilterStatus(f => f === 'DRAFT' ? '' : 'DRAFT'); setPage(1); }
+                    : null
+            },
+            {
+                icon: 'pending', label: 'Chờ Duyệt',
+                value: String(tours.filter(t => t.status === 'PENDING_REVIEW').length),
+                unit: null,
+                color: 'bg-amber-500/10 text-amber-700',
+                highlight: false,
+                onClick: null
+            },
+        ] : []),
     ];
 
     // ── Bulk helpers ——————————————————————————————————
@@ -233,16 +410,88 @@ export default function AdminToursPage() {
         setIsBulkDeleting(false);
         setSelectedIds(new Set());
         showToast(`Ẩn ${ok}/${ids.length} tour thành công.`);
+        // Cập nhật KPI và chuyển sang Thùng rác
         fetchTours();
+        fetchPendingCount();
+        setActiveTab('trash');
+    };
+
+    // ── Trash handlers ——————————————————————————————
+    const fetchTrashedTours = useCallback(async () => {
+        setIsLoadingTrash(true);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/trash?page=${trashPage}&limit=10`);
+            const json = await res.json();
+            setTrashedTours(json.data ?? []);
+            if (json.meta) setTrashMeta(json.meta);
+        } catch {
+            showToast('Lỗi tải thùng rác.', 'error');
+        } finally {
+            setIsLoadingTrash(false);
+        }
+    }, [trashPage]);
+
+    useEffect(() => {
+        if (activeTab === 'trash' && isAdmin) fetchTrashedTours();
+    }, [activeTab, fetchTrashedTours, isAdmin]);
+
+    // Fetch trash count khi mount để tab "Thùng rác" hiện số lượng đúng ngay từ đầu
+    useEffect(() => {
+        if (!isAdmin) return;
+        fetchWithAuth(`${API_BASE_URL}/tour/trash?page=1&limit=1`)
+            .then(r => r.json())
+            .then(json => {
+                if (json.meta) setTrashMeta(prev => ({ ...prev, totalItems: json.meta.totalItems, totalPages: json.meta.totalPages }));
+            })
+            .catch(() => { });
+    }, [isAdmin]);
+
+    const handleRestore = async (tour: Tour) => {
+        setRestoring(tour.id);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tour.id}/restore`, { method: 'PATCH' });
+            if (!res.ok) throw new Error();
+            showToast(`Đã khôi phục tour "${tour.name}" về trạng thái Nháp!`);
+            fetchTrashedTours();
+            fetchTours(); // cập nhật lại tab active
+        } catch {
+            showToast('Khôi phục thất bại.', 'error');
+        } finally {
+            setRestoring(null);
+        }
+    };
+
+    const handlePermanentDelete = async () => {
+        if (!permDeleteTarget) return;
+        setIsPermDeleting(true);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/${permDeleteTarget.id}/permanent`, { method: 'DELETE' });
+            if (!res.ok) throw new Error();
+            showToast(`Đã xóa vĩnh viễn "${permDeleteTarget.name}".`);
+            setPermDeleteTarget(null);
+            fetchTrashedTours();
+        } catch {
+            showToast('Xóa vĩnh viễn thất bại.', 'error');
+        } finally {
+            setIsPermDeleting(false);
+        }
     };
 
     // ── Export CSV ——————————————————————————————————
     const handleExportCSV = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/tour?limit=9999&sortBy=recommended`);
+            // Dùng fetchWithAuth để Admin export được tất cả tours (kể cả DRAFT/PENDING)
+            // Nếu dùng fetch thường → backend trả PUBLISHED only
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour?limit=9999&sortBy=recommended`);
             const json = await res.json();
             const all: Tour[] = json.data ?? [];
-            const headers = ['ID', 'Tên Tour', 'Điểm Đến', 'Giá (VNĐ)', 'Ngày KH', 'Thời Lượng', 'Ghế Còn', 'Rating', 'Loại'];
+            const headers = ['ID', 'Tên Tour', 'Điểm Đến', 'Giá (VNĐ)', 'Ngày KH', 'Thời Lượng', 'Ghế Còn', 'Rating', 'Loại', 'Trạng Thái'];
+            const statusLabel: Record<string, string> = {
+                PUBLISHED: 'Đã duyệt',
+                PENDING_REVIEW: 'Chờ duyệt',
+                DRAFT: 'Nháp',
+                REJECTED: 'Bị từ chối',
+            };
             const rows = all.map(t => [
                 t.id,
                 `"${t.name.replace(/"/g, '""')}"`,
@@ -253,6 +502,7 @@ export default function AdminToursPage() {
                 t.availableSeats,
                 t.averageRating > 0 ? t.averageRating.toFixed(1) : '0',
                 t.tourType ?? '',
+                statusLabel[t.status] ?? t.status,
             ]);
             const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
             const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -293,14 +543,14 @@ export default function AdminToursPage() {
                         <span className="material-symbols-outlined text-[17px]" aria-hidden="true">download</span>
                         Xuất CSV
                     </button>
-                    {/* Tạo mới */}
+                    {/* Tạo mới — tất cả role có thể tạo, STAFF sẽ lưu dưới dạng Nháp */}
                     <button
                         onClick={() => { setSelectedTour(null); setModalMode('create'); }}
                         aria-label="Tạo tour mới"
                         className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-90 transition-opacity active:scale-[0.98] flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none"
                     >
                         <span className="material-symbols-outlined text-sm" aria-hidden="true">add</span>
-                        Tạo Tour Mới
+                        {isStaff ? 'Tạo Tour Mới' : 'Tạo Tour Mới'}
                     </button>
                 </div>
             </div>
@@ -319,7 +569,7 @@ export default function AdminToursPage() {
                         Bỏ chọn
                     </button>
                     <button
-                        onClick={handleBulkHide}
+                        onClick={() => setShowBulkConfirm(true)}
                         disabled={isBulkDeleting}
                         className="flex items-center gap-2 px-4 py-1.5 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 transition-colors"
                     >
@@ -333,28 +583,149 @@ export default function AdminToursPage() {
                 </div>
             )}
 
-            {/* ── KPI Cards ─── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {kpis.map(kpi => (
-                    <div key={kpi.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/10 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${kpi.color}`}>
-                                <span className="material-symbols-outlined text-xl" aria-hidden="true">{kpi.icon}</span>
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs text-on-surface-variant font-medium truncate">{kpi.label}</p>
-                                <p className="text-xl font-bold text-on-surface leading-tight mt-0.5 truncate">{kpi.value}</p>
-                                {kpi.unit && (
-                                    <p className="text-[10px] text-on-surface-variant/60 mt-0.5 font-medium tracking-wider">{kpi.unit}</p>
-                                )}
-                            </div>
+            {/* ── Bulk Confirm Dialog ─── */}
+            {showBulkConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowBulkConfirm(false)} />
+                    <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                        <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <span className="material-symbols-outlined text-amber-500 text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>hide_source</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-on-surface text-center mb-2">Xác nhận ẩn tour?</h3>
+                        <p className="text-sm text-on-surface-variant text-center leading-relaxed mb-5">
+                            Bạn sắp ẩn <strong className="text-amber-600">{selectedIds.size} tour</strong> khỏi khách hàng.
+                            <br />Các tour này sẽ được chuyển vào <strong>Thùng rác</strong> và có thể khôi phục sau.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowBulkConfirm(false)}
+                                disabled={isBulkDeleting}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors disabled:opacity-50"
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                onClick={async () => { setShowBulkConfirm(false); await handleBulkHide(); }}
+                                disabled={isBulkDeleting}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isBulkDeleting
+                                    ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span> Đang ẩn...</>
+                                    : <><span className="material-symbols-outlined text-base">hide_source</span> Xác nhận ẩn</>
+                                }
+                            </button>
                         </div>
                     </div>
-                ))}
+                </div>
+            )}
+
+            {/* ── Pending Alert Banner (Admin only) ─── */}
+            {isAdmin && pendingCount > 0 && (
+                <div className="mb-4 flex items-center gap-3 px-5 py-3.5 bg-amber-50 border border-amber-300/50 rounded-2xl">
+                    <span className="material-symbols-outlined text-amber-600 text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>pending_actions</span>
+                    <span className="text-sm font-semibold text-amber-800 flex-1">
+                        Có <strong>{pendingCount}</strong> tour đang chờ bạn duyệt.
+                    </span>
+                    <button
+                        onClick={() => { setFilterStatus('PENDING_REVIEW'); setPage(1); setActiveTab('active'); }}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                        Xem ngay
+                    </button>
+                </div>
+            )}
+
+            {/* ── KPI Cards ─── */}
+            <div className={`grid gap-4 mb-8 ${isAdmin ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4'
+                }`}>
+                {kpis.map(kpi => {
+                    const isActive =
+                        (kpi.label === 'Chờ Duyệt' && filterStatus === 'PENDING_REVIEW') ||
+                        (kpi.label === 'Bị Từ Chối' && filterStatus === 'REJECTED');
+                    const Tag = kpi.onClick ? 'button' : 'div';
+                    return (
+                        <Tag
+                            key={kpi.label}
+                            onClick={kpi.onClick ?? undefined}
+                            className={`bg-surface-container-lowest rounded-2xl p-5 border shadow-sm transition-all text-left w-full ${isActive
+                                    ? 'border-amber-400/60 ring-2 ring-amber-400/40 shadow-md'
+                                    : kpi.highlight
+                                        ? 'border-amber-300/60 ring-1 ring-amber-400/30 hover:shadow-md hover:scale-[1.02]'
+                                        : 'border-outline-variant/10 hover:shadow-md'
+                                } ${kpi.onClick ? 'cursor-pointer active:scale-[0.98]' : ''}`}
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${kpi.color}`}>
+                                    <span className="material-symbols-outlined text-xl" aria-hidden="true">{kpi.icon}</span>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-xs text-on-surface-variant font-medium truncate">{kpi.label}</p>
+                                    <p className="text-xl font-bold text-on-surface leading-tight mt-0.5 truncate">{kpi.value}</p>
+                                    {kpi.unit && (
+                                        <p className="text-[10px] text-on-surface-variant/60 mt-0.5 font-medium tracking-wider">{kpi.unit}</p>
+                                    )}
+                                </div>
+                                {kpi.onClick && (
+                                    <span className={`material-symbols-outlined text-[18px] shrink-0 ${isActive ? 'text-amber-600' : 'text-amber-400'
+                                        }`}>arrow_forward</span>
+                                )}
+                            </div>
+                            {isActive && (
+                                <p className="text-[10px] font-semibold text-amber-600 mt-2">Đang lọc • Nhấn để bỏ lọc</p>
+                            )}
+                        </Tag>
+                    );
+                })}
             </div>
 
-            {/* ── Filters ─── */}
-            <div className="bg-surface-container-lowest rounded-2xl p-4 mb-6 border border-outline-variant/10 shadow-sm flex flex-wrap gap-3 items-center">
+            {/* ── Tab switcher: Hoạt động / Thùng rác ─── */}
+            {isAdmin && (
+                <div className="flex items-center gap-1 mb-6 bg-surface-container-lowest rounded-2xl p-1 border border-outline-variant/10 shadow-sm w-fit">
+                    <button
+                        onClick={() => setActiveTab('active')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'active'
+                                ? 'bg-primary text-on-primary shadow-sm'
+                                : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined text-[16px]">travel_explore</span>
+                        Đang hoạt động
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${activeTab === 'active' ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'
+                            }`}>{meta.totalItems}</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('trash')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'trash'
+                                ? 'bg-error text-on-error shadow-sm'
+                                : 'text-on-surface-variant hover:bg-error/5 hover:text-error'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                        Thùng rác
+                        {trashMeta.totalItems > 0 && (
+                            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${activeTab === 'trash' ? 'bg-white/20 text-white' : 'bg-error/10 text-error'
+                                }`}>{trashMeta.totalItems}</span>
+                        )}
+                    </button>
+                </div>
+            )}
+
+            {/* ── Staff Info Banner — hướng dẫn workflow ở trạng thái DRAFT —— */}
+            {isStaff && tours.some(t => t.status === 'DRAFT') && (
+                <div className="mb-4 flex items-start gap-3 px-5 py-4 bg-primary/5 border border-primary/20 rounded-2xl">
+                    <span className="material-symbols-outlined text-primary text-[20px] mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
+                    <div>
+                        <p className="text-sm font-semibold text-on-surface">Bạn có bản nháp chưa gửi duyệt</p>
+                        <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">
+                            Tour ở trạng thái <span className="font-semibold text-on-surface">Bản Nháp</span> có thể chỉnh sửa tự do. Khi đã hoàn thiện, nhấn <span className="font-semibold text-amber-600">Gửi Duyệt</span> để chuyển cho Admin kiểm tra và phê duyệt.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Filters (chỉ hiện ở tab active) ─── */}
+            {activeTab === 'active' && <div className="bg-surface-container-lowest rounded-2xl p-4 mb-6 border border-outline-variant/10 shadow-sm flex flex-wrap gap-3 items-center">
                 <div className="flex-1 min-w-[220px] relative">
                     <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg pointer-events-none" aria-hidden="true">search</span>
                     <label htmlFor="search-tours" className="sr-only">Tìm kiếm tour</label>
@@ -391,16 +762,146 @@ export default function AdminToursPage() {
                         <option value="priceLowHigh">Giá: Thấp → Cao</option>
                         <option value="priceHighLow">Giá: Cao → Thấp</option>
                     </select>
+                    {/* Lọc theo trạng thái — Admin và Staff đều có, options khác nhau */}
+                    {(isAdmin || isStaff) && (
+                        <>
+                            <label htmlFor="filter-status" className="sr-only">Lọc theo trạng thái</label>
+                            <select
+                                id="filter-status"
+                                value={filterStatus}
+                                onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+                                className={`border rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors ${filterStatus
+                                        ? 'bg-primary/10 border-primary/40 font-semibold'
+                                        : 'bg-surface-container-low border-outline-variant/15'
+                                    }`}
+                            >
+                                <option value="">Tất cả trạng thái</option>
+                                {isStaff && <option value="DRAFT">📝 Bản nháp</option>}
+                                {isStaff && <option value="PENDING_REVIEW">⏳ Chờ duyệt</option>}
+                                {isStaff && <option value="REJECTED">❌ Bị từ chối</option>}
+                                {isStaff && <option value="PUBLISHED">✅ Đã duyệt</option>}
+                                {isAdmin && <option value="PUBLISHED">✅ Đã duyệt</option>}
+                                {isAdmin && <option value="PENDING_REVIEW">⏳ Chờ duyệt</option>}
+                                {isAdmin && <option value="REJECTED">❌ Bị từ chối</option>}
+                            </select>
+                        </>
+                    )}
                 </div>
-            </div>
+            </div>}
 
-            {/* ── Table ─── */}
-            <div id="tours-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
+
+            {/* ── TRASH TABLE ─── */}
+            {activeTab === 'trash' && isAdmin && (
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden mb-4">
+                    {/* Header */}
+                    <div className="flex items-center gap-3 px-6 py-4 border-b border-outline-variant/10 bg-error/5">
+                        <span className="material-symbols-outlined text-error text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>delete</span>
+                        <div>
+                            <p className="font-semibold text-sm text-on-surface">Thùng Rác — Tour Đã Ẩn</p>
+                            <p className="text-xs text-on-surface-variant mt-0.5">Tour trong đây bị ẩn khỏi khách hàng. Admin có thể khôi phục; Super Admin có thể xóa vĩnh viễn.</p>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-outline-variant/15 bg-surface-container/40">
+                                    <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Tour</th>
+                                    <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Điểm Đến</th>
+                                    <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Người Tạo</th>
+                                    <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Ngày Ẩn</th>
+                                    <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-right">Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/10">
+                                {isLoadingTrash ? (
+                                    <tr><td colSpan={5} className="py-16 text-center">
+                                        <span className="material-symbols-outlined text-3xl text-primary animate-spin">progress_activity</span>
+                                    </td></tr>
+                                ) : trashedTours.length === 0 ? (
+                                    <tr><td colSpan={5} className="py-16 text-center">
+                                        <span className="material-symbols-outlined text-4xl text-outline mb-2 block">delete_sweep</span>
+                                        <p className="font-semibold text-on-surface">Thùng rác trống</p>
+                                        <p className="text-sm text-on-surface-variant mt-1">Không có tour nào bị ẩn.</p>
+                                    </td></tr>
+                                ) : trashedTours.map(tour => (
+                                    <tr key={tour.id} className="hover:bg-error/5 transition-colors">
+                                        <td className="py-3 px-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-xl overflow-hidden bg-surface-container shrink-0 opacity-60">
+                                                    {tour.imageUrl
+                                                        ? <img src={tour.imageUrl} alt={tour.name} width={48} height={48} className="w-full h-full object-cover" />
+                                                        : <div className="w-full h-full flex items-center justify-center"><span className="material-symbols-outlined text-outline">image</span></div>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-sm text-on-surface/70 line-through">{tour.name}</p>
+                                                    <p className="text-xs text-on-surface-variant">#{tour.id}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-5 text-sm text-on-surface-variant">{tour.destination?.name ?? '—'}</td>
+                                        <td className="py-3 px-5 text-sm text-on-surface-variant">{tour.createdBy?.fullName ?? '—'}</td>
+                                        <td className="py-3 px-5 text-sm text-on-surface-variant">
+                                            {tour.deletedAt
+                                                ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(tour.deletedAt))
+                                                : '—'}
+                                        </td>
+                                        <td className="py-3 px-5 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                {/* Restore */}
+                                                <button
+                                                    onClick={() => handleRestore(tour)}
+                                                    disabled={restoring === tour.id}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 text-xs font-semibold transition-colors disabled:opacity-50"
+                                                >
+                                                    {restoring === tour.id
+                                                        ? <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                                                        : <span className="material-symbols-outlined text-[14px]">restore</span>
+                                                    }
+                                                    Khôi phục
+                                                </button>
+                                                {/* Permanent delete — chỉ Super Admin */}
+                                                {isSuperAdmin && (
+                                                    <button
+                                                        onClick={() => setPermDeleteTarget(tour)}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-error/10 text-error hover:bg-error/20 text-xs font-semibold transition-colors"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[14px]">delete_forever</span>
+                                                        Xóa vĩnh viễn
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {trashMeta.totalPages > 1 && (
+                        <div className="py-3 px-6 border-t border-outline-variant/10">
+                            <AdminPagination
+                                currentPage={trashMeta.currentPage}
+                                totalPages={trashMeta.totalPages}
+                                totalItems={trashMeta.totalItems}
+                                pageSize={10}
+                                onPageChange={p => setTrashPage(p)}
+                                onPageSizeChange={() => { }}
+                                itemLabel="tour trong thùng rác"
+                                pageSizeOptions={[10]}
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── ACTIVE TABLE ─── */}
+            {activeTab === 'active' && <div id="tours-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-outline-variant/15 bg-surface-container/40">
-                                {/* Checkbox select-all */}
                                 <th className="py-3.5 pl-5 pr-2 w-10">
                                     <input
                                         type="checkbox"
@@ -410,6 +911,8 @@ export default function AdminToursPage() {
                                         aria-label="Chọn tất cả"
                                     />
                                 </th>
+                                {/* STT */}
+                                <th className="py-3.5 px-3 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-center w-12">STT</th>
                                 <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Tour</th>
                                 <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Điểm Đến</th>
                                 <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">
@@ -441,9 +944,16 @@ export default function AdminToursPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                tours.map(tour => {
-                                    const status = getStatusLabel(tour.availableSeats);
+                                tours.map((tour, rowIndex) => {
+                                    const tourStatusBadge = getTourStatusBadge(tour.status ?? 'PUBLISHED');
                                     const isChecked = selectedIds.has(tour.id);
+                                    const isMyTour = tour.createdById === userId;
+                                    // Staff có thể sửa: tour của mình ở DRAFT hoặc REJECTED
+                                    const canStaffEdit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
+                                    // Staff có thể gửi duyệt: tour của mình ở DRAFT hoặc REJECTED
+                                    const canStaffSubmit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
+                                    const canAdminReview = isAdmin && tour.status === 'PENDING_REVIEW';
+                                    const stt = (page - 1) * pageSize + rowIndex + 1;
                                     return (
                                         <tr key={tour.id} className={`hover:bg-surface-container-low/40 transition-colors group ${isChecked ? 'bg-primary/5' : ''}`}>
                                             {/* Checkbox */}
@@ -456,6 +966,12 @@ export default function AdminToursPage() {
                                                     className="w-4 h-4 rounded border-outline-variant accent-primary cursor-pointer"
                                                     aria-label={`Chọn tour ${tour.name}`}
                                                 />
+                                            </td>
+                                            {/* STT */}
+                                            <td className="py-3 px-3 text-center">
+                                                <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-surface-container text-xs font-bold text-on-surface-variant">
+                                                    {stt}
+                                                </span>
                                             </td>
                                             {/* Tour name + image */}
                                             <td className="py-3 px-5">
@@ -504,40 +1020,106 @@ export default function AdminToursPage() {
                                                 )}
                                             </td>
                                             <td className="py-3 px-5 whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-semibold ${status.cls}`}>
-                                                    {status.label}
-                                                </span>
+                                                <div className="flex flex-col gap-1">
+                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${tourStatusBadge.cls}`}>
+                                                        <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>{tourStatusBadge.icon}</span>
+                                                        {tourStatusBadge.label}
+                                                    </span>
+                                                    {/* Lý do từ chối — hiện nổi bật để Staff biết cần sửa gì */}
+                                                    {tour.status === 'REJECTED' && tour.reviewNote && (
+                                                        <p
+                                                            className="text-[10px] text-error font-medium mt-1 max-w-[160px] leading-tight cursor-help"
+                                                            title={tour.reviewNote}
+                                                        >
+                                                            ↳ {tour.reviewNote.length > 60
+                                                                ? tour.reviewNote.slice(0, 60) + '…'
+                                                                : tour.reviewNote}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="py-3 px-5 text-right whitespace-nowrap">
                                                 <div className="flex justify-end gap-1">
-                                                    {/* View */}
-                                                    <div className="relative group/tip">
-                                                        <button onClick={() => window.open(`/vi/tour/${tour.id}`, '_blank')} aria-label={`Xem tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
-                                                            <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                                                    {/* View — chỉ khi PUBLISHED (tour chưa duyệt không hiển thị với khách) */}
+                                                    {tour.status === 'PUBLISHED' && (
+                                                        <div className="relative group/tip">
+                                                            <button onClick={() => window.open(`/vi/tour/${tour.id}`, '_blank')} aria-label={`Xem tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
+                                                                <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                                                            </button>
+                                                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Xem trang khách<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
+                                                        </div>
+                                                    )}
+                                                    {/* Content — chỉ khi PUBLISHED và là Admin hoặc Staff chủ sở hữu */}
+                                                    {(isAdmin || isMyTour) && tour.status === 'PUBLISHED' && (
+                                                        <div className="relative group/tip">
+                                                            <button onClick={() => handleOpenContent(tour)} aria-label={`Quản lý nội dung tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-violet-500/10 hover:text-violet-600 transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
+                                                                <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+                                                            </button>
+                                                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Nội dung<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
+                                                        </div>
+                                                    )}
+                                                    {/* Edit:
+                                                        - PENDING_REVIEW: Admin có thể sửa trước khi duyệt
+                                                        - REJECTED: chỉ Staff owner sửa để gửi lại (Admin đã từ chối, không cần sửa)
+                                                    */}
+                                                    {(
+                                                        (isAdmin && tour.status === 'PENDING_REVIEW') ||
+                                                        canStaffEdit
+                                                    ) && (
+                                                            <div className="relative group/tip">
+                                                                <button onClick={() => handleEdit(tour)} aria-label={`Chỉnh sửa tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
+                                                                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                                </button>
+                                                                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Chỉnh sửa<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
+                                                            </div>
+                                                        )}
+                                                    {/* Gửi Duyệt — Staff owner khi DRAFT hoặc REJECTED: hiện nút text rõ ràng */}
+                                                    {canStaffSubmit && (
+                                                        <button
+                                                            onClick={() => handleSubmitForReview(tour.id)}
+                                                            disabled={isSubmitting === tour.id}
+                                                            aria-label={`Gửi duyệt tour ${tour.name}`}
+                                                            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border border-amber-300/40 text-xs font-semibold transition-all disabled:opacity-50 whitespace-nowrap"
+                                                        >
+                                                            {isSubmitting === tour.id
+                                                                ? <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                                                                : <span className="material-symbols-outlined text-[13px]">send</span>
+                                                            }
+                                                            Gửi Duyệt
                                                         </button>
-                                                        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Xem tour<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
-                                                    </div>
-                                                    {/* Content */}
-                                                    <div className="relative group/tip">
-                                                        <button onClick={() => handleOpenContent(tour)} aria-label={`Quản lý nội dung tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-violet-500/10 hover:text-violet-600 transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
-                                                            <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-                                                        </button>
-                                                        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Nội dung<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
-                                                    </div>
-                                                    {/* Edit */}
-                                                    <div className="relative group/tip">
-                                                        <button onClick={() => handleEdit(tour)} aria-label={`Chỉnh sửa tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
-                                                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                                                        </button>
-                                                        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Chỉnh sửa<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
-                                                    </div>
-                                                    {/* Delete */}
-                                                    <div className="relative group/tip">
-                                                        <button onClick={() => setDeleteTarget(tour)} aria-label={`Xóa tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors focus-visible:ring-2 focus-visible:ring-error outline-none">
-                                                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                                                        </button>
-                                                        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-error px-2 py-1 text-[10px] font-medium text-on-error opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Xóa tour<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-error" /></span>
-                                                    </div>
+                                                    )}
+                                                    {/* Approve / Reject — Admin khi tour PENDING_REVIEW */}
+                                                    {canAdminReview && (<>
+                                                        <div className="relative group/tip">
+                                                            <button
+                                                                onClick={() => setReviewTarget({ tour, action: 'approve' })}
+                                                                aria-label={`Duyệt tour ${tour.name}`}
+                                                                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 outline-none"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                                                            </button>
+                                                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-emerald-700 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Duyệt<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-emerald-700" /></span>
+                                                        </div>
+                                                        <div className="relative group/tip">
+                                                            <button
+                                                                onClick={() => setReviewTarget({ tour, action: 'reject' })}
+                                                                aria-label={`Từ chối tour ${tour.name}`}
+                                                                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors focus-visible:ring-2 focus-visible:ring-error outline-none"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[18px]">cancel</span>
+                                                            </button>
+                                                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-error px-2 py-1 text-[10px] font-medium text-on-error opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Từ chối<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-error" /></span>
+                                                        </div>
+                                                    </>)}
+                                                    {/* Delete — chỉ Admin */}
+                                                    {isAdmin && (
+                                                        <div className="relative group/tip">
+                                                            <button onClick={() => setDeleteTarget(tour)} aria-label={`Xóa tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors focus-visible:ring-2 focus-visible:ring-error outline-none">
+                                                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                                                            </button>
+                                                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-error px-2 py-1 text-[10px] font-medium text-on-error opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Xóa tour<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-error" /></span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -561,9 +1143,55 @@ export default function AdminToursPage() {
                     />
                 </div>
 
-            </div>
+            </div>}
 
-            {/* ── Content Drawer ─── */}
+            {/* ── Permanent Delete Confirmation (Super Admin) ─── */}
+            {permDeleteTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    role="alertdialog"
+                    aria-modal="true"
+                    aria-labelledby="perm-delete-dialog-title"
+                >
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                        <div className="p-7">
+                            <div className="w-12 h-12 bg-error/10 rounded-2xl flex items-center justify-center mb-5">
+                                <span className="material-symbols-outlined text-error text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>delete_forever</span>
+                            </div>
+                            <h2 id="perm-delete-dialog-title" className="text-lg font-bold text-on-surface mb-2">Xóa Vĩnh Viễn?</h2>
+                            <p className="text-on-surface-variant text-sm leading-relaxed mb-3">
+                                Tour <strong className="text-on-surface">"{permDeleteTarget.name}"</strong> sẽ bị <strong className="text-error">xóa hoàn toàn khỏi cơ sở dữ liệu</strong>, bao gồm tất cả hình ảnh, gói, ngày khởi hành và đánh giá liên quan.
+                            </p>
+                            <div className="flex items-start gap-2 p-3 bg-error/8 rounded-xl border border-error/20">
+                                <span className="material-symbols-outlined text-error text-[16px] mt-0.5">warning</span>
+                                <p className="text-xs text-error font-semibold">Hành động này không thể hoàn tác. Chỉ Super Admin mới có quyền thực hiện.</p>
+                            </div>
+                        </div>
+                        <div className="px-7 pb-6 flex gap-3 justify-end">
+                            <button
+                                onClick={() => setPermDeleteTarget(null)}
+                                className="px-6 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handlePermanentDelete}
+                                disabled={isPermDeleting}
+                                className="px-6 py-2.5 bg-error text-on-error rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center gap-2"
+                            >
+                                {isPermDeleting ? (
+                                    <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang xóa…</>
+                                ) : (
+                                    <><span className="material-symbols-outlined text-base">delete_forever</span>Xóa vĩnh viễn</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
             {contentDrawerTour && (
                 <TourContentDrawer
                     tour={contentDrawerTour}
@@ -583,6 +1211,16 @@ export default function AdminToursPage() {
                     onDestinationCreated={(dest) => setDestinations(prev =>
                         [...prev, dest].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
                     )}
+                />
+            )}
+
+            {/* ── Review Tour Modal (Admin approve/reject) ─── */}
+            {reviewTarget && (
+                <ReviewTourModal
+                    tour={reviewTarget.tour}
+                    action={reviewTarget.action}
+                    onConfirm={handleReviewTour}
+                    onClose={() => setReviewTarget(null)}
                 />
             )}
 

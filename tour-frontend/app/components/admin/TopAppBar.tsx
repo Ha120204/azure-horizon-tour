@@ -20,6 +20,7 @@ const PAGE_META: Record<string, { title: string; icon: string; subtitle: string 
     '/admin/reviews': { title: 'Đánh giá', icon: 'reviews', subtitle: 'Kiểm duyệt nhận xét từ khách hàng' },
     '/admin/profile': { title: 'Hồ sơ cá nhân', icon: 'manage_accounts', subtitle: 'Quản lý thông tin tài khoản & bảo mật' },
     '/admin/settings': { title: 'Cài đặt hệ thống', icon: 'settings', subtitle: 'Cấu hình và trạng thái vận hành của Azure Horizon' },
+    '/admin/support': { title: 'Hỗ trợ khách hàng', icon: 'support_agent', subtitle: 'Tiếp nhận và xử lý yêu cầu hỗ trợ từ khách hàng' },
 };
 
 function getPageMeta(pathname: string) {
@@ -49,7 +50,7 @@ function LiveClock() {
     if (!time) return null;
     return (
         <div className="hidden xl:flex flex-col items-end leading-tight select-none">
-            <span className="font-mono text-sm font-bold text-slate-700 tracking-wider tabular-nums">{time}</span>
+            <span className="text-sm font-bold text-slate-700 tracking-wider tabular-nums" style={{ fontVariant: 'tabular-nums', letterSpacing: '0.05em' }}>{time}</span>
             <span className="text-[10px] text-slate-400 font-medium capitalize">{date}</span>
         </div>
     );
@@ -605,11 +606,11 @@ export default function TopAppBar() {
 
     return (
         <>
-            <header className="sticky top-0 z-30 w-full h-[68px] bg-white/90 backdrop-blur-xl border-b border-slate-200/70 flex items-center px-8 gap-6 flex-shrink-0 shadow-sm">
+            <header className="sticky top-0 z-30 w-full h-[68px] bg-white/95 backdrop-blur-xl border-b border-slate-200 flex items-center px-8 gap-6 flex-shrink-0">
 
                 {/* ── Page Title ── */}
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-blue-50 ring-1 ring-blue-100 flex items-center justify-center flex-shrink-0">
                         <span className="material-symbols-outlined text-blue-600 text-[19px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                             {meta.icon}
                         </span>
@@ -623,11 +624,11 @@ export default function TopAppBar() {
                 {/* ── Cmd+K Search Trigger ── */}
                 <button 
                     onClick={() => setSearchModalOpen(true)}
-                    className="hidden md:flex items-center gap-3 px-3.5 py-1.5 w-64 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 rounded-xl transition-all group"
+                    className="hidden md:flex items-center gap-3 px-3.5 py-2 w-64 bg-slate-50 hover:bg-white border border-slate-200 hover:border-blue-200 hover:shadow-sm rounded-xl transition-all group focus:outline-none focus:ring-2 focus:ring-blue-300"
                 >
-                    <span className="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-blue-500 transition-colors">search</span>
-                    <span className="flex-1 text-left text-sm text-slate-500 font-medium">Tìm kiếm...</span>
-                    <kbd className="hidden lg:flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-200 bg-white text-[10px] font-bold text-slate-400 font-mono shadow-sm">
+                    <span className="material-symbols-outlined text-[17px] text-slate-400 group-hover:text-blue-500 transition-colors">search</span>
+                    <span className="flex-1 text-left text-sm text-slate-400 font-medium group-hover:text-slate-500">Tìm kiếm...</span>
+                    <kbd className="hidden lg:flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border border-slate-200 bg-white text-[10px] font-bold text-slate-400 shadow-sm">
                         <span className="text-[11px]">⌘</span>K
                     </kbd>
                 </button>

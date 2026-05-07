@@ -62,13 +62,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (authState === 'loading') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#060B18]">
-                <div className="flex flex-col items-center gap-4">
-                    <span className="material-symbols-outlined text-5xl text-blue-400 animate-spin">
-                        progress_activity
-                    </span>
-                    <p className="text-slate-400 text-sm font-medium">
-                        Đang xác thực quyền truy cập...
-                    </p>
+                <div className="flex flex-col items-center gap-5">
+                    {/* Logo + spinner */}
+                    <div className="relative">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                            <span className="material-symbols-outlined text-white text-[26px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                explore
+                            </span>
+                        </div>
+                        {/* Spinner ring */}
+                        <span className="absolute -inset-1.5 rounded-2xl border-2 border-blue-500/30 border-t-blue-400 animate-spin" style={{ borderRadius: '18px' }} />
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5">
+                        <p className="text-slate-200 text-sm font-semibold">Azure Horizon</p>
+                        <p className="text-slate-500 text-xs">Đang xác thực quyền truy cập...</p>
+                    </div>
                 </div>
             </div>
         );

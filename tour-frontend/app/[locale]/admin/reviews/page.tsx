@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import AdminPagination from '@/app/components/admin/AdminPagination';
+import { API_BASE_URL } from '@/app/lib/constants';
 
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -48,9 +49,6 @@ interface Meta {
     itemsPerPage: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const API = 'http://localhost:3000';
 
 const fmtDate = (d: string) =>
     new Intl.DateTimeFormat('vi-VN', {
@@ -623,7 +621,7 @@ export default function ReviewManagementPage() {
     // Fetch stats
     const fetchStats = useCallback(async () => {
         try {
-            const res = await fetchWithAuth(`${API}/review/admin/stats`);
+            const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/stats`);
             const json = await res.json();
             setStats(json?.data ?? json);
         } catch { /* silent */ }
@@ -642,7 +640,7 @@ export default function ReviewManagementPage() {
             if (statusFilter) qs.set('status', statusFilter);
             if (sortBy) qs.set('sortBy', sortBy);
 
-            const res = await fetchWithAuth(`${API}/review/admin/all?${qs}`);
+            const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/all?${qs}`);
             const json = await res.json();
             if (!res.ok) throw new Error(json?.message ?? 'Lỗi API');
 
@@ -679,7 +677,7 @@ export default function ReviewManagementPage() {
     const handleToggleVisibility = async (review: Review) => {
         setLoadingId(review.id);
         try {
-            const res = await fetchWithAuth(`${API}/review/admin/${review.id}/visibility`, { method: 'PATCH' });
+            const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/${review.id}/visibility`, { method: 'PATCH' });
             const json = await res.json();
             if (!res.ok) throw new Error();
             const updated: Review = json?.data ?? json;
@@ -701,10 +699,10 @@ export default function ReviewManagementPage() {
         setIsDeleting(true);
         try {
             if (deleteTarget.length === 1) {
-                const res = await fetchWithAuth(`${API}/review/admin/${deleteTarget[0]}`, { method: 'DELETE' });
+                const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/${deleteTarget[0]}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error();
             } else {
-                const res = await fetchWithAuth(`${API}/review/admin/bulk/delete`, {
+                const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/bulk/delete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ids: deleteTarget }),
@@ -726,7 +724,7 @@ export default function ReviewManagementPage() {
     const handleReply = async (content: string) => {
         if (!replyTarget) return;
         try {
-            const res = await fetchWithAuth(`${API}/review/admin/${replyTarget.id}/reply`, {
+            const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/${replyTarget.id}/reply`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content }),
@@ -745,7 +743,7 @@ export default function ReviewManagementPage() {
     const handleBulkHide = async () => {
         setBulkLoading(true);
         try {
-            const res = await fetchWithAuth(`${API}/review/admin/bulk/hide`, {
+            const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/bulk/hide`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ids: selected }),

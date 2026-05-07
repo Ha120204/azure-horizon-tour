@@ -76,9 +76,10 @@ export default function AdminLoginPage() {
             const payload = await res.json();
             const data = payload.data || payload;
 
-            // Lưu token
+            // Lưu token + thông tin user
             localStorage.setItem('accessToken', data.access_token);
             localStorage.setItem('userName', data.user?.fullName || '');
+            localStorage.setItem('userRole', data.user?.role || '');
 
             // Kiểm tra role — chặn CUSTOMER
             const role = data.user?.role;

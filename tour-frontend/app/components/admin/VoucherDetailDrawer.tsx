@@ -81,11 +81,36 @@ const getInitials = (name?: string): string => {
   return name.split(' ').map((n) => n[0]).filter(Boolean).slice(-2).join('').toUpperCase();
 };
 
+// Palette for status: gradient pairs + badge styles
 const statusConfig = {
-  active:   { label: 'Đang hoạt động', bg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600', dot: 'bg-emerald-500', ring: 'ring-emerald-200' },
-  expired:  { label: 'Đã hết hạn',     bg: 'bg-slate-100',                         text: 'text-slate-500',   dot: 'bg-slate-400',   ring: 'ring-slate-200' },
-  depleted: { label: 'Hết lượt dùng',  bg: 'bg-red-50',                            text: 'text-red-500',     dot: 'bg-red-500',     ring: 'ring-red-200' },
-  inactive: { label: 'Vô hiệu hóa',   bg: 'bg-amber-50',                          text: 'text-amber-600',   dot: 'bg-amber-500',   ring: 'ring-amber-200' },
+  active:   {
+    label: 'Đang hoạt động',
+    badgeBg: 'rgba(16,185,129,0.12)',
+    badgeText: '#059669',
+    dotColor: '#10b981',
+    badgeBorder: 'rgba(16,185,129,0.25)',
+  },
+  expired:  {
+    label: 'Đã hết hạn',
+    badgeBg: 'rgba(100,116,139,0.1)',
+    badgeText: '#64748b',
+    dotColor: '#94a3b8',
+    badgeBorder: 'rgba(100,116,139,0.2)',
+  },
+  depleted: {
+    label: 'Hết lượt dùng',
+    badgeBg: 'rgba(239,68,68,0.1)',
+    badgeText: '#dc2626',
+    dotColor: '#ef4444',
+    badgeBorder: 'rgba(239,68,68,0.2)',
+  },
+  inactive: {
+    label: 'Vô hiệu hóa',
+    badgeBg: 'rgba(245,158,11,0.1)',
+    badgeText: '#d97706',
+    dotColor: '#f59e0b',
+    badgeBorder: 'rgba(245,158,11,0.2)',
+  },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -95,6 +120,7 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Animate in
   useEffect(() => {
@@ -123,7 +149,6 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
       const res = await fetchWithAuth(`${API_BASE_URL}/voucher/admin/${voucherId}`);
       if (!res.ok) throw new Error('Không thể tải chi tiết voucher');
       const json = await res.json();
-      // TransformInterceptor wraps response: { statusCode, message, data: VoucherDetail, timestamp }
       const voucher = json?.data ?? json;
       setData(voucher);
     } catch (e: any) {
@@ -147,6 +172,14 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
     setTimeout(onClose, 250);
   };
 
+  const handleCopy = () => {
+    if (data?.code) {
+      navigator.clipboard?.writeText(data.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   if (voucherId === null) return null;
 
   // ── Derived ─────────────────────────────────────────────────────────────
@@ -160,11 +193,27 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
   const status       = data?.computedStatus ? statusConfig[data.computedStatus] : null;
   const discountValue = Number(data?.discountValue);
 
+  const isPercentage = data?.discountType === 'PERCENTAGE';
   const discountDisplay = data
-    ? data.discountType === 'PERCENTAGE'
-      ? `Giảm ${isNaN(discountValue) ? '—' : discountValue}%`
-      : `Giảm ${formatCurrency(discountValue)}`
+    ? isPercentage
+      ? `${isNaN(discountValue) ? '—' : discountValue}%`
+      : formatCurrency(discountValue)
     : '';
+
+  // Hero gradient by status
+  const heroGradient = data?.computedStatus === 'active'
+    ? 'linear-gradient(135deg, #0f4c81 0%, #1565C0 45%, #1E88E5 100%)'
+    : data?.computedStatus === 'expired' || data?.computedStatus === 'inactive'
+    ? 'linear-gradient(135deg, #374151 0%, #4b5563 100%)'
+    : data?.computedStatus === 'depleted'
+    ? 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)'
+    : 'linear-gradient(135deg, #0f4c81 0%, #1565C0 100%)';
+
+  const progressColor = usageRatio >= 1
+    ? '#ef4444'
+    : usageRatio >= 0.8
+    ? '#f59e0b'
+    : '#3b82f6';
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -177,248 +226,340 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
     >
       {/* Backdrop */}
       <div
-        className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-250 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 transition-opacity duration-250 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
         onClick={handleClose}
       />
 
-      {/* Modal Card */}
+      {/* ── Modal Card ── */}
       <div
-        className={`relative w-full max-w-[560px] bg-surface rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden transition-all duration-250 ${
+        className={`relative w-full max-w-[540px] flex flex-col overflow-hidden transition-all duration-250 ${
           visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4'
         }`}
+        style={{
+          maxHeight: '92vh',
+          borderRadius: '24px',
+          background: '#ffffff',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.06)',
+        }}
       >
-        {/* ── Loading / Error overlay ─────────────────────────────── */}
+        {/* ── Loading / Error overlay ── */}
         {isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface rounded-3xl">
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-3xl" style={{ background: '#fff' }}>
             <div className="flex flex-col items-center gap-3">
-              <span className="material-symbols-outlined text-4xl text-primary animate-spin" aria-hidden="true">progress_activity</span>
-              <p className="text-sm text-on-surface-variant font-medium">Đang tải dữ liệu…</p>
+              <span className="material-symbols-outlined text-4xl animate-spin" style={{ color: '#1565C0' }}>progress_activity</span>
+              <p className="text-sm font-medium text-gray-500">Đang tải dữ liệu…</p>
             </div>
           </div>
         )}
         {error && !isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface rounded-3xl">
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-3xl" style={{ background: '#fff' }}>
             <div className="flex flex-col items-center gap-3 px-8 text-center">
-              <span className="material-symbols-outlined text-4xl text-error" aria-hidden="true">error</span>
-              <p className="text-sm text-error font-semibold">{error}</p>
-              <button onClick={fetchDetail} className="text-sm text-primary font-semibold hover:underline">Thử lại</button>
+              <span className="material-symbols-outlined text-4xl text-red-500">error</span>
+              <p className="text-sm text-red-600 font-semibold">{error}</p>
+              <button onClick={fetchDetail} className="text-sm font-semibold hover:underline" style={{ color: '#1565C0' }}>Thử lại</button>
             </div>
           </div>
         )}
 
-        {/* ── Hero Section ─────────────────────────────────────────── */}
-        <div className="relative px-7 pt-7 pb-6 bg-gradient-to-br from-primary/8 via-surface to-surface shrink-0">
-          {/* Close button */}
-          <button
-            onClick={handleClose}
-            aria-label="Đóng"
-            className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none"
-          >
-            <span className="material-symbols-outlined text-xl" aria-hidden="true">close</span>
-          </button>
+        {/* ── Hero Header ── */}
+        <div
+          className="relative shrink-0 overflow-hidden"
+          style={{ background: heroGradient, borderRadius: '24px 24px 0 0' }}
+        >
+          {/* Decorative circles */}
+          <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full opacity-10" style={{ background: 'white' }} />
+          <div className="absolute top-8 -right-4 w-24 h-24 rounded-full opacity-8" style={{ background: 'white' }} />
+          <div className="absolute -bottom-6 left-8 w-20 h-20 rounded-full opacity-8" style={{ background: 'white' }} />
 
-          {/* Title row */}
-          <div className="flex items-center gap-2.5 mb-5">
-            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">local_activity</span>
+          <div className="relative z-[1] px-7 pt-6 pb-7">
+            {/* Top row: label + close */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.18)' }}>
+                  <span className="material-symbols-outlined text-white text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>local_activity</span>
+                </div>
+                <h2 id="vd-title" className="text-white/80 text-sm font-semibold tracking-wide">Chi Tiết Voucher</h2>
+              </div>
+              <button
+                onClick={handleClose}
+                aria-label="Đóng"
+                className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+                style={{ background: 'rgba(255,255,255,0.15)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
+              >
+                <span className="material-symbols-outlined text-white text-lg">close</span>
+              </button>
             </div>
-            <h2 id="vd-title" className="font-semibold text-sm text-on-surface-variant">Chi Tiết Voucher</h2>
-          </div>
 
-          {/* Voucher identity */}
-          {data && (
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                {/* Code badge */}
-                <div className="inline-flex items-center gap-2 bg-primary/10 rounded-xl px-3.5 py-1.5 mb-3">
-                  <span className="font-mono font-bold text-primary text-lg tracking-widest">{data.code}</span>
+            {/* Code + Discount */}
+            {data && (
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  {/* Code badge */}
                   <button
-                    onClick={() => navigator.clipboard?.writeText(data.code)}
-                    aria-label="Sao chép mã"
+                    onClick={handleCopy}
+                    className="inline-flex items-center gap-2 mb-3 px-3.5 py-1.5 rounded-xl transition-all"
+                    style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.22)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
                     title="Sao chép mã"
-                    className="text-primary/60 hover:text-primary transition-colors"
                   >
-                    <span className="material-symbols-outlined text-sm">content_copy</span>
+                    <span className="font-mono font-bold text-white text-base tracking-widest">{data.code}</span>
+                    <span className="material-symbols-outlined text-white/70 text-sm">
+                      {copied ? 'check' : 'content_copy'}
+                    </span>
+                    {copied && <span className="text-white/80 text-xs">Đã sao chép!</span>}
                   </button>
+
+                  {/* Big discount number */}
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-white/60 text-base font-semibold">Giảm</span>
+                    <span className="text-white font-extrabold leading-none" style={{ fontSize: '2.6rem' }}>
+                      {discountDisplay}
+                    </span>
+                  </div>
+
+                  <p className="text-white/70 text-sm mt-1">
+                    {data.label}
+                    {data.minOrderValue > 0 && (
+                      <span className="ml-1.5 text-white/50 text-xs">· Đơn từ {formatCurrency(data.minOrderValue)}</span>
+                    )}
+                  </p>
                 </div>
 
-                {/* Discount value — primary focus */}
-                <p className="text-3xl font-extrabold text-on-surface leading-none mb-1">
-                  {discountDisplay}
-                </p>
-                <p className="text-sm text-on-surface-variant">
-                  {data.label}
-                  {data.minOrderValue > 0 && (
-                    <span className="ml-1 text-xs text-outline">· Đơn từ {formatCurrency(data.minOrderValue)}</span>
-                  )}
-                </p>
+                {/* Status badge */}
+                {status && (
+                  <div
+                    className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5"
+                    style={{
+                      background: 'rgba(255,255,255,0.15)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.25)',
+                      backdropFilter: 'blur(4px)',
+                    }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white inline-block animate-pulse" />
+                    {status.label}
+                  </div>
+                )}
               </div>
+            )}
+          </div>
 
-              {/* Status badge */}
-              {status && (
-                <span className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ring-1 ${status.bg} ${status.text} ${status.ring}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
-                  {status.label}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Description */}
+          {/* Description ribbon */}
           {data?.description && (
-            <p className="mt-3 text-xs text-on-surface-variant/70 italic leading-relaxed border-t border-outline-variant/10 pt-3">
-              {data.description}
-            </p>
+            <div
+              className="px-7 py-3 text-xs font-medium italic"
+              style={{ background: 'rgba(0,0,0,0.18)', color: 'rgba(255,255,255,0.75)' }}
+            >
+              "{data.description}"
+            </div>
           )}
         </div>
 
-        {/* ── Scrollable Body ──────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-7 py-5 space-y-6">
+        {/* ── Scrollable Body ── */}
+        <div className="flex-1 overflow-y-auto" style={{ background: '#f8fafc' }}>
+          <div className="p-5 space-y-4">
 
-          {/* ── Usage Stats ─── */}
-          {data && (
-            <div>
-              <p className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-3">
-                Thống Kê Sử Dụng
-              </p>
+            {/* ── Usage Stats ── */}
+            {data && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[16px]" style={{ color: '#1565C0' }}>bar_chart</span>
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Thống Kê Sử Dụng</p>
+                </div>
 
-              {/* 3 stat tiles */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
+                {/* 3 stat tiles */}
+                <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+                  {[
+                    {
+                      value: usedCount.toLocaleString('vi-VN'),
+                      label: 'Đã dùng',
+                      icon: 'check_circle',
+                      color: '#1565C0',
+                      bg: '#EFF6FF',
+                    },
+                    {
+                      value: isUnlimited ? '∞' : maxUses.toLocaleString('vi-VN'),
+                      label: 'Tổng lượt',
+                      icon: 'confirmation_number',
+                      color: '#374151',
+                      bg: '#F9FAFB',
+                    },
+                    {
+                      value: savedCount.toLocaleString('vi-VN'),
+                      label: 'Đã lưu ví',
+                      icon: 'bookmark',
+                      color: '#7C3AED',
+                      bg: '#F5F3FF',
+                    },
+                  ].map(({ value, label, icon, color, bg }) => (
+                    <div key={label} className="flex flex-col items-center py-4 px-2 gap-1.5">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center mb-1" style={{ background: bg }}>
+                        <span className="material-symbols-outlined text-[17px]" style={{ color, fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+                      </div>
+                      <p className="text-2xl font-extrabold leading-none" style={{ color }}>{value}</p>
+                      <p className="text-[11px] text-gray-400 font-medium">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress bar */}
+                <div className="px-4 pb-4 pt-3 border-t border-gray-50">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-gray-500">Tỉ lệ sử dụng</span>
+                    <span className="text-xs font-bold text-gray-700">
+                      {isUnlimited ? `${usedCount} lượt` : `${Math.round(usageRatio * 100)}%`}
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full overflow-hidden" style={{ background: '#e5e7eb' }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-700 ease-out"
+                      style={{
+                        width: `${Math.max(usageRatio * 100, usedCount > 0 ? 3 : 0)}%`,
+                        background: `linear-gradient(90deg, ${progressColor}aa, ${progressColor})`,
+                      }}
+                    />
+                  </div>
+                  {!isUnlimited && (
+                    <p className="text-[10px] text-gray-400 mt-1.5 text-right">
+                      Còn lại: <strong className="text-gray-600">{Math.max(0, maxUses - usedCount).toLocaleString('vi-VN')}</strong> lượt
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Metadata ── */}
+            {data && (
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { value: usedCount.toLocaleString('vi-VN'), label: 'Đã dùng',   accent: 'text-primary' },
-                  { value: isUnlimited ? '∞' : maxUses.toLocaleString('vi-VN'), label: 'Tổng lượt', accent: 'text-on-surface' },
-                  { value: savedCount.toLocaleString('vi-VN'),                  label: 'Đã lưu ví', accent: 'text-secondary' },
-                ].map(({ value, label, accent }) => (
-                  <div key={label} className="bg-surface-container-low/60 rounded-2xl p-3.5 border border-outline-variant/10 text-center">
-                    <p className={`text-2xl font-extrabold leading-none mb-1 ${accent}`}>{value}</p>
-                    <p className="text-[11px] text-on-surface-variant font-medium">{label}</p>
+                  {
+                    icon: 'event',
+                    label: 'Hết hạn',
+                    value: isNeverExpires(data.expiresAt)
+                      ? 'Không giới hạn'
+                      : formatDate(data.expiresAt),
+                    iconColor: '#dc2626',
+                    iconBg: '#FEF2F2',
+                    isInfinite: isNeverExpires(data.expiresAt),
+                  },
+                  {
+                    icon: 'calendar_add_on',
+                    label: 'Ngày tạo',
+                    value: formatDate(data.createdAt),
+                    iconColor: '#1565C0',
+                    iconBg: '#EFF6FF',
+                    isInfinite: false,
+                  },
+                ].map(({ icon, label, value, iconColor, iconBg, isInfinite }) => (
+                  <div key={label} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: iconBg }}>
+                        <span className="material-symbols-outlined text-[15px]" style={{ color: iconColor }}>{icon}</span>
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+                    </div>
+                    <p className="text-sm font-bold text-gray-800 flex items-center gap-1">
+                      {isInfinite && (
+                        <span className="material-symbols-outlined text-base text-gray-400">all_inclusive</span>
+                      )}
+                      {value}
+                    </p>
                   </div>
                 ))}
               </div>
+            )}
 
-              {/* Progress bar */}
-              <div className="bg-surface-container-low/40 rounded-2xl p-4 border border-outline-variant/10">
-                <div className="flex justify-between items-center mb-2.5">
-                  <span className="text-xs font-semibold text-on-surface-variant">Tỉ lệ sử dụng</span>
-                  <span className="text-xs font-bold text-on-surface">
-                    {isUnlimited ? `${usedCount} lượt` : `${Math.round(usageRatio * 100)}%`}
+            {/* ── User Redemptions ── */}
+            {data && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]" style={{ color: '#1565C0' }}>group</span>
+                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Người Dùng Gần Đây</p>
+                  </div>
+                  <span
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+                    style={{ background: '#EFF6FF', color: '#1565C0' }}
+                  >
+                    {savedCount} người đã lưu
                   </span>
                 </div>
-                <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ease-out ${
-                      usageRatio >= 1 ? 'bg-error' : usageRatio >= 0.8 ? 'bg-amber-500' : 'bg-primary'
-                    }`}
-                    style={{ width: `${Math.max(usageRatio * 100, usedCount > 0 ? 3 : 0)}%` }}
-                  />
-                </div>
-                {!isUnlimited && (
-                  <p className="text-[10px] text-on-surface-variant mt-1.5 text-right">
-                    Còn lại: {Math.max(0, maxUses - usedCount).toLocaleString('vi-VN')} lượt
-                  </p>
+
+                {userVouchers.length === 0 ? (
+                  <div className="text-center py-10 px-4">
+                    <div
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3"
+                      style={{ background: '#F1F5F9' }}
+                    >
+                      <span className="material-symbols-outlined text-3xl text-gray-300">group_off</span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-500">Chưa có ai lưu voucher này</p>
+                    <p className="text-xs text-gray-400 mt-1">Voucher sẽ xuất hiện ở đây khi có người sử dụng</p>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-gray-50">
+                    {userVouchers.map((uv) => (
+                      <li
+                        key={uv.id}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50/70 transition-colors"
+                      >
+                        {/* Avatar */}
+                        {uv.user?.avatarUrl ? (
+                          <img
+                            src={uv.user.avatarUrl}
+                            alt={uv.user.fullName}
+                            className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm"
+                          />
+                        ) : (
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 ring-2 ring-white shadow-sm"
+                            style={{ background: 'linear-gradient(135deg, #BFDBFE, #C4B5FD)' }}
+                          >
+                            <span className="text-blue-700 text-xs font-bold">{getInitials(uv.user?.fullName)}</span>
+                          </div>
+                        )}
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{uv.user?.fullName ?? '—'}</p>
+                          <p className="text-xs text-gray-400 truncate">{uv.user?.email ?? '—'}</p>
+                        </div>
+
+                        {/* Status + Time */}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                            style={
+                              uv.isUsed
+                                ? { background: 'rgba(16,185,129,0.1)', color: '#059669', border: '1px solid rgba(16,185,129,0.2)' }
+                                : { background: '#F1F5F9', color: '#64748b' }
+                            }
+                          >
+                            {uv.isUsed && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
+                            {uv.isUsed ? 'Đã dùng' : 'Đã lưu'}
+                          </span>
+                          <span className="text-[10px] text-gray-400">{formatDateTime(uv.savedAt)}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {savedCount > 20 && (
+                  <div className="px-4 py-3 border-t border-gray-50 text-center">
+                    <p className="text-xs text-gray-400">Hiển thị 20/{savedCount} người gần nhất</p>
+                  </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ── Metadata ─── */}
-          {data && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-surface-container-low/40 rounded-2xl p-4 border border-outline-variant/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center">
-                    <span className="material-symbols-outlined text-outline text-sm" aria-hidden="true">event</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Hết Hạn</p>
-                </div>
-                <p className="text-sm font-bold text-on-surface">
-                  {isNeverExpires(data.expiresAt) ? (
-                    <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
-                      <span className="material-symbols-outlined text-base" aria-hidden="true">all_inclusive</span>
-                      Không có ngày hết hạn
-                    </span>
-                  ) : formatDate(data.expiresAt)}
-                </p>
-              </div>
-              <div className="bg-surface-container-low/40 rounded-2xl p-4 border border-outline-variant/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center">
-                    <span className="material-symbols-outlined text-outline text-sm" aria-hidden="true">calendar_add_on</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Ngày Tạo</p>
-                </div>
-                <p className="text-sm font-bold text-on-surface">{formatDate(data.createdAt)}</p>
-              </div>
-            </div>
-          )}
-
-          {/* ── User Redemptions ─── */}
-          {data && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">
-                  Người Dùng Gần Đây
-                </p>
-                <span className="text-[11px] font-semibold text-on-surface-variant bg-surface-container rounded-full px-2.5 py-1">
-                  {savedCount} người đã lưu
-                </span>
-              </div>
-
-              {userVouchers.length === 0 ? (
-                <div className="text-center py-10 bg-surface-container-low/40 rounded-2xl border border-dashed border-outline-variant/20">
-                  <span className="material-symbols-outlined text-3xl text-outline/50 mb-2 block" aria-hidden="true">group_off</span>
-                  <p className="text-sm font-medium text-on-surface-variant">Chưa có ai lưu voucher này</p>
-                  <p className="text-xs text-outline mt-1">Voucher sẽ xuất hiện ở đây khi có người sử dụng</p>
-                </div>
-              ) : (
-                <ul className="space-y-1.5">
-                  {userVouchers.map((uv) => (
-                    <li
-                      key={uv.id}
-                      className="flex items-center gap-3 px-3.5 py-3 rounded-2xl hover:bg-surface-container-low/60 transition-colors"
-                    >
-                      {/* Avatar */}
-                      {uv.user?.avatarUrl ? (
-                        <img src={uv.user.avatarUrl} alt={uv.user.fullName} className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-surface" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center shrink-0 ring-2 ring-surface">
-                          <span className="text-primary text-xs font-bold">{getInitials(uv.user?.fullName)}</span>
-                        </div>
-                      )}
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-on-surface truncate">{uv.user?.fullName ?? '—'}</p>
-                        <p className="text-xs text-on-surface-variant truncate">{uv.user?.email ?? '—'}</p>
-                      </div>
-
-                      {/* Status + Time */}
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          uv.isUsed
-                            ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200'
-                            : 'bg-surface-container text-on-surface-variant'
-                        }`}>
-                          {uv.isUsed && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
-                          {uv.isUsed ? 'Đã dùng' : 'Đã lưu'}
-                        </span>
-                        <span className="text-[10px] text-outline">{formatDateTime(uv.savedAt)}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {savedCount > 20 && (
-                <p className="text-center text-xs text-on-surface-variant mt-3 py-2 bg-surface-container-low/40 rounded-xl">
-                  Hiển thị 20/{savedCount} người gần nhất
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Bottom padding */}
-          <div className="h-1" />
+            {/* Bottom padding */}
+            <div className="h-1" />
+          </div>
         </div>
       </div>
     </div>

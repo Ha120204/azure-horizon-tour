@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import AdminPagination from '@/app/components/admin/AdminPagination';
+import { API_BASE_URL } from '@/app/lib/constants';
 
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -25,7 +26,7 @@ interface BookingTour {
 interface Booking {
   id: number;
   bookingCode: string;
-  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+  status: 'PENDING' | 'CONFIRMED' | 'CANCEL_REQUESTED' | 'CANCELLED';
   paymentStatus: 'UNPAID' | 'PAID' | 'FAILED';
   numberOfPeople: number;
   totalPrice: number;
@@ -53,10 +54,8 @@ interface Meta {
   itemsPerPage: number;
 }
 
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const API = 'http://localhost:3000';
-
 const fmt = (n: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
 
@@ -89,9 +88,10 @@ const AVATAR_COLORS = [
 // ─── Config Maps ─────────────────────────────────────────────────────────────
 
 const STATUS_CFG: Record<string, { label: string; dot: string; badge: string; icon: string }> = {
-  PENDING:   { label: 'Chờ xử lý',   dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-200',     icon: 'schedule'      },
-  CONFIRMED: { label: 'Đã xác nhận', dot: 'bg-emerald-400', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'check_circle'  },
-  CANCELLED: { label: 'Đã hủy',      dot: 'bg-red-400',     badge: 'bg-red-50 text-red-600 border-red-200',            icon: 'cancel'        },
+  PENDING:          { label: 'Chờ xử lý',    dot: 'bg-amber-400',   badge: 'bg-amber-50 text-amber-700 border-amber-200',         icon: 'schedule'      },
+  CONFIRMED:        { label: 'Đã xác nhận',  dot: 'bg-emerald-400', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',   icon: 'check_circle'  },
+  CANCEL_REQUESTED: { label: 'Chờ Duyệt Hủy', dot: 'bg-orange-400',  badge: 'bg-orange-50 text-orange-600 border-orange-200',       icon: 'pending'       },
+  CANCELLED:        { label: 'Đã hủy',       dot: 'bg-red-400',     badge: 'bg-red-50 text-red-600 border-red-200',                icon: 'cancel'        },
 };
 
 const PAY_CFG: Record<string, { label: string; badge: string; icon: string }> = {
@@ -162,7 +162,7 @@ function BookingDetailModal({
     setIsConfirming(true);
     setConfirmError('');
     try {
-      const res = await fetchWithAuth(`${API}/booking/admin/${booking.id}/confirm-manual`, { method: 'PATCH' });
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/confirm-manual`, { method: 'PATCH' });
       const json = await res.json();
       if (!res.ok) {
         const msg = json?.message ?? 'Xác nhận thất bại';
@@ -381,6 +381,231 @@ function BookingDetailModal({
   );
 }
 
+// ─── Cancel Request Panel ─────────────────────────────────────────────────────
+interface CancelRequest {
+  id: number;
+  bookingCode: string;
+  cancelReason: string;
+  cancelRequestedAt: string;
+  refundAmount: number;
+  refundNote: string;
+  totalPrice: number;
+  numberOfPeople: number;
+  user: { fullName: string; email: string; avatarUrl?: string };
+  tour: { name: string; startDate: string; imageUrl?: string } | null;
+}
+
+function CancelRequestPanel({ onActionDone }: { onActionDone: () => void }) {
+  const [requests, setRequests] = useState<CancelRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [actionState, setActionState] = useState<Record<number, { loading: boolean; note: string; mode: 'approve' | 'reject' | null }>>({});
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  const showToast = (msg: string, ok = true) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const fetchRequests = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/cancel-requests`);
+      const json = await res.json();
+      setRequests(json?.data ?? []);
+    } catch {
+      showToast('Lỗi tải danh sách yêu cầu hủy', false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchRequests(); }, []);
+
+  const initAction = (id: number, mode: 'approve' | 'reject') =>
+    setActionState(prev => ({ ...prev, [id]: { loading: false, note: '', mode } }));
+
+  const cancelAction = (id: number) =>
+    setActionState(prev => ({ ...prev, [id]: { loading: false, note: '', mode: null } }));
+
+  const handleApprove = async (id: number) => {
+    const state = actionState[id];
+    setActionState(prev => ({ ...prev, [id]: { ...prev[id], loading: true } }));
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${id}/approve-cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminNote: state?.note || undefined }),
+      });
+      if (!res.ok) throw new Error();
+      showToast('✅ Đã duyệt hủy booking và hoàn trả ghế');
+      fetchRequests();
+      onActionDone();
+    } catch {
+      showToast('Lỗi duyệt yêu cầu hủy', false);
+    } finally {
+      setActionState(prev => ({ ...prev, [id]: { ...prev[id], loading: false, mode: null } }));
+    }
+  };
+
+  const handleReject = async (id: number) => {
+    const state = actionState[id];
+    if (!state?.note?.trim()) {
+      showToast('Vui lòng nhập lý do từ chối', false);
+      return;
+    }
+    setActionState(prev => ({ ...prev, [id]: { ...prev[id], loading: true } }));
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${id}/reject-cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejectReason: state.note.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      showToast('ℹ️ Đã từ chối yêu cầu hủy, booking tiếp tục hiệu lực');
+      fetchRequests();
+      onActionDone();
+    } catch {
+      showToast('Lỗi từ chối yêu cầu hủy', false);
+    } finally {
+      setActionState(prev => ({ ...prev, [id]: { ...prev[id], loading: false, mode: null } }));
+    }
+  };
+
+  if (isLoading) return (
+    <div className="bg-surface-container-lowest rounded-2xl border border-orange-200 p-6 mb-6 animate-pulse">
+      <div className="h-5 w-48 bg-surface-container-high rounded mb-4" />
+      {[1, 2].map(i => <div key={i} className="h-20 bg-surface-container rounded-xl mb-3" />)}
+    </div>
+  );
+
+  if (requests.length === 0) return null;
+
+  return (
+    <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-6 mb-6">
+      {toast && (
+        <div className={`fixed top-6 right-6 z-[9999] px-5 py-3 rounded-xl shadow-lg text-white text-sm font-semibold flex items-center gap-2 ${toast.ok ? 'bg-emerald-500' : 'bg-red-500'}`}>
+          {toast.msg}
+        </div>
+      )}
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+          <span className="material-symbols-outlined text-orange-600 text-xl animate-pulse">pending_actions</span>
+        </div>
+        <div>
+          <h2 className="font-bold text-orange-800 text-base">Yêu Cầu Hủy Tour Chờ Duyệt</h2>
+          <p className="text-xs text-orange-600">{requests.length} yêu cầu đang chờ xử lý</p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {requests.map(req => {
+          const as = actionState[req.id];
+          const colorIdx = (req.user.fullName.charCodeAt(0) || 0) % AVATAR_COLORS.length;
+          return (
+            <div key={req.id} className="bg-white rounded-xl border border-orange-100 p-5 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center gap-4">
+                {/* User info */}
+                <div className="flex items-center gap-3 min-w-[200px]">
+                  {req.user.avatarUrl ? (
+                    <img src={req.user.avatarUrl} alt={req.user.fullName} className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${AVATAR_COLORS[colorIdx]} flex items-center justify-center text-white text-xs font-bold`}>
+                      {getInitials(req.user.fullName)}
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-bold text-sm text-slate-800">{req.user.fullName}</p>
+                    <p className="text-xs text-slate-500">{req.user.email}</p>
+                  </div>
+                </div>
+
+                {/* Booking info */}
+                <div className="flex-1 space-y-1">
+                  <p className="font-mono text-sm font-bold text-orange-700">{req.bookingCode}</p>
+                  <p className="text-sm text-slate-700 font-medium">{req.tour?.name ?? '—'}</p>
+                  <p className="text-xs text-slate-500">Lý do: <span className="font-medium text-slate-700">{req.cancelReason}</span></p>
+                  <p className="text-xs text-slate-400">Gửi lúc: {req.cancelRequestedAt ? new Date(req.cancelRequestedAt).toLocaleString('vi-VN') : '—'}</p>
+                </div>
+
+                {/* Refund info */}
+                <div className="text-right min-w-[140px]">
+                  <p className="text-xs text-slate-500 mb-0.5">Dự kiến hoàn</p>
+                  <p className={`text-lg font-extrabold ${req.refundAmount > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {req.refundAmount > 0 ? req.refundAmount.toLocaleString('vi-VN') + 'đ' : 'Không hoàn'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">{req.refundNote}</p>
+                </div>
+
+                {/* Action buttons */}
+                {!as?.mode ? (
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => initAction(req.id, 'approve')}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-base">check_circle</span>
+                      Duyệt
+                    </button>
+                    <button
+                      onClick={() => initAction(req.id, 'reject')}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl border-2 border-red-300 text-red-600 text-sm font-bold hover:bg-red-50 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-base">cancel</span>
+                      Từ Chối
+                    </button>
+                  </div>
+                ) : (
+                  <div className="shrink-0 w-full md:w-64">
+                    {as.mode === 'approve' ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-emerald-700">Ghi chú duyệt (tùy chọn):</p>
+                        <input
+                          type="text"
+                          placeholder="Vd: Đã kiểm tra, xác nhận hoàn tiền..."
+                          value={as.note}
+                          onChange={e => setActionState(prev => ({ ...prev, [req.id]: { ...prev[req.id], note: e.target.value } }))}
+                          className="w-full border border-emerald-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                        />
+                        <div className="flex gap-2">
+                          <button onClick={() => handleApprove(req.id)} disabled={as.loading}
+                            className="flex-1 py-2 rounded-lg bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 disabled:opacity-60 flex items-center justify-center gap-1">
+                            {as.loading ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <span className="material-symbols-outlined text-base">check</span>}
+                            Xác Nhận Duyệt
+                          </button>
+                          <button onClick={() => cancelAction(req.id)} className="px-3 py-2 rounded-lg border text-slate-500 text-sm hover:bg-slate-50">Hủy</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-red-600">Lý do từ chối <span className="text-red-500">*</span>:</p>
+                        <input
+                          type="text"
+                          placeholder="Nhập lý do từ chối..."
+                          value={as.note}
+                          onChange={e => setActionState(prev => ({ ...prev, [req.id]: { ...prev[req.id], note: e.target.value } }))}
+                          className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                        />
+                        <div className="flex gap-2">
+                          <button onClick={() => handleReject(req.id)} disabled={as.loading}
+                            className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-bold hover:bg-red-600 disabled:opacity-60 flex items-center justify-center gap-1">
+                            {as.loading ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <span className="material-symbols-outlined text-base">close</span>}
+                            Xác Nhận Từ Chối
+                          </button>
+                          <button onClick={() => cancelAction(req.id)} className="px-3 py-2 rounded-lg border text-slate-500 text-sm hover:bg-slate-50">Hủy</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function BookingManagementPage() {
@@ -438,7 +663,7 @@ export default function BookingManagementPage() {
     try {
       const qs = buildQs({ page: String(page), limit: String(pageSize) });
 
-      const res = await fetchWithAuth(`${API}/booking/admin/all?${qs}`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/all?${qs}`);
       const json = await res.json();
       if (!res.ok) throw new Error();
       const payload = json?.data ?? json;
@@ -474,7 +699,7 @@ export default function BookingManagementPage() {
     setIsExporting(true);
     try {
       const qs = buildQs({ page: '1', limit: '99999' });
-      const res = await fetchWithAuth(`${API}/booking/admin/all?${qs}`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/all?${qs}`);
       const json = await res.json();
       const payload = json?.data ?? json;
       const allBookings: Booking[] = payload.bookings ?? [];
@@ -606,6 +831,9 @@ export default function BookingManagementPage() {
         </div>
       </div>
 
+      {/* ── Cancel Requests Panel ────────────────────────────── */}
+      <CancelRequestPanel onActionDone={fetchBookings} />
+
       {/* ── KPI Cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {kpis.map((k) => (
@@ -649,6 +877,7 @@ export default function BookingManagementPage() {
               <option value="">Tất cả trạng thái</option>
               <option value="PENDING">Chờ xử lý</option>
               <option value="CONFIRMED">Đã xác nhận</option>
+              <option value="CANCEL_REQUESTED">Chờ Duyệt Hủy ⚠️</option>
               <option value="CANCELLED">Đã hủy</option>
             </select>
 

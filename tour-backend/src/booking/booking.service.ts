@@ -421,7 +421,7 @@ export class BookingService {
       where: {
         userId,
         deletedAt: null,
-        status: { not: 'CANCELLED' }, // Ẩn booking đã hủy khỏi lịch sử khách hàng
+        // Hiện tất cả trạng thái, kể cả CANCELLED và CANCEL_REQUESTED
       },
       include: { tour: true },
       orderBy: { createdAt: 'desc' },
@@ -641,6 +641,297 @@ export class BookingService {
       this.logger.error('Lỗi khi proxy ảnh:', error.message);
       throw new NotFoundException('Failed to proxy image');
     }
+  }
+
+  // ============ CANCELLATION FLOW ============
+
+  /**
+   * Tính số tiền hoàn theo chính sách 3 tier:
+   * >= 7 ngày trước khởi hành → hoàn 100%
+   * 3-6 ngày → hoàn 50%
+   * < 3 ngày hoặc đã qua → không hoàn
+   * PENDING (chưa thanh toán) → hoàn 100% ngay
+   */
+  calculateRefund(booking: {
+    paymentStatus: string;
+    totalPrice: number;
+    tour: { startDate: Date };
+  }): { refundAmount: number; refundNote: string; policyTier: string } {
+    if (booking.paymentStatus !== 'PAID') {
+      return {
+        refundAmount: Number(booking.totalPrice),
+        refundNote: 'Hoàn 100% — chưa thanh toán',
+        policyTier: 'FULL_UNPAID',
+      };
+    }
+
+    const now = new Date();
+    const tourStart = new Date(booking.tour.startDate);
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysUntilTour = Math.ceil((tourStart.getTime() - now.getTime()) / msPerDay);
+
+    if (daysUntilTour >= 7) {
+      return {
+        refundAmount: Number(booking.totalPrice),
+        refundNote: 'Hoàn 100% (hủy trước 7 ngày khởi hành)',
+        policyTier: 'FULL_REFUND',
+      };
+    } else if (daysUntilTour >= 3) {
+      return {
+        refundAmount: Number(booking.totalPrice) * 0.5,
+        refundNote: 'Hoàn 50% (hủy trong vòng 3-6 ngày trước khởi hành)',
+        policyTier: 'HALF_REFUND',
+      };
+    } else {
+      return {
+        refundAmount: 0,
+        refundNote: 'Không hoàn tiền (hủy dưới 3 ngày hoặc sau ngày khởi hành)',
+        policyTier: 'NO_REFUND',
+      };
+    }
+  }
+
+  /**
+   * Khách hàng gửi yêu cầu hủy booking.
+   * - PENDING (chưa thanh toán): hủy ngay, không cần admin duyệt.
+   * - CONFIRMED (đã thanh toán): chuyển sang CANCEL_REQUESTED, chờ admin.
+   */
+  async requestCancellation(bookingId: number, userId: number, reason: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+      include: { user: true, tour: true },
+    });
+
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.userId !== userId) throw new BadRequestException('Không có quyền hủy booking này');
+
+    if (booking.status === 'CANCELLED') {
+      throw new BadRequestException('Booking này đã được hủy trước đó');
+    }
+    if (booking.status === 'CANCEL_REQUESTED') {
+      throw new BadRequestException('Yêu cầu hủy của bạn đang chờ xử lý');
+    }
+
+    const { refundAmount, refundNote } = this.calculateRefund({
+      paymentStatus: booking.paymentStatus,
+      totalPrice: Number(booking.totalPrice),
+      tour: booking.tour,
+    });
+
+    // PENDING = chưa thanh toán → hủy ngay, hoàn ghế
+    if (booking.status === 'PENDING') {
+      await this.prisma.$transaction([
+        this.prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: 'CANCELLED',
+            cancelReason: reason,
+            cancelledAt: new Date(),
+            cancelledBy: 'CUSTOMER',
+            refundAmount: 0, // Chưa thanh toán → không có tiền để hoàn
+            refundNote: 'Hủy trước khi thanh toán',
+          },
+        }),
+        this.prisma.tour.update({
+          where: { id: booking.tourId },
+          data: { availableSeats: { increment: booking.numberOfPeople } },
+        }),
+      ]);
+
+      this.logger.log(`[CANCEL] Khách hủy booking PENDING #${bookingId} trước khi thanh toán`);
+      return { message: 'Đã hủy đặt tour thành công', refundAmount: 0, refundNote: 'Chưa thanh toán — không có hoàn tiền' };
+    }
+
+    // CONFIRMED = đã thanh toán → chuyển sang CANCEL_REQUESTED, chờ admin
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: 'CANCEL_REQUESTED',
+        cancelReason: reason,
+        cancelRequestedAt: new Date(),
+        refundAmount,
+        refundNote,
+      },
+    });
+
+    // Gửi email xác nhận cho khách
+    try {
+      if (booking.user?.email) {
+        await this.mailService.sendCancelRequestConfirmation({
+          to: booking.user.email,
+          customerName: booking.user.fullName,
+          bookingCode: booking.bookingCode,
+          tourName: booking.tour.name,
+          cancelReason: reason,
+          refundAmount,
+          refundNote,
+        });
+      }
+    } catch (emailError) {
+      this.logger.error('[EMAIL] Lỗi gửi email yêu cầu hủy:', emailError);
+    }
+
+    this.logger.log(`[CANCEL] Booking #${bookingId} chuyển sang CANCEL_REQUESTED. Dự kiến hoàn: ${refundAmount}đ`);
+    return { message: 'Yêu cầu hủy đã được ghi nhận, đang chờ xử lý', refundAmount, refundNote };
+  }
+
+  /**
+   * Admin duyệt yêu cầu hủy → CANCELLED + hoàn ghế
+   */
+  async approveCancellation(bookingId: number, adminNote?: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+      include: { user: true, tour: true },
+    });
+
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.status !== 'CANCEL_REQUESTED') {
+      throw new BadRequestException('Booking này không ở trạng thái chờ duyệt hủy');
+    }
+
+    const refundAmount = Number(booking.refundAmount ?? 0);
+
+    await this.prisma.$transaction([
+      this.prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'FAILED',
+          cancelledAt: new Date(),
+          cancelledBy: 'ADMIN',
+          refundNote: adminNote || booking.refundNote,
+        },
+      }),
+      this.prisma.tour.update({
+        where: { id: booking.tourId },
+        data: { availableSeats: { increment: booking.numberOfPeople } },
+      }),
+    ]);
+
+    // Ghi log PaymentTransaction REFUND nếu có hoàn tiền
+    if (refundAmount > 0) {
+      await this.prisma.paymentTransaction.create({
+        data: {
+          bookingId,
+          gateway: 'MANUAL',
+          amount: refundAmount,
+          status: 'SUCCESS',
+          transactionRef: `REFUND-${bookingId}-${Date.now()}`,
+        },
+      });
+    }
+
+    // Gửi email thông báo cho khách
+    try {
+      if (booking.user?.email) {
+        await this.mailService.sendCancellationApproved({
+          to: booking.user.email,
+          customerName: booking.user.fullName,
+          bookingCode: booking.bookingCode,
+          tourName: booking.tour.name,
+          refundAmount,
+          adminNote,
+        });
+      }
+    } catch (emailError) {
+      this.logger.error('[EMAIL] Lỗi gửi email duyệt hủy:', emailError);
+    }
+
+    this.logger.log(`[ADMIN] Đã duyệt hủy booking #${bookingId}. Hoàn tiền: ${refundAmount}đ`);
+    return { message: 'Đã duyệt hủy booking và hoàn trả ghế', refundAmount };
+  }
+
+  /**
+   * Admin từ chối yêu cầu hủy → CONFIRMED trở lại
+   */
+  async rejectCancellation(bookingId: number, rejectReason: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+      include: { user: true, tour: true },
+    });
+
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.status !== 'CANCEL_REQUESTED') {
+      throw new BadRequestException('Booking này không ở trạng thái chờ duyệt hủy');
+    }
+
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: 'CONFIRMED',
+        cancelReason: null,
+        cancelRequestedAt: null,
+        refundAmount: null,
+        refundNote: rejectReason,
+      },
+    });
+
+    // Gửi email thông báo từ chối cho khách
+    try {
+      if (booking.user?.email) {
+        await this.mailService.sendCancellationRejected({
+          to: booking.user.email,
+          customerName: booking.user.fullName,
+          bookingCode: booking.bookingCode,
+          tourName: booking.tour.name,
+          rejectReason,
+        });
+      }
+    } catch (emailError) {
+      this.logger.error('[EMAIL] Lỗi gửi email từ chối hủy:', emailError);
+    }
+
+    this.logger.log(`[ADMIN] Đã từ chối hủy booking #${bookingId}. Lý do: ${rejectReason}`);
+    return { message: 'Đã từ chối yêu cầu hủy, booking tiếp tục hiệu lực' };
+  }
+
+  /**
+   * Admin lấy danh sách yêu cầu hủy đang chờ xử lý
+   */
+  async getCancelRequests() {
+    const requests = await this.prisma.booking.findMany({
+      where: { status: 'CANCEL_REQUESTED', deletedAt: null },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+        tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, startDate: true } },
+      },
+      orderBy: { cancelRequestedAt: 'asc' }, // Xử lý theo thứ tự gửi
+    });
+
+    return requests.map(b => ({
+      ...b,
+      totalPrice: Number(b.totalPrice),
+      unitPriceAtBooking: Number(b.unitPriceAtBooking),
+      discountAmount: Number(b.discountAmount),
+      refundAmount: Number(b.refundAmount ?? 0),
+    }));
+  }
+
+  /**
+   * Quick stats for Staff Dashboard (no revenue, just booking counts).
+   * Accessible by STAFF | ADMIN | SUPER_ADMIN.
+   */
+  async getAdminQuickStats() {
+    const [grouped, myToursCount] = await Promise.all([
+      this.prisma.booking.groupBy({
+        by: ['status'],
+        where: { deletedAt: null },
+        _count: { status: true },
+      }),
+      this.prisma.tour.count({ where: { deletedAt: null, status: 'PUBLISHED' } }),
+    ]);
+
+    const map: Record<string, number> = {};
+    for (const row of grouped) map[row.status] = row._count.status;
+
+    return {
+      pending: map['PENDING'] || 0,
+      confirmed: map['CONFIRMED'] || 0,
+      cancelRequested: map['CANCEL_REQUESTED'] || 0,
+      cancelled: map['CANCELLED'] || 0,
+      total: Object.values(map).reduce((a, b) => a + b, 0),
+      publishedTours: myToursCount,
+    };
   }
 
   findAll() {

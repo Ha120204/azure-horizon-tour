@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Ip, Query, Req, Res, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Ip, Query, Req, Res, BadRequestException, Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
@@ -7,6 +7,20 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { PaymentService } from '../payment/payment.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
+
+// ─── Guards ───────────────────────────────────────────────────────────────────
+
+/** Cho phép STAFF, ADMIN, SUPER_ADMIN — chặn CUSTOMER */
+@Injectable()
+class StaffOrAdminGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext): boolean {
+    const role = ctx.switchToHttp().getRequest().user?.role;
+    if (role !== 'ADMIN' && role !== 'SUPER_ADMIN' && role !== 'STAFF') {
+      throw new ForbiddenException('Bạn không có quyền truy cập tính năng này');
+    }
+    return true;
+  }
+}
 
 @Controller('booking')
 export class BookingController {
@@ -101,10 +115,21 @@ export class BookingController {
   }
 
   /**
-   * Admin: Lấy toàn bộ booking (có filter)
+   * Staff + Admin: Quick stats (số lượng booking theo status, không có doanh thu)
+   * GET /booking/admin/stats
+   */
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Get('admin/stats')
+  async getAdminQuickStats() {
+    const data = await this.bookingService.getAdminQuickStats();
+    return { message: 'Success', data };
+  }
+
+  /**
+   * Staff + Admin: Lấy toàn bộ booking (có filter) — Staff chỉ đọc
    * GET /booking/admin/all?status=PENDING&paymentStatus=UNPAID&search=BKG
    */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
   @Get('admin/all')
   async getAllBookings(
     @Query('status') status?: string,
@@ -131,6 +156,69 @@ export class BookingController {
   @Post(':id/retry-payment')
   async retryPayment(@Param('id') id: string, @Req() req: any) {
     return this.bookingService.retryPayment(Number(id), req.user.userId);
+  }
+
+  /**
+   * Khách hàng gửi yêu cầu hủy booking
+   * POST /booking/:id/cancel-request
+   * Body: { reason: string }
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post(':id/cancel-request')
+  @AuditLog('CANCEL_BOOKING', 'Booking')
+  async requestCancellation(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @Req() req: any,
+  ) {
+    if (!reason || reason.trim().length < 3) {
+      throw new BadRequestException('Vui lòng cung cấp lý do hủy hợp lệ');
+    }
+    return this.bookingService.requestCancellation(Number(id), req.user.userId, reason.trim());
+  }
+
+  /**
+   * Admin lấy danh sách yêu cầu hủy đang chờ
+   * GET /booking/admin/cancel-requests
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Get('admin/cancel-requests')
+  async getCancelRequests() {
+    const data = await this.bookingService.getCancelRequests();
+    return { message: 'Success', data };
+  }
+
+  /**
+   * Admin duyệt yêu cầu hủy
+   * POST /booking/admin/:id/approve-cancel
+   * Body: { adminNote?: string }
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('admin/:id/approve-cancel')
+  @AuditLog('UPDATE', 'Booking')
+  async approveCancellation(
+    @Param('id') id: string,
+    @Body('adminNote') adminNote?: string,
+  ) {
+    return this.bookingService.approveCancellation(Number(id), adminNote);
+  }
+
+  /**
+   * Admin từ chối yêu cầu hủy
+   * POST /booking/admin/:id/reject-cancel
+   * Body: { rejectReason: string }
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('admin/:id/reject-cancel')
+  @AuditLog('UPDATE', 'Booking')
+  async rejectCancellation(
+    @Param('id') id: string,
+    @Body('rejectReason') rejectReason: string,
+  ) {
+    if (!rejectReason || rejectReason.trim().length < 3) {
+      throw new BadRequestException('Vui lòng cung cấp lý do từ chối');
+    }
+    return this.bookingService.rejectCancellation(Number(id), rejectReason.trim());
   }
 
   @Get('code/:bookingCode')

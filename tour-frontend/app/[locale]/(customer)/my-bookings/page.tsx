@@ -15,7 +15,7 @@ export default function MyBookingsPage() {
     const { t, formatPrice } = useLocale();
     const router = useRouter();
 
-    const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'UNPAID'>('ALL');
+    const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'UNPAID' | 'CANCELLED'>('ALL');
 
     useEffect(() => {
         const fetchMyBookings = async () => {
@@ -47,8 +47,13 @@ export default function MyBookingsPage() {
 
     const filteredBookings = bookings.filter(booking => {
         if (filterStatus === 'ALL') return true;
-        return booking.paymentStatus === filterStatus;
+        if (filterStatus === 'PAID') return booking.paymentStatus === 'PAID' && booking.status === 'CONFIRMED';
+        if (filterStatus === 'UNPAID') return booking.paymentStatus === 'UNPAID' && booking.status === 'PENDING';
+        if (filterStatus === 'CANCELLED') return booking.status === 'CANCELLED' || booking.status === 'CANCEL_REQUESTED';
+        return true;
     });
+
+    const cancelledCount = bookings.filter(b => b.status === 'CANCELLED' || b.status === 'CANCEL_REQUESTED').length;
 
     return (
         <div className="bg-slate-50 font-body text-on-surface flex flex-col min-h-screen">
@@ -86,6 +91,16 @@ export default function MyBookingsPage() {
                             <span className="material-symbols-outlined text-[16px]">pending</span>
                             {t('my_bookings.unpaidTab')}
                         </button>
+                        {cancelledCount > 0 && (
+                            <button
+                                onClick={() => setFilterStatus('CANCELLED')}
+                                className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 flex items-center gap-2 ${filterStatus === 'CANCELLED' ? 'bg-slate-600 text-white shadow-md' : 'bg-white border border-outline-variant/30 text-on-surface-variant hover:border-slate-400/50 hover:text-slate-600'}`}
+                            >
+                                <span className="material-symbols-outlined text-[16px]">cancel</span>
+                                Đã Hủy
+                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{cancelledCount}</span>
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -142,12 +157,31 @@ export default function MyBookingsPage() {
                                                     </span>
                                                 </div>
 
-                                                <span className={`px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 border ${badgeBgColor}`}>
-                                                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
-                                                        {badgeIcon}
-                                                    </span>
-                                                    {badgeText}
-                                                </span>
+                                                {/* Dynamic status badge */}
+                                                {(() => {
+                                                    const s = booking.status;
+                                                    const p = booking.paymentStatus;
+                                                    if (s === 'CANCEL_REQUESTED') return (
+                                                        <span className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 border bg-orange-50 text-orange-600 border-orange-200">
+                                                            <span className="material-symbols-outlined text-sm animate-pulse">pending</span> Chờ Duyệt Hủy
+                                                        </span>
+                                                    );
+                                                    if (s === 'CANCELLED') return (
+                                                        <span className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 border bg-red-50 text-red-600 border-red-200">
+                                                            <span className="material-symbols-outlined text-sm">cancel</span> Đã Hủy
+                                                        </span>
+                                                    );
+                                                    if (p === 'PAID') return (
+                                                        <span className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 border bg-emerald-50 text-emerald-700 border-emerald-100">
+                                                            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span> {t('my_bookings.paidBadge')}
+                                                        </span>
+                                                    );
+                                                    return (
+                                                        <span className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-1.5 border bg-amber-50 text-amber-700 border-amber-100">
+                                                            <span className="material-symbols-outlined text-sm">pending</span> {t('my_bookings.unpaidBadge')}
+                                                        </span>
+                                                    );
+                                                })()} 
                                             </div>
 
                                             <h2 className="font-headline text-2xl md:text-3xl font-bold text-on-surface mb-6 group-hover:text-primary transition-colors">
@@ -184,7 +218,15 @@ export default function MyBookingsPage() {
                                         </div>
 
                                         <div className="flex justify-between items-center mt-2">
-                                            {!isPaid ? (
+                                            {booking.status === 'CANCELLED' ? (
+                                                <span className="text-xs text-red-500 font-medium italic flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[14px]">cancel</span> Đặt tour đã hủy
+                                                </span>
+                                            ) : booking.status === 'CANCEL_REQUESTED' ? (
+                                                <span className="text-xs text-orange-500 font-medium italic flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[14px]">pending</span> Đang chờ xử lý hủy
+                                                </span>
+                                            ) : booking.paymentStatus !== 'PAID' ? (
                                                 <span className="text-xs text-amber-600 font-medium italic flex items-center gap-1">
                                                     <span className="material-symbols-outlined text-[14px]">info</span> {t('my_bookings.plsPayLbl')}
                                                 </span>

@@ -18,6 +18,20 @@ enum Role {
   CUSTOMER
 }
 
+enum TourStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+}
+
+enum ArticleStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+}
+
 // =============================================
 // BẢNG NGƯỜI DÙNG (USER)
 // =============================================
@@ -35,11 +49,16 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // [PHASE 1] Soft Delete                     
 
-  bookings     Booking[]
-  userVouchers UserVoucher[]
-  chatSessions ChatSession[]
-  reviews      Review[]
-  systemLogs   SystemLog[]
+  bookings        Booking[]
+  userVouchers    UserVoucher[]
+  chatSessions    ChatSession[]
+  reviews         Review[]
+  systemLogs      SystemLog[]
+  supportTickets  SupportTicket[]
+  createdTours    Tour[]    @relation("TourCreatedBy")
+  reviewedTours   Tour[]    @relation("TourReviewedBy")
+  createdArticles Article[] @relation("ArticleCreatedBy")
+  reviewedArticles Article[] @relation("ArticleReviewedBy")
 }
 
 // =============================================
@@ -80,6 +99,16 @@ model Tour {
   tourType       String      @default("Luxury Retreat")
   departurePoint String?                             // Điểm khởi hành mặc định (VD: "TP. Hồ Chí Minh")
   
+  // ── Workflow fields ──────────────────────────────────────────────
+  status         TourStatus  @default(PUBLISHED)    // Trạng thái duyệt
+  publishedAt    DateTime?                           // Thời điểm xuất bản
+  reviewNote     String?     @db.Text               // Lý do từ chối (Admin ghi)
+  createdById    Int?                               // Staff/Admin tạo
+  reviewedById   Int?                               // Admin duyệt/từ chối
+  createdBy      User?       @relation("TourCreatedBy",  fields: [createdById],  references: [id], onDelete: SetNull)
+  reviewedBy     User?       @relation("TourReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  // ─────────────────────────────────────────────────────────────────
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   deletedAt      DateTime?   // [PHASE 1] Soft Delete
@@ -96,6 +125,7 @@ model Tour {
   @@index([destinationId, startDate])  // [PHASE 1] Index tăng tốc filter
   @@index([tourType, price])           // [PHASE 1] Index tăng tốc filter
 }
+
 
 // =============================================
 // BẢNG LỊCH TRÌNH TOUR THEO NGÀY (PHASE 1 - MỚI)
@@ -213,9 +243,10 @@ model TourDeparture {
 
 // --- CÁC ENUM CHO ĐẶT TOUR ---
 enum BookingStatus {
-  PENDING   // Chờ xác nhận
-  CONFIRMED // Đã chốt
-  CANCELLED // Đã hủy
+  PENDING            // Chờ xác nhận
+  CONFIRMED          // Đã chốt
+  CANCEL_REQUESTED   // Khách đã gửi yêu cầu hủy, chờ Admin duyệt
+  CANCELLED          // Đã hủy
 }
 
 enum PaymentStatus {
@@ -248,6 +279,15 @@ model Booking {
   
   voucherCode      String?       // Mã voucher đã áp dụng (nếu có)
   discountAmount   Float         @default(0) // Số tiền đã giảm (VNĐ)
+
+  // ── Cancellation fields ──────────────────────────────────────────
+  cancelReason        String?   @db.Text  // Lý do hủy của khách
+  cancelRequestedAt   DateTime?           // Thời điểm gửi yêu cầu hủy
+  cancelledAt         DateTime?           // Thời điểm thực sự hủy
+  cancelledBy         String?             // "CUSTOMER" | "ADMIN" | "SYSTEM"
+  refundAmount        Float?              // Số tiền hoàn lại thực tế (VNĐ)
+  refundNote          String?   @db.Text  // Ghi chú hoàn tiền / lý do từ chối
+  // ─────────────────────────────────────────────────────────────────
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -343,19 +383,29 @@ model UserVoucher {
 
 // --- HỆ THỐNG BÀI VIẾT (JOURNAL / BLOG) ---
 model Article {
-  id          Int      @id @default(autoincrement())
-  slug        String   @unique               // URL thân thiện: "whispers-of-the-highlands"
-  category    String                          // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
+  id          Int           @id @default(autoincrement())
+  slug        String        @unique               // URL thân thiện
+  category    String                              // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
   title       String
-  excerpt     String   @db.Text              // Tóm tắt ngắn hiển thị trên card
-  content     String   @db.Text              // Nội dung đầy đủ (HTML)
+  excerpt     String        @db.Text              // Tóm tắt ngắn hiển thị trên card
+  content     String        @db.Text              // Nội dung đầy đủ (HTML)
   imageUrl    String
   author      String
-  readTime    Int      @default(5)           // Thời gian đọc (phút)
-  isFeatured  Boolean  @default(false)       // Bài nổi bật hiện trên hero
-  publishedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  readTime    Int           @default(5)           // Thời gian đọc (phút)
+  isFeatured  Boolean       @default(false)       // Bài nổi bật hiện trên hero
+  publishedAt DateTime?                           // Nullable để hỗ trợ DRAFT
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?                           // Soft Delete (thùng rác)
+
+  // ── Workflow fields ──────────────────────────────────────────────
+  status        ArticleStatus @default(PUBLISHED) // Trạng thái duyệt
+  reviewNote    String?       @db.Text             // Lý do từ chối (Admin ghi)
+  createdById   Int?                               // Staff/Admin tạo
+  reviewedById  Int?                               // Admin duyệt/từ chối
+  createdBy     User?         @relation("ArticleCreatedBy",  fields: [createdById],  references: [id], onDelete: SetNull)
+  reviewedBy    User?         @relation("ArticleReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  // ─────────────────────────────────────────────────────────────────
 }
 
 // --- HỢP PHẦN AI CONCIERGE (LƯU TRỮ LỊCH SỬ CHAT) ---
@@ -425,4 +475,46 @@ model SystemSetting {
   group       String             // Nhóm: "company" | "booking" | "announcement"
   updatedAt   DateTime @updatedAt
   updatedBy   Int?               // ID admin đã chỉnh sửa lần cuối
+}
+
+// =============================================
+// HỀ THỐNG HỔ TRỢ KHÁCH HÀNG (SUPPORT TICKETS)
+// =============================================
+model SupportTicket {
+  id              Int      @id @default(autoincrement())
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  bookingRef      String?                // Mã booking liên quan (nếu có)
+  subject         String
+  message         String   @db.Text
+  category        String   @default("general") // booking|payment|reschedule|complaint|general
+  status          String   @default("NEW")     // NEW|IN_PROGRESS|RESOLVED
+  assignedStaffId Int?                         // Staff được assign xử lý
+  rating          Int?                         // Đánh giá của khách sau khi RESOLVED (1-5)
+
+  // Liên kết tới tài khoản người dùng (nullable — guest submissions không có)
+  userId          Int?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  replies         TicketReply[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([customerEmail])
+  @@index([userId])
+}
+
+model TicketReply {
+  id         Int      @id @default(autoincrement())
+  ticketId   Int
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType String                          // "staff" | "customer"
+  senderName String
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId])
 }

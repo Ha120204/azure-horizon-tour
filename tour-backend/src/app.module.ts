@@ -30,6 +30,7 @@ import { SearchModule } from './search/search.module';
 import { AiModule } from './ai/ai.module';
 import { SubscriberModule } from './subscriber/subscriber.module';
 import { ContactModule } from './contact/contact.module';
+import { SupportModule } from './support/support.module';
 
 // ── Admin & Operations ────────────────────────────────────────────────────────
 import { StatisticsModule } from './statistics/statistics.module';
@@ -67,6 +68,7 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
     AiModule,
     SubscriberModule,
     ContactModule,
+    SupportModule,
 
     // Admin & Operations
     StatisticsModule,

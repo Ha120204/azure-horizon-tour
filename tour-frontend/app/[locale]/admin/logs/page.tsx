@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/app/lib/constants';
-import { useRouter } from 'next/navigation';
 
 interface UserInfo {
     id: number;
@@ -19,8 +18,8 @@ interface ActivityLog {
     resourceId: string | null;
     targetName: string | null;
     description: string;
-    oldData: any;
-    newData: any;
+    oldData: unknown;
+    newData: unknown;
     ipAddress: string | null;
     userAgent: string | null;
     createdAt: string;
@@ -58,8 +57,279 @@ const ACTION_LABELS: Record<string, string> = {
     EXPORT: 'XUẤT DỮ LIỆU',
 };
 
+type KpiFilter = 'all' | 'today' | 'CREATE' | 'UPDATE' | 'DELETE';
+type AuditRecord = Record<string, unknown>;
+
+interface AuditFieldRow {
+    key: string;
+    label: string;
+    before?: string;
+    after?: string;
+}
+
+const RESOURCE_LABELS: Record<string, string> = {
+    Article: 'Bài viết',
+    Booking: 'Đơn đặt tour',
+    Review: 'Đánh giá',
+    Subscriber: 'Subscriber',
+    SupportTicket: 'Ticket hỗ trợ',
+    Tour: 'Tour',
+    TourDeparture: 'Lịch khởi hành',
+    User: 'Người dùng',
+    Voucher: 'Mã giảm giá',
+};
+
+const FIELD_LABELS: Record<string, string> = {
+    accessCode: 'Mã truy cập',
+    assignedStaffId: 'Nhân viên phụ trách',
+    audience: 'Nhóm người nhận',
+    body: 'Nội dung',
+    bookingRef: 'Mã đặt chỗ',
+    category: 'Danh mục',
+    code: 'Mã',
+    content: 'Nội dung',
+    customerEmail: 'Email khách hàng',
+    customerName: 'Tên khách hàng',
+    customerPhone: 'Số điện thoại',
+    departureDate: 'Ngày khởi hành',
+    description: 'Mô tả',
+    discountType: 'Loại giảm giá',
+    discountValue: 'Giá trị giảm',
+    duration: 'Thời lượng',
+    email: 'Email',
+    expiresAt: 'Ngày hết hạn',
+    failedCount: 'Số lượt lỗi',
+    featured: 'Nổi bật',
+    fullName: 'Họ tên',
+    isActive: 'Trạng thái',
+    label: 'Tên hiển thị',
+    maxUses: 'Số lượt dùng tối đa',
+    message: 'Tin nhắn',
+    minOrderValue: 'Giá trị đơn tối thiểu',
+    name: 'Tên',
+    phone: 'Số điện thoại',
+    previewText: 'Đoạn xem trước',
+    price: 'Giá',
+    published: 'Đã xuất bản',
+    rating: 'Điểm đánh giá',
+    recipientEstimate: 'Số người nhận dự kiến',
+    resourceId: 'Mã đối tượng',
+    role: 'Vai trò',
+    scheduledAt: 'Thời gian gửi',
+    sentCount: 'Số lượt gửi',
+    slug: 'Đường dẫn',
+    status: 'Trạng thái',
+    subject: 'Tiêu đề',
+    title: 'Tiêu đề',
+    totalPrice: 'Tổng tiền',
+    type: 'Loại',
+    usedCount: 'Số lượt đã dùng',
+};
+
+const HIDDEN_AUDIT_FIELDS = new Set([
+    'id',
+    'createdAt',
+    'updatedAt',
+    'deletedAt',
+    'password',
+    'accessToken',
+    'refreshToken',
+]);
+
+const DETAIL_FIELD_PRIORITY = [
+    'code',
+    'label',
+    'name',
+    'title',
+    'subject',
+    'customerName',
+    'customerEmail',
+    'bookingRef',
+    'status',
+    'role',
+    'category',
+    'isActive',
+    'discountType',
+    'discountValue',
+    'minOrderValue',
+    'maxUses',
+    'usedCount',
+    'expiresAt',
+    'price',
+    'totalPrice',
+    'rating',
+    'scheduledAt',
+];
+
+const STATUS_VALUE_LABELS: Record<string, string> = {
+    ACTIVE: 'Đang hoạt động',
+    CANCELLED: 'Đã hủy',
+    CONFIRMED: 'Đã xác nhận',
+    DELETE: 'Xóa',
+    DRAFT: 'Bản nháp',
+    FAILED: 'Thất bại',
+    FIXED_AMOUNT: 'Giảm tiền cố định',
+    IN_PROGRESS: 'Đang xử lý',
+    INACTIVE: 'Tạm dừng',
+    NEW: 'Mới',
+    PENDING: 'Chờ xử lý',
+    PENDING_REVIEW: 'Chờ duyệt',
+    PERCENT: 'Giảm theo phần trăm',
+    PUBLISHED: 'Đã xuất bản',
+    REJECTED: 'Bị từ chối',
+    RESOLVED: 'Đã giải quyết',
+    SCHEDULED: 'Đã lên lịch',
+    SENDING: 'Đang gửi',
+    SENT: 'Đã gửi',
+    STAFF: 'Nhân viên',
+    SUPER_ADMIN: 'Siêu quản trị',
+    ADMIN: 'Quản trị viên',
+};
+
+const isAuditRecord = (value: unknown): value is AuditRecord =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const stringifyComparable = (value: unknown) => JSON.stringify(value ?? null);
+
+const getResourceLabel = (resource: string) => RESOURCE_LABELS[resource] ?? resource;
+
+const getFieldLabel = (field: string) => FIELD_LABELS[field] ?? field.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+
+const formatDateTimeValue = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString('vi-VN');
+};
+
+const formatMoney = (value: number) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
+
+const formatAuditValue = (field: string, value: unknown, context?: AuditRecord) => {
+    if (value === null || value === undefined || value === '') return 'Chưa có';
+    if (typeof value === 'boolean') return value ? 'Đang bật' : 'Đã tắt';
+    if (typeof value === 'number') {
+        if (field === 'discountValue' && context?.discountType === 'PERCENT') return `${value}%`;
+        if (['discountValue', 'minOrderValue', 'price', 'totalPrice', 'amount', 'refundAmount'].includes(field)) return formatMoney(value);
+        return value.toLocaleString('vi-VN');
+    }
+    if (typeof value === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTimeValue(value);
+        return STATUS_VALUE_LABELS[value] ?? value;
+    }
+    if (Array.isArray(value)) return `${value.length.toLocaleString('vi-VN')} mục`;
+    if (isAuditRecord(value)) return 'Có dữ liệu chi tiết';
+    return String(value);
+};
+
+const getRecordTitle = (log: ActivityLog) => {
+    if (log.targetName) return log.targetName;
+    const record = isAuditRecord(log.newData) ? log.newData : isAuditRecord(log.oldData) ? log.oldData : null;
+    const candidate = record?.label ?? record?.name ?? record?.title ?? record?.subject ?? record?.code ?? record?.fullName ?? record?.email;
+    return typeof candidate === 'string' && candidate.trim() ? candidate : `ID #${log.resourceId ?? log.id}`;
+};
+
+const getAuditSeverity = (log: ActivityLog) => {
+    if (['DELETE', 'ROLE_CHANGE', 'CANCEL_BOOKING'].includes(log.action)) {
+        return { label: 'Cần chú ý', className: 'bg-red-50 text-red-700 border-red-200', icon: 'priority_high' };
+    }
+    if (['Voucher', 'Booking', 'User', 'Tour'].includes(log.resource) || ['EXPORT'].includes(log.action)) {
+        return { label: 'Quan trọng', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'warning' };
+    }
+    return { label: 'Bình thường', className: 'bg-slate-100 text-slate-600 border-slate-200', icon: 'info' };
+};
+
+const getAuditSummary = (log: ActivityLog) => {
+    const actor = log.user?.fullName || 'Hệ thống';
+    const resourceLabel = getResourceLabel(log.resource).toLowerCase();
+    const target = getRecordTitle(log);
+    const quotedTarget = target ? ` "${target}"` : '';
+
+    switch (log.action) {
+        case 'CREATE':
+            return `${actor} đã tạo ${resourceLabel}${quotedTarget}.`;
+        case 'UPDATE':
+            return `${actor} đã cập nhật ${resourceLabel}${quotedTarget}.`;
+        case 'DELETE':
+            return `${actor} đã xóa ${resourceLabel}${quotedTarget}.`;
+        case 'LOGIN':
+            return `${actor} đã đăng nhập vào hệ thống.`;
+        case 'LOGOUT':
+            return `${actor} đã đăng xuất khỏi hệ thống.`;
+        case 'ROLE_CHANGE':
+            return `${actor} đã thay đổi quyền truy cập của ${resourceLabel}${quotedTarget}.`;
+        case 'CANCEL_BOOKING':
+            return `${actor} đã hủy đơn đặt tour${quotedTarget}.`;
+        case 'EXPORT':
+            return `${actor} đã xuất dữ liệu ${resourceLabel}.`;
+        default:
+            return log.description || `${actor} đã thực hiện thao tác trên ${resourceLabel}${quotedTarget}.`;
+    }
+};
+
+const getAuditImpactText = (log: ActivityLog) => {
+    switch (log.action) {
+        case 'CREATE':
+            return `${getResourceLabel(log.resource)} mới đã được ghi nhận trong hệ thống.`;
+        case 'UPDATE':
+            return `Thông tin ${getResourceLabel(log.resource).toLowerCase()} đã thay đổi. Nên kiểm tra các trường bên dưới nếu thao tác ảnh hưởng tới khách hàng.`;
+        case 'DELETE':
+            return `${getResourceLabel(log.resource)} đã bị xóa hoặc vô hiệu hóa. Đây là thao tác cần rà soát khi phát sinh khiếu nại.`;
+        case 'ROLE_CHANGE':
+            return 'Quyền truy cập thay đổi có thể ảnh hưởng trực tiếp tới bảo mật và phân quyền vận hành.';
+        case 'EXPORT':
+            return 'Dữ liệu đã được xuất ra khỏi hệ thống. Cần đảm bảo người thực hiện có đúng thẩm quyền.';
+        default:
+            return 'Bản ghi này giúp xác định người thực hiện, thời điểm và đối tượng bị tác động.';
+    }
+};
+
+const getSortedFields = (record: AuditRecord) => {
+    const keys = Object.keys(record).filter(key => !HIDDEN_AUDIT_FIELDS.has(key));
+    return keys.sort((a, b) => {
+        const ia = DETAIL_FIELD_PRIORITY.indexOf(a);
+        const ib = DETAIL_FIELD_PRIORITY.indexOf(b);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+        return a.localeCompare(b);
+    });
+};
+
+const buildCreatedRows = (record: unknown): AuditFieldRow[] => {
+    if (!isAuditRecord(record)) return [];
+    return getSortedFields(record).map(key => ({
+        key,
+        label: getFieldLabel(key),
+        after: formatAuditValue(key, record[key], record),
+    }));
+};
+
+const buildChangedRows = (oldData: unknown, newData: unknown): AuditFieldRow[] => {
+    if (!isAuditRecord(oldData) && !isAuditRecord(newData)) return [];
+    const before = isAuditRecord(oldData) ? oldData : {};
+    const after = isAuditRecord(newData) ? newData : {};
+    const hasBefore = isAuditRecord(oldData);
+    const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
+        .filter(key => !HIDDEN_AUDIT_FIELDS.has(key))
+        .filter(key => stringifyComparable(before[key]) !== stringifyComparable(after[key]));
+
+    return keys.sort((a, b) => {
+        const ia = DETAIL_FIELD_PRIORITY.indexOf(a);
+        const ib = DETAIL_FIELD_PRIORITY.indexOf(b);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+        return a.localeCompare(b);
+    }).map(key => ({
+        key,
+        label: getFieldLabel(key),
+        before: hasBefore ? formatAuditValue(key, before[key], before) : undefined,
+        after: formatAuditValue(key, after[key], after),
+    }));
+};
+
+const buildAuditRows = (log: ActivityLog): AuditFieldRow[] => {
+    if (log.action === 'CREATE') return buildCreatedRows(log.newData);
+    if (log.action === 'DELETE') return buildCreatedRows(log.oldData || log.newData);
+    return buildChangedRows(log.oldData, log.newData);
+};
+
 export default function SystemLogsPage() {
-    const router = useRouter();
     const [logs, setLogs] = useState<ActivityLog[]>([]);
     const [stats, setStats] = useState<LogStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +377,36 @@ export default function SystemLogsPage() {
 
     const clearDateFilter = () => {
         setDateFrom(''); setDateTo(''); setActiveShortcut(''); setPage(1);
+    };
+
+    const applyKpiFilter = (filter: KpiFilter) => {
+        if (filter === 'all') {
+            setSearch('');
+            setActionFilter('');
+            setDateFrom('');
+            setDateTo('');
+            setActiveShortcut('');
+            setPage(1);
+            return;
+        }
+
+        if (filter === 'today') {
+            setActionFilter('');
+            applyShortcut('today');
+            return;
+        }
+
+        setActionFilter(current => current === filter ? '' : filter);
+        setDateFrom('');
+        setDateTo('');
+        setActiveShortcut('');
+        setPage(1);
+    };
+
+    const handleKpiKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, filter: KpiFilter) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        applyKpiFilter(filter);
     };
 
     const fetchLogs = async (currentPage: number, currentSearch: string, currentAction: string, from: string, to: string) => {
@@ -227,35 +527,90 @@ export default function SystemLogsPage() {
 
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 rounded-xl shadow-sm">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={!search && !actionFilter && !dateFrom && !dateTo}
+                    onClick={() => applyKpiFilter('all')}
+                    onKeyDown={(event) => handleKpiKeyDown(event, 'all')}
+                    className={`bg-surface-container-lowest border p-4 rounded-xl shadow-sm cursor-pointer text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary/25 ${
+                        !search && !actionFilter && !dateFrom && !dateTo
+                            ? 'border-primary/40 bg-primary/5 ring-2 ring-primary/10'
+                            : 'border-outline-variant/20 hover:border-primary/30 hover:bg-primary/5'
+                    }`}
+                >
                     <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Tổng cộng</p>
                     <div className="flex items-end justify-between">
                         <span className="text-2xl font-bold font-headline">{stats?.total?.toLocaleString() || 0}</span>
                         <span className="material-symbols-outlined text-outline">analytics</span>
                     </div>
                 </div>
-                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl shadow-sm">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={activeShortcut === 'today' && !actionFilter}
+                    onClick={() => applyKpiFilter('today')}
+                    onKeyDown={(event) => handleKpiKeyDown(event, 'today')}
+                    className={`bg-emerald-50 border p-4 rounded-xl shadow-sm cursor-pointer text-left transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300/60 ${
+                        activeShortcut === 'today' && !actionFilter
+                            ? 'border-emerald-300 ring-2 ring-emerald-100'
+                            : 'border-emerald-100 hover:border-emerald-300 hover:bg-emerald-100/50'
+                    }`}
+                >
                     <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-1">Hôm nay</p>
                     <div className="flex items-end justify-between">
                         <span className="text-2xl font-bold font-headline text-emerald-700">+{stats?.todayCount?.toLocaleString() || 0}</span>
                         <span className="material-symbols-outlined text-emerald-400">today</span>
                     </div>
                 </div>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 rounded-xl shadow-sm">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={actionFilter === 'CREATE'}
+                    onClick={() => applyKpiFilter('CREATE')}
+                    onKeyDown={(event) => handleKpiKeyDown(event, 'CREATE')}
+                    className={`bg-surface-container-lowest border p-4 rounded-xl shadow-sm cursor-pointer text-left transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300/50 ${
+                        actionFilter === 'CREATE'
+                            ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-100'
+                            : 'border-outline-variant/20 hover:border-emerald-300 hover:bg-emerald-50'
+                    }`}
+                >
                     <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Tạo mới</p>
                     <div className="flex items-end justify-between">
                         <span className="text-2xl font-bold font-headline">{stats?.create?.toLocaleString() || 0}</span>
                         <span className="material-symbols-outlined text-emerald-500">add_circle</span>
                     </div>
                 </div>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 rounded-xl shadow-sm">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={actionFilter === 'UPDATE'}
+                    onClick={() => applyKpiFilter('UPDATE')}
+                    onKeyDown={(event) => handleKpiKeyDown(event, 'UPDATE')}
+                    className={`bg-surface-container-lowest border p-4 rounded-xl shadow-sm cursor-pointer text-left transition-all focus:outline-none focus:ring-2 focus:ring-blue-300/50 ${
+                        actionFilter === 'UPDATE'
+                            ? 'border-blue-300 bg-blue-50 ring-2 ring-blue-100'
+                            : 'border-outline-variant/20 hover:border-blue-300 hover:bg-blue-50'
+                    }`}
+                >
                     <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Cập nhật</p>
                     <div className="flex items-end justify-between">
                         <span className="text-2xl font-bold font-headline">{stats?.update?.toLocaleString() || 0}</span>
                         <span className="material-symbols-outlined text-blue-500">edit</span>
                     </div>
                 </div>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 rounded-xl shadow-sm">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={actionFilter === 'DELETE'}
+                    onClick={() => applyKpiFilter('DELETE')}
+                    onKeyDown={(event) => handleKpiKeyDown(event, 'DELETE')}
+                    className={`bg-surface-container-lowest border p-4 rounded-xl shadow-sm cursor-pointer text-left transition-all focus:outline-none focus:ring-2 focus:ring-red-300/50 ${
+                        actionFilter === 'DELETE'
+                            ? 'border-red-300 bg-red-50 ring-2 ring-red-100'
+                            : 'border-outline-variant/20 hover:border-red-300 hover:bg-red-50'
+                    }`}
+                >
                     <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Xóa</p>
                     <div className="flex items-end justify-between">
                         <span className="text-2xl font-bold font-headline text-red-600">{stats?.delete?.toLocaleString() || 0}</span>
@@ -379,7 +734,7 @@ export default function SystemLogsPage() {
                                 <th className="py-3 px-4 font-semibold">Người Thực Hiện</th>
                                 <th className="py-3 px-4 font-semibold">Hành Động</th>
                                 <th className="py-3 px-4 font-semibold">Đối Tượng</th>
-                                <th className="py-3 px-4 font-semibold hidden lg:table-cell">IP Address</th>
+                                <th className="py-3 px-4 font-semibold hidden lg:table-cell">Mức độ</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-outline-variant/10">
@@ -402,7 +757,15 @@ export default function SystemLogsPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                logs.map((log) => (
+                                logs.map((log) => {
+                                    const summary = getAuditSummary(log);
+                                    const severity = getAuditSeverity(log);
+                                    const changedRows = buildAuditRows(log);
+                                    const resourceLabel = getResourceLabel(log.resource);
+                                    const targetTitle = getRecordTitle(log);
+                                    const hasBeforeData = log.action === 'UPDATE' && isAuditRecord(log.oldData);
+
+                                    return (
                                     <React.Fragment key={log.id}>
                                         <tr 
                                             onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
@@ -444,13 +807,16 @@ export default function SystemLogsPage() {
                                                 </span>
                                             </td>
                                             <td className="py-3 px-4">
-                                                <div className="text-sm text-on-surface line-clamp-1 max-w-md" title={log.description}>
-                                                    <span className="font-semibold text-primary mr-1">[{log.resource}]</span>
-                                                    {log.targetName || `ID: ${log.resourceId}`}
+                                                <div className="max-w-xl" title={summary}>
+                                                    <p className="line-clamp-1 text-sm font-semibold text-on-surface">{summary}</p>
+                                                    <p className="mt-0.5 line-clamp-1 text-[11px] font-medium text-outline">{resourceLabel} · {targetTitle}</p>
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4 hidden lg:table-cell">
-                                                <span className="text-xs font-mono text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded">{log.ipAddress || '—'}</span>
+                                                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${severity.className}`}>
+                                                    <span className="material-symbols-outlined text-[13px]">{severity.icon}</span>
+                                                    {severity.label}
+                                                </span>
                                             </td>
                                         </tr>
                                         
@@ -458,51 +824,103 @@ export default function SystemLogsPage() {
                                         {expandedRow === log.id && (
                                             <tr className="bg-surface-container-low/30 border-b border-outline-variant/20">
                                                 <td colSpan={6} className="p-0">
-                                                    <div className="px-14 py-5 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                                            <div>
-                                                                <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3 flex items-center gap-2">
-                                                                    <span className="material-symbols-outlined text-[16px]">info</span> Thông tin chi tiết
-                                                                </h4>
-                                                                <table className="w-full text-sm">
-                                                                    <tbody className="divide-y divide-outline-variant/10">
-                                                                        <tr><td className="py-2 text-outline w-32">Mô tả đầy đủ:</td><td className="py-2 font-medium">{log.description}</td></tr>
-                                                                        <tr><td className="py-2 text-outline">Resource ID:</td><td className="py-2 font-mono">{log.resourceId || '—'}</td></tr>
-                                                                        <tr><td className="py-2 text-outline">User Agent:</td><td className="py-2 text-xs text-on-surface-variant line-clamp-2">{log.userAgent || '—'}</td></tr>
-                                                                        <tr><td className="py-2 text-outline">Email thực hiện:</td><td className="py-2">{log.user?.email || '—'}</td></tr>
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                            
-                                                            <div>
-                                                                <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3 flex items-center gap-2">
-                                                                    <span className="material-symbols-outlined text-[16px]">data_object</span> Dữ liệu thay đổi
-                                                                </h4>
-                                                                <div className="bg-surface border border-outline-variant/20 rounded-lg overflow-hidden flex flex-col gap-px">
-                                                                    {log.action !== 'CREATE' && log.oldData && (
-                                                                        <div className="bg-[#fff1f2] p-3 overflow-x-auto">
-                                                                            <span className="text-[10px] font-bold text-red-600 uppercase mb-1 block">Dữ liệu cũ (Old Data)</span>
-                                                                            <pre className="text-[11px] font-mono text-red-900 m-0">{JSON.stringify(log.oldData, null, 2)}</pre>
-                                                                        </div>
-                                                                    )}
-                                                                    {log.action !== 'DELETE' && log.newData && (
-                                                                        <div className="bg-[#ecfdf5] p-3 overflow-x-auto">
-                                                                            <span className="text-[10px] font-bold text-emerald-600 uppercase mb-1 block">Dữ liệu mới (New Data)</span>
-                                                                            <pre className="text-[11px] font-mono text-emerald-900 m-0">{JSON.stringify(log.newData, null, 2)}</pre>
-                                                                        </div>
-                                                                    )}
-                                                                    {!log.oldData && !log.newData && (
-                                                                        <div className="p-4 text-center text-sm text-outline italic">Không có payload data được ghi lại</div>
-                                                                    )}
+                                                    <div className="px-8 py-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                                                            <section className="rounded-2xl border border-outline-variant/25 bg-surface p-5 shadow-sm">
+                                                                <div className="flex items-start gap-3">
+                                                                    <span className={`material-symbols-outlined grid h-10 w-10 shrink-0 place-items-center rounded-2xl border text-[20px] ${severity.className}`}>
+                                                                        {severity.icon}
+                                                                    </span>
+                                                                    <div>
+                                                                        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">Tóm tắt nghiệp vụ</p>
+                                                                        <h4 className="mt-1 text-lg font-black leading-7 text-on-surface">{summary}</h4>
+                                                                        <p className="mt-2 text-sm leading-6 text-on-surface-variant">{getAuditImpactText(log)}</p>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
+
+                                                                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                                                    {[
+                                                                        ['Đối tượng', `${resourceLabel} · ${targetTitle}`],
+                                                                        ['Người thực hiện', log.user?.fullName || 'Hệ thống'],
+                                                                        ['Email', log.user?.email || '—'],
+                                                                        ['Thời gian', new Date(log.createdAt).toLocaleString('vi-VN')],
+                                                                        ['IP', log.ipAddress || '—'],
+                                                                        ['Mã bản ghi', log.resourceId || `Log #${log.id}`],
+                                                                    ].map(([label, value]) => (
+                                                                        <div key={label} className="rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-3 py-2">
+                                                                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-outline">{label}</p>
+                                                                            <p className="mt-1 break-words text-sm font-semibold text-on-surface">{value}</p>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </section>
+
+                                                            <section className="rounded-2xl border border-outline-variant/25 bg-surface p-5 shadow-sm">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-on-surface-variant">
+                                                                        <span className="material-symbols-outlined text-[17px]">difference</span>
+                                                                        {log.action === 'UPDATE' ? 'Thông tin được cập nhật' : log.action === 'DELETE' ? 'Thông tin trước khi xóa' : 'Thông tin được ghi nhận'}
+                                                                    </h4>
+                                                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${severity.className}`}>{severity.label}</span>
+                                                                </div>
+
+                                                                {changedRows.length > 0 ? (
+                                                                    <div className="mt-4 overflow-hidden rounded-xl border border-outline-variant/20">
+                                                                        <table className="w-full text-sm">
+                                                                            <thead className="bg-surface-container-low text-[10px] uppercase tracking-[0.12em] text-outline">
+                                                                                <tr>
+                                                                                    <th className="px-3 py-2 text-left font-black">Thông tin</th>
+                                                                                    {hasBeforeData && <th className="px-3 py-2 text-left font-black">Trước</th>}
+                                                                                    <th className="px-3 py-2 text-left font-black">{hasBeforeData ? 'Sau' : log.action === 'UPDATE' ? 'Giá trị mới' : 'Giá trị'}</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody className="divide-y divide-outline-variant/10">
+                                                                                {changedRows.map(row => (
+                                                                                    <tr key={row.key} className="align-top">
+                                                                                        <td className="w-44 px-3 py-3 font-bold text-on-surface">{row.label}</td>
+                                                                                        {hasBeforeData && <td className="px-3 py-3 text-on-surface-variant">{row.before}</td>}
+                                                                                        <td className="px-3 py-3 font-semibold text-on-surface">{row.after}</td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="mt-4 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-lowest p-5 text-center text-sm text-outline">
+                                                                        Không có dữ liệu thay đổi thân thiện để hiển thị.
+                                                                    </div>
+                                                                )}
+
+                                                                <details className="mt-4 rounded-xl border border-outline-variant/20 bg-surface-container-lowest">
+                                                                    <summary className="cursor-pointer px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-on-surface-variant">
+                                                                        Chi tiết kỹ thuật
+                                                                    </summary>
+                                                                    <div className="space-y-3 border-t border-outline-variant/20 p-4">
+                                                                        <div>
+                                                                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-outline">User Agent</p>
+                                                                            <p className="mt-1 break-words text-xs font-medium text-on-surface-variant">{log.userAgent || '—'}</p>
+                                                                        </div>
+                                                                        <div className="grid gap-3 lg:grid-cols-2">
+                                                                            <div className="overflow-x-auto rounded-lg bg-[#fff1f2] p-3">
+                                                                                <p className="mb-2 text-[10px] font-black uppercase text-red-700">Old Data</p>
+                                                                                <pre className="m-0 text-[11px] text-red-950">{log.oldData ? JSON.stringify(log.oldData, null, 2) : 'Không có'}</pre>
+                                                                            </div>
+                                                                            <div className="overflow-x-auto rounded-lg bg-[#ecfdf5] p-3">
+                                                                                <p className="mb-2 text-[10px] font-black uppercase text-emerald-700">New Data</p>
+                                                                                <pre className="m-0 text-[11px] text-emerald-950">{log.newData ? JSON.stringify(log.newData, null, 2) : 'Không có'}</pre>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </details>
+                                                            </section>
                                                         </div>
                                                     </div>
                                                 </td>
                                             </tr>
                                         )}
                                     </React.Fragment>
-                                ))
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>

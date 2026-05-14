@@ -1,54 +1,87 @@
-import { Controller, Post, Body, Req, Get, Param } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { AiService } from './ai.service';
-import { JwtService } from '@nestjs/jwt';
-import type { Request } from 'express';
 
-class ChatDto {
-    message: string;
-    sessionId?: string; // Tùy chọn, để duy trì cuộc hội thoại
-}
+type ChatRequestBody = {
+  message?: string;
+  sessionId?: string;
+};
+
+type AuthenticatedRequest = {
+  user?: {
+    userId?: number;
+  };
+};
 
 @Controller('ai')
 export class AiController {
-    constructor(
-        private readonly aiService: AiService,
-        private readonly jwtService: JwtService
-    ) { }
+  constructor(private readonly aiService: AiService) {}
 
-    /**
-     * POST /ai/chat
-     * Body: { message: "string", sessionId?: "..." }
-     * Header: Authorization: Bearer <token> (Optional)
-     * Response: { reply: "string", sessionId: "...", tourCard?: {...} }
-     */
-    @Post('chat')
-    async chat(@Body() body: ChatDto, @Req() request: Request) {
-        const { message, sessionId } = body;
+  @Get('status')
+  getStatus() {
+    return this.aiService.getStatus();
+  }
 
-        if (!message || !message.trim()) {
-            return { reply: 'Vui lòng nhập tin nhắn.' };
-        }
-
-        let userId: number | null = null;
-
-        // Trích xuất JWT token để nhận diện người dùng
-        const authHeader = request.headers['authorization'];
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            try {
-                const decoded = this.jwtService.verify(token);
-                userId = decoded.sub || decoded.userId;
-            } catch (error) {
-                console.warn('[AI] Invalid JWT token, treating as anonymous guest.', error.message);
-            }
-        }
-
-        const result = await this.aiService.chat(message, sessionId, userId);
-        return result;
+  @UseGuards(AuthGuard('jwt'))
+  @Get('chat/me/latest')
+  getMyLatestHistory(@Req() req: AuthenticatedRequest) {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException('Login is required');
     }
 
-    @Get('chat/:sessionId')
-    async getHistory(@Param('sessionId') sessionId: string) {
-        return this.aiService.getHistory(sessionId);
+    return this.aiService.getLatestHistoryForUser(userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('chat/sessions')
+  getMySessions(@Req() req: AuthenticatedRequest) {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException('Login is required');
     }
+
+    return this.aiService.getSessionsForUser(userId);
+  }
+
+  @UseGuards(OptionalJwtGuard)
+  @Post('chat')
+  chat(@Body() body: ChatRequestBody, @Req() req: AuthenticatedRequest) {
+    const message = body.message?.trim();
+    if (!message) {
+      throw new BadRequestException('Message is required');
+    }
+
+    return this.aiService.chat(message, body.sessionId, req.user?.userId);
+  }
+
+  @UseGuards(OptionalJwtGuard)
+  @Get('chat/:sessionId')
+  getHistory(
+    @Param('sessionId') sessionId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.aiService.getHistory(sessionId, req.user?.userId);
+  }
+
+  @UseGuards(OptionalJwtGuard)
+  @Delete('chat/:sessionId')
+  clearSession(
+    @Param('sessionId') sessionId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.aiService.clearSession(sessionId, req.user?.userId);
+  }
 }

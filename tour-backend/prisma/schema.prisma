@@ -23,6 +23,7 @@ enum TourStatus {
   PENDING_REVIEW
   PUBLISHED
   REJECTED
+  COMPLETED
 }
 
 enum ArticleStatus {
@@ -44,12 +45,15 @@ model User {
   avatarUrl String?
   dob       String?
   gender    String?
+  identityType  String?   // "CCCD" | "PASSPORT"
+  identityNo    String?   // Mã số giấy tờ tuỳ thân
   role      Role      @default(CUSTOMER)             
   createdAt DateTime  @default(now())               
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // [PHASE 1] Soft Delete                     
 
   bookings        Booking[]
+  bookingNotifications BookingNotification[]
   userVouchers    UserVoucher[]
   chatSessions    ChatSession[]
   reviews         Review[]
@@ -59,6 +63,9 @@ model User {
   reviewedTours   Tour[]    @relation("TourReviewedBy")
   createdArticles Article[] @relation("ArticleCreatedBy")
   reviewedArticles Article[] @relation("ArticleReviewedBy")
+  assistedDraftsCreated AssistedBookingDraft[] @relation("AssistedDraftCreatedBy")
+  assistedDraftsReviewed AssistedBookingDraft[] @relation("AssistedDraftReviewedBy")
+  assistedDraftsAsCustomer AssistedBookingDraft[] @relation("AssistedDraftCustomer")
 }
 
 // =============================================
@@ -114,6 +121,7 @@ model Tour {
   deletedAt      DateTime?   // [PHASE 1] Soft Delete
 
   bookings       Booking[]
+  assistedDrafts AssistedBookingDraft[]
   reviews        Review[]
   itinerary      TourItinerary[] // [PHASE 1] Lịch trình theo ngày
   packages       TourPackage[]   // Các gói tour (Tiêu Chuẩn / Cao Cấp / Luxury)
@@ -230,7 +238,10 @@ model TourDeparture {
   departureDate  DateTime              // Ngày khởi hành cụ thể
   price          Float?                // Null = dùng tour.price làm fallback
   availableSeats Int      @default(0)  // Số ghế còn lại cho ngày này
-  note           String?               // Ghi chú (VD: "Giá ưu đãi cuối tuần")
+  maxSeats       Int?                  // [FLASH SALE] Tổng ghế ban đầu — dùng tính % đã đặt thực tế
+  note           String?               // Ghi chú tự do (VD: "Giá ưu đãi cuối tuần")
+  category       String?               // [FLASH SALE] 'FLASH_SALE' | 'EARLY_BIRD' | 'LAST_MINUTE' | null
+  flashSaleEndsAt DateTime?            // [FLASH SALE] Thời điểm kết thúc ưu đãi (null = không giới hạn)
 
   isActive       Boolean  @default(true)
   sortOrder      Int      @default(0)
@@ -239,6 +250,7 @@ model TourDeparture {
   updatedAt      DateTime @updatedAt
 
   @@index([tourId, departureDate])
+  @@index([category, flashSaleEndsAt]) // [FLASH SALE] Tăng tốc query lọc khuyến mãi
 }
 
 // --- CÁC ENUM CHO ĐẶT TOUR ---
@@ -254,6 +266,14 @@ enum PaymentStatus {
   PROCESSING  // Đang chờ xử lý
   PAID        // Đã thanh toán thành công
   FAILED      // Thanh toán thất bại
+}
+
+enum AssistedDraftStatus {
+  DRAFT
+  PENDING_APPROVAL
+  NEEDS_REVISION
+  REJECTED
+  CONVERTED
 }
 
 // =============================================
@@ -276,6 +296,8 @@ model Booking {
   status           BookingStatus @default(PENDING)
   paymentStatus    PaymentStatus @default(UNPAID)
   vnpayTxnRef      String?       // Mã giao dịch từ cổng thanh toán để đối soát
+  isAssistedBooking Boolean      @default(false)
+  assistedDraftId  Int?          @unique
   
   voucherCode      String?       // Mã voucher đã áp dụng (nếu có)
   discountAmount   Float         @default(0) // Số tiền đã giảm (VNĐ)
@@ -287,6 +309,8 @@ model Booking {
   cancelledBy         String?             // "CUSTOMER" | "ADMIN" | "SYSTEM"
   refundAmount        Float?              // Số tiền hoàn lại thực tế (VNĐ)
   refundNote          String?   @db.Text  // Ghi chú hoàn tiền / lý do từ chối
+  refundBankDetails   Json?               // Thông tin nhận hoàn tiền (Ngân hàng, STK, Tên chủ TK)
+  refundedAt          DateTime?           // Thời điểm Admin thực sự chuyển khoản hoàn tiền
   // ─────────────────────────────────────────────────────────────────
 
   createdAt        DateTime      @default(now())
@@ -296,7 +320,9 @@ model Booking {
   // Kết nối (Relations)
   user             User          @relation(fields: [userId], references: [id])
   tour             Tour          @relation(fields: [tourId], references: [id])
+  assistedDraft    AssistedBookingDraft? @relation(fields: [assistedDraftId], references: [id], onDelete: SetNull)
   transactions     PaymentTransaction[] // [PHASE 1] Log thanh toán
+  notifications    BookingNotification[]
 
   @@index([userId, status])                  // [PHASE 1] Index: lịch sử booking user
   @@index([status, paymentStatus, createdAt]) // [PHASE 1] Index: cron job quét đơn hết hạn
@@ -306,6 +332,55 @@ model Booking {
 // BẢNG LOG THANH TOÁN (PHASE 1 - MỚI)
 // Lưu toàn bộ lịch sử giao dịch với cổng thanh toán
 // =============================================
+model AssistedBookingDraft {
+  id               Int                 @id @default(autoincrement())
+  draftCode        String              @unique
+  status           AssistedDraftStatus @default(DRAFT)
+
+  customerId       Int?
+  customer         User?               @relation("AssistedDraftCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  customerName     String?
+  customerEmail    String?
+  customerPhone    String?
+  customerIdentityNo String?
+  sourceChannel    String              @default("LIVE_CHAT")
+  confirmationChannel String           @default("ZALO")
+  emailForTicket   String?
+  sourceTicketId   Int?
+  sourceTicket     SupportTicket?      @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)
+
+  tourId           Int?
+  tour             Tour?               @relation(fields: [tourId], references: [id])
+  packageId        Int?
+  departureId      Int?
+  numberOfPeople   Int                 @default(1)
+  passengers       Json?
+
+  quotedPrice      Float               @default(0)
+  unitPriceAtDraft Float?
+  voucherCode      String?
+  discountAmount   Float               @default(0)
+  specialRequests  String?             @db.Text
+  internalNote     String?             @db.Text
+
+  createdByStaffId Int?
+  createdByStaff   User?               @relation("AssistedDraftCreatedBy", fields: [createdByStaffId], references: [id], onDelete: SetNull)
+  reviewedByAdminId Int?
+  reviewedByAdmin  User?               @relation("AssistedDraftReviewedBy", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  approvalNote     String?             @db.Text
+  rejectionReason  String?             @db.Text
+
+  convertedBooking Booking?
+
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdByStaffId, status])
+  @@index([sourceTicketId])
+}
+
 model PaymentTransaction {
   id             Int      @id @default(autoincrement())
   bookingId      Int
@@ -320,6 +395,29 @@ model PaymentTransaction {
   createdAt      DateTime @default(now())
 
   @@index([bookingId])
+}
+
+model BookingNotification {
+  id           Int      @id @default(autoincrement())
+  bookingId    Int
+  booking      Booking  @relation(fields: [bookingId], references: [id])
+  type         String
+  channel      String
+  recipient    String?
+  status       String
+  subject      String?
+  content      String   @db.Text
+  paymentUrl   String?
+  qrCodeUrl    String?  @db.Text
+  errorMessage String?  @db.Text
+  sentAt       DateTime?
+  createdById  Int?
+  createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([bookingId, type, createdAt])
+  @@index([status, createdAt])
 }
 
 // --- BẢNG NHẬT KÝ HÀNH ĐỘNG (AUDIT LOG) ---
@@ -482,6 +580,7 @@ model SystemSetting {
 // =============================================
 model SupportTicket {
   id              Int      @id @default(autoincrement())
+  accessCode      String?  @default(uuid()) @unique // [FIX] Bắt buộc dùng để khách vãng lai xem ticket, chống lộ dữ liệu
   customerName    String
   customerEmail   String
   customerPhone   String?
@@ -497,6 +596,7 @@ model SupportTicket {
   userId          Int?
   user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  assistedDrafts  AssistedBookingDraft[]
   replies         TicketReply[]
 
   createdAt       DateTime @default(now())

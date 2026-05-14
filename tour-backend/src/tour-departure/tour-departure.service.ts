@@ -5,7 +5,10 @@ export interface CreateDepartureDto {
     departureDate: string;   // ISO string
     price?: number | null;   // null = dùng tour.price
     availableSeats: number;
+    maxSeats?: number;       // [FLASH SALE] Tổng ghế ban đầu — để tính % đã đặt
     note?: string;
+    category?: string;       // [FLASH SALE] 'FLASH_SALE' | 'EARLY_BIRD' | 'LAST_MINUTE'
+    flashSaleEndsAt?: string | null; // [FLASH SALE] ISO datetime
     sortOrder?: number;
 }
 
@@ -29,7 +32,7 @@ export class TourDepartureService {
 
         if (!Array.isArray(dtos)) throw new BadRequestException('departures phải là mảng');
 
-        return this.prisma.$transaction(async (tx) => {
+            return this.prisma.$transaction(async (tx) => {
             // Xóa tất cả departure cũ
             await tx.tourDeparture.deleteMany({ where: { tourId } });
 
@@ -42,7 +45,10 @@ export class TourDepartureService {
                     departureDate: new Date(d.departureDate),
                     price: d.price ?? null,
                     availableSeats: d.availableSeats ?? 0,
+                    maxSeats: d.maxSeats ?? null,
                     note: d.note ?? null,
+                    category: d.category ?? null,
+                    flashSaleEndsAt: d.flashSaleEndsAt ? new Date(d.flashSaleEndsAt) : null,
                     sortOrder: d.sortOrder ?? i,
                     isActive: true,
                 })),

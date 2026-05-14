@@ -40,10 +40,15 @@ interface DealCard {
     duration: string;
     newPrice: number;
     oldPrice: number;
+    discountPct: number;
+    bookedPercent: number | null;   // null = no data (no maxSeats)
+    maxSeats: number | null;
+    availableSeats: number;
+    flashSaleEndsAt: string | null; // ISO — for real per-card countdown
     urgencyText: string;
-    bookedPercent: number;
     urgencyColor: string;
     category: DealCategory;
+    destination: string;
 }
 
 // getDeals removed — data now fetched from API (/tour/sale-deals)
@@ -106,27 +111,34 @@ export default function PromotionsPage() {
                     image: d.image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
                     badge: d.badge,
                     badgeColor: d.category === 'flash' ? 'bg-error text-white'
-                        : d.category === 'early' ? 'bg-secondary-container text-on-secondary-fixed'
-                        : 'bg-tertiary-container text-white',
-                    rating: d.rating,
+                        : d.category === 'early' ? 'bg-secondary-container text-on-secondary-container'
+                        : 'bg-amber-500 text-white',
+                    rating: d.rating ?? 0,
                     duration: d.duration,
                     newPrice: d.newPrice,
                     oldPrice: d.oldPrice,
+                    discountPct: d.discountPct ?? 0,
+                    // ✅ Real data from DB — no more Math.random()
+                    bookedPercent: d.bookedPercent ?? null,
+                    maxSeats: d.maxSeats ?? null,
+                    availableSeats: d.availableSeats ?? 0,
+                    flashSaleEndsAt: d.flashSaleEndsAt ?? null,
                     urgencyText: d.availableSeats <= 3
                         ? `Chỉ còn ${d.availableSeats} chỗ!`
-                        : d.category === 'flash' ? 'Kết thúc hôm nay!'
+                        : d.category === 'flash' ? 'Flash Sale'
                         : d.category === 'lastminute' ? 'Sắp hết!'
                         : 'Ưu đãi có hạn',
-                    bookedPercent: Math.min(95, Math.round(((d.availableSeats <= 5 ? 90 : 50) + Math.random() * 20))),
                     urgencyColor: d.category === 'flash' ? 'error'
                         : d.category === 'early' ? 'secondary-container'
-                        : 'tertiary',
+                        : 'amber-500',
                     category: d.category as DealCategory,
+                    destination: d.destination ?? '',
                 }));
                 setDeals(mapped);
             })
             .catch(console.error);
     }, []);
+
 
 
     // ── Vouchers from API ─────────
@@ -220,7 +232,13 @@ export default function PromotionsPage() {
         }
     };
 
-    // ── Filter tabs ───────────────
+    // ✅ Tính Flash Sale gần hết hạn nhất — dùng cho HeroBanner countdown
+    const nearestFlashSaleEndsAt = deals
+        .filter(d => d.category === 'flash' && d.flashSaleEndsAt && new Date(d.flashSaleEndsAt) > new Date())
+        .sort((a, b) => new Date(a.flashSaleEndsAt!).getTime() - new Date(b.flashSaleEndsAt!).getTime())[0]
+        ?.flashSaleEndsAt ?? null;
+
+    // ── Filter tabs ────────────
     const [activeTab, setActiveTab] = useState<DealCategory>('all');
     const filteredDeals = activeTab === 'all' ? deals : deals.filter(d => d.category === activeTab);
 
@@ -313,7 +331,7 @@ export default function PromotionsPage() {
             <Header />
 
             <main className="flex-grow">
-                <HeroBanner timeLeft={timeLeft} isMounted={isMounted} t={t} />
+                <HeroBanner timeLeft={timeLeft} isMounted={isMounted} nearestFlashSaleEndsAt={nearestFlashSaleEndsAt} t={t} />
 
                 <section id="vouchers">
                     <VoucherCarousel

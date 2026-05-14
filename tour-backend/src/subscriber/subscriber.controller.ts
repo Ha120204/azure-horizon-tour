@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Get, Delete,
+  Controller, Post, Get, Delete, Patch,
   Body, Param, Query, ParseIntPipe,
   BadRequestException, UseGuards,
 } from '@nestjs/common';
@@ -29,11 +29,13 @@ export class SubscriberController {
     @Query('page')   page?:   string,
     @Query('limit')  limit?:  string,
     @Query('search') search?: string,
+    @Query('status') status?: 'active' | 'inactive' | 'all',
   ) {
     return this.subscriberService.getAll({
       page:   page  ? parseInt(page)  : 1,
       limit:  limit ? parseInt(limit) : 20,
       search,
+      status: status ?? 'all',
     });
   }
 
@@ -43,6 +45,89 @@ export class SubscriberController {
   @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
   async getStats() {
     return this.subscriberService.getStats();
+  }
+
+  @Get('campaigns')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  async getCampaigns() {
+    return this.subscriberService.getCampaigns();
+  }
+
+  @Patch(':id/status')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  async setStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { isActive?: boolean },
+  ) {
+    if (typeof body.isActive !== 'boolean') {
+      throw new BadRequestException('isActive must be boolean');
+    }
+    return this.subscriberService.setActive(id, body.isActive);
+  }
+
+  @Post('campaign/test')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  async sendCampaignTest(@Body() body: {
+    to?: string;
+    subject?: string;
+    previewText?: string;
+    body?: string;
+    campaignName?: string;
+  }) {
+    if (!body.to || !body.to.includes('@')) {
+      throw new BadRequestException('Email nhận test không hợp lệ');
+    }
+    if (!body.subject?.trim() || !body.body?.trim()) {
+      throw new BadRequestException('Subject và nội dung email là bắt buộc');
+    }
+    return this.subscriberService.sendCampaignTest({
+      to: body.to.trim().toLowerCase(),
+      subject: body.subject.trim(),
+      previewText: body.previewText?.trim(),
+      body: body.body.trim(),
+      campaignName: body.campaignName?.trim(),
+    });
+  }
+
+  @Post('campaign/schedule')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  async scheduleCampaign(@Body() body: {
+    campaignName?: string;
+    type?: string;
+    subject?: string;
+    previewText?: string;
+    body?: string;
+    audience?: 'ALL_ACTIVE' | 'CURRENT_FILTER';
+    audienceFilter?: { status?: 'active' | 'inactive' | 'all'; search?: string };
+    scheduledAt?: string;
+  }) {
+    if (!body.campaignName?.trim() || !body.subject?.trim() || !body.body?.trim()) {
+      throw new BadRequestException('Campaign name, subject và nội dung email là bắt buộc');
+    }
+    if (!body.scheduledAt) {
+      throw new BadRequestException('scheduledAt là bắt buộc');
+    }
+    const scheduledDate = new Date(body.scheduledAt);
+    if (Number.isNaN(scheduledDate.getTime())) {
+      throw new BadRequestException('Thời gian gửi không hợp lệ');
+    }
+    if (scheduledDate.getTime() < Date.now() + 30_000) {
+      throw new BadRequestException('Thời gian gửi phải sau hiện tại ít nhất 30 giây');
+    }
+    return this.subscriberService.scheduleCampaign({
+      campaignName: body.campaignName.trim(),
+      type: body.type?.trim(),
+      subject: body.subject.trim(),
+      previewText: body.previewText?.trim(),
+      body: body.body.trim(),
+      audience: body.audience ?? 'ALL_ACTIVE',
+      audienceFilter: body.audienceFilter,
+      scheduledAt: scheduledDate.toISOString(),
+    });
   }
 
   // Admin: DELETE /subscriber/:id — xóa subscriber

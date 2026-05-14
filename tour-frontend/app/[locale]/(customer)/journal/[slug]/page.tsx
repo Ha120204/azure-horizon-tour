@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
 import { useLocale } from '@/app/context/LocaleContext';
+import { API_BASE_URL } from '@/app/lib/constants';
 
 interface ArticleFull {
     id: number;
@@ -27,7 +28,7 @@ export default function ArticleDetailPage() {
     const [article, setArticle] = useState<ArticleFull | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [emailInput, setEmailInput] = useState('');
-    const [subscribed, setSubscribed] = useState(false);
+    const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'loading' | 'success' | 'exists' | 'error'>('idle');
 
     useEffect(() => {
         if (!slug) return;
@@ -56,12 +57,30 @@ export default function ArticleDetailPage() {
         );
     };
 
-    const handleSubscribe = (e: React.FormEvent) => {
+    const handleSubscribe = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (emailInput.trim()) {
-            setSubscribed(true);
+        const email = emailInput.trim();
+        if (!email || !email.includes('@')) {
+            setSubscribeStatus('error');
+            setTimeout(() => setSubscribeStatus('idle'), 4000);
+            return;
+        }
+
+        setSubscribeStatus('loading');
+        try {
+            const res = await fetch(`${API_BASE_URL}/subscriber/subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.message || 'Subscribe failed');
+            setSubscribeStatus(data?.message === 'already_exists' ? 'exists' : 'success');
             setEmailInput('');
-            setTimeout(() => setSubscribed(false), 4000);
+        } catch {
+            setSubscribeStatus('error');
+        } finally {
+            setTimeout(() => setSubscribeStatus('idle'), 4000);
         }
     };
 
@@ -220,14 +239,25 @@ export default function ArticleDetailPage() {
                             />
                             <button
                                 type="submit"
-                                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-200 active:scale-95 text-sm whitespace-nowrap shadow-lg shadow-blue-600/25"
+                                disabled={subscribeStatus === 'loading'}
+                                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-200 active:scale-95 text-sm whitespace-nowrap shadow-lg shadow-blue-600/25 disabled:opacity-60 disabled:pointer-events-none"
                             >
-                                {t('journal.newsletterBtn')}
+                                {subscribeStatus === 'loading' ? '...' : t('journal.newsletterBtn')}
                             </button>
                         </form>
-                        {subscribed && (
+                        {subscribeStatus === 'success' && (
                             <p className="mt-4 text-emerald-300 text-sm font-medium animate-fade-in-up">
                                 ✓ {t('journal.newsletterSuccess')}
+                            </p>
+                        )}
+                        {subscribeStatus === 'exists' && (
+                            <p className="mt-4 text-blue-200 text-sm font-medium animate-fade-in-up">
+                                {language === 'vi' ? 'Email này đã được đăng ký trước đó!' : 'This email is already subscribed!'}
+                            </p>
+                        )}
+                        {subscribeStatus === 'error' && (
+                            <p className="mt-4 text-red-200 text-sm font-medium animate-fade-in-up">
+                                {language === 'vi' ? 'Email không hợp lệ hoặc có lỗi.' : 'Invalid email or an error occurred.'}
                             </p>
                         )}
                     </div>

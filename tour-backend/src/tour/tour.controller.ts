@@ -15,6 +15,11 @@ import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 
+const getAuthUserId = (req: any): number | undefined => {
+  const rawId = req.user?.id ?? req.user?.userId ?? req.user?.sub;
+  return rawId == null ? undefined : Number(rawId);
+};
+
 @Controller('tour')
 export class TourController {
   constructor(
@@ -50,7 +55,7 @@ export class TourController {
       const result = await this.cloudinaryService.uploadFile(file, 'azure-horizon/tours');
       createTourDto.imageUrl = result.secure_url;
     }
-    const creatorId: number = req.user?.id;
+    const creatorId = getAuthUserId(req);
     const creatorRole: string = req.user?.role;
     return this.tourService.create(createTourDto, creatorId, creatorRole);
   }
@@ -66,9 +71,16 @@ export class TourController {
   @UseGuards(OptionalJwtGuard)
   @Get()
   findAll(@Query() query: FilterTourDto, @Req() req: any) {
-    const requesterId: number | undefined = req.user?.id;
+    const requesterId = getAuthUserId(req);
     const requesterRole: string | undefined = req.user?.role;
     return this.tourService.findAll(query, requesterId, requesterRole);
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+  @Get('admin/stats')
+  getAdminStats(@Req() req: any) {
+    return this.tourService.getAdminStats(getAuthUserId(req), req.user?.role);
   }
 
   @Get('sale-deals')
@@ -140,17 +152,17 @@ export class TourController {
       const result = await this.cloudinaryService.uploadFile(file, 'azure-horizon/tours');
       updateTourDto.imageUrl = result.secure_url;
     }
-    const requesterId: number = req.user?.id;
+    const requesterId = getAuthUserId(req);
     const requesterRole: string = req.user?.role;
     return this.tourService.update(+id, updateTourDto, requesterId, requesterRole);
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Delete(':id')
   @AuditLog('DELETE', 'Tour')
-  remove(@Param('id') id: string) {
-    return this.tourService.remove(+id);
+  remove(@Req() req: any, @Param('id') id: string) {
+    return this.tourService.remove(+id, getAuthUserId(req), req.user?.role);
   }
 
   // ── Trash Management ─────────────────────────────────────
@@ -184,7 +196,7 @@ export class TourController {
   @Post(':id/submit')
   @AuditLog('UPDATE', 'Tour')
   submitForReview(@Param('id') id: string, @Req() req: any) {
-    return this.tourService.submitForReview(+id, req.user?.id);
+    return this.tourService.submitForReview(+id, getAuthUserId(req)!);
   }
 
   /**
@@ -201,7 +213,7 @@ export class TourController {
     @Req() req: any,
     @Body() body: { action: 'approve' | 'reject'; note?: string },
   ) {
-    return this.tourService.reviewTour(+id, req.user?.id, body.action, body.note);
+    return this.tourService.reviewTour(+id, getAuthUserId(req)!, body.action, body.note);
   }
 
   // ── Gallery ─────────────────────────────────────────────────────────

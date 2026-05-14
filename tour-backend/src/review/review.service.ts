@@ -17,6 +17,21 @@ export class ReviewService {
     const tour = await this.prisma.tour.findUnique({ where: { id: tourId } });
     if (!tour) throw new NotFoundException('Tour not found');
 
+    // [FIX] Kiểm tra user đã có booking CONFIRMED + PAID cho tour này chưa
+    const confirmedBooking = await this.prisma.booking.findFirst({
+      where: {
+        userId,
+        tourId,
+        status: 'CONFIRMED',
+        paymentStatus: 'PAID',
+      },
+    });
+    if (!confirmedBooking) {
+      throw new BadRequestException(
+        'Bạn cần đặt và hoàn thành chuyến đi để có thể gửi đánh giá.',
+      );
+    }
+
     const existingReview = await this.prisma.review.findFirst({
       where: { userId, tourId },
     });

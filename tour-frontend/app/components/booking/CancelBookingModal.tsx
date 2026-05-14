@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 
 const CANCEL_REASONS = [
@@ -59,17 +59,55 @@ export default function CancelBookingModal({
 }: CancelBookingModalProps) {
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [banksList, setBanksList] = useState<{ shortName: string, name: string, logo: string }[]>([]);
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Dropdown states
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredBanks = banksList.filter(b => 
+    b.shortName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const selectedBankObj = banksList.find(b => b.shortName === bankName);
 
   const refundPreview = calculateRefundPreview(paymentStatus, totalPrice, tourStartDate);
   const isPaid = paymentStatus === 'PAID';
   const isPending = bookingStatus === 'PENDING';
 
-  // Đóng modal bằng Escape
+  // Đóng modal bằng Escape & Fetch Banks
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handleKey);
+    
+    // Gọi API danh sách ngân hàng Việt Nam từ VietQR (Napas)
+    fetch('https://api.vietqr.io/v2/banks')
+      .then(res => res.json())
+      .then(json => {
+        if (json.code === '00' && json.data) {
+          setBanksList(json.data);
+        }
+      })
+      .catch(err => console.error('Lỗi lấy danh sách ngân hàng:', err));
+
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
@@ -83,6 +121,13 @@ export default function CancelBookingModal({
       return;
     }
 
+    if (isPaid && refundPreview.refundAmount > 0) {
+      if (!isVerified) {
+        setError('Vui lòng xác thực tài khoản ngân hàng trước khi gửi yêu cầu.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -92,7 +137,14 @@ export default function CancelBookingModal({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: finalReason }),
+          body: JSON.stringify({
+            reason: finalReason,
+            bankDetails: (isPaid && refundPreview.refundAmount > 0) ? {
+              bankName: bankName.trim(),
+              accountNumber: accountNumber.trim(),
+              accountName: accountName.trim()
+            } : undefined
+          }),
         }
       );
 
@@ -230,13 +282,141 @@ export default function CancelBookingModal({
             )}
           </div>
 
+          {/* Bank Info for Refund */}
+          {isPaid && refundPreview.refundAmount > 0 && (
+            <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-5">
+              <p className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">account_balance</span>
+                Thông Tin Nhận Tiền Hoàn <span className="text-red-500">*</span>
+              </p>
+              <div className="space-y-3">
+                <div className="relative" ref={dropdownRef}>
+                  <div 
+                    className={`w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm flex items-center justify-between cursor-pointer transition-all bg-white ${bankName ? 'text-slate-700' : 'text-slate-400'}`}
+                    onClick={() => {
+                      setIsDropdownOpen(!isDropdownOpen);
+                      setSearchQuery('');
+                    }}
+                  >
+                    <span className="truncate pr-4">
+                      {banksList.length === 0 ? 'Đang tải danh sách ngân hàng...' : (bankName && selectedBankObj ? `${selectedBankObj.shortName} - ${selectedBankObj.name}` : 'Tìm hoặc chọn ngân hàng...')}
+                    </span>
+                    <span className="material-symbols-outlined text-slate-400 text-lg transition-transform duration-200" style={{ transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0)' }}>
+                      expand_more
+                    </span>
+                  </div>
+
+                  {isDropdownOpen && banksList.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col max-h-72 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-2 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10">
+                        <div className="relative">
+                          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                          <input
+                            type="text"
+                            placeholder="Gõ để tìm tên hoặc mã ngân hàng..."
+                            className="w-full pl-9 pr-4 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <div className="overflow-y-auto overflow-x-hidden flex-1">
+                        {filteredBanks.length > 0 ? (
+                          filteredBanks.map((bank, idx) => (
+                            <div 
+                              key={idx} 
+                              className={`px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm text-slate-700 border-b border-slate-50 last:border-0 transition-colors flex items-center gap-3 ${bankName === bank.shortName ? 'bg-blue-50/80 font-medium' : ''}`}
+                              onClick={() => {
+                                setBankName(bank.shortName);
+                                setIsDropdownOpen(false);
+                                setSearchQuery('');
+                                setIsVerified(false);
+                                setAccountName('');
+                              }}
+                            >
+                              <div className="w-8 h-8 rounded-full border border-slate-200 bg-white shrink-0 flex items-center justify-center p-1">
+                                {bank.logo ? <img src={bank.logo} alt={bank.shortName} className="max-w-full max-h-full object-contain" /> : <span className="material-symbols-outlined text-slate-400 text-xs">account_balance</span>}
+                              </div>
+                              <span className="truncate">{bank.shortName} - {bank.name}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-6 text-center text-sm text-slate-500">
+                            Không tìm thấy ngân hàng nào phù hợp
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Số tài khoản"
+                      value={accountNumber}
+                      onChange={(e) => {
+                        setAccountNumber(e.target.value.replace(/[^0-9]/g, ''));
+                        setIsVerified(false);
+                        setAccountName('');
+                      }}
+                      className="w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                    />
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!bankName.trim() || !accountNumber.trim()) {
+                          setError('Vui lòng nhập Ngân hàng và Số tài khoản');
+                          return;
+                        }
+                        setError('');
+                        setIsVerifying(true);
+                        // Giả lập API Napas (delay 1.5s)
+                        await new Promise(r => setTimeout(r, 1500));
+                        setIsVerifying(false);
+                        setIsVerified(true);
+                        setAccountName('ĐÀO THÀNH HÀ'); // Giả lập dữ liệu trả về
+                      }}
+                      disabled={isVerifying || isVerified || !bankName || !accountNumber}
+                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all border ${
+                        isVerified 
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200 cursor-default' 
+                          : 'bg-blue-600 text-white hover:bg-blue-700 border-transparent active:scale-[0.98]'
+                      } disabled:opacity-60 disabled:cursor-not-allowed`}
+                    >
+                      {isVerifying ? (
+                        <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Đang kiểm tra...</>
+                      ) : isVerified ? (
+                        <><span className="material-symbols-outlined text-base">check_circle</span> Hợp lệ</>
+                      ) : (
+                        <><span className="material-symbols-outlined text-base">search</span> Kiểm tra</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Tên chủ tài khoản (Tự động điền)"
+                    value={accountName}
+                    readOnly
+                    className="w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none bg-slate-50 cursor-not-allowed uppercase font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Warning note for PAID */}
           {isPaid && (
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <span className="material-symbols-outlined text-amber-600 text-base mt-0.5 shrink-0">info</span>
               <p className="text-xs text-amber-700 leading-relaxed">
-                Yêu cầu hủy sẽ được xem xét trong vòng <strong>1–3 ngày làm việc</strong>.
-                Sau khi được duyệt, tiền sẽ được hoàn về phương thức thanh toán ban đầu.
+                Yêu cầu hoàn tiền sẽ được kế toán xử lý trong vòng <strong>1–3 ngày làm việc</strong> kể từ khi Admin duyệt. 
+                Tiền sẽ được chuyển khoản trực tiếp vào tài khoản ngân hàng bạn cung cấp ở trên.
               </p>
             </div>
           )}

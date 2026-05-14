@@ -61,6 +61,17 @@ const formatDate = (d: string) =>
 
 const isNeverExpires = (d: string) => new Date(d).getFullYear() >= NEVER_YEAR;
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+const getApiMessage = (payload: unknown, fallback: string) => {
+  if (payload && typeof payload === 'object' && 'message' in payload) {
+    const message = (payload as { message?: unknown }).message;
+    return typeof message === 'string' ? message : fallback;
+  }
+  return fallback;
+};
+
 const statusConfig: Record<string, { label: string; dot: string; text: string }> = {
   active:   { label: 'Hoạt động',    dot: 'bg-tertiary',  text: 'text-tertiary' },
   expired:  { label: 'Hết hạn',      dot: 'bg-outline',   text: 'text-outline' },
@@ -105,7 +116,15 @@ export default function VoucherManagementPage() {
   useEffect(() => {
     fetchWithAuth(`${API_BASE_URL}/auth/profile`)
       .then((r: Response) => r.json())
-      .then((d: any) => setCurrentUserRole(d.role || d.data?.role || ''))
+      .then((d: unknown) => {
+        const payload = d && typeof d === 'object' && 'data' in d
+          ? (d as { data?: unknown }).data
+          : d;
+        const role = payload && typeof payload === 'object' && 'role' in payload
+          ? (payload as { role?: unknown }).role
+          : undefined;
+        setCurrentUserRole(typeof role === 'string' ? role : '');
+      })
       .catch(() => {});
   }, []);
 
@@ -149,8 +168,8 @@ export default function VoucherManagementPage() {
       // Nên json.data = Voucher[], json.meta = Meta (flat, không double-nest)
       setVouchers(json.data ?? []);
       if (json.meta) setMeta(json.meta);
-    } catch (e: any) {
-      showToast(e.message ?? 'Lỗi tải dữ liệu', 'error');
+    } catch (e: unknown) {
+      showToast(getErrorMessage(e, 'Lỗi tải dữ liệu'), 'error');
     } finally {
       setIsLoadingList(false);
     }
@@ -187,8 +206,8 @@ export default function VoucherManagementPage() {
       } : x));
       showToast(`${newIsActive ? 'Đã kích hoạt' : 'Đã vô hiệu hóa'} voucher "${v.code}"`);
       fetchStats();
-    } catch (e: any) {
-      showToast(e.message ?? 'Lỗi cập nhật', 'error');
+    } catch (e: unknown) {
+      showToast(getErrorMessage(e, 'Lỗi cập nhật'), 'error');
     } finally {
       setToggleLoadingId(null);
     }
@@ -201,43 +220,70 @@ export default function VoucherManagementPage() {
     try {
       const res = await fetchWithAuth(`${API_BASE_URL}/voucher/admin/${deleteTarget.id}`, { method: 'DELETE' });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.message ?? 'Lỗi xóa voucher');
+      if (!res.ok) throw new Error(getApiMessage(json, 'Lỗi xóa voucher'));
       showToast(`Đã xóa voucher "${deleteTarget.code}"`);
       setDeleteTarget(null);
       fetchVouchers();
       fetchStats();
-    } catch (e: any) {
-      showToast(e.message ?? 'Xóa that bại', 'error');
+    } catch (e: unknown) {
+      showToast(getErrorMessage(e, 'Xóa that bại'), 'error');
     } finally {
       setIsDeleting(false);
     }
   };
 
   // ── KPI cards data ───────────────────────────────────────────────────────
+  const filterByStatus = (status: Voucher['computedStatus']) => {
+    setFilterStatus((current) => current === status ? '' : status);
+    setPage(1);
+  };
+  const clearVoucherFilters = () => {
+    setSearch('');
+    setFilterType('');
+    setFilterStatus('');
+    setPage(1);
+  };
+
   const kpis = [
     {
       icon: 'local_activity',
       label: 'Đang Hoạt Động',
       value: isLoadingStats ? '…' : (stats?.totalActive ?? 0).toLocaleString('vi-VN'),
       color: 'bg-tertiary/10 text-tertiary',
+      onClick: () => filterByStatus('active'),
+      active: filterStatus === 'active',
+    },
+    {
+      icon: 'event_busy',
+      label: 'Hết Hạn Tháng Này',
+      value: isLoadingStats ? '…' : (stats?.totalExpiredThisMonth ?? 0).toLocaleString('vi-VN'),
+      color: 'bg-slate-500/10 text-slate-600',
+      onClick: () => filterByStatus('expired'),
+      active: filterStatus === 'expired',
     },
     {
       icon: 'sell',
       label: 'Tổng Lượt Đổi',
       value: isLoadingStats ? '…' : (stats?.totalRedemptions ?? 0).toLocaleString('vi-VN'),
       color: 'bg-primary/10 text-primary',
+      onClick: clearVoucherFilters,
+      active: !search && !filterType && !filterStatus,
     },
     {
       icon: 'schedule',
       label: 'Sắp Hết Hạn (7 ngày)',
       value: isLoadingStats ? '…' : (stats?.expiringSoon ?? 0).toLocaleString('vi-VN'),
       color: 'bg-amber-500/10 text-amber-600',
+      onClick: () => filterByStatus('active'),
+      active: false,
     },
     {
       icon: 'payments',
       label: 'Tổng Giảm Giá Đã Cấp',
       value: isLoadingStats ? '…' : formatCurrencyCompact(stats?.totalDiscountGiven ?? 0),
       color: 'bg-secondary/10 text-secondary',
+      onClick: clearVoucherFilters,
+      active: false,
     },
   ];
 
@@ -274,19 +320,25 @@ export default function VoucherManagementPage() {
       </div>
 
       {/* ── KPI Cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/10 shadow-sm hover:shadow-md transition-shadow">
+          <button
+            key={kpi.label}
+            type="button"
+            onClick={kpi.onClick}
+            className={`bg-surface-container-lowest rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all active:scale-[0.99] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary ${kpi.active ? 'border-primary/50 ring-2 ring-primary/15' : 'border-outline-variant/10'}`}
+          >
             <div className="flex items-center gap-4">
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${kpi.color}`}>
                 <span className="material-symbols-outlined text-xl" aria-hidden="true">{kpi.icon}</span>
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs text-on-surface-variant font-medium truncate">{kpi.label}</p>
                 <p className="text-xl font-bold text-on-surface leading-tight mt-0.5 truncate">{kpi.value}</p>
               </div>
+              <span className={`material-symbols-outlined text-[18px] ${kpi.active ? 'text-primary' : 'text-on-surface-variant/35'}`}>filter_alt</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -597,7 +649,7 @@ export default function VoucherManagementPage() {
               <h2 id="delete-voucher-title" className="text-lg font-bold text-on-surface mb-2">Xóa Voucher?</h2>
               <p className="text-on-surface-variant text-sm leading-relaxed">
                 Bạn sắp xóa voucher{' '}
-                <strong className="text-on-surface font-mono">"{deleteTarget.code}"</strong>.
+                <strong className="text-on-surface font-mono">&ldquo;{deleteTarget.code}&rdquo;</strong>.
               </p>
               {deleteTarget.usedCount > 0 && (
                 <div className="mt-3 p-3 bg-error/5 border border-error/20 rounded-xl flex items-start gap-2">

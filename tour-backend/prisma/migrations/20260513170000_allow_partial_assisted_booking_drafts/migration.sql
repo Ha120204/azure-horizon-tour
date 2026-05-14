@@ -1,0 +1,6 @@
+ALTER TABLE "AssistedBookingDraft"
+ALTER COLUMN "customerName" DROP NOT NULL,
+ALTER COLUMN "customerEmail" DROP NOT NULL,
+ALTER COLUMN "tourId" DROP NOT NULL,
+ALTER COLUMN "numberOfPeople" SET DEFAULT 1,
+ALTER COLUMN "quotedPrice" SET DEFAULT 0;

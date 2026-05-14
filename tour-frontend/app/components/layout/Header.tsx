@@ -104,7 +104,13 @@ export default function Header() {
                     const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(searchQuery)}`);
                     if (res.ok) {
                         const data = await res.json();
-                        setSearchResults(data);
+                        // Backend wraps all responses via TransformInterceptor:
+                        // { statusCode, message, data: { destinations, tours }, timestamp }
+                        const payload = data?.data ?? data;
+                        setSearchResults({
+                            destinations: Array.isArray(payload?.destinations) ? payload.destinations : [],
+                            tours: Array.isArray(payload?.tours) ? payload.tours : [],
+                        });
                         setIsDropdownOpen(true);
                     }
                 } catch (error) {
@@ -189,8 +195,8 @@ export default function Header() {
                     </Link>
 
                     {/* 2. MAIN NAVIGATION */}
-                    <div className="hidden md:flex items-center gap-8 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight" suppressHydrationWarning>
-                        {[{ href: '/destinations', key: 'nav.destinations' }, { href: '/promotions', key: 'nav.promotions' }, { href: '/journal', key: 'nav.journal' }, { href: '/about', key: 'nav.about' }].map(link => (
+                    <div className="hidden md:flex items-center gap-7 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight" suppressHydrationWarning>
+                        {[{ href: '/destinations', key: 'nav.destinations' }, { href: '/promotions', key: 'nav.promotions' }, { href: '/journal', key: 'nav.journal' }, { href: '/about', key: 'nav.about' }, { href: '/contact', key: 'nav.contact' }].map(link => (
                             <Link key={link.href} href={link.href} className={`transition-all duration-300 relative group py-2 ${
                                 pathname.includes(link.href)
                                     ? ((isScrolled || !isHomepage) ? 'text-blue-800' : 'text-white')
@@ -256,7 +262,7 @@ export default function Header() {
                                                     {searchResults.destinations.map(dest => (
                                                         <div
                                                             key={`dest-${dest.id}`}
-                                                            onClick={() => handleResultClick(`/destinations/${dest.id}`)}
+                                                            onClick={() => handleResultClick(`/destinations?dest=${encodeURIComponent(dest.name)}`)}
                                                             className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
                                                         >
                                                             <span className="material-symbols-outlined text-slate-400 text-lg">location_on</span>
@@ -296,7 +302,7 @@ export default function Header() {
                                             {/* Trống */}
                                             {searchResults.destinations.length === 0 && searchResults.tours.length === 0 && (
                                                 <div className="p-6 text-center text-sm text-slate-500">
-                                                    {t('nav.noResults')} "{searchQuery}"
+                                                    {t('nav.noResults')} &quot;{searchQuery}&quot;
                                                 </div>
                                             )}
 

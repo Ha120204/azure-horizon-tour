@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { isValidPhoneNumber, CountryCode } from 'libphonenumber-js';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
 import { useLocale } from '@/app/context/LocaleContext';
+import { API_BASE_URL } from '@/app/lib/constants';
 
 const COUNTRY_CODES = [
-    { code: '+1',  country: 'US', iso: 'us' },
+    { code: '+1', country: 'US', iso: 'us' },
     { code: '+44', country: 'UK', iso: 'gb' },
     { code: '+61', country: 'AU', iso: 'au' },
     { code: '+81', country: 'JP', iso: 'jp' },
@@ -22,12 +25,12 @@ const COUNTRY_CODES = [
 ];
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const getFlagUrl = (iso: string) => `https://flagcdn.com/24x18/${iso}.png`;
 
 export default function ContactPage() {
-    const { t } = useLocale();
+    const { t, language } = useLocale();
 
     const [formData, setFormData] = useState({
         name: '',
@@ -40,14 +43,15 @@ export default function ContactPage() {
     });
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [fileError, setFileError]       = useState('');
-    const [errors, setErrors]             = useState<Record<string, string>>({});
+    const [fileError, setFileError] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isSubmitted, setIsSubmitted]   = useState(false);
+    const [isSubmitted, setIsSubmitted] = useState(false);
     const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
     const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
+
     const phoneDropdownRef = useRef<HTMLDivElement>(null);
-    const fileInputRef     = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -55,43 +59,55 @@ export default function ContactPage() {
                 setIsPhoneDropdownOpen(false);
             }
         }
+
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const selectedCountry = COUNTRY_CODES.find(c => c.code === formData.phonePrefix) ?? COUNTRY_CODES[5];
+    const selectedCountry = COUNTRY_CODES.find(country => country.code === formData.phonePrefix) ?? COUNTRY_CODES[5];
 
-    /* ── Validation ───────────────────────────────────────────── */
     const validate = () => {
         const newErrors: Record<string, string> = {};
-        if (!formData.name.trim())    newErrors.name = t('contact.errors.required');
-        if (!formData.email.trim())   newErrors.email = t('contact.errors.required');
-        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
+
+        if (!formData.name.trim()) newErrors.name = t('contact.errors.required');
+        if (!formData.email.trim()) newErrors.email = t('contact.errors.required');
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
             newErrors.email = t('contact.errors.invalidEmail');
-        if (!formData.phone.trim())   newErrors.phone = t('contact.errors.required');
-        else if (!isValidPhoneNumber(formData.phone, selectedCountry.iso.toUpperCase() as CountryCode))
+        }
+
+        if (!formData.phone.trim()) newErrors.phone = t('contact.errors.required');
+        else if (!isValidPhoneNumber(formData.phone, selectedCountry.iso.toUpperCase() as CountryCode)) {
             newErrors.phone = t('contact.errors.invalidPhone');
+        }
+
         if (!formData.message.trim()) newErrors.message = t('contact.errors.required');
+
         return newErrors;
     };
 
-    /* ── File picker ──────────────────────────────────────────── */
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] ?? null;
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0] ?? null;
+
         setFileError('');
-        if (!file) { setSelectedFile(null); return; }
+        if (!file) {
+            setSelectedFile(null);
+            return;
+        }
+
         if (file.size > MAX_FILE_SIZE) {
             setFileError(t('contact.errors.fileTooLarge'));
             setSelectedFile(null);
-            e.target.value = '';
+            event.target.value = '';
             return;
         }
+
         if (!ALLOWED_TYPES.includes(file.type)) {
             setFileError(t('contact.errors.fileInvalidType'));
             setSelectedFile(null);
-            e.target.value = '';
+            event.target.value = '';
             return;
         }
+
         setSelectedFile(file);
     };
 
@@ -101,44 +117,50 @@ export default function ContactPage() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    /* ── Submit ───────────────────────────────────────────────── */
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+
         const newErrors = validate();
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             return;
         }
+
         setErrors({});
         setIsSubmitting(true);
 
         try {
             const body = new FormData();
-            Object.entries(formData).forEach(([k, v]) => body.append(k, v));
+            Object.entries(formData).forEach(([key, value]) => body.append(key, value));
             if (selectedFile) body.append('attachment', selectedFile);
 
-            // Gửi userId nếu user đã đăng nhập để liên kết ticket với tài khoản
             const token = localStorage.getItem('accessToken');
             if (token) {
                 try {
-                    // Decode JWT payload để lấy userId (không cần verify)
                     const payload = JSON.parse(atob(token.split('.')[1]));
                     const userId = payload.sub ?? payload.id;
                     if (userId) body.append('userId', String(userId));
-                } catch { /* bỏ qua nếu token không decode được */ }
+                } catch {
+                    // Token decoding is only used to associate an optional support ticket.
+                }
             }
 
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contact/send`, {
+            const response = await fetch(`${API_BASE_URL}/contact/send`, {
                 method: 'POST',
                 body,
             });
 
-            if (!res.ok) throw new Error('Server error');
-            const data = await res.json();
+            if (!response.ok) throw new Error('Server error');
+
+            const data = await response.json();
             setSubmittedTicketId(data.ticketId ?? 0);
             setIsSubmitted(true);
         } catch {
-            setErrors({ submit: 'Gửi thất bại. Vui lòng thử lại.' });
+            setErrors({
+                submit: language === 'vi'
+                    ? 'Gửi thất bại. Vui lòng thử lại.'
+                    : 'Unable to send your request. Please try again.',
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -149,219 +171,247 @@ export default function ContactPage() {
         setSelectedFile(null);
         setFileError('');
         setErrors({});
-        setFormData({ name: '', email: '', phonePrefix: '+84', phone: '', reference: '', subject: 'booking', message: '' });
+        setFormData({
+            name: '',
+            email: '',
+            phonePrefix: '+84',
+            phone: '',
+            reference: '',
+            subject: 'booking',
+            message: '',
+        });
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    /* ── Input class helper ───────────────────────────────────── */
-    const inputCls = (field: string) =>
-        `w-full px-5 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all font-body text-on-surface placeholder:text-outline/50 ${errors[field] ? 'ring-2 ring-error/50' : ''}`;
+    const inputClass = (field: string) =>
+        `w-full border-x-0 border-t-0 border-b bg-transparent px-2 py-3.5 font-body text-on-surface outline-none transition-colors placeholder:text-outline/45 focus:border-primary focus:ring-0 ${
+            errors[field] ? 'border-error' : 'border-outline-variant'
+        }`;
 
-    /* ── Render ───────────────────────────────────────────────── */
+    const minimalFieldClass =
+        'w-full border-x-0 border-t-0 border-b border-outline-variant bg-transparent px-2 py-3.5 font-body text-on-surface outline-none transition-colors placeholder:text-outline/45 focus:border-primary focus:ring-0';
+
     return (
-        <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
+        <div className="min-h-screen bg-surface text-on-surface antialiased">
             <Header />
 
-            <main className="flex-grow pt-32 pb-24 px-6 max-w-7xl mx-auto w-full">
-                {/* Label + Heading */}
-                <div className="mb-8">
-                    <span className="text-[0.6875rem] font-medium tracking-[0.1em] uppercase text-primary font-label">
+            <main className="mx-auto w-full max-w-7xl px-6 pb-24 pt-32">
+                <div className="mb-12 animate-fade-in-up">
+                    <span className="font-label text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-primary">
                         {t('contact.guestRelations')}
                     </span>
-                    <h1 className="text-5xl md:text-6xl font-headline font-bold text-primary mt-2 tracking-tight">
+                    <h1 className="mt-3 max-w-4xl font-headline text-4xl font-extrabold leading-[1.02] tracking-tight text-primary md:text-6xl">
                         {t('contact.howCanWeAssist')}
                     </h1>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
-                    {/* ── Left Column ─────────────────────────────────── */}
-                    <div className="lg:col-span-5 space-y-12">
-                        <p className="text-lg text-on-surface-variant leading-relaxed font-body max-w-md">
+                <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-12 lg:gap-16">
+                    <section className="animate-fade-in-up space-y-14 lg:col-span-5">
+                        <p className="max-w-md font-body text-lg leading-8 text-on-surface-variant">
                             {t('contact.description')}
                         </p>
 
-                        <div className="space-y-8">
-                            {/* Service Hours */}
-                            <div className="flex items-start gap-5">
-                                <div className="p-3 bg-surface-container-low rounded-xl text-primary flex items-center justify-center shrink-0">
-                                    <span className="material-symbols-outlined">schedule</span>
+                        <div className="space-y-10">
+                            {[
+                                {
+                                    icon: 'schedule',
+                                    title: t('contact.serviceHours'),
+                                    body: t('contact.serviceHoursTime'),
+                                    note: t('contact.serviceHoursSub'),
+                                },
+                                {
+                                    icon: 'mail',
+                                    title: t('contact.emailUs'),
+                                    body: 'support@azurehorizon.com',
+                                    href: 'mailto:support@azurehorizon.com',
+                                },
+                                {
+                                    icon: 'help_outline',
+                                    title: t('contact.faq'),
+                                    body: t('contact.faqDesc'),
+                                    action: t('contact.viewFaq'),
+                                    href: '/support/track',
+                                },
+                            ].map(item => (
+                                <div key={item.title} className="group flex items-start gap-5">
+                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/5 text-primary transition-colors group-hover:bg-primary/10">
+                                        <span className="material-symbols-outlined">{item.icon}</span>
+                                    </div>
+                                    <div>
+                                        <h2 className="mb-1 font-headline text-lg font-semibold text-primary">{item.title}</h2>
+                                        {item.href && !item.action ? (
+                                            <a
+                                                className="font-body text-on-surface-variant underline decoration-outline-variant underline-offset-4 transition-colors hover:text-primary"
+                                                href={item.href}
+                                            >
+                                                {item.body}
+                                            </a>
+                                        ) : (
+                                            <p className="font-body text-on-surface-variant">{item.body}</p>
+                                        )}
+                                        {item.note && <p className="mt-2 font-body text-sm text-outline">{item.note}</p>}
+                                        {item.action && item.href && (
+                                            <Link
+                                                className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
+                                                href={item.href}
+                                            >
+                                                {item.action}
+                                                <span className="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1">
+                                                    arrow_forward
+                                                </span>
+                                            </Link>
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-headline font-semibold text-primary mb-1">{t('contact.serviceHours')}</h3>
-                                    <p className="text-on-surface-variant font-body">{t('contact.serviceHoursTime')}</p>
-                                    <p className="text-sm text-outline mt-1 font-body">{t('contact.serviceHoursSub')}</p>
-                                </div>
-                            </div>
-
-                            {/* Email */}
-                            <div className="flex items-start gap-5">
-                                <div className="p-3 bg-surface-container-low rounded-xl text-primary flex items-center justify-center shrink-0">
-                                    <span className="material-symbols-outlined">mail</span>
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-headline font-semibold text-primary mb-1">{t('contact.emailUs')}</h3>
-                                    <a
-                                        className="text-on-surface-variant font-body hover:text-primary transition-colors underline underline-offset-4 decoration-outline-variant"
-                                        href="mailto:support@azurehorizon.com"
-                                    >
-                                        support@azurehorizon.com
-                                    </a>
-                                </div>
-                            </div>
-
-                            {/* FAQ */}
-                            <div className="flex items-start gap-5">
-                                <div className="p-3 bg-surface-container-low rounded-xl text-primary flex items-center justify-center shrink-0">
-                                    <span className="material-symbols-outlined">help_outline</span>
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-headline font-semibold text-primary mb-1">{t('contact.faq')}</h3>
-                                    <p className="text-on-surface-variant font-body mb-3">{t('contact.faqDesc')}</p>
-                                    <a className="text-primary font-semibold text-sm flex items-center gap-2 group" href="/faq">
-                                        {t('contact.viewFaq')}
-                                        <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                                    </a>
-                                </div>
-                            </div>
+                            ))}
                         </div>
 
-                        {/* Decorative image */}
-                        <div className="rounded-xl overflow-hidden aspect-[16/9] w-full relative group">
-                            <img
-                                className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105"
-                                alt="luxury hotel concierge desk"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQyFceXASZsuTjJXxjYyx-MeFinrs2inzDL_XeF3xlt81WJMykVt3qPeJUHElBLlSADQF7xMnd4QTa9QZ8Qgd1tq26Vw6m5NnZBEIQJte4F0MisyzXCJ7bxSm_-8GwX-3UdX6EA2HgVcXZUK7KmFe5Tb_jDlBZJcHkQGHYFv9H4RbNSWyzPxYRPyP9bULJUuF9071-JFE7RT1KSV7nXY1KAMSxkC4jm-uuCHVr4FSRPydnlAZrOQrAwE3x7oKCuEInYaRVD7BgVfl0"
+                        <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl shadow-lg">
+                            <Image
+                                src="https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&q=85&w=1200"
+                                alt="Luxury hotel concierge desk with warm ambient lighting"
+                                fill
+                                className="object-cover transition-transform duration-700 hover:scale-105"
+                                sizes="(max-width: 1024px) 100vw, 40vw"
                             />
                             <div className="absolute inset-0 bg-primary/10 mix-blend-multiply" />
                         </div>
-                    </div>
+                    </section>
 
-                    {/* ── Right Column ────────────────────────────────── */}
-                    <div className="lg:col-span-7">
-                        <div className="bg-surface-container-lowest p-8 md:p-12 rounded-[1.5rem] shadow-xl" style={{ boxShadow: '0 8px 32px rgba(25,28,33,0.04)' }}>
-
+                    <section className="animate-fade-in-up lg:col-span-7">
+                        <div className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-7 shadow-2xl shadow-slate-900/10 backdrop-blur md:p-10 lg:p-12">
                             {isSubmitted ? (
-                                /* Success state */
-                                <div className="text-center py-8 px-4">
-                                    <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-5 text-primary">
+                                <div className="mx-auto max-w-md py-8 text-center">
+                                    <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
                                         <span className="material-symbols-outlined text-4xl">check_circle</span>
                                     </div>
-                                    <h3 className="text-2xl font-bold font-headline text-on-surface mb-2">Yêu cầu đã được gửi!</h3>
-                                    <p className="text-on-surface-variant leading-relaxed max-w-sm mx-auto text-sm mb-6">
-                                        Đội ngũ hỗ trợ Azure Horizon sẽ phản hồi trong vòng 2 giờ làm việc.
+                                    <h2 className="font-headline text-2xl font-bold text-on-surface">
+                                        {language === 'vi' ? 'Yêu cầu đã được gửi' : 'Your request has been sent'}
+                                    </h2>
+                                    <p className="mt-3 text-sm leading-6 text-on-surface-variant">
+                                        {t('contact.successMessage')}
                                     </p>
 
-                                    {/* Ticket ID Badge */}
                                     {submittedTicketId > 0 && (
-                                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 mb-6 mx-auto max-w-xs">
-                                            <p className="text-xs text-on-surface-variant uppercase tracking-widest font-label mb-1">Mã yêu cầu hỗ trợ của bạn</p>
-                                            <p className="text-4xl font-mono font-bold text-primary">#{submittedTicketId}</p>
-                                            <p className="text-xs text-outline mt-2">Lưu lại mã này để theo dõi tiến trình xử lý</p>
+                                        <div className="my-7 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                                            <p className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant">
+                                                {language === 'vi' ? 'Mã yêu cầu hỗ trợ' : 'Support ticket ID'}
+                                            </p>
+                                            <p className="mt-2 font-mono text-4xl font-bold text-primary">#{submittedTicketId}</p>
                                         </div>
                                     )}
 
                                     <div className="flex flex-col gap-3">
                                         {submittedTicketId > 0 && (
-                                            <a
+                                            <Link
                                                 href={`/support/track?id=${submittedTicketId}&email=${encodeURIComponent(formData.email)}`}
-                                                className="w-full text-white py-3.5 rounded-full font-headline font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-                                                style={{ background: 'linear-gradient(135deg,#003f87 0%,#0056b3 100%)' }}
+                                                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-colors hover:bg-primary-container"
                                             >
                                                 <span className="material-symbols-outlined text-sm">search</span>
-                                                Theo dõi tiến trình xử lý
-                                            </a>
+                                                {language === 'vi' ? 'Theo dõi tiến trình xử lý' : 'Track this request'}
+                                            </Link>
                                         )}
                                         <button
+                                            type="button"
                                             onClick={resetForm}
-                                            className="w-full px-8 py-3.5 bg-surface-container-low text-on-surface-variant font-bold rounded-full hover:bg-surface-container transition-colors text-sm"
+                                            className="rounded-full bg-surface-container-low px-6 py-3.5 text-sm font-bold text-on-surface-variant transition-colors hover:bg-surface-container"
                                         >
-                                            Gửi yêu cầu khác
+                                            {t('contact.sendAnother')}
                                         </button>
                                     </div>
                                 </div>
                             ) : (
-                                /* Contact form */
-                                <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-
-                                    {/* Row 1: Name + Email */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <form className="space-y-8" onSubmit={handleSubmit} noValidate>
+                                    <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                                         <div className="space-y-2">
-                                            <label htmlFor="contact-name" className="text-[0.6875rem] font-bold tracking-widest text-on-surface-variant uppercase font-label">
-                                                {t('contact.fullName')} <span className="text-error" aria-hidden="true">*</span>
+                                            <label htmlFor="contact-name" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
+                                                {t('contact.fullName')} <span className="text-error">*</span>
                                             </label>
                                             <input
                                                 id="contact-name"
                                                 type="text"
                                                 autoComplete="name"
-                                                aria-required="true"
-                                                aria-describedby={errors.name ? 'error-name' : undefined}
-                                                className={inputCls('name')}
+                                                aria-describedby={errors.name ? 'contact-name-error' : undefined}
+                                                className={inputClass('name')}
                                                 value={formData.name}
-                                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                                onChange={event => setFormData({ ...formData, name: event.target.value })}
                                                 placeholder={t('contact.namePlaceholder')}
                                             />
-                                            {errors.name && <p id="error-name" role="alert" className="text-xs text-error font-medium mt-1">{errors.name}</p>}
+                                            {errors.name && <p id="contact-name-error" className="text-xs font-medium text-error">{errors.name}</p>}
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label htmlFor="contact-email" className="text-[0.6875rem] font-bold tracking-widest text-on-surface-variant uppercase font-label">
-                                                {t('contact.emailAddress')} <span className="text-error" aria-hidden="true">*</span>
+                                            <label htmlFor="contact-email" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
+                                                {t('contact.emailAddress')} <span className="text-error">*</span>
                                             </label>
                                             <input
                                                 id="contact-email"
                                                 type="email"
                                                 autoComplete="email"
-                                                aria-required="true"
-                                                aria-describedby={errors.email ? 'error-email' : undefined}
-                                                className={inputCls('email')}
+                                                aria-describedby={errors.email ? 'contact-email-error' : undefined}
+                                                className={inputClass('email')}
                                                 value={formData.email}
-                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                                placeholder="example@gmail.com"
+                                                onChange={event => setFormData({ ...formData, email: event.target.value })}
+                                                placeholder="a.thorne@example.com"
                                             />
-                                            {errors.email && <p id="error-email" role="alert" className="text-xs text-error font-medium mt-1">{errors.email}</p>}
+                                            {errors.email && <p id="contact-email-error" className="text-xs font-medium text-error">{errors.email}</p>}
                                         </div>
                                     </div>
 
-                                    {/* Row 2: Phone + Booking ref */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                                         <div className="space-y-2">
-                                            <label htmlFor="contact-phone" className="text-[0.6875rem] font-bold tracking-widest text-on-surface-variant uppercase font-label">
-                                                {t('contact.phoneNumber')} <span className="text-error" aria-hidden="true">*</span>
+                                            <label htmlFor="contact-phone" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
+                                                {t('contact.phoneNumber')} <span className="text-error">*</span>
                                             </label>
                                             <div
-                                                className={`flex bg-surface-container-low rounded-xl focus-within:ring-2 focus-within:ring-primary/20 transition-all ${errors.phone ? 'ring-2 ring-error/50' : ''}`}
-                                                aria-describedby={errors.phone ? 'error-phone' : undefined}
+                                                className={`flex border-x-0 border-t-0 border-b bg-transparent transition-colors focus-within:border-primary ${
+                                                    errors.phone ? 'border-error' : 'border-outline-variant'
+                                                }`}
                                             >
-                                                {/* Country code dropdown */}
-                                                <div className="relative flex-shrink-0" ref={phoneDropdownRef}>
+                                                <div className="relative shrink-0" ref={phoneDropdownRef}>
                                                     <button
                                                         type="button"
                                                         aria-haspopup="listbox"
                                                         aria-expanded={isPhoneDropdownOpen}
-                                                        aria-label={`Country code: ${selectedCountry.code}`}
-                                                        onClick={() => setIsPhoneDropdownOpen(v => !v)}
-                                                        className="flex items-center gap-2 h-full px-4 py-4 cursor-pointer hover:bg-surface-container-highest transition-colors"
-                                                        style={{ borderRight: '1px solid rgba(194,198,212,0.3)' }}
+                                                        onClick={() => setIsPhoneDropdownOpen(value => !value)}
+                                                        className="flex h-full items-center gap-2 px-2 py-3.5 text-sm font-semibold text-on-surface transition-colors hover:text-primary"
                                                     >
-                                                        <img src={getFlagUrl(selectedCountry.iso)} alt={selectedCountry.country} className="w-6 h-[18px] object-cover rounded-sm" />
-                                                        <span className="text-sm font-medium text-on-surface">{selectedCountry.code}</span>
-                                                        <span className="material-symbols-outlined text-sm text-outline transition-transform" style={{ transform: isPhoneDropdownOpen ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+                                                        <Image
+                                                            src={getFlagUrl(selectedCountry.iso)}
+                                                            alt={selectedCountry.country}
+                                                            width={24}
+                                                            height={18}
+                                                            className="h-[18px] w-6 rounded-sm object-cover"
+                                                        />
+                                                        <span>{selectedCountry.code}</span>
+                                                        <span className="material-symbols-outlined text-sm text-outline">expand_more</span>
                                                     </button>
 
                                                     {isPhoneDropdownOpen && (
-                                                        <div role="listbox" aria-label="Select country code" className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl shadow-xl border border-outline-variant/20 overflow-hidden z-30 max-h-64 overflow-y-auto">
-                                                            {COUNTRY_CODES.map(c => (
+                                                        <div role="listbox" className="absolute left-0 top-full z-30 mt-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-outline-variant/30 bg-white py-1 shadow-xl">
+                                                            {COUNTRY_CODES.map(country => (
                                                                 <button
-                                                                    key={c.code}
+                                                                    key={country.code}
                                                                     type="button"
                                                                     role="option"
-                                                                    aria-selected={formData.phonePrefix === c.code}
-                                                                    onClick={() => { setFormData({ ...formData, phonePrefix: c.code }); setIsPhoneDropdownOpen(false); }}
-                                                                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-surface-container-lowest transition-colors ${formData.phonePrefix === c.code ? 'bg-primary/5 font-bold text-primary' : 'text-on-surface'}`}
+                                                                    aria-selected={formData.phonePrefix === country.code}
+                                                                    onClick={() => {
+                                                                        setFormData({ ...formData, phonePrefix: country.code });
+                                                                        setIsPhoneDropdownOpen(false);
+                                                                    }}
+                                                                    className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface-container-low ${
+                                                                        formData.phonePrefix === country.code ? 'bg-primary/5 font-bold text-primary' : 'text-on-surface'
+                                                                    }`}
                                                                 >
-                                                                    <img src={getFlagUrl(c.iso)} alt={c.country} className="w-6 h-[18px] object-cover rounded-sm" />
-                                                                    <span>{c.country}</span>
-                                                                    <span className="text-on-surface-variant ml-auto">{c.code}</span>
+                                                                    <Image
+                                                                        src={getFlagUrl(country.iso)}
+                                                                        alt={country.country}
+                                                                        width={24}
+                                                                        height={18}
+                                                                        className="h-[18px] w-6 rounded-sm object-cover"
+                                                                    />
+                                                                    <span>{country.country}</span>
+                                                                    <span className="ml-auto text-on-surface-variant">{country.code}</span>
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -372,42 +422,41 @@ export default function ContactPage() {
                                                     id="contact-phone"
                                                     type="tel"
                                                     autoComplete="tel-national"
-                                                    aria-required="true"
-                                                    className="w-full px-4 py-4 bg-transparent border-none outline-none font-body text-on-surface placeholder:text-outline/50 flex-1 min-w-0 !ring-0"
+                                                    aria-describedby={errors.phone ? 'contact-phone-error' : undefined}
+                                                    className="min-w-0 flex-1 border-none bg-transparent px-3 py-3.5 text-on-surface outline-none placeholder:text-outline/45 focus:ring-0"
                                                     value={formData.phone}
-                                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                                    onChange={event => setFormData({ ...formData, phone: event.target.value })}
                                                     placeholder="912 345 678"
                                                 />
                                             </div>
-                                            {errors.phone && <p id="error-phone" role="alert" className="text-xs text-error font-medium mt-1">{errors.phone}</p>}
+                                            {errors.phone && <p id="contact-phone-error" className="text-xs font-medium text-error">{errors.phone}</p>}
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label htmlFor="contact-ref" className="text-[0.6875rem] font-bold tracking-widest text-on-surface-variant uppercase font-label">
+                                            <label htmlFor="contact-ref" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
                                                 {t('contact.bookingRef')}
                                             </label>
                                             <input
                                                 id="contact-ref"
                                                 type="text"
-                                                className="w-full px-5 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all font-body text-on-surface placeholder:text-outline/50"
+                                                className={minimalFieldClass}
                                                 value={formData.reference}
-                                                onChange={e => setFormData({ ...formData, reference: e.target.value })}
-                                                placeholder="AZH-2024-XXXX"
+                                                onChange={event => setFormData({ ...formData, reference: event.target.value })}
+                                                placeholder="AH-98234-X"
                                             />
                                         </div>
                                     </div>
 
-                                    {/* Subject */}
                                     <div className="space-y-2">
-                                        <label htmlFor="contact-subject" className="text-[0.6875rem] font-bold tracking-widest text-on-surface-variant uppercase font-label">
+                                        <label htmlFor="contact-subject" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
                                             {t('contact.subject')}
                                         </label>
                                         <div className="relative">
                                             <select
                                                 id="contact-subject"
-                                                className="w-full px-5 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all font-body text-on-surface appearance-none cursor-pointer pr-10"
+                                                className={`${minimalFieldClass} cursor-pointer appearance-none pr-10`}
                                                 value={formData.subject}
-                                                onChange={e => setFormData({ ...formData, subject: e.target.value })}
+                                                onChange={event => setFormData({ ...formData, subject: event.target.value })}
                                             >
                                                 <option value="booking">{t('contact.subjectOptions.booking')}</option>
                                                 <option value="payment">{t('contact.subjectOptions.payment')}</option>
@@ -416,100 +465,99 @@ export default function ContactPage() {
                                                 <option value="partnership">{t('contact.subjectOptions.partnership')}</option>
                                                 <option value="general">{t('contact.subjectOptions.general')}</option>
                                             </select>
-                                            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
+                                            <span className="material-symbols-outlined pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-outline">
+                                                expand_more
+                                            </span>
                                         </div>
                                     </div>
 
-                                    {/* Message */}
                                     <div className="space-y-2">
-                                        <label htmlFor="contact-message" className="text-[0.6875rem] font-bold tracking-widest text-on-surface-variant uppercase font-label">
-                                            {t('contact.message')} <span className="text-error" aria-hidden="true">*</span>
+                                        <label htmlFor="contact-message" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
+                                            {t('contact.message')} <span className="text-error">*</span>
                                         </label>
                                         <textarea
                                             id="contact-message"
-                                            aria-required="true"
-                                            aria-describedby={errors.message ? 'error-message' : undefined}
-                                            className={`w-full px-5 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-lowest transition-all font-body text-on-surface placeholder:text-outline/50 resize-none ${errors.message ? 'ring-2 ring-error/50' : ''}`}
-                                            value={formData.message}
-                                            onChange={e => setFormData({ ...formData, message: e.target.value })}
-                                            placeholder={t('contact.messagePlaceholder')}
+                                            aria-describedby={errors.message ? 'contact-message-error' : undefined}
+                                            className={`${inputClass('message')} resize-none`}
                                             rows={4}
+                                            value={formData.message}
+                                            onChange={event => setFormData({ ...formData, message: event.target.value })}
+                                            placeholder={t('contact.messagePlaceholder')}
                                         />
-                                        {errors.message && <p id="error-message" role="alert" className="text-xs text-error font-medium mt-1">{errors.message}</p>}
+                                        {errors.message && <p id="contact-message-error" className="text-xs font-medium text-error">{errors.message}</p>}
                                     </div>
 
-                                    {/* File Upload */}
-                                    <div className="space-y-2">
-                                        <label className="text-[0.6875rem] font-bold tracking-widest text-on-surface-variant uppercase font-label block">
+                                    <div className="space-y-3">
+                                        <label className="block font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
                                             {t('contact.attachments')}
                                         </label>
 
                                         {selectedFile ? (
-                                            /* File selected — show preview row */
-                                            <div className="flex items-center gap-3 px-4 py-3 bg-primary/5 border border-primary/20 rounded-xl">
-                                                <span className="material-symbols-outlined text-primary text-xl">attach_file</span>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium text-on-surface truncate">{selectedFile.name}</p>
-                                                    <p className="text-xs text-outline">{(selectedFile.size / 1024).toFixed(0)} KB — {t('contact.fileSelected')}</p>
+                                            <div className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
+                                                <span className="material-symbols-outlined text-primary">attach_file</span>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-sm font-semibold text-on-surface">{selectedFile.name}</p>
+                                                    <p className="text-xs text-outline">
+                                                        {(selectedFile.size / 1024).toFixed(0)} KB - {t('contact.fileSelected')}
+                                                    </p>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     aria-label={t('contact.removeFile')}
                                                     onClick={removeFile}
-                                                    className="p-1 rounded-full hover:bg-error/10 text-outline hover:text-error transition-colors"
+                                                    className="rounded-full p-1 text-outline transition-colors hover:bg-error/10 hover:text-error"
                                                 >
                                                     <span className="material-symbols-outlined text-base">close</span>
                                                 </button>
                                             </div>
                                         ) : (
-                                            /* Drop zone */
                                             <label
                                                 htmlFor="contact-file"
-                                                className="group relative border-2 border-dashed border-outline-variant/30 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:border-primary/40 transition-colors cursor-pointer bg-surface/50 block"
+                                                className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-outline-variant/60 bg-transparent p-8 text-center transition-all hover:border-primary/40 hover:bg-primary/5"
                                             >
-                                                <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors mb-2">cloud_upload</span>
-                                                <p className="text-sm font-body text-on-surface-variant">{t('contact.attachInst')}</p>
-                                                <p className="text-xs text-outline font-body mt-1">{t('contact.attachSize')}</p>
+                                                <span className="material-symbols-outlined mb-3 text-3xl text-outline transition-colors group-hover:text-primary">
+                                                    cloud_upload
+                                                </span>
+                                                <p className="text-sm font-medium text-on-surface-variant">{t('contact.attachInst')}</p>
+                                                <p className="mt-2 text-xs text-outline">{t('contact.attachSize')}</p>
                                                 <input
                                                     id="contact-file"
                                                     ref={fileInputRef}
                                                     type="file"
                                                     accept=".pdf,.jpg,.jpeg,.png"
-                                                    aria-label={t('contact.attachments')}
                                                     className="sr-only"
                                                     onChange={handleFileChange}
                                                 />
                                             </label>
                                         )}
 
-                                        {fileError && <p role="alert" className="text-xs text-error font-medium mt-1">{fileError}</p>}
+                                        {fileError && <p className="text-xs font-medium text-error">{fileError}</p>}
                                     </div>
 
-                                    {/* Submit error */}
-                                    {errors.submit && (
-                                        <p role="alert" className="text-sm text-error font-medium text-center">{errors.submit}</p>
-                                    )}
+                                    {errors.submit && <p className="text-center text-sm font-medium text-error">{errors.submit}</p>}
 
-                                    {/* Submit button */}
                                     <button
                                         type="submit"
                                         disabled={isSubmitting}
-                                        className="w-full text-white py-5 rounded-full font-headline font-bold text-lg shadow-lg hover:shadow-primary/20 transition-all active:scale-[0.98] mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
-                                        style={{ background: 'linear-gradient(135deg,#003f87 0%,#0056b3 100%)' }}
+                                        className="w-full rounded-full bg-primary px-6 py-5 font-headline text-lg font-bold text-white shadow-[0_8px_24px_rgba(0,86,179,0.28)] transition-all hover:bg-primary-container hover:shadow-[0_12px_32px_rgba(0,86,179,0.36)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                                     >
-                                        {isSubmitting
-                                            ? <span className="flex items-center justify-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>{t('contact.submitting')}</span>
-                                            : t('contact.sendMsg')
-                                        }
+                                        {isSubmitting ? (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                                                {t('contact.submitting')}
+                                            </span>
+                                        ) : (
+                                            t('contact.sendMsg')
+                                        )}
                                     </button>
 
-                                    <p className="text-[0.6875rem] text-center text-outline font-label uppercase tracking-widest">
+                                    <p className="text-center font-label text-[0.6875rem] uppercase tracking-widest text-outline">
                                         {t('contact.avgResponse')}
                                     </p>
                                 </form>
                             )}
                         </div>
-                    </div>
+                    </section>
                 </div>
             </main>
 

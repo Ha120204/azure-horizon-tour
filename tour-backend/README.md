@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
@@ -89,10 +89,28 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 
 ## Stay in touch
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
+- Author - [Kamil MyÅ›liwiec](https://twitter.com/kammysliwiec)
 - Website - [https://nestjs.com](https://nestjs.com/)
 - Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## AI Provider Configuration
+
+This backend supports both `llmgate` and `openai` through a shared OpenAI-compatible client.
+
+Required env vars:
+
+- `AI_PROVIDER`: `llmgate` or `openai`
+- `AI_API_KEY`: API key for selected provider (falls back to `LLMGATE_API_KEY` for backward compatibility)
+- `AI_PRIMARY_MODEL`: primary model name
+- `AI_FALLBACK_MODEL`: fallback model name
+- `AI_BASE_URL` (optional): custom gateway endpoint; with `llmgate` default is `https://llmgate.app/v1`
+
+### Quick Debug Checklist for `404 model not found`
+
+1. Verify `AI_PROVIDER` matches your provider/account.
+2. Verify `AI_BASE_URL` points to the correct endpoint for that provider.
+3. Verify both `AI_PRIMARY_MODEL` and `AI_FALLBACK_MODEL` exist on the selected provider/gateway.

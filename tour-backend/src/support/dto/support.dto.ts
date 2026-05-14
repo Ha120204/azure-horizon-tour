@@ -29,11 +29,11 @@ export class CreateTicketReplyDto {
 
 // ─── Customer DTOs ────────────────────────────────────────────────────────────
 
-/** Dùng cho query param: ?email=xxx */
+/** Dùng cho query param: ?accessCode=xxx */
 export class LookupQueryDto {
   @IsOptional()
-  @IsEmail()
-  email?: string;
+  @IsString()
+  accessCode?: string;
 }
 
 /** Customer phản hồi ticket (chỉ khi IN_PROGRESS) */
@@ -43,10 +43,10 @@ export class CustomerReplyDto {
   @MaxLength(1000)
   content: string;
 
-  /** Email để verify quyền sở hữu (dành cho guest không có JWT) */
+  /** Access Code để verify quyền sở hữu (dành cho guest không có JWT) */
   @IsOptional()
-  @IsEmail()
-  email?: string;
+  @IsString()
+  accessCode?: string;
 
   @IsOptional()
   @IsString()
@@ -62,6 +62,6 @@ export class RateTicketDto {
   rating: number;
 
   @IsOptional()
-  @IsEmail()
-  email?: string;
+  @IsString()
+  accessCode?: string;
 }

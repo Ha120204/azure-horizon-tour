@@ -29,6 +29,8 @@ export default function ProfilePage() {
     const [email, setEmail] = useState('');
     const [dob, setDob] = useState('');
     const [gender, setGender] = useState('');
+    const [identityType, setIdentityType] = useState('CCCD');
+    const [identityNo, setIdentityNo] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
 
     const [isAvatarUploading, setIsAvatarUploading] = useState(false);
@@ -72,6 +74,8 @@ export default function ProfilePage() {
                     setEmail(data.email || '');
                     setDob(data.dob || '');
                     setGender(data.gender || '');
+                    setIdentityType(data.identityType || 'CCCD');
+                    setIdentityNo(data.identityNo || '');
                     setAvatarUrl(data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200");
                 }
 
@@ -120,19 +124,31 @@ export default function ProfilePage() {
     const handleUpdateInfo = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const payload = { fullName: name, phone: phone, dob, gender, identityType, identityNo };
+            console.log('[Profile] Sending PATCH payload:', payload);
+
             const res = await fetchWithAuth('http://localhost:3000/auth/profile', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fullName: name, phone: phone, dob, gender })
+                body: JSON.stringify(payload)
             });
+
+            const result = await res.json();
+            console.log('[Profile] PATCH response status:', res.status, 'body:', result);
+
             if (res.ok) {
                 // Đồng bộ tên mới lên localStorage → Header cập nhật ngay
                 localStorage.setItem('userName', name);
                 window.dispatchEvent(new Event('auth-change'));
                 setToast({ msg: t('profile.updateSuccess'), type: 'success' });
+            } else {
+                const errorMsg = Array.isArray(result?.message)
+                    ? result.message.join(', ')
+                    : (result?.message || t('profile.updateFail'));
+                setToast({ msg: errorMsg, type: 'error' });
             }
-            else setToast({ msg: t('profile.updateFail'), type: 'error' });
         } catch (err) {
+            console.error('[Profile] Update error:', err);
             setToast({ msg: t('profile.serverError'), type: 'error' });
         } finally {
             setTimeout(() => setToast(null), 3000);
@@ -253,6 +269,8 @@ export default function ProfilePage() {
                                 email={email}
                                 dob={dob} setDob={setDob}
                                 gender={gender} setGender={setGender}
+                                identityType={identityType} setIdentityType={setIdentityType}
+                                identityNo={identityNo} setIdentityNo={setIdentityNo}
                                 onSubmit={handleUpdateInfo}
                                 t={t}
                             />

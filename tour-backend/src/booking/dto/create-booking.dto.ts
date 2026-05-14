@@ -1,4 +1,12 @@
 import { IsInt, IsOptional, IsString, Min, IsNumber, IsObject, IsArray } from 'class-validator';
+import { Prisma } from '@prisma/client';
+
+export type PassengerDto = {
+    type?: string;
+    [key: string]: Prisma.JsonValue | undefined;
+};
+
+export type ContactInfoDto = Record<string, Prisma.JsonValue>;
 
 export class CreateBookingDto {
     @IsInt()
@@ -26,9 +34,9 @@ export class CreateBookingDto {
 
     @IsOptional()
     @IsObject()
-    contactInfo?: Record<string, any>;
+    contactInfo?: ContactInfoDto;
 
     @IsOptional()
     @IsArray()
-    passengers?: any[];
-}
+    passengers?: PassengerDto[];
+}

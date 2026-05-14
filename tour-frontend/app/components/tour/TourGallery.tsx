@@ -9,101 +9,151 @@ interface TourGalleryProps {
     t: (key: string) => string;
 }
 
-// Fallback images khi tour chưa có ảnh gallery
 const FALLBACK_IMAGES = [
     'https://images.unsplash.com/photo-1723380775952-28ea1a7a330a?auto=format&fit=crop&q=80&w=1200',
-    'https://images.unsplash.com/photo-1688707084161-a2d4a7313f37?auto=format&fit=crop&q=80&w=800',
-    'https://plus.unsplash.com/premium_photo-1673139081468-d6c013defbc2?auto=format&fit=crop&q=80&w=800',
-    'https://plus.unsplash.com/premium_photo-1680831748191-d726a2f7b201?auto=format&fit=crop&q=80&w=800',
 ];
 
 export default function TourGallery({ tour, t }: TourGalleryProps) {
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-    // Ảnh từ DB (gallery), nếu không có thì dùng imageUrl chính, fallback cuối cùng
+    // Lấy ảnh thực tế từ database, không fix cứng thêm fallback nữa
     const dbImages: TourImage[] = tour?.images ?? [];
-    const allImages: string[] = dbImages.length > 0
-        ? dbImages.map((img) => img.url)
-        : [tour?.imageUrl || FALLBACK_IMAGES[0], ...FALLBACK_IMAGES.slice(1)];
+    let allImages: string[] = dbImages.map((img) => img.url);
+    
+    // Nếu hoàn toàn không có ảnh nào, mới dùng 1 ảnh fallback
+    if (allImages.length === 0) {
+        if (tour?.imageUrl) {
+            allImages = [tour.imageUrl];
+        } else {
+            allImages = [FALLBACK_IMAGES[0]];
+        }
+    }
 
-    const [main, ...rest] = allImages;
-    // Hiển thị tối đa 3 ảnh phụ trong grid
-    const side = rest.slice(0, 3);
+    const imgCount = allImages.length;
+
+    const renderTourCode = () => (
+        <div className="absolute top-4 left-4 z-10">
+            <span className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase shadow-sm text-on-surface">
+                {t('tour_detail.tourCode')} {tour.tourCode?.substring(0, 12)}
+            </span>
+        </div>
+    );
+
+    const renderViewAllBtn = (isAbsolute = true) => (
+        imgCount > 1 ? (
+            <button
+                onClick={(e) => { e.stopPropagation(); setLightboxIndex(0); }}
+                className={`${isAbsolute ? 'absolute bottom-4 right-4' : 'mt-4 float-right'} bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-lg hover:bg-white transition-colors z-10 hidden md:flex`}
+            >
+                <span className="material-symbols-outlined text-sm">photo_library</span>
+                {t('tour_detail.viewAllPhotos')}
+            </button>
+        ) : null
+    );
+
+    const renderGalleryGrid = () => {
+        // Layout 1 Ảnh
+        if (imgCount === 1) {
+            return (
+                <div className="w-full h-[300px] md:h-[480px] rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
+                    <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={allImages[0]} />
+                    {renderTourCode()}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                </div>
+            );
+        }
+
+        // Layout 2 Ảnh (Chia đôi màn hình)
+        if (imgCount === 2) {
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
+                    <div className="rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
+                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={allImages[0]} />
+                        {renderTourCode()}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                    </div>
+                    <div className="hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(1)}>
+                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} 2`} src={allImages[1]} />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                        {renderViewAllBtn()}
+                    </div>
+                </div>
+            );
+        }
+
+        // Layout 3 Ảnh (1 To bên trái, 2 Nhỏ bên phải xếp trên dưới)
+        if (imgCount === 3) {
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
+                    <div className="md:col-span-2 md:row-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
+                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={allImages[0]} />
+                        {renderTourCode()}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                    </div>
+                    <div className="hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(1)}>
+                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} 2`} src={allImages[1]} />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                    </div>
+                    <div className="hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(2)}>
+                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} 3`} src={allImages[2]} />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                        {renderViewAllBtn()}
+                    </div>
+                </div>
+            );
+        }
+
+        // Layout >= 4 Ảnh (Layout cũ: 1 To, 3 Nhỏ xếp quanh)
+        const [main, ...rest] = allImages;
+        const side = rest.slice(0, 3);
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
+                {/* Ảnh chính */}
+                <div className="md:col-span-2 md:row-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
+                    <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={main} />
+                    {renderTourCode()}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                </div>
+
+                {/* Ảnh phụ */}
+                {side.map((url, i) => {
+                    const isLast = i === side.length - 1 && allImages.length > 4;
+                    const extraCount = allImages.length - 4;
+                    return (
+                        <div key={i} className={`hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group ${i === 2 ? 'md:col-span-2' : ''}`} onClick={() => setLightboxIndex(i + 1)}>
+                            <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} ${i + 2}`} src={url} />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                            {isLast && (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
+                                    <span className="text-white font-bold text-lg">+{extraCount} ảnh</span>
+                                </div>
+                            )}
+                            {i === 2 && !isLast && renderViewAllBtn()}
+                            {isLast && renderViewAllBtn()}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
 
     return (
         <>
             <section className="mb-10">
-                <div className="grid grid-cols-1 md:grid-cols-4 grid-rows-2 gap-2 md:gap-3 h-[300px] md:h-[480px]">
-                    {/* Ảnh chính — chiếm 2 cột, 2 hàng */}
-                    <div
-                        className="md:col-span-2 md:row-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group"
-                        onClick={() => setLightboxIndex(0)}
-                    >
-                        <img
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                            alt={tour.name}
-                            src={main}
-                        />
-                        <div className="absolute top-4 left-4">
-                            <span className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase shadow-sm text-on-surface">
-                                {t('tour_detail.tourCode')} {tour.tourCode?.substring(0, 12)}
-                            </span>
-                        </div>
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 rounded-2xl" />
-                    </div>
-
-                    {/* Ảnh phụ */}
-                    {side.map((url, i) => {
-                        const isLast = i === side.length - 1 && allImages.length > 4;
-                        const extraCount = allImages.length - 4;
-                        return (
-                            <div
-                                key={i}
-                                className={`hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group ${i === 2 ? 'md:col-span-2' : ''}`}
-                                onClick={() => setLightboxIndex(i + 1)}
-                            >
-                                <img
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                                    alt={`${tour.name} ${i + 2}`}
-                                    src={url}
-                                />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 rounded-2xl" />
-                                {/* Nút "Xem tất cả" ở ảnh cuối nếu còn ảnh */}
-                                {isLast && (
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
-                                        <span className="text-white font-bold text-lg">+{extraCount} ảnh</span>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-
-                    {/* Nút Xem tất cả ảnh (nếu không có ảnh thừa thì vẫn hiển thị) */}
-                    {side.length === 0 && (
-                        <div className="hidden md:block md:col-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(1)}>
-                            <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={FALLBACK_IMAGES[3]} />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 rounded-2xl" />
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setLightboxIndex(0); }}
-                                className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-lg hover:bg-white transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-sm">photo_library</span>
-                                {t('tour_detail.viewAllPhotos')}
-                            </button>
-                        </div>
-                    )}
-                </div>
+                {renderGalleryGrid()}
 
                 {/* Xem tất cả ảnh — mobile friendly */}
-                <div className="mt-3 flex justify-end md:hidden">
-                    <button
-                        onClick={() => setLightboxIndex(0)}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 px-3 py-1.5 rounded-lg"
-                    >
-                        <span className="material-symbols-outlined text-[14px]">photo_library</span>
-                        Xem tất cả {allImages.length} ảnh
-                    </button>
-                </div>
+                {imgCount > 1 && (
+                    <div className="mt-3 flex justify-end md:hidden">
+                        <button
+                            onClick={() => setLightboxIndex(0)}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 px-3 py-1.5 rounded-lg"
+                        >
+                            <span className="material-symbols-outlined text-[14px]">photo_library</span>
+                            Xem tất cả {allImages.length} ảnh
+                        </button>
+                    </div>
+                )}
             </section>
 
             {/* ── Lightbox ── */}

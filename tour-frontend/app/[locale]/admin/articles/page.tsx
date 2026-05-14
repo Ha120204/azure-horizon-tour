@@ -30,6 +30,30 @@ const STATUS_CFG: Record<ArticleStatus, { label: string; icon: string; cls: stri
 };
 const getStatusCfg = (s: string) => STATUS_CFG[s as ArticleStatus] ?? STATUS_CFG.DRAFT;
 
+type TrashArticle = Article & {
+  deletedAt?: string | null;
+};
+
+type ArticleStats = {
+  totalVisible: number;
+  published: number;
+  draft: number;
+  pending: number;
+  rejected: number;
+  featured: number;
+  topCategory: { category: string; count: number } | null;
+};
+
+const EMPTY_STATS: ArticleStats = {
+  totalVisible: 0,
+  published: 0,
+  draft: 0,
+  pending: 0,
+  rejected: 0,
+  featured: 0,
+  topCategory: null,
+};
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 function SkeletonRow() {
   return (
@@ -67,7 +91,7 @@ function DeleteDialog({ article, onConfirm, onCancel, isDeleting }: {
         </div>
         <h3 className="text-lg font-bold text-on-surface text-center mb-2">Xóa bài viết?</h3>
         <p className="text-sm text-on-surface-variant text-center leading-relaxed mb-1">Bạn sắp xóa vĩnh viễn bài viết</p>
-        <p className="text-sm font-bold text-on-surface text-center mb-5 line-clamp-2">"{article.title}"</p>
+        <p className="text-sm font-bold text-on-surface text-center mb-5 line-clamp-2">&ldquo;{article.title}&rdquo;</p>
         <div className="flex gap-3">
           <button onClick={onCancel} disabled={isDeleting}
             className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors disabled:opacity-50 outline-none">
@@ -78,6 +102,78 @@ function DeleteDialog({ article, onConfirm, onCancel, isDeleting }: {
             {isDeleting
               ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang xóa…</>
               : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>delete</span>Xóa ngay</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubmitReviewDialog({ article, onConfirm, onCancel, isSubmitting }: {
+  article: Article;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !isSubmitting) onCancel(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [isSubmitting, onCancel]);
+
+  const title = article.title?.trim() || 'Bản nháp chưa có tiêu đề';
+  const excerpt = article.excerpt?.trim() || 'Chưa có tóm tắt';
+  const statusLabel = getStatusCfg(article.status ?? 'DRAFT').label;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="submit-review-title">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!isSubmitting) onCancel(); }} />
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl animate-fade-slide-up">
+        <div className="border-b border-outline-variant/10 bg-amber-50/80 px-6 py-5">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+              <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>outgoing_mail</span>
+            </div>
+            <div className="min-w-0">
+              <h3 id="submit-review-title" className="text-lg font-bold text-on-surface">Gửi bài viết để Admin duyệt?</h3>
+              <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">
+                Sau khi gửi, bài viết sẽ chuyển sang trạng thái chờ duyệt và bạn sẽ chỉnh sửa tiếp khi Admin phản hồi.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          <div className="rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container px-2.5 py-1 text-[11px] font-bold text-on-surface-variant">
+                <span className="material-symbols-outlined text-[14px]">edit_note</span>{statusLabel}
+              </span>
+              <span className="text-[11px] font-semibold text-on-surface-variant">{article.readTime || 1} phút đọc</span>
+            </div>
+            <p className="line-clamp-2 text-sm font-bold leading-snug text-on-surface">&ldquo;{title}&rdquo;</p>
+            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-on-surface-variant">{excerpt}</p>
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-6 pb-6">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="flex-1 rounded-xl border border-outline-variant/20 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isSubmitting}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-600 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:opacity-60 outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            {isSubmitting
+              ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang gửi…</>
+              : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>Xác nhận gửi</>}
           </button>
         </div>
       </div>
@@ -105,11 +201,11 @@ export default function ArticleManagementPage() {
   // Auth & workflow
   const [userRole, setUserRole] = useState('');
   const [userId, setUserId] = useState<number | null>(null);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [rejectedCount, setRejectedCount] = useState(0);
+  const [articleStats, setArticleStats] = useState<ArticleStats>(EMPTY_STATS);
   const [reviewTarget, setReviewTarget] = useState<{ article: Article; action: 'approve' | 'reject' } | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [isReviewing, setIsReviewing] = useState(false);
+  const [submitTarget, setSubmitTarget] = useState<Article | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
 
   const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
@@ -123,12 +219,12 @@ export default function ArticleManagementPage() {
 
   // Trash
   const [showTrash, setShowTrash] = useState(false);
-  const [trashArticles, setTrashArticles] = useState<any[]>([]);
+  const [trashArticles, setTrashArticles] = useState<TrashArticle[]>([]);
   const [trashMeta, setTrashMeta] = useState({ totalItems: 0, totalPages: 1, currentPage: 1 });
   const [trashPage, setTrashPage] = useState(1);
   const [trashSearch, setTrashSearch] = useState('');
   const [trashLoading, setTrashLoading] = useState(false);
-  const [hardDeleteTarget, setHardDeleteTarget] = useState<any | null>(null);
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<TrashArticle | null>(null);
   const [isHardDeleting, setIsHardDeleting] = useState(false);
   const [isRestoring, setIsRestoring] = useState<number | null>(null);
   const [trashCount, setTrashCount] = useState(0);
@@ -169,8 +265,16 @@ export default function ArticleManagementPage() {
     try {
       const res = await fetchWithAuth(`${API_BASE_URL}/article/admin/stats`);
       const json = await res.json();
-      setPendingCount(json?.pending ?? 0);
-      setRejectedCount(json?.rejected ?? 0);
+      const payload = json?.data ?? json;
+      setArticleStats({
+        totalVisible: payload?.totalVisible ?? payload?.total ?? 0,
+        published: payload?.published ?? 0,
+        draft: payload?.draft ?? 0,
+        pending: payload?.pending ?? 0,
+        rejected: payload?.rejected ?? 0,
+        featured: payload?.featured ?? 0,
+        topCategory: payload?.topCategory ?? null,
+      });
     } catch { /* silent */ }
   }, []);
 
@@ -281,6 +385,7 @@ export default function ArticleManagementPage() {
       const res = await fetchWithAuth(`${API_BASE_URL}/article/admin/${article.id}/toggle-featured`, { method: 'PATCH' });
       if (!res.ok) throw new Error();
       setArticles(prev => prev.map(a => a.id === article.id ? { ...a, isFeatured: !a.isFeatured } : a));
+      fetchStats();
       showToast(article.isFeatured ? 'Đã bỏ nổi bật' : '⭐ Đã đặt làm nổi bật');
     } catch {
       showToast('Thao tác thất bại', false);
@@ -294,7 +399,9 @@ export default function ArticleManagementPage() {
       const res = await fetchWithAuth(`${API_BASE_URL}/article/admin/${id}/submit`, { method: 'POST' });
       if (!res.ok) throw new Error();
       showToast('Đã gửi bài viết để Admin duyệt!');
+      setSubmitTarget(null);
       fetchArticles();
+      fetchStats();
     } catch {
       showToast('Gửi duyệt thất bại', false);
     } finally {
@@ -331,14 +438,45 @@ export default function ArticleManagementPage() {
 
   const hasFilter = !!(search || categoryFilter || featuredFilter || statusFilter);
   const resetFilters = () => { setSearch(''); setCategoryFilter(''); setFeaturedFilter(''); setStatusFilter(''); setPage(1); };
+  const filterByStatus = (status: ArticleStatus) => {
+    setFeaturedFilter('');
+    setStatusFilter(current => current === status ? '' : status);
+    setPage(1);
+  };
+  const filterFeatured = () => {
+    setStatusFilter('');
+    setFeaturedFilter(current => current === 'true' ? '' : 'true');
+    setPage(1);
+  };
 
   const openEdit = (article: Article) => { setEditTarget(article); setDrawerMode('edit'); };
   const openCreate = () => { setEditTarget(null); setDrawerMode('create'); };
 
-  // Stats quick compute
-  const totalFeatured = articles.filter(a => a.isFeatured).length;
-  const categoryCounts = articles.reduce<Record<string, number>>((acc, a) => { acc[a.category] = (acc[a.category] ?? 0) + 1; return acc; }, {});
-  const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const topCategoryCfg = articleStats.topCategory ? getCatCfg(articleStats.topCategory.category) : null;
+  const kpiTone = {
+    blue: 'bg-blue-50 text-blue-700 border-blue-100',
+    slate: 'bg-slate-100 text-slate-700 border-slate-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    red: 'bg-red-50 text-red-700 border-red-200',
+    violet: 'bg-violet-50 text-violet-700 border-violet-200',
+  };
+  const kpiCards = isAdmin
+    ? [
+        { icon: 'article', label: 'Tổng bài viết', value: articleStats.totalVisible, sub: 'toàn bộ bài chưa xóa', tone: 'blue' as const, onClick: resetFilters, active: !hasFilter },
+        { icon: 'check_circle', label: 'Đã xuất bản', value: articleStats.published, sub: 'đang hiển thị với khách', tone: 'emerald' as const, onClick: () => filterByStatus('PUBLISHED'), active: statusFilter === 'PUBLISHED' },
+        { icon: 'pending_actions', label: 'Chờ duyệt', value: articleStats.pending, sub: 'cần Admin xử lý', tone: 'amber' as const, onClick: () => filterByStatus('PENDING_REVIEW'), active: statusFilter === 'PENDING_REVIEW' },
+        { icon: 'edit_note', label: 'Bản nháp', value: articleStats.draft, sub: 'chưa gửi duyệt', tone: 'slate' as const, onClick: () => filterByStatus('DRAFT'), active: statusFilter === 'DRAFT' },
+        { icon: 'cancel', label: 'Bị từ chối', value: articleStats.rejected, sub: 'cần chỉnh sửa lại', tone: 'red' as const, onClick: () => filterByStatus('REJECTED'), active: statusFilter === 'REJECTED' },
+        { icon: 'star', label: 'Nổi bật', value: articleStats.featured, sub: 'đang được ghim đầu', tone: 'violet' as const, onClick: filterFeatured, active: featuredFilter === 'true' },
+      ]
+    : [
+        { icon: 'article', label: 'Tổng hiển thị', value: articleStats.totalVisible, sub: 'bài bạn có thể xem', tone: 'blue' as const, onClick: resetFilters, active: !hasFilter },
+        { icon: 'edit_note', label: 'Bản nháp của tôi', value: articleStats.draft, sub: 'đang soạn', tone: 'slate' as const, onClick: () => filterByStatus('DRAFT'), active: statusFilter === 'DRAFT' },
+        { icon: 'pending_actions', label: 'Chờ duyệt', value: articleStats.pending, sub: 'đã gửi Admin', tone: 'amber' as const, onClick: () => filterByStatus('PENDING_REVIEW'), active: statusFilter === 'PENDING_REVIEW' },
+        { icon: 'cancel', label: 'Cần chỉnh sửa', value: articleStats.rejected, sub: 'bị trả về', tone: 'red' as const, onClick: () => filterByStatus('REJECTED'), active: statusFilter === 'REJECTED' },
+        { icon: 'check_circle', label: 'Đã xuất bản', value: articleStats.published, sub: 'đang hiển thị với khách', tone: 'emerald' as const, onClick: () => filterByStatus('PUBLISHED'), active: statusFilter === 'PUBLISHED' },
+      ];
 
   return (
     <main className="flex-1 pt-8 px-8 pb-12 overflow-y-auto w-full max-w-[1600px] mx-auto">
@@ -397,7 +535,7 @@ export default function ArticleManagementPage() {
             onClick={openCreate}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold hover:bg-primary/90 transition-all active:scale-[0.98] shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <span className="material-symbols-outlined text-[18px]">post_add</span>Thêm bài viết
+            <span className="material-symbols-outlined text-[18px]">post_add</span>{isAdmin ? 'Thêm bài viết' : 'Tạo bản nháp'}
           </button>
         </div>
       </div>
@@ -406,57 +544,31 @@ export default function ArticleManagementPage() {
       <div className={`grid gap-4 mb-8 ${
         isAdmin ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-5'
       }`}>
-        {[
-          { icon: 'article', label: 'Tổng bài viết', value: meta.totalItems, sub: 'bài viết trong hệ thống', gradient: 'from-blue-600 to-indigo-600', bg: 'bg-blue-50', ic: 'text-blue-600', onClick: null, activeColor: '' },
-          { icon: 'star', label: 'Đang nổi bật', value: totalFeatured, sub: 'bài viết được ghim đầu', gradient: 'from-amber-400 to-orange-500', bg: 'bg-amber-50', ic: 'text-amber-600', onClick: null, activeColor: '' },
-          { icon: topCategory ? getCatCfg(topCategory).icon : 'category', label: 'Danh mục phổ biến', value: topCategory ? getCatCfg(topCategory).label : '—', sub: topCategory ? `${categoryCounts[topCategory]} bài viết` : 'Chưa có dữ liệu', gradient: 'from-violet-500 to-purple-600', bg: 'bg-violet-50', ic: 'text-violet-600', onClick: null, activeColor: '' },
-          { icon: 'auto_stories', label: 'Trang hiện tại', value: `${meta.currentPage}/${meta.totalPages}`, sub: `${pageSize} bài/trang`, gradient: 'from-teal-400 to-cyan-600', bg: 'bg-teal-50', ic: 'text-teal-600', onClick: null, activeColor: '' },
-          ...(isAdmin ? [{
-            icon: 'pending_actions', label: 'Chờ duyệt',
-            value: pendingCount, sub: 'bài viết chờ Admin',
-            gradient: 'from-amber-400 to-orange-400',
-            bg: pendingCount > 0 ? 'bg-amber-100' : 'bg-surface-container',
-            ic: pendingCount > 0 ? 'text-amber-700' : 'text-on-surface-variant',
-            onClick: () => { setStatusFilter(f => f === 'PENDING_REVIEW' ? '' : 'PENDING_REVIEW'); setPage(1); },
-            activeColor: 'amber',
-          }] : []),
-          {
-            icon: 'cancel', label: isAdmin ? 'Bị từ chối' : 'Bài bị từ chối',
-            value: rejectedCount,
-            sub: isAdmin ? 'bài viết từ chối' : 'bài cần chỉnh sửa lại',
-            gradient: 'from-red-400 to-rose-500',
-            bg: rejectedCount > 0 ? 'bg-red-50' : 'bg-surface-container',
-            ic: rejectedCount > 0 ? 'text-red-600' : 'text-on-surface-variant',
-            onClick: () => { setStatusFilter(f => f === 'REJECTED' ? '' : 'REJECTED'); setPage(1); },
-            activeColor: 'red',
-          },
-        ].map(k => {
-          const isActive = (
-            (k.activeColor === 'amber' && statusFilter === 'PENDING_REVIEW') ||
-            (k.activeColor === 'red'   && statusFilter === 'REJECTED')
-          );
-          const Tag = k.onClick ? 'button' : 'div';
-          const borderCls = isActive
-            ? k.activeColor === 'amber'
-              ? 'border-amber-400 ring-2 ring-amber-300/50'
-              : 'border-red-400 ring-2 ring-red-300/50'
-            : 'border-outline-variant/10 hover:shadow-md hover:-translate-y-0.5';
+        {kpiCards.map(k => {
+          const borderCls = k.active
+            ? 'border-primary/60 ring-2 ring-primary/20 shadow-md'
+            : 'border-outline-variant/10 hover:border-outline-variant/25 hover:shadow-md';
           return (
-            <Tag key={k.label}
-              {...(k.onClick ? { onClick: k.onClick, type: 'button' as const } : {})}
-              className={`relative bg-surface-container-lowest rounded-2xl p-5 border shadow-sm transition-all overflow-hidden group text-left ${borderCls} ${k.onClick ? 'cursor-pointer' : ''}`}
+            <button key={k.label}
+              type="button"
+              onClick={k.onClick}
+              className={`relative bg-surface-container-lowest rounded-2xl p-5 border shadow-sm transition-all text-left ${borderCls} cursor-pointer active:scale-[0.99]`}
             >
-              <div className={`absolute top-0 right-0 w-24 h-24 rounded-full -translate-y-8 translate-x-8 bg-gradient-to-br ${k.gradient} opacity-[0.07] group-hover:opacity-[0.12] transition-opacity`} />
-              <div className={`w-10 h-10 rounded-xl ${k.bg} flex items-center justify-center mb-4`}>
-                <span className={`material-symbols-outlined text-xl ${k.ic}`} style={{ fontVariationSettings: "'FILL' 1" }}>{k.icon}</span>
+              <div className="flex items-start justify-between gap-4">
+                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${kpiTone[k.tone]}`}>
+                  <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>{k.icon}</span>
+                </div>
+                <span className={`material-symbols-outlined text-[18px] mt-1 ${k.active ? 'text-primary' : 'text-on-surface-variant/35'}`}>
+                  {k.active ? 'filter_alt_off' : 'filter_alt'}
+                </span>
               </div>
-              <p className="text-2xl font-extrabold text-on-surface leading-tight truncate">{k.value}</p>
-              <p className="text-xs font-medium text-on-surface-variant mt-1">{k.label}</p>
-              {isActive
-                ? <p className={`text-[10px] font-semibold mt-0.5 ${k.activeColor === 'red' ? 'text-red-500' : 'text-amber-600'}`}>Đang lọc • Nhấn để bỏ</p>
+              <p className="text-2xl font-extrabold text-on-surface leading-tight truncate mt-4">{k.value}</p>
+              <p className="text-xs font-semibold text-on-surface mt-1">{k.label}</p>
+              {k.active
+                ? <p className="text-[10px] font-semibold mt-0.5 text-primary">Đang lọc · Nhấn để bỏ</p>
                 : <p className="text-[10px] text-on-surface-variant/50 mt-0.5">{k.sub}</p>
               }
-            </Tag>
+            </button>
           );
         })}
       </div>
@@ -495,7 +607,7 @@ export default function ArticleManagementPage() {
               <option value="false">Bài thường</option>
             </select>
 
-            {isAdmin && (
+            {(isAdmin || userRole === 'STAFF') && (
               <>
                 <label htmlFor="art-status" className="sr-only">Lọc trạng thái</label>
                 <select id="art-status" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
@@ -517,9 +629,17 @@ export default function ArticleManagementPage() {
             )}
           </div>
           {!isLoading && (
-            <span className="ml-auto text-xs text-on-surface-variant whitespace-nowrap font-medium pl-2">
-              {meta.totalItems} bài viết
-            </span>
+            <div className="ml-auto flex items-center gap-3 pl-2 text-xs text-on-surface-variant whitespace-nowrap">
+              {topCategoryCfg && articleStats.topCategory && (
+                <span className="hidden xl:inline-flex items-center gap-1.5">
+                  <span className={`material-symbols-outlined text-[15px] ${topCategoryCfg.color}`}>{topCategoryCfg.icon}</span>
+                  {topCategoryCfg.label}: {articleStats.topCategory.count}
+                </span>
+              )}
+              <span className="font-medium">
+                Trang {meta.currentPage}/{meta.totalPages} · {meta.totalItems} bài viết
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -553,7 +673,7 @@ export default function ArticleManagementPage() {
                         {!hasFilter && (
                           <button onClick={openCreate}
                             className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:bg-primary/90 transition-colors outline-none">
-                            <span className="material-symbols-outlined text-[16px]">post_add</span>Tạo bài viết đầu tiên
+                            <span className="material-symbols-outlined text-[16px]">post_add</span>{isAdmin ? 'Tạo bài viết đầu tiên' : 'Tạo bản nháp đầu tiên'}
                           </button>
                         )}
                       </div>
@@ -562,17 +682,25 @@ export default function ArticleManagementPage() {
                 ) : (
                   articles.map(a => {
                     const cc = getCatCfg(a.category);
+                    const articleStatus = a.status ?? 'PUBLISHED';
+                    const staffCanManage = !isAdmin && (a.createdById == null || a.createdById === userId) && (articleStatus === 'DRAFT' || articleStatus === 'REJECTED');
                     return (
                       <tr key={a.id} className="hover:bg-primary/[0.025] transition-colors group cursor-pointer" onClick={() => openEdit(a)}>
                         <td className="py-3.5 px-5" onClick={e => e.stopPropagation()}>
                           <div className="w-16 h-11 rounded-lg overflow-hidden bg-surface-container shrink-0">
-                            <img src={a.imageUrl} alt={a.title} className="w-full h-full object-cover" loading="lazy"
-                              onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x44/e2e8f0/94a3b8?text=No+Img'; }} />
+                            {a.imageUrl ? (
+                              <img src={a.imageUrl} alt={a.title || 'Bản nháp bài viết'} className="w-full h-full object-cover" loading="lazy"
+                                onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/64x44/e2e8f0/94a3b8?text=No+Img'; }} />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-outline">
+                                <span className="material-symbols-outlined text-[18px]">article</span>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="py-3.5 px-5 max-w-[280px]">
-                          <p className="font-semibold text-on-surface text-sm line-clamp-1 group-hover:text-primary transition-colors">{a.title}</p>
-                          <p className="text-xs text-on-surface-variant/60 line-clamp-1 mt-0.5">{a.excerpt}</p>
+                          <p className="font-semibold text-on-surface text-sm line-clamp-1 group-hover:text-primary transition-colors">{a.title || 'Bản nháp chưa có tiêu đề'}</p>
+                          <p className="text-xs text-on-surface-variant/60 line-clamp-1 mt-0.5">{a.excerpt || 'Chưa có tóm tắt'}</p>
                         </td>
                         <td className="py-3.5 px-5">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${cc.badge}`}>
@@ -580,7 +708,7 @@ export default function ArticleManagementPage() {
                             {cc.label}
                           </span>
                         </td>
-                        <td className="py-3.5 px-5 text-sm text-on-surface-variant whitespace-nowrap">{a.author}</td>
+                        <td className="py-3.5 px-5 text-sm text-on-surface-variant whitespace-nowrap">{a.author || '—'}</td>
                         <td className="py-3.5 px-5 text-sm text-on-surface-variant whitespace-nowrap">
                           <span className="flex items-center gap-1">
                             <span className="material-symbols-outlined text-[13px]">schedule</span>
@@ -589,15 +717,15 @@ export default function ArticleManagementPage() {
                         </td>
                         <td className="py-3.5 px-5 whitespace-nowrap">
                           {(() => {
-                            const sc = getStatusCfg((a as any).status ?? 'PUBLISHED');
-                            const rn = (a as any).reviewNote;
+                            const sc = getStatusCfg(articleStatus);
+                            const rn = a.reviewNote;
                             return (
                               <div className="flex flex-col gap-1">
                                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold ${sc.cls}`}>
                                   <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>{sc.icon}</span>
                                   {sc.label}
                                 </span>
-                                {(a as any).status === 'REJECTED' && rn && (
+                                {articleStatus === 'REJECTED' && rn && (
                                   <p className="text-[10px] text-error font-medium max-w-[140px] leading-tight cursor-help" title={rn}>
                                     ↳ {rn.length > 50 ? rn.slice(0, 50) + '…' : rn}
                                   </p>
@@ -607,7 +735,7 @@ export default function ArticleManagementPage() {
                           })()}
                         </td>
                         <td className="py-3.5 px-5" onClick={e => e.stopPropagation()}>
-                          {(a as any).status === 'PUBLISHED' ? (
+                          {articleStatus === 'PUBLISHED' ? (
                             <div className="relative group/tip inline-block">
                               <button onClick={() => handleToggleFeatured(a)} aria-label="Toggle nổi bật"
                                 className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors outline-none ${a.isFeatured ? 'text-amber-500 hover:bg-amber-50' : 'text-on-surface-variant/30 hover:bg-amber-50 hover:text-amber-400'}`}>
@@ -622,9 +750,9 @@ export default function ArticleManagementPage() {
                         <td className="py-3.5 px-5 text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
                             {/* Xem — chỉ PUBLISHED */}
-                            {(a as any).status === 'PUBLISHED' && (
+                            {articleStatus === 'PUBLISHED' && (
                               <div className="relative group/tip">
-                                <button onClick={() => window.open(`/vi/journal/${(a as any).slug}`, '_blank')} aria-label="Xem trang khách"
+                                <button onClick={() => window.open(`/vi/journal/${a.slug}`, '_blank')} aria-label="Xem trang khách"
                                   className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors outline-none">
                                   <span className="material-symbols-outlined text-[18px]">open_in_new</span>
                                 </button>
@@ -632,7 +760,7 @@ export default function ArticleManagementPage() {
                               </div>
                             )}
                             {/* Duyệt / Từ chối — Admin khi PENDING_REVIEW */}
-                            {isAdmin && (a as any).status === 'PENDING_REVIEW' && (<>
+                            {isAdmin && articleStatus === 'PENDING_REVIEW' && (<>
                               <div className="relative group/tip">
                                 <button onClick={() => setReviewTarget({ article: a, action: 'approve' })} aria-label="Duyệt"
                                   className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors outline-none">
@@ -649,27 +777,26 @@ export default function ArticleManagementPage() {
                               </div>
                             </>)}
                             {/* Sửa — Admin (PENDING) | Staff owner (DRAFT/REJECTED) */}
-                            {(isAdmin && (a as any).status === 'PENDING_REVIEW') ||
-                             (!isAdmin && ((a as any).status === 'DRAFT' || (a as any).status === 'REJECTED') && (a as any).createdById === userId)
-                              ? (
+                            {(isAdmin && articleStatus === 'PENDING_REVIEW') || staffCanManage ? (
                               <div className="relative group/tip">
                                 <button onClick={() => openEdit(a)} aria-label="Chỉnh sửa"
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors outline-none">
+                                  className={`${staffCanManage ? 'w-auto px-2.5 gap-1 text-xs font-bold' : 'w-8'} h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors outline-none`}>
                                   <span className="material-symbols-outlined text-[18px]">edit</span>
+                                  {staffCanManage && <span>Chỉnh sửa</span>}
                                 </button>
-                                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Chỉnh sửa<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
+                                {!staffCanManage && <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Chỉnh sửa<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>}
                               </div>
                             ) : null}
                             {/* Gửi duyệt — Staff owner khi DRAFT hoặc REJECTED */}
-                            {!isAdmin && ((a as any).status === 'DRAFT' || (a as any).status === 'REJECTED') && (a as any).createdById === userId && (
+                            {staffCanManage && (
                               <div className="relative group/tip">
-                                <button onClick={() => handleSubmitForReview(a.id)} disabled={isSubmitting === a.id} aria-label="Gửi duyệt"
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-amber-500/10 hover:text-amber-600 transition-colors outline-none disabled:opacity-50">
+                                <button onClick={() => setSubmitTarget(a)} disabled={isSubmitting === a.id} aria-label="Gửi duyệt"
+                                  className="h-8 w-auto px-2.5 flex items-center justify-center gap-1 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors outline-none disabled:opacity-50">
                                   {isSubmitting === a.id
                                     ? <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
                                     : <span className="material-symbols-outlined text-[18px]">send</span>}
+                                  <span>Gửi duyệt</span>
                                 </button>
-                                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-amber-700 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Gửi duyệt<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-amber-700" /></span>
                               </div>
                             )}
                             {/* Xóa — chỉ Admin */}
@@ -726,19 +853,28 @@ export default function ArticleManagementPage() {
             <div className="col-span-full py-24 text-center">
               <p className="font-bold text-on-surface">Không có bài viết nào</p>
               <button onClick={openCreate} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold mx-auto hover:bg-primary/90 outline-none">
-                <span className="material-symbols-outlined text-[16px]">post_add</span>Tạo bài viết
+                <span className="material-symbols-outlined text-[16px]">post_add</span>{isAdmin ? 'Tạo bài viết' : 'Tạo bản nháp'}
               </button>
             </div>
           ) : (
             articles.map(a => {
               const cc = getCatCfg(a.category);
+              const articleStatus = a.status ?? 'PUBLISHED';
+              const staffCanManage = !isAdmin && (a.createdById == null || a.createdById === userId) && (articleStatus === 'DRAFT' || articleStatus === 'REJECTED');
               return (
                 <article key={a.id} className="flex flex-col group bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/10 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer relative"
                   onClick={() => openEdit(a)}>
                   {/* Cover */}
                   <div className="relative aspect-video overflow-hidden bg-surface-container">
-                    <img src={a.imageUrl} alt={a.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy"
-                      onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x225/e2e8f0/94a3b8?text=No+Image'; }} />
+                    {a.imageUrl ? (
+                      <img src={a.imageUrl} alt={a.title || 'Bản nháp bài viết'} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy"
+                        onError={e => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x225/e2e8f0/94a3b8?text=No+Image'; }} />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-outline">
+                        <span className="material-symbols-outlined text-3xl">article</span>
+                        <span className="text-xs font-semibold">Chưa có ảnh bìa</span>
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     {/* Category badge */}
                     <span className={`absolute top-3 left-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border backdrop-blur-md ${cc.badge}`}>
@@ -756,22 +892,34 @@ export default function ArticleManagementPage() {
                         className="w-10 h-10 bg-white/90 backdrop-blur-sm text-primary rounded-full flex items-center justify-center hover:bg-white hover:scale-110 transition-all shadow-md">
                         <span className="material-symbols-outlined text-[18px]">edit</span>
                       </button>
-                      <button onClick={() => handleToggleFeatured(a)} aria-label="Toggle nổi bật"
-                        className={`w-10 h-10 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-110 transition-all shadow-md ${a.isFeatured ? 'bg-amber-400/90 text-white hover:bg-amber-400' : 'bg-white/90 text-amber-400 hover:bg-white'}`}>
-                        <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                      </button>
-                      <button onClick={() => setDeleteTarget(a)} aria-label="Xóa"
-                        className="w-10 h-10 bg-error/90 backdrop-blur-sm text-on-error rounded-full flex items-center justify-center hover:bg-error hover:scale-110 transition-all shadow-md">
-                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                      </button>
+                      {staffCanManage && (
+                        <button onClick={() => setSubmitTarget(a)} disabled={isSubmitting === a.id} aria-label="Gửi duyệt"
+                          className="w-10 h-10 bg-amber-500/90 backdrop-blur-sm text-white rounded-full flex items-center justify-center hover:bg-amber-500 hover:scale-110 transition-all shadow-md disabled:opacity-60">
+                          {isSubmitting === a.id
+                            ? <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+                            : <span className="material-symbols-outlined text-[18px]">send</span>}
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <>
+                          <button onClick={() => handleToggleFeatured(a)} aria-label="Toggle nổi bật"
+                            className={`w-10 h-10 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-110 transition-all shadow-md ${a.isFeatured ? 'bg-amber-400/90 text-white hover:bg-amber-400' : 'bg-white/90 text-amber-400 hover:bg-white'}`}>
+                            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                          </button>
+                          <button onClick={() => setDeleteTarget(a)} aria-label="Xóa"
+                            className="w-10 h-10 bg-error/90 backdrop-blur-sm text-on-error rounded-full flex items-center justify-center hover:bg-error hover:scale-110 transition-all shadow-md">
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   {/* Body */}
                   <div className="p-4 flex flex-col flex-1">
-                    <h3 className="font-bold text-sm text-on-surface line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-2">{a.title}</h3>
-                    <p className="text-xs text-on-surface-variant line-clamp-2 flex-1">{a.excerpt}</p>
+                    <h3 className="font-bold text-sm text-on-surface line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-2">{a.title || 'Bản nháp chưa có tiêu đề'}</h3>
+                    <p className="text-xs text-on-surface-variant line-clamp-2 flex-1">{a.excerpt || 'Chưa có tóm tắt'}</p>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-outline-variant/10 text-[11px] text-on-surface-variant">
-                      <span className="font-medium">{a.author}</span>
+                      <span className="font-medium">{a.author || '—'}</span>
                       <span className="flex items-center gap-1">
                         <span className="material-symbols-outlined text-[12px]">schedule</span>{a.readTime} phút
                       </span>
@@ -789,8 +937,9 @@ export default function ArticleManagementPage() {
         <ArticleDrawer
           mode={drawerMode}
           article={editTarget}
+          userRole={userRole}
           onClose={() => { setDrawerMode(null); setEditTarget(null); }}
-          onSuccess={msg => { showToast(msg); fetchArticles(); }}
+          onSuccess={msg => { showToast(msg); fetchArticles(); fetchStats(); }}
         />
       )}
 
@@ -856,6 +1005,16 @@ export default function ArticleManagementPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Submit Review Dialog ── */}
+      {submitTarget && (
+        <SubmitReviewDialog
+          article={submitTarget}
+          onConfirm={() => handleSubmitForReview(submitTarget.id)}
+          onCancel={() => setSubmitTarget(null)}
+          isSubmitting={isSubmitting === submitTarget.id}
+        />
       )}
 
       {/* ── Delete Dialog ── */}

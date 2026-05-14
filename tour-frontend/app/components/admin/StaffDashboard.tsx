@@ -13,6 +13,13 @@ interface QuickStats {
     cancelRequested: number;
     total: number;
     publishedTours: number;
+    unpaidCount?: number;
+    assistedDraftPending?: number;
+    tourDraft?: number;
+    tourPending?: number;
+    articleDraft?: number;
+    articlePending?: number;
+    supportOpen?: number;
 }
 
 interface MyTour {
@@ -105,16 +112,27 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const [statsRes, toursRes, ticketsRes] = await Promise.all([
+            const [statsRes, toursRes, ticketsRes, tourStatsRes, articleStatsRes, supportStatsRes] = await Promise.all([
                 fetchWithAuth(`${API_BASE_URL}/booking/admin/stats`),
                 fetchWithAuth(`${API_BASE_URL}/tour?limit=6`),
                 fetchWithAuth(`${API_BASE_URL}/support/tickets?limit=5`),
+                fetchWithAuth(`${API_BASE_URL}/tour/admin/stats`),
+                fetchWithAuth(`${API_BASE_URL}/article/admin/stats`),
+                fetchWithAuth(`${API_BASE_URL}/support/stats`),
             ]);
 
             // Helper: extract array from any API response shape
-            const toArray = (j: any): any[] => {
+            const toArray = (j: unknown): unknown[] => {
+                const obj = j as Record<string, unknown> | null;
                 if (Array.isArray(j)) return j;
-                const candidates = [j?.data, j?.tours, j?.data?.tours, j?.data?.data, j?.items];
+                const data = obj?.data as Record<string, unknown> | unknown[] | undefined;
+                const candidates = [
+                    obj?.data,
+                    obj?.tours,
+                    !Array.isArray(data) ? data?.tours : undefined,
+                    !Array.isArray(data) ? data?.data : undefined,
+                    obj?.items,
+                ];
                 for (const c of candidates) {
                     if (Array.isArray(c)) return c;
                 }
@@ -123,15 +141,31 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
 
             if (statsRes.ok) {
                 const j = await statsRes.json();
-                setStats(j.data);
+                const bookingStats = j.data ?? j;
+                const [tourStatsJson, articleStatsJson, supportStatsJson] = await Promise.all([
+                    tourStatsRes.ok ? tourStatsRes.json() : Promise.resolve({}),
+                    articleStatsRes.ok ? articleStatsRes.json() : Promise.resolve({}),
+                    supportStatsRes.ok ? supportStatsRes.json() : Promise.resolve({}),
+                ]);
+                const tourStats = tourStatsJson?.data ?? tourStatsJson;
+                const articleStats = articleStatsJson?.data ?? articleStatsJson;
+                const supportStats = supportStatsJson?.data ?? supportStatsJson;
+                setStats({
+                    ...bookingStats,
+                    tourDraft: tourStats.draft ?? 0,
+                    tourPending: tourStats.pending ?? 0,
+                    articleDraft: articleStats.draft ?? 0,
+                    articlePending: articleStats.pending ?? 0,
+                    supportOpen: supportStats.open ?? 0,
+                });
             }
             if (toursRes.ok) {
                 const j = await toursRes.json();
-                setMyTours(toArray(j).slice(0, 6));
+                setMyTours(toArray(j).slice(0, 6) as MyTour[]);
             }
             if (ticketsRes.ok) {
                 const j = await ticketsRes.json();
-                setMyTickets(toArray(j).slice(0, 5));
+                setMyTickets(toArray(j).slice(0, 5) as MyTicket[]);
             }
         } catch (e) {
             console.error('Staff dashboard error:', e);
@@ -185,15 +219,17 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
             </div>
 
             {/* ── Quick Stats ── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
                 {loading ? (
-                    Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28" />)
+                    Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28" />)
                 ) : stats ? (
                     <>
-                        <StatCard icon="book_online" label="Tổng Booking HT" value={stats.total.toLocaleString('vi-VN')} color="bg-blue-50 text-blue-500" />
-                        <StatCard icon="pending_actions" label="Chờ Xác Nhận" value={stats.pending.toLocaleString('vi-VN')} color="bg-amber-50 text-amber-500" />
-                        <StatCard icon="check_circle" label="Đã Xác Nhận" value={stats.confirmed.toLocaleString('vi-VN')} color="bg-emerald-50 text-emerald-600" />
-                        <StatCard icon="public" label="Tour Đang Mở" value={stats.publishedTours.toLocaleString('vi-VN')} color="bg-indigo-50 text-indigo-500" />
+                        <StatCard icon="pending_actions" label="Booking Chờ XL" value={stats.pending.toLocaleString('vi-VN')} color="bg-amber-50 text-amber-500" />
+                        <StatCard icon="assignment_late" label="Yêu Cầu Hủy" value={stats.cancelRequested.toLocaleString('vi-VN')} color="bg-orange-50 text-orange-600" />
+                        <StatCard icon="edit_note" label="Tour Nháp" value={(stats.tourDraft ?? 0).toLocaleString('vi-VN')} color="bg-slate-100 text-slate-600" />
+                        <StatCard icon="approval" label="Tour Chờ Duyệt" value={(stats.tourPending ?? 0).toLocaleString('vi-VN')} color="bg-blue-50 text-blue-600" />
+                        <StatCard icon="article" label="Bài Chờ Duyệt" value={(stats.articlePending ?? 0).toLocaleString('vi-VN')} color="bg-violet-50 text-violet-600" />
+                        <StatCard icon="support_agent" label="Ticket Đang Mở" value={(stats.supportOpen ?? 0).toLocaleString('vi-VN')} color="bg-teal-50 text-teal-600" />
                     </>
                 ) : null}
             </div>

@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
-import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
@@ -31,11 +30,11 @@ function SuccessTicketContent() {
 
         const fetchTicket = async () => {
             try {
-                const res = await fetchWithAuth(`http://localhost:3000/booking/code/${bookingId}`, {
+                // Dùng fetch thông thường (không cần auth) — bookingCode là UUID đủ bảo mật
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+                const res = await fetch(`${apiUrl}/booking/code/${bookingId}`, {
                     method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
+                    headers: { 'Content-Type': 'application/json' },
                 });
 
                 const result = await res.json();
@@ -43,10 +42,10 @@ function SuccessTicketContent() {
                 if (res.ok && result.data) {
                     setTicketData(result.data);
                 } else {
-                    console.log("Backend báo lỗi:", result.message);
+                    console.log('Backend báo lỗi:', result.message);
                 }
             } catch (error) {
-                console.error("Lỗi khi tải vé:", error);
+                console.error('Lỗi khi tải vé:', error);
             } finally {
                 setLoading(false);
             }

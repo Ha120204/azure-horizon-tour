@@ -347,7 +347,7 @@ export default function BookingDetailPage() {
                                         </div>
                                         <p className="text-xs text-center text-slate-400">Thời gian xử lý: 1–3 ngày làm việc</p>
                                         <Link
-                                            href="/support"
+                                            href="/contact"
                                             className="w-full border border-slate-200 text-slate-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
                                         >
                                             <span className="material-symbols-outlined text-base">support_agent</span>

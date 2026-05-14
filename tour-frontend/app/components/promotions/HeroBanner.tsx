@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
+
 
 interface HeroBannerProps {
     timeLeft: { days: number; hours: number; minutes: number; seconds: number };
     isMounted: boolean;
     t: (key: string) => string;
+    /** ISO datetime của Flash Sale sắp hết hạn nhất. Nếu null → dùng countdown cuối tháng (fallback). */
+    nearestFlashSaleEndsAt?: string | null;
 }
 
 const VIDEO_URL =
@@ -13,9 +16,32 @@ const VIDEO_URL =
 
 const FADE_DURATION = 0.5; // seconds
 
-export default function HeroBanner({ timeLeft, isMounted, t }: HeroBannerProps) {
+export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEndsAt }: HeroBannerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const rafRef = useRef<number>(0);
+
+    // Countdown thực tế từ Flash Sale gần nhất
+    const [flashLeft, setFlashLeft] = React.useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+    useEffect(() => {
+        if (!nearestFlashSaleEndsAt) return;
+        const compute = () => {
+            const diff = Math.max(0, new Date(nearestFlashSaleEndsAt).getTime() - Date.now());
+            if (diff === 0) { setFlashLeft(null); return; }
+            setFlashLeft({
+                days: Math.floor(diff / 86_400_000),
+                hours: Math.floor((diff % 86_400_000) / 3_600_000),
+                minutes: Math.floor((diff % 3_600_000) / 60_000),
+                seconds: Math.floor((diff % 60_000) / 1_000),
+            });
+        };
+        compute();
+        const id = setInterval(compute, 1000);
+        return () => clearInterval(id);
+    }, [nearestFlashSaleEndsAt]);
+
+    // Hiển thị: nếu có Flash Sale thực → dùng flashLeft; fallback → timeLeft (cuối tháng)
+    const displayTime = (nearestFlashSaleEndsAt && flashLeft) ? flashLeft : timeLeft;
+    const isFlashCountdown = !!(nearestFlashSaleEndsAt && flashLeft);
 
     // ── Smooth fade loop via requestAnimationFrame ──────────────────
     useEffect(() => {
@@ -148,24 +174,34 @@ export default function HeroBanner({ timeLeft, isMounted, t }: HeroBannerProps) 
                 {isMounted && (
                     <div className="anim-fade-rise-d2 mb-10">
                         <p className="text-white/50 text-[0.65rem] uppercase tracking-[0.2em] font-bold mb-3">
-                            {t('summerOffer')}
+                            {isFlashCountdown
+                                ? <span className="flex items-center justify-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span>
+                                    Flash Sale kết thúc sau
+                                  </span>
+                                : t('summerOffer')
+                            }
                         </p>
-                        <div className="inline-flex items-center gap-3 bg-white/8 backdrop-blur-xl border border-white/15 rounded-2xl px-8 py-5 shadow-2xl">
+                        <div className={`inline-flex items-center gap-3 backdrop-blur-xl border rounded-2xl px-8 py-5 shadow-2xl ${
+                            isFlashCountdown
+                                ? 'bg-red-950/40 border-red-400/30'
+                                : 'bg-white/8 border-white/15'
+                        }`}>
                             {[
-                                { value: timeLeft.days, label: t('days') },
-                                { value: timeLeft.hours, label: t('hours') },
-                                { value: timeLeft.minutes, label: t('minutes') },
-                                { value: timeLeft.seconds, label: t('seconds') },
+                                { value: displayTime.days,    label: t('days') },
+                                { value: displayTime.hours,   label: t('hours') },
+                                { value: displayTime.minutes, label: t('minutes') },
+                                { value: displayTime.seconds, label: t('seconds') },
                             ].map((item, idx) => (
                                 <div key={item.label} className="flex items-center">
                                     {idx > 0 && (
-                                        <span className="text-white/30 text-2xl font-bold pb-3 select-none pr-3">:</span>
+                                        <span className={`text-2xl font-bold pb-3 select-none pr-3 ${isFlashCountdown ? 'text-red-400/60' : 'text-white/30'}`}>:</span>
                                     )}
                                     <div className="flex flex-col items-center min-w-[3rem]">
-                                        <span className="countdown-digit text-3xl font-headline font-extrabold text-white leading-none">
+                                        <span className={`countdown-digit text-3xl font-headline font-extrabold leading-none ${isFlashCountdown ? 'text-red-300' : 'text-white'}`}>
                                             {String(item.value).padStart(2, '0')}
                                         </span>
-                                        <span className="text-white/45 text-[0.58rem] uppercase tracking-widest mt-1.5">
+                                        <span className={`text-[0.58rem] uppercase tracking-widest mt-1.5 ${isFlashCountdown ? 'text-red-400/60' : 'text-white/45'}`}>
                                             {item.label}
                                         </span>
                                     </div>

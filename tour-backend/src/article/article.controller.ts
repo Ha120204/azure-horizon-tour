@@ -11,6 +11,11 @@ import { ArticleService } from './article.service';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 
+const getAuthUserId = (req: any): number | undefined => {
+  const rawId = req.user?.id ?? req.user?.userId ?? req.user?.sub;
+  return rawId == null ? undefined : Number(rawId);
+};
+
 @Controller('article')
 export class ArticleController {
   constructor(
@@ -47,7 +52,7 @@ export class ArticleController {
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Get('admin/stats')
   async getAdminStats(@Req() req: any) {
-    return this.articleService.getAdminStats(req.user?.id, req.user?.role);
+    return this.articleService.getAdminStats(getAuthUserId(req), req.user?.role);
   }
 
   /** GET /article/admin/all — Danh sách phân trang, filter, search */
@@ -65,7 +70,7 @@ export class ArticleController {
   ) {
     return this.articleService.adminFindAll(
       { page: Number(page), limit: Number(limit), search, category, isFeatured, status },
-      req.user?.id,
+      getAuthUserId(req),
       req.user?.role,
     );
   }
@@ -97,12 +102,12 @@ export class ArticleController {
   async adminCreate(
     @Req() req: any,
     @Body() dto: {
-      title: string; category: string; excerpt: string;
-      content: string; imageUrl: string; author: string;
+      title?: string; category?: string; excerpt?: string;
+      content?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
     },
   ) {
-    return this.articleService.adminCreate(dto, req.user?.id, req.user?.role);
+    return this.articleService.adminCreate(dto, getAuthUserId(req), req.user?.role);
   }
 
   /** POST /article/admin/:id/submit — Staff gửi DRAFT/REJECTED → PENDING_REVIEW */
@@ -114,7 +119,7 @@ export class ArticleController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
   ) {
-    return this.articleService.submitForReview(id, req.user?.id);
+    return this.articleService.submitForReview(id, getAuthUserId(req)!);
   }
 
   /** PATCH /article/admin/:id/review — Admin duyệt hoặc từ chối */
@@ -127,7 +132,7 @@ export class ArticleController {
     @Req() req: any,
     @Body() body: { action: 'approve' | 'reject'; note?: string },
   ) {
-    return this.articleService.reviewArticle(id, req.user?.id, body.action, body.note);
+    return this.articleService.reviewArticle(id, getAuthUserId(req)!, body.action, body.note);
   }
 
   /** PATCH /article/admin/:id — Cập nhật bài viết */
@@ -144,7 +149,7 @@ export class ArticleController {
       readTime?: number; isFeatured?: boolean;
     },
   ) {
-    return this.articleService.adminUpdate(id, dto, req.user?.id, req.user?.role);
+    return this.articleService.adminUpdate(id, dto, getAuthUserId(req), req.user?.role);
   }
 
   /** PATCH /article/admin/:id/toggle-featured — Bật/tắt nổi bật */
@@ -165,7 +170,7 @@ export class ArticleController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
   ) {
-    return this.articleService.adminDelete(id, req.user?.id, req.user?.role);
+    return this.articleService.adminDelete(id, getAuthUserId(req), req.user?.role);
   }
 
   // ─── Trash endpoints ──────────────────────────────────────────────────────

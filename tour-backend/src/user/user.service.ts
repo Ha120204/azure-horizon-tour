@@ -304,7 +304,9 @@ export class UserService {
     // Chỉ thống kê CUSTOMER — đồng bộ với bảng danh sách
     const customerWhere = { role: 'CUSTOMER' as any };
 
-    const [totalUsers, activeUsers, newThisMonth, roleBreakdown] =
+    const staffWhere = { role: { in: [Role.ADMIN, Role.STAFF, Role.SUPER_ADMIN] } };
+
+    const [totalUsers, activeUsers, newThisMonth, roleBreakdown, staffActive, staffNewThisMonth] =
       await Promise.all([
         this.prisma.user.count({ where: customerWhere }),
         this.prisma.user.count({ where: { ...customerWhere, deletedAt: null } }),
@@ -314,6 +316,10 @@ export class UserService {
         this.prisma.user.groupBy({
           by: ['role'],
           _count: { role: true },
+        }),
+        this.prisma.user.count({ where: { ...staffWhere, deletedAt: null } }),
+        this.prisma.user.count({
+          where: { ...staffWhere, createdAt: { gte: firstDayOfMonth } },
         }),
       ]);
 
@@ -326,6 +332,8 @@ export class UserService {
       activeUsers,
       newThisMonth,
       staffAndAdmin,
+      staffActive,
+      staffNewThisMonth,
       roleBreakdown: roleBreakdown.map((r) => ({
         role: r.role,
         count: r._count.role,

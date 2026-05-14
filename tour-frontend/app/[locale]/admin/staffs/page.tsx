@@ -36,6 +36,8 @@ interface Stats {
     activeUsers: number;
     newThisMonth: number;
     staffAndAdmin: number;
+    staffActive: number;
+    staffNewThisMonth: number;
 }
 
 interface Meta {
@@ -106,6 +108,28 @@ const getInitials = (name?: string | null) => {
     return name.substring(0, 2).toUpperCase();
 };
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error ? error.message : fallback;
+
+const getApiMessage = (payload: unknown, fallback: string) => {
+    if (payload && typeof payload === 'object' && 'message' in payload) {
+        const message = (payload as { message?: unknown }).message;
+        return typeof message === 'string' ? message : fallback;
+    }
+    return fallback;
+};
+
+const getProfileRole = (payload: unknown) => {
+    const profile = payload && typeof payload === 'object' && 'data' in payload
+        ? (payload as { data?: unknown }).data
+        : payload;
+    if (profile && typeof profile === 'object' && 'role' in profile) {
+        const role = (profile as { role?: unknown }).role;
+        return typeof role === 'string' ? role : '';
+    }
+    return '';
+};
+
 const bookingStatusStyle: Record<string, string> = {
     CONFIRMED: 'bg-emerald-500/10 text-emerald-700',
     PENDING: 'bg-amber-500/10 text-amber-700',
@@ -171,7 +195,7 @@ export default function StaffManagementPage() {
     useEffect(() => {
         fetchWithAuth(`${API_BASE_URL}/auth/profile`)
             .then((r: Response) => r.json())
-            .then((d: any) => setCurrentUserRole(d.role || d.data?.role || ''))
+            .then((d: unknown) => setCurrentUserRole(getProfileRole(d)))
             .catch(() => { });
     }, []);
 
@@ -209,7 +233,7 @@ export default function StaffManagementPage() {
             const res = await fetchWithAuth(`${API_BASE_URL}/user/stats`);
             if (res.ok) {
                 const json = await res.json();
-                setStats(json);
+                setStats(json?.data ?? json);
             }
         } catch { /* silent */ }
     }, []);
@@ -279,8 +303,8 @@ export default function StaffManagementPage() {
             setIsEditing(false);
             openDetail(detailUser.id);
             fetchUsers();
-        } catch (error: any) {
-            showToast('Lỗi: ' + (error.message || 'Lỗi lưu thông tin'), 'error');
+        } catch (error: unknown) {
+            showToast('Lỗi: ' + getErrorMessage(error, 'Lỗi lưu thông tin'), 'error');
         } finally {
             setIsSaving(false);
         }
@@ -298,15 +322,15 @@ export default function StaffManagementPage() {
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed');
+                throw new Error(getApiMessage(err, 'Failed'));
             }
             showToast(`Đã đổi role của "${roleEditUser.fullName}" thành ${roleConfig[newRole]?.label || newRole}`);
             setRoleEditUser(null);
             setNewRole('');
             fetchUsers();
             fetchStats();
-        } catch (e: any) {
-            showToast(e.message || 'Đổi role thất bại.', 'error');
+        } catch (e: unknown) {
+            showToast(getErrorMessage(e, 'Đổi role thất bại.'), 'error');
         } finally {
             setIsUpdatingRole(false);
         }
@@ -322,7 +346,7 @@ export default function StaffManagementPage() {
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Failed');
+                throw new Error(getApiMessage(err, 'Failed'));
             }
             const result = await res.json();
             const action = result.status === 'Active' ? 'kích hoạt' : 'vô hiệu hóa';
@@ -330,8 +354,8 @@ export default function StaffManagementPage() {
             setToggleTarget(null);
             fetchUsers();
             fetchStats();
-        } catch (e: any) {
-            showToast(e.message || 'Thao tác thất bại.', 'error');
+        } catch (e: unknown) {
+            showToast(getErrorMessage(e, 'Thao tác thất bại.'), 'error');
         } finally {
             setIsToggling(false);
         }
@@ -360,7 +384,7 @@ export default function StaffManagementPage() {
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || 'Tạo tài khoản thất bại');
+                throw new Error(getApiMessage(err, 'Tạo tài khoản thất bại'));
             }
             showToast(`Tạo tài khoản "${createForm.fullName}" thành công!`);
             setShowCreateModal(false);
@@ -368,8 +392,8 @@ export default function StaffManagementPage() {
             setConfirmPassword('');
             fetchUsers();
             fetchStats();
-        } catch (e: any) {
-            showToast(e.message || 'Tạo tài khoản thất bại.', 'error');
+        } catch (e: unknown) {
+            showToast(getErrorMessage(e, 'Tạo tài khoản thất bại.'), 'error');
         } finally {
             setIsCreating(false);
         }
@@ -378,8 +402,8 @@ export default function StaffManagementPage() {
     // ── KPI Cards Data ──────────────────────────────────────────
     const kpis = [
         { icon: 'shield_person', label: 'Tổng Nhân Sự', value: stats?.staffAndAdmin ?? '—', color: 'bg-amber-500/10 text-amber-600' },
-        { icon: 'verified_user', label: 'Hoạt Động (All)', value: stats?.activeUsers ?? '—', color: 'bg-emerald-500/10 text-emerald-600' },
-        { icon: 'person_add', label: 'Mới Tháng Này (All)', value: stats?.newThisMonth ?? '—', color: 'bg-violet-500/10 text-violet-600' },
+        { icon: 'verified_user', label: 'Nhân Sự Hoạt Động', value: stats?.staffActive ?? '—', color: 'bg-emerald-500/10 text-emerald-600' },
+        { icon: 'person_add', label: 'Nhân Sự Mới Tháng Này', value: stats?.staffNewThisMonth ?? '—', color: 'bg-violet-500/10 text-violet-600' },
     ];
 
     // ── Render ───────────────────────────────────────────────────
@@ -1358,36 +1382,4 @@ export default function StaffManagementPage() {
 }
 
 // ── Sub-components ───────────────────────────────────────────────────
-function InfoItem({ label, value, icon }: { label: string; value: string; icon: string }) {
-    return (
-        <div className="flex items-start gap-2">
-            <span className="material-symbols-outlined text-on-surface-variant text-base mt-0.5" aria-hidden="true">{icon}</span>
-            <div>
-                <p className="text-[11px] text-on-surface-variant font-medium uppercase tracking-wider">{label}</p>
-                <p className="text-sm text-on-surface font-medium mt-0.5">{value}</p>
-            </div>
-        </div>
-    );
-}
-
 // ── Pagination helper ────────────────────────────────────────────────
-function generatePageNumbers(current: number, total: number): (number | string)[] {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    const pages: (number | string)[] = [];
-    if (current <= 4) {
-        for (let i = 1; i <= 5; i++) pages.push(i);
-        pages.push('...');
-        pages.push(total);
-    } else if (current >= total - 3) {
-        pages.push(1);
-        pages.push('...');
-        for (let i = total - 4; i <= total; i++) pages.push(i);
-    } else {
-        pages.push(1);
-        pages.push('...');
-        for (let i = current - 1; i <= current + 1; i++) pages.push(i);
-        pages.push('...');
-        pages.push(total);
-    }
-    return pages;
-}

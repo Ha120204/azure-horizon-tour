@@ -23,7 +23,10 @@ interface TourDeparture {
     departureDate: string; // YYYY-MM-DD
     price: string;         // '' = use tour price
     availableSeats: string;
+    maxSeats: string;
     note: string;
+    category: SaleCategory;
+    flashSaleEndsAt: string; // YYYY-MM-DDThh:mm
 }
 
 interface TourFormData {
@@ -39,11 +42,55 @@ interface TourFormData {
     departurePoint: string; // Điểm khởi hành mặc định
 }
 
+type SaleCategory = 'all' | 'flash' | 'early' | 'lastminute';
+
+interface ExistingTourImage { id: number; url: string; }
+
+interface ExistingTourPackage {
+    id?: number;
+    name?: string;
+    description?: string;
+    price?: number | string;
+    badge?: string;
+    includes?: string[] | string | null;
+    excludes?: string[] | string | null;
+}
+
+interface ExistingTourDeparture {
+    id?: number;
+    departureDate?: string | Date | null;
+    price?: number | string | null;
+    availableSeats?: number | string | null;
+    maxSeats?: number | string | null;
+    note?: string | null;
+    category?: string | null;
+    flashSaleEndsAt?: string | Date | null;
+}
+
+interface InitialTourData {
+    id: number;
+    name?: string;
+    description?: string;
+    price?: number | string;
+    destination?: Destination | null;
+    destinationId?: number | string | null;
+    startDate?: string | Date | null;
+    duration?: string;
+    availableSeats?: number | string;
+    tourType?: string;
+    imageUrl?: string;
+    departurePoint?: string | null;
+    images?: ExistingTourImage[];
+    packages?: ExistingTourPackage[];
+    departures?: ExistingTourDeparture[];
+}
+
 interface TourFormModalProps {
     mode: 'create' | 'edit';
-    initialData?: any;
+    initialData?: InitialTourData;
     destinations: Destination[];
-    onSuccess: (message: string) => void;
+    userRole?: string;
+    onSuccess: (message: string, savedTour?: InitialTourData, action?: 'draft' | 'submit') => void;
     onClose: () => void;
     onDestinationCreated?: (dest: Destination) => void;
 }
@@ -55,6 +102,8 @@ const EMPTY_FORM: TourFormData = {
     tourType: 'Tour Gia Đình', imageUrl: '', departurePoint: '',
 };
 
+const DRAFT_DESTINATION_NAME = 'Chưa xác định';
+
 /** Trả về chuỗi YYYY-MM-DD của ngày mai (today + 1) */
 const getTomorrowDateString = (): string => {
     const d = new Date();
@@ -63,6 +112,28 @@ const getTomorrowDateString = (): string => {
 };
 
 const MIN_START_DATE = getTomorrowDateString();
+
+const UI_TO_API_DEPARTURE_CATEGORY: Record<SaleCategory, string | null> = {
+    all: null,
+    flash: 'FLASH_SALE',
+    early: 'EARLY_BIRD',
+    lastminute: 'LAST_MINUTE',
+};
+
+const API_TO_UI_DEPARTURE_CATEGORY: Record<string, SaleCategory> = {
+    FLASH_SALE: 'flash',
+    EARLY_BIRD: 'early',
+    LAST_MINUTE: 'lastminute',
+};
+
+const toUiDepartureCategory = (category?: string | null): SaleCategory => {
+    if (!category) return 'all';
+    if (category === 'flash' || category === 'early' || category === 'lastminute' || category === 'all') {
+        return category;
+    }
+    return API_TO_UI_DEPARTURE_CATEGORY[category] ?? 'all';
+};
+
 
 const TOUR_TYPES = [
     { value: 'Tour Gia Đình', icon: 'family_restroom', label: 'Tour Gia Đình' },
@@ -259,15 +330,16 @@ function TagChipField({ items, presets, color, onChange }: {
 // ── Component ──────────────────────────────────────────────────────────
 export default function TourFormModal({
     mode, initialData, destinations: initialDestinations,
-    onSuccess, onClose, onDestinationCreated,
+    userRole = '', onSuccess, onClose, onDestinationCreated,
 }: TourFormModalProps) {
+    const isStaff = userRole === 'STAFF';
     const [form, setForm] = useState<TourFormData>(EMPTY_FORM);
     const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string>('');
     const [errors, setErrors] = useState<Partial<TourFormData>>({});
     const [globalError, setGlobalError] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
+    const [saveAction, setSaveAction] = useState<'draft' | 'submit' | null>(null);
     const [isDirty, setIsDirty] = useState(false);
 
     // Gallery state
@@ -283,7 +355,7 @@ export default function TourFormModal({
 
     // Departure state
     const [departures, setDepartures] = useState<TourDeparture[]>([]);
-    const EMPTY_DEP: TourDeparture = { departureDate: '', price: '', availableSeats: '', note: '' };
+    const EMPTY_DEP: TourDeparture = { departureDate: '', price: '', availableSeats: '', maxSeats: '', note: '', category: 'all', flashSaleEndsAt: '' };
 
     // Confirm-close dialog state
     const [showConfirmClose, setShowConfirmClose] = useState(false);
@@ -312,11 +384,15 @@ export default function TourFormModal({
                 ? new Date(initialData.startDate).toISOString().split('T')[0] : '';
             const duration = initialData.duration || '';
             const isPreset = DURATION_PRESETS.slice(0, -1).includes(duration);
+            const destinationId =
+                initialData.destination?.name === DRAFT_DESTINATION_NAME
+                    ? ''
+                    : String(initialData.destination?.id || initialData.destinationId || '');
             setForm({
                 name: initialData.name || '',
                 description: initialData.description || '',
                 price: String(initialData.price || ''),
-                destinationId: String(initialData.destination?.id || initialData.destinationId || ''),
+                destinationId,
                 startDate,
                 duration: isPreset ? duration : (duration ? 'Khác (tùy chỉnh)' : ''),
                 availableSeats: String(initialData.availableSeats || ''),
@@ -333,7 +409,7 @@ export default function TourFormModal({
             setExistingImages(initialData.images ?? []);
             // Pre-fill packages
             if (initialData.packages?.length) {
-                setPackages(initialData.packages.map((p: any) => ({
+                setPackages(initialData.packages.map((p: ExistingTourPackage) => ({
                     id: p.id, name: p.name || '', description: p.description || '',
                     nameMode: (PACKAGE_NAMES.includes(p.name || '') ? 'select' : 'custom') as 'select' | 'custom',
                     price: String(p.price || ''), badge: p.badge || '',
@@ -341,14 +417,16 @@ export default function TourFormModal({
                     excludes: Array.isArray(p.excludes) ? p.excludes : (p.excludes || '').split('\n').map((s: string) => s.trim()).filter(Boolean),
                 })));
             }
-            // Pre-fill departures
             if (initialData.departures?.length) {
-                setDepartures(initialData.departures.map((d: any) => ({
+                setDepartures(initialData.departures.map((d: ExistingTourDeparture) => ({
                     id: d.id,
                     departureDate: d.departureDate && !isNaN(new Date(d.departureDate).getTime()) ? new Date(d.departureDate).toISOString().split('T')[0] : '',
                     price: d.price != null ? String(d.price) : '',
                     availableSeats: String(d.availableSeats ?? ''),
+                    maxSeats: String(d.maxSeats ?? d.availableSeats ?? ''),
                     note: d.note || '',
+                    category: toUiDepartureCategory(d.category),
+                    flashSaleEndsAt: d.flashSaleEndsAt && !isNaN(new Date(d.flashSaleEndsAt).getTime()) ? new Date(d.flashSaleEndsAt).toISOString().slice(0, 16) : '',
                 })));
             }
             // Pre-fill departure point mode
@@ -428,15 +506,15 @@ export default function TourFormModal({
             onDestinationCreated?.(newDest);
             setNewDestName('');
             setShowNewDest(false);
-        } catch (e: any) {
-            setNewDestError(e.message || 'Tạo điểm đến thất bại');
+        } catch (e: unknown) {
+            setNewDestError(e instanceof Error ? e.message : 'Tạo điểm đến thất bại');
         } finally {
             setIsCreatingDest(false);
         }
     };
 
     // ── Validate ─────────────────────────────────────────────────────
-    const validate = (): boolean => {
+    const validateForReview = (): boolean => {
         setGlobalError('');
         const newErrors: Partial<TourFormData> = {};
         if (!form.name.trim()) newErrors.name = 'Tên tour không được để trống';
@@ -460,20 +538,24 @@ export default function TourFormModal({
     };
 
     // ── Submit ────────────────────────────────────────────────────────
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!validate()) return;
+    const handleSave = async (action: 'draft' | 'submit') => {
+        if (action === 'submit' && !validateForReview()) return;
+        const editId = initialData?.id;
+        if (mode === 'edit' && !editId) {
+            setGlobalError('Không tìm thấy dữ liệu tour cần chỉnh sửa.');
+            return;
+        }
 
         const finalDuration = durationMode === 'custom' ? customDuration : form.duration;
         const validDepartures = departures.filter(d => d.departureDate).sort((a, b) => new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime());
-        // Set the primary startDate to the earliest departure date
-        const payload = { ...form, duration: finalDuration, startDate: validDepartures[0].departureDate };
+        const primaryStartDate = validDepartures[0]?.departureDate || form.startDate || MIN_START_DATE;
+        const payload = { ...form, duration: finalDuration, startDate: primaryStartDate };
 
-        setIsSaving(true);
+        setSaveAction(action);
         try {
             let response: Response;
             const url = mode === 'edit'
-                ? `${API_BASE_URL}/tour/${initialData.id}`
+                ? `${API_BASE_URL}/tour/${editId}`
                 : `${API_BASE_URL}/tour`;
             const method = mode === 'edit' ? 'PATCH' : 'POST';
 
@@ -481,19 +563,25 @@ export default function TourFormModal({
                 const formData = new FormData();
                 formData.append('image', imageFile);
                 Object.entries(payload).forEach(([key, val]) => {
-                    if (key !== 'imageUrl') formData.append(key, val);
+                    if (key === 'imageUrl' || val === '') return;
+                    if (key === 'price' || key === 'availableSeats') {
+                        formData.append(key, String(Number(val) || 0));
+                        return;
+                    }
+                    formData.append(key, String(val));
                 });
                 response = await fetchWithAuth(url, { method, body: formData });
             } else {
+                const body = {
+                    ...payload,
+                    price: payload.price ? Number(payload.price) : 0,
+                    destinationId: payload.destinationId ? Number(payload.destinationId) : undefined,
+                    availableSeats: payload.availableSeats ? Number(payload.availableSeats) : 0,
+                };
                 response = await fetchWithAuth(url, {
                     method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        ...payload,
-                        price: Number(payload.price),
-                        destinationId: Number(payload.destinationId),
-                        availableSeats: Number(payload.availableSeats),
-                    }),
+                    body: JSON.stringify(body),
                 });
             }
 
@@ -524,7 +612,6 @@ export default function TourFormModal({
                 });
             }
 
-            // Save departures (always bulk-replace, kể cả khi empty)
             if (tourId) {
                 const depPayload = departures
                     .filter(d => d.departureDate)
@@ -532,7 +619,10 @@ export default function TourFormModal({
                         departureDate: d.departureDate,
                         price: d.price ? Number(d.price) : null,
                         availableSeats: Number(d.availableSeats) || 0,
+                        maxSeats: Number(d.maxSeats) || Number(d.availableSeats) || 0,
                         note: d.note.trim() || undefined,
+                        category: UI_TO_API_DEPARTURE_CATEGORY[d.category],
+                        flashSaleEndsAt: (d.category === 'flash' && d.flashSaleEndsAt) ? new Date(d.flashSaleEndsAt).toISOString() : null,
                         sortOrder: i,
                     }));
                 await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}/departures/bulk`, {
@@ -540,6 +630,14 @@ export default function TourFormModal({
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ departures: depPayload }),
                 });
+            }
+
+            if (isStaff && action === 'submit' && tourId) {
+                const submitRes = await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}/submit`, { method: 'POST' });
+                if (!submitRes.ok) {
+                    const err = await submitRes.json().catch(() => ({}));
+                    throw new Error(err.message || 'Gửi duyệt thất bại');
+                }
             }
 
             // Upload gallery images nếu có
@@ -552,14 +650,30 @@ export default function TourFormModal({
                 });
             }
 
-            onSuccess(mode === 'edit' ? 'Cập nhật tour thành công!' : 'Tạo tour mới thành công!');
+            const successMessage = isStaff
+                ? action === 'submit'
+                    ? 'Đã lưu và gửi tour để Admin duyệt!'
+                    : 'Đã lưu bản nháp tour!'
+                : mode === 'edit' ? 'Cập nhật tour thành công!' : 'Tạo tour mới thành công!';
+
+            onSuccess(successMessage, saved?.data ?? saved, action);
             onClose();
-        } catch (err: any) {
-            setGlobalError(err.message || 'Có lỗi xảy ra khi lưu tour. Vui lòng thử lại.');
+        } catch (err: unknown) {
+            setGlobalError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi lưu tour. Vui lòng thử lại.');
         } finally {
-            setIsSaving(false);
+            setSaveAction(null);
         }
     };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        void handleSave('submit');
+    };
+
+    const isSaving = saveAction !== null;
+    const requiredMark = isStaff
+        ? <span className="normal-case tracking-normal text-on-surface-variant/50">(khi gửi duyệt)</span>
+        : <span className="text-error">*</span>;
 
     const handleCloseAttempt = () => {
         if (isDirty) {
@@ -641,10 +755,14 @@ export default function TourFormModal({
                             </div>
                             <div>
                                 <h2 id="modal-title" className="font-headline text-lg font-bold text-white leading-tight">
-                                    {mode === 'edit' ? 'Chỉnh Sửa Tour' : 'Tạo Tour Mới'}
+                                    {mode === 'edit' ? 'Chỉnh Sửa Tour' : isStaff ? 'Tạo Bản Nháp Tour' : 'Tạo Tour Mới'}
                                 </h2>
                                 <p className="text-white/60 text-xs mt-0.5">
-                                    {mode === 'edit' ? `Đang sửa: ${initialData?.name}` : 'Điền đầy đủ thông tin để tạo tour'}
+                                    {mode === 'edit'
+                                        ? `Đang sửa: ${initialData?.name || 'bản nháp tour'}`
+                                        : isStaff
+                                            ? 'Lưu nháp trước, hoàn thiện sau rồi gửi Admin duyệt'
+                                            : 'Điền đầy đủ thông tin để tạo tour'}
                                 </p>
                             </div>
                         </div>
@@ -674,7 +792,7 @@ export default function TourFormModal({
                             {/* Tour Name */}
                             <div>
                                 <label htmlFor="field-name" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
-                                    Tên Tour <span className="text-error">*</span>
+                                    Tên Tour {requiredMark}
                                 </label>
                                 <div className="relative">
                                     <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">travel_explore</span>
@@ -721,7 +839,7 @@ export default function TourFormModal({
                             {/* Description */}
                             <div>
                                 <label htmlFor="field-description" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
-                                    Mô Tả <span className="text-error">*</span>
+                                    Mô Tả {requiredMark}
                                 </label>
                                 <div className="relative">
                                     <span className="material-symbols-outlined absolute left-3.5 top-3.5 text-on-surface-variant/60 text-base pointer-events-none">description</span>
@@ -755,7 +873,7 @@ export default function TourFormModal({
                             {/* Destination */}
                             <div>
                                 <label htmlFor="field-destinationId" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
-                                    Điểm Đến <span className="text-error">*</span>
+                                    Điểm Đến {requiredMark}
                                 </label>
                                 {!showNewDest ? (
                                     <>
@@ -903,7 +1021,7 @@ export default function TourFormModal({
                                 {/* Duration */}
                                 <div>
                                     <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
-                                        Thời Lượng <span className="text-error">*</span>
+                                        Thời Lượng {requiredMark}
                                     </label>
                                     <div className="space-y-2">
                                         <div className="relative">
@@ -954,7 +1072,7 @@ export default function TourFormModal({
                             {/* Price */}
                             <div>
                                 <label htmlFor="field-price" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
-                                    Giá niêm yết <span className="text-error">*</span>
+                                    Giá niêm yết {requiredMark}
                                 </label>
                                 <div className="relative">
                                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-600 font-bold text-sm pointer-events-none">₫</span>
@@ -987,7 +1105,7 @@ export default function TourFormModal({
                             {/* Available Seats */}
                             <div>
                                 <label htmlFor="field-availableSeats" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
-                                    Số Ghế <span className="text-error">*</span>
+                                    Số Ghế {requiredMark}
                                 </label>
                                 <div className="relative">
                                     <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">airline_seat_recline_normal</span>
@@ -1302,16 +1420,41 @@ export default function TourFormModal({
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Ngày khởi hành *</label>
+                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Ngày khởi hành {requiredMark}</label>
                                             <input type="date" value={dep.departureDate}
                                                 min={MIN_START_DATE}
                                                 onChange={e => setDepartures(d => d.map((x, i) => i === idx ? { ...x, departureDate: e.target.value } : x))}
                                                 className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
                                         </div>
                                         <div>
-                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Số ghế còn *</label>
-                                            <input type="number" placeholder="20" min={0} value={dep.availableSeats}
+                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Phân loại (Sale)</label>
+                                            <select value={dep.category}
+                                                onChange={e => setDepartures(d => d.map((x, i) => i === idx ? { ...x, category: e.target.value as SaleCategory } : x))}
+                                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                                                <option value="all">Bình thường</option>
+                                                <option value="flash">Flash Sale</option>
+                                                <option value="early">Đặt Sớm</option>
+                                                <option value="lastminute">Giờ Chót</option>
+                                            </select>
+                                        </div>
+                                        {dep.category === 'flash' && (
+                                            <div className="col-span-2">
+                                                <label className="block text-[11px] font-semibold text-error uppercase tracking-wider mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">timer</span>Thời gian kết thúc Flash Sale *</label>
+                                                <input type="datetime-local" value={dep.flashSaleEndsAt}
+                                                    onChange={e => setDepartures(d => d.map((x, i) => i === idx ? { ...x, flashSaleEndsAt: e.target.value } : x))}
+                                                    className="w-full bg-surface-container-lowest border border-error/50 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-error" />
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Số ghế còn {requiredMark}</label>
+                                            <input type="number" placeholder="VD: 20" min={0} value={dep.availableSeats}
                                                 onChange={e => setDepartures(d => d.map((x, i) => i === idx ? { ...x, availableSeats: e.target.value } : x))}
+                                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Tổng số ghế (Max)</label>
+                                            <input type="number" placeholder="VD: 30" min={0} value={dep.maxSeats}
+                                                onChange={e => setDepartures(d => d.map((x, i) => i === idx ? { ...x, maxSeats: e.target.value } : x))}
                                                 className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
                                         </div>
                                         <div>
@@ -1342,7 +1485,9 @@ export default function TourFormModal({
                 {/* ── Footer ── */}
                 <div className="px-7 py-5 border-t border-outline-variant/10 bg-surface-container-lowest flex items-center justify-between gap-3 shrink-0">
                     <p className="text-xs text-on-surface-variant">
-                        <span className="text-error font-bold">*</span> Trường bắt buộc
+                        {isStaff
+                            ? 'Lưu nháp không bắt buộc đủ thông tin. Chỉ “Lưu & gửi duyệt” mới kiểm tra đủ trường.'
+                            : <><span className="text-error font-bold">*</span> Trường bắt buộc</>}
                     </p>
                     <div className="flex gap-3">
                         <button
@@ -1352,13 +1497,33 @@ export default function TourFormModal({
                         >
                             Hủy
                         </button>
+                        {isStaff && (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('draft')}
+                                disabled={isSaving}
+                                className="px-5 py-2.5 rounded-xl border border-outline-variant/20 bg-surface text-on-surface text-sm font-semibold hover:bg-surface-container active:scale-[0.98] transition-all disabled:opacity-60 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                            >
+                                {saveAction === 'draft' ? (
+                                    <>
+                                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                                        Đang lưu…
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-outlined text-base">draft</span>
+                                        Lưu nháp
+                                    </>
+                                )}
+                            </button>
+                        )}
                         <button
-                            type="submit"
-                            form="tour-form"
+                            type="button"
+                            onClick={() => handleSave('submit')}
                             disabled={isSaving}
                             className="px-6 py-2.5 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-xl text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none shadow-sm"
                         >
-                            {isSaving ? (
+                            {saveAction === 'submit' ? (
                                 <>
                                     <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
                                     Đang lưu…
@@ -1366,9 +1531,9 @@ export default function TourFormModal({
                             ) : (
                                 <>
                                     <span className="material-symbols-outlined text-base">
-                                        {mode === 'edit' ? 'save' : 'add_circle'}
+                                        {isStaff ? 'send' : mode === 'edit' ? 'save' : 'add_circle'}
                                     </span>
-                                    {mode === 'edit' ? 'Lưu Thay Đổi' : 'Tạo Tour'}
+                                    {isStaff ? 'Lưu & gửi duyệt' : mode === 'edit' ? 'Lưu Thay Đổi' : 'Tạo Tour'}
                                 </>
                             )}
                         </button>

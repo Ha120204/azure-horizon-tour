@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service'
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class AuthService {
@@ -162,8 +163,9 @@ export class AuthService {
     const { password, ...safeUserInfo } = user;
     return safeUserInfo;
   }
+
   // Thêm hàm Cập nhật Profile
-  async updateProfile(userId: number, updateData: { fullName?: string, phone?: string, dob?: string, gender?: string }) {
+  async updateProfile(userId: number, updateData: UpdateProfileDto) {
     // 1. Tìm user trong Database
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
@@ -178,7 +180,9 @@ export class AuthService {
         ...(updateData.fullName && { fullName: updateData.fullName }),
         ...(updateData.phone !== undefined && { phone: updateData.phone }),
         ...(updateData.dob !== undefined && { dob: updateData.dob }),
-        ...(updateData.gender !== undefined && { gender: updateData.gender })
+        ...(updateData.gender !== undefined && { gender: updateData.gender }),
+        ...(updateData.identityType !== undefined && { identityType: updateData.identityType }),
+        ...(updateData.identityNo !== undefined && { identityNo: updateData.identityNo }),
       },
     });
 

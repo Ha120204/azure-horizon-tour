@@ -10,7 +10,7 @@ interface TourCardProps {
 
 export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
     return (
-        <article className="bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1">
+        <Link href={`/tour/${tour.id}`} className="block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1">
             <div className="relative aspect-[4/3] overflow-hidden">
                 <img alt={tour.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" src={tour.imageUrl || "https://images.unsplash.com/photo-1499681404123-6c7102ce0033"} />
                 <div className="absolute top-4 left-4">
@@ -40,11 +40,11 @@ export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
                             )}
                         </span>
                     </div>
-                    <Link href={`/tour/${tour.id}`} className="bg-surface-container-high hover:bg-primary hover:text-white text-primary px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 active:scale-95 text-center">
-                        {t('dest.viewDetails')}
-                    </Link>
+                    <div className="w-10 h-10 rounded-full bg-surface-container-high group-hover:bg-primary flex items-center justify-center transition-colors duration-300">
+                        <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">arrow_forward</span>
+                    </div>
                 </div>
             </div>
-        </article>
+        </Link>
     );
 }

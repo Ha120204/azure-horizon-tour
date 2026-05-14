@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
 import { useLocale } from '@/app/context/LocaleContext';
@@ -41,10 +42,13 @@ export default function AboutPage() {
                 {/* 1. Hero Section */}
                 <section className="relative h-[80vh] w-full flex items-center justify-center overflow-hidden">
                     <div className="absolute inset-0">
-                        <img
+                        <Image
                             alt="Luxury resort overlooking turquoise ocean"
-                            className="w-full h-full object-cover"
                             src="https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=2000"
+                            fill
+                            priority
+                            className="object-cover"
+                            sizes="100vw"
                         />
                         <div className="absolute inset-0 hero-gradient"></div>
                     </div>
@@ -74,11 +78,13 @@ export default function AboutPage() {
                             {/* Left: Artistic Image with Offset Frame */}
                             <div className="relative group order-2 lg:order-1">
                                 <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 w-full h-full border-2 border-primary/10 rounded-xl -z-10 transition-transform duration-500 group-hover:translate-x-2 group-hover:translate-y-2"></div>
-                                <div className="rounded-xl overflow-hidden shadow-2xl">
-                                    <img
+                                <div className="relative rounded-xl overflow-hidden shadow-2xl w-full aspect-[3/4] md:aspect-[4/5] lg:aspect-[3/4]">
+                                    <Image
                                         alt="Luxury travel detail"
-                                        className="w-full aspect-[3/4] md:aspect-[4/5] lg:aspect-[3/4] object-cover"
                                         src="https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&q=80&w=1000"
+                                        fill
+                                        className="object-cover"
+                                        sizes="(max-width: 768px) 100vw, 50vw"
                                     />
                                 </div>
                             </div>
@@ -174,11 +180,13 @@ export default function AboutPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 md:gap-12">
                             {/* Team Card 1 */}
                             <div className="group">
-                                <div className="aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
-                                    <img
+                                <div className="relative aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
+                                    <Image
                                         alt="Julian Vance"
-                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                         src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=800"
+                                        fill
+                                        className="object-cover transition-transform duration-700 group-hover:scale-110"
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                                     />
                                 </div>
                                 <div className="space-y-1 md:space-y-2">
@@ -192,11 +200,13 @@ export default function AboutPage() {
 
                             {/* Team Card 2 */}
                             <div className="group">
-                                <div className="aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
-                                    <img
+                                <div className="relative aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
+                                    <Image
                                         alt="Elena Sterling"
-                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                         src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=800"
+                                        fill
+                                        className="object-cover transition-transform duration-700 group-hover:scale-110"
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                                     />
                                 </div>
                                 <div className="space-y-1 md:space-y-2">
@@ -210,11 +220,13 @@ export default function AboutPage() {
 
                             {/* Team Card 3 */}
                             <div className="group">
-                                <div className="aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
-                                    <img
+                                <div className="relative aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
+                                    <Image
                                         alt="Marcus Thorne"
-                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                         src="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=800"
+                                        fill
+                                        className="object-cover transition-transform duration-700 group-hover:scale-110"
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                                     />
                                 </div>
                                 <div className="space-y-1 md:space-y-2">

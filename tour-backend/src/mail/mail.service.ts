@@ -20,6 +20,91 @@ export class MailService {
     });
   }
 
+  private escapeHtml(value: string) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  async sendMarketingCampaignTest(data: {
+    to: string;
+    subject: string;
+    previewText?: string;
+    body: string;
+    campaignName?: string;
+  }) {
+    const safeSubject = this.escapeHtml(data.subject);
+    const safePreview = this.escapeHtml(data.previewText ?? '');
+    const safeBody = this.escapeHtml(data.body).replace(/\n/g, '<br/>');
+    const safeCampaignName = this.escapeHtml(data.campaignName || 'Marketing campaign');
+
+    return this.transporter.sendMail({
+      from: `"Azure Horizon Marketing" <${this.configService.get('MAIL_USER')}>`,
+      to: data.to,
+      subject: `[TEST] ${data.subject}`,
+      html: `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
+          <div style="background:#0f3d8a;padding:32px 28px;color:white;">
+            <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#bfdbfe;">Azure Horizon Test Email</p>
+            <h1 style="margin:0;font-size:26px;line-height:1.25;">${safeSubject}</h1>
+            ${safePreview ? `<p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.6;">${safePreview}</p>` : ''}
+          </div>
+          <div style="padding:28px;background:white;">
+            <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Campaign draft: <strong style="color:#0f172a;">${safeCampaignName}</strong></p>
+            <div style="color:#1e293b;font-size:15px;line-height:1.75;">${safeBody}</div>
+            <div style="margin-top:28px;padding:16px;border-radius:14px;background:#eff6ff;color:#1d4ed8;font-size:13px;line-height:1.6;">
+              Đây là email test nội bộ. Campaign chưa được gửi tới subscriber.
+            </div>
+          </div>
+          <div style="padding:18px 28px;background:#f1f5f9;color:#94a3b8;font-size:12px;text-align:center;">
+            © 2026 Azure Horizon. Test campaign only.
+          </div>
+        </div>
+      `,
+    });
+  }
+
+  async sendMarketingCampaignEmail(data: {
+    to: string;
+    subject: string;
+    previewText?: string;
+    body: string;
+    campaignName?: string;
+  }) {
+    const safeSubject = this.escapeHtml(data.subject);
+    const safePreview = this.escapeHtml(data.previewText ?? '');
+    const safeBody = this.escapeHtml(data.body).replace(/\n/g, '<br/>');
+    const safeCampaignName = this.escapeHtml(data.campaignName || 'Azure Horizon newsletter');
+
+    return this.transporter.sendMail({
+      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+      to: data.to,
+      subject: data.subject,
+      html: `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
+          <div style="background:#0f3d8a;padding:34px 28px;color:white;">
+            <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#bfdbfe;">Azure Horizon</p>
+            <h1 style="margin:0;font-size:26px;line-height:1.25;">${safeSubject}</h1>
+            ${safePreview ? `<p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.6;">${safePreview}</p>` : ''}
+          </div>
+          <div style="padding:28px;background:white;">
+            <p style="margin:0 0 16px;color:#64748b;font-size:13px;">${safeCampaignName}</p>
+            <div style="color:#1e293b;font-size:15px;line-height:1.75;">${safeBody}</div>
+            <div style="margin-top:28px;padding-top:18px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;line-height:1.6;">
+              Bạn nhận được email này vì đã đăng ký nhận tin từ Azure Horizon.
+            </div>
+          </div>
+          <div style="padding:18px 28px;background:#f1f5f9;color:#94a3b8;font-size:12px;text-align:center;">
+            © 2026 Azure Horizon.
+          </div>
+        </div>
+      `,
+    });
+  }
+
   async sendPasswordResetEmail(to: string, token: string) {
     const resetLink = `http://localhost:3001/reset-password?token=${token}`;
 
@@ -61,7 +146,7 @@ export class MailService {
     };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
+      const info: unknown = await this.transporter.sendMail(mailOptions);
       console.log('✅ Email sent successfully to:', to);
       return info;
     } catch (error) {
@@ -113,7 +198,7 @@ export class MailService {
     };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
+      const info: unknown = await this.transporter.sendMail(mailOptions);
       console.log('✅ Welcome email sent successfully to:', to);
       return info;
     } catch (error) {
@@ -231,7 +316,7 @@ export class MailService {
     };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
+      const info: unknown = await this.transporter.sendMail(mailOptions);
       console.log('✅ Booking confirmation email sent to:', data.to);
       return info;
     } catch (error) {
@@ -243,6 +328,63 @@ export class MailService {
   /**
    * Email xác nhận đã nhận yêu cầu hủy tour (gửi cho khách hàng)
    */
+  async sendPaymentRequestEmail(data: {
+    to: string;
+    customerName: string;
+    bookingCode: string;
+    tourName: string;
+    startDate: string;
+    duration: string;
+    passengerBreakdown: string;
+    totalPrice: string;
+    discountAmount?: string;
+    paymentUrl: string;
+    qrCodeUrl?: string;
+    deadlineText: string;
+  }) {
+    const qrMarkup = data.qrCodeUrl
+      ? `<img src="${data.qrCodeUrl}" alt="QR thanh toan" width="180" height="180" style="display:block;border-radius:12px;" />`
+      : `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.paymentUrl)}" alt="QR thanh toan" width="180" height="180" style="display:block;border-radius:12px;" />`;
+
+    const mailOptions = {
+      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+      to: data.to,
+      subject: `Xac nhan thong tin dat tour va thanh toan - ${data.bookingCode}`,
+      html: `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
+          <div style="background:#0f3f9f;padding:30px 32px;">
+            <h1 style="color:white;margin:0;font-size:24px;">Azure Horizon</h1>
+            <p style="color:#dbeafe;margin:6px 0 0;font-size:13px;">Phieu xac nhan dat tour & yeu cau thanh toan</p>
+          </div>
+          <div style="padding:32px;">
+            <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 20px;">Xin chao <strong>${data.customerName}</strong>, vui long kiem tra lai thong tin dat tour ben duoi. Neu thong tin da dung, anh/chi thanh toan bang nut hoac QR kem theo.</p>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:22px;">
+              <p style="margin:0 0 6px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;">Ma dat tour</p>
+              <p style="margin:0;color:#0f3f9f;font-size:26px;font-weight:800;font-family:'Courier New',monospace;">${data.bookingCode}</p>
+            </div>
+            <table style="width:100%;border-collapse:collapse;margin-bottom:22px;">
+              <tr><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;width:150px;">Tour</td><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:700;">${data.tourName}</td></tr>
+              <tr><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;">Khoi hanh</td><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:700;">${data.startDate}</td></tr>
+              <tr><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;">Thoi gian</td><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:700;">${data.duration}</td></tr>
+              <tr><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;">Hanh khach</td><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#0f172a;font-weight:700;">${data.passengerBreakdown}</td></tr>
+              ${data.discountAmount ? `<tr><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#64748b;">Giam gia</td><td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#16a34a;font-weight:700;">-${data.discountAmount}</td></tr>` : ''}
+              <tr><td style="padding:14px 0;color:#0f3f9f;font-weight:800;">Tong thanh toan</td><td style="padding:14px 0;color:#0f3f9f;font-size:22px;font-weight:900;">${data.totalPrice}</td></tr>
+            </table>
+            <div style="text-align:center;margin:28px 0;"><a href="${data.paymentUrl}" style="display:inline-block;background:#0f3f9f;color:white;text-decoration:none;border-radius:999px;padding:14px 34px;font-size:15px;font-weight:800;">Thanh toan ngay</a></div>
+            <div style="text-align:center;margin:22px 0;">
+              <div style="display:inline-block;padding:12px;border:1px solid #dbe3ef;border-radius:18px;background:white;">${qrMarkup}</div>
+              <p style="color:#64748b;font-size:12px;margin:10px 0 0;">Han thanh toan: <strong>${data.deadlineText}</strong></p>
+            </div>
+            <p style="color:#64748b;font-size:12px;line-height:1.6;text-align:center;margin:24px 0 0;">Neu thong tin chua dung, vui long phan hoi voi nhan vien tu van truoc khi thanh toan.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    const info: unknown = await this.transporter.sendMail(mailOptions);
+    return info;
+  }
+
   async sendCancelRequestConfirmation(data: {
     to: string;
     customerName: string;

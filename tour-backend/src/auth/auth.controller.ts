@@ -7,6 +7,7 @@ import { LoginDto } from './dto/login.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -81,7 +82,7 @@ export class AuthController {
   @Patch('profile')
   async updateProfile(
     @Request() req,
-    @Body() body: { fullName?: string, phone?: string, dob?: string, gender?: string }
+    @Body() body: UpdateProfileDto
   ) {
     const userId = req.user.userId;
     return this.authService.updateProfile(userId, body);

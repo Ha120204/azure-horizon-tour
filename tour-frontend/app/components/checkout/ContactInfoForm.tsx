@@ -1,9 +1,13 @@
 'use client';
 
+import React from 'react';
+
 interface ContactInfo {
     fullName: string;
     email: string;
     phone: string;
+    identityType: string; // "CCCD" | "PASSPORT"
+    identityNo: string;
     dob: string;
     gender: string;
 }
@@ -14,8 +18,15 @@ interface ContactInfoFormProps {
     isBookForMyself: boolean;
     setIsBookForMyself: (checked: boolean) => void;
     onToggleBookForMyself: (checked: boolean) => void;
-    setLeadTraveler: React.Dispatch<React.SetStateAction<{ fullName: string; dob: string; gender: string; notes: string }>>;
+    setLeadTraveler: React.Dispatch<React.SetStateAction<{ fullName: string; dob: string; gender: string; identityType: string; identityNo: string; notes: string }>>;
     t: (key: string) => string;
+}
+
+function validateIdentity(type: string, no: string): string | null {
+    if (!no) return null;
+    if (type === 'CCCD' && !/^\d{12}$/.test(no)) return 'CCCD phải đúng 12 chữ số.';
+    if (type === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(no)) return 'Hộ chiếu phải từ 6–15 ký tự, chỉ gồm chữ và số.';
+    return null;
 }
 
 export default function ContactInfoForm({
@@ -26,6 +37,8 @@ export default function ContactInfoForm({
     setLeadTraveler,
     t,
 }: ContactInfoFormProps) {
+    const identityError = validateIdentity(contactInfo.identityType, contactInfo.identityNo);
+
     return (
         <>
             {/* 1. Contact Information Card */}
@@ -35,6 +48,7 @@ export default function ContactInfoForm({
                     <h2 className="font-headline text-xl md:text-2xl font-bold tracking-tight">{t('checkout.contactInfoTitle')}</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    {/* Full Name — spans 2 cols */}
                     <div className="md:col-span-2">
                         <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.fullName')} <span className="text-error">*</span></label>
                         <input
@@ -51,7 +65,9 @@ export default function ContactInfoForm({
                             }}
                         />
                     </div>
-                    <div>
+
+                    {/* Email — spans 2 cols (read-only) */}
+                    <div className="md:col-span-2">
                         <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.email')} <span className="text-error">*</span></label>
                         <input
                             className="w-full bg-surface-container-low border-none rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none text-slate-500"
@@ -62,6 +78,8 @@ export default function ContactInfoForm({
                             title="Login email cannot be changed"
                         />
                     </div>
+
+                    {/* Phone */}
                     <div>
                         <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.phone')} <span className="text-error">*</span></label>
                         <input
@@ -69,8 +87,63 @@ export default function ContactInfoForm({
                             type="tel"
                             placeholder={t('checkout.enterPhone')}
                             value={contactInfo.phone}
-                            onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                            onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value.replace(/\D/g, '') })}
                         />
+                    </div>
+
+                    {/* Identity Document — type dropdown + number input */}
+                    <div>
+                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">
+                            Giấy tờ tuỳ thân <span className="text-error">*</span>
+                        </label>
+                        <div className="flex gap-2">
+                            <select
+                                className="bg-surface-container-low border-none rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none text-sm font-semibold text-on-surface w-36 flex-shrink-0"
+                                value={contactInfo.identityType}
+                                onChange={(e) => {
+                                    const newType = e.target.value;
+                                    setContactInfo({ ...contactInfo, identityType: newType, identityNo: '' });
+                                    if (isBookForMyself) setLeadTraveler(prev => ({ ...prev, identityType: newType, identityNo: '' }));
+                                }}
+                            >
+                                <option value="CCCD">CCCD</option>
+                                <option value="PASSPORT">Hộ chiếu</option>
+                            </select>
+                            <div className="flex-1">
+                                <input
+                                    className={`w-full bg-surface-container-low border-none rounded-lg p-3 md:p-4 focus:ring-1 outline-none ${identityError ? 'ring-1 ring-error/60 bg-error/5 focus:ring-error' : 'focus:ring-primary'}`}
+                                    type="text"
+                                    placeholder={contactInfo.identityType === 'CCCD' ? 'Nhập 12 số CCCD' : 'Nhập số hộ chiếu'}
+                                    value={contactInfo.identityNo}
+                                    maxLength={contactInfo.identityType === 'CCCD' ? 12 : 15}
+                                    onChange={(e) => {
+                                        const newNo = contactInfo.identityType === 'CCCD'
+                                            ? e.target.value.replace(/\D/g, '')
+                                            : e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                                        setContactInfo({ ...contactInfo, identityNo: newNo });
+                                        if (isBookForMyself) setLeadTraveler(prev => ({ ...prev, identityNo: newNo }));
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        {/* Validation feedback */}
+                        {identityError && (
+                            <p className="mt-1.5 text-xs text-error font-medium flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[13px]">error</span>
+                                {identityError}
+                            </p>
+                        )}
+                        {contactInfo.identityNo && !identityError && (
+                            <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                                Hợp lệ
+                            </p>
+                        )}
+                        {!contactInfo.identityNo && (
+                            <p className="mt-1.5 text-[11px] text-on-surface-variant/60 italic">
+                                {contactInfo.identityType === 'CCCD' ? 'Căn cước công dân 12 số.' : 'Số hộ chiếu có thể chứa chữ và số.'}
+                            </p>
+                        )}
                     </div>
                 </div>
             </section>

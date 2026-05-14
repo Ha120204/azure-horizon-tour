@@ -19,6 +19,37 @@ function generateSlug(title: string): string {
     .replace(/-+/g, '-');
 }
 
+type ArticleDraftInput = {
+  title?: string;
+  category?: string;
+  excerpt?: string;
+  content?: string;
+  imageUrl?: string;
+  author?: string;
+  readTime?: number;
+  isFeatured?: boolean;
+};
+
+function stripHtml(value?: string | null): string {
+  return String(value ?? '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
+function requirePublishableArticle(article: ArticleDraftInput) {
+  const missing: string[] = [];
+  if (!article.title?.trim()) missing.push('tiêu đề');
+  if (!article.excerpt?.trim()) missing.push('tóm tắt');
+  if (!article.imageUrl?.trim()) missing.push('ảnh bìa');
+  if (!article.author?.trim()) missing.push('tác giả');
+  if (!stripHtml(article.content) || article.content === '<p><br></p>') missing.push('nội dung');
+
+  if (missing.length) {
+    throw new BadRequestException(`Bài viết chưa đủ thông tin để gửi duyệt: ${missing.join(', ')}`);
+  }
+}
+
 @Injectable()
 export class ArticleService {
   constructor(private prisma: PrismaService) {}
@@ -63,22 +94,72 @@ export class ArticleService {
     return { count };
   }
 
-  async getAdminStats(requesterId?: number, requesterRole?: string): Promise<{ pending: number; rejected: number }> {
+  async getAdminStats(requesterId?: number, requesterRole?: string) {
     const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
     const baseWhere = { deletedAt: null };
-    const [pending, rejected] = await Promise.all([
+    const visibleWhere = isAdmin
+      ? baseWhere
+      : requesterRole === 'STAFF' && requesterId
+        ? {
+            ...baseWhere,
+            OR: [
+              { status: ArticleStatus.PUBLISHED },
+              { createdById: requesterId },
+            ],
+          }
+        : { ...baseWhere, status: ArticleStatus.PUBLISHED };
+    const statusWhere = (status: ArticleStatus) =>
+      isAdmin || status === ArticleStatus.PUBLISHED
+        ? { ...baseWhere, status }
+        : requesterRole === 'STAFF' && requesterId
+          ? { ...baseWhere, status, createdById: requesterId }
+          : { ...baseWhere, status, id: -1 };
+
+    const [
+      totalVisible,
+      published,
+      draft,
+      pending,
+      rejected,
+      featured,
+      topCategoryRows,
+    ] = await Promise.all([
+      this.prisma.article.count({ where: visibleWhere }),
+      this.prisma.article.count({ where: statusWhere(ArticleStatus.PUBLISHED) }),
+      this.prisma.article.count({ where: statusWhere(ArticleStatus.DRAFT) }),
       this.prisma.article.count({
-        where: isAdmin
-          ? { ...baseWhere, status: ArticleStatus.PENDING_REVIEW }
-          : { ...baseWhere, status: ArticleStatus.PENDING_REVIEW, ...(requesterId && { createdById: requesterId }) },
+        where: statusWhere(ArticleStatus.PENDING_REVIEW),
       }),
       this.prisma.article.count({
-        where: isAdmin
-          ? { ...baseWhere, status: ArticleStatus.REJECTED }
-          : { ...baseWhere, status: ArticleStatus.REJECTED, ...(requesterId && { createdById: requesterId }) },
+        where: statusWhere(ArticleStatus.REJECTED),
+      }),
+      this.prisma.article.count({
+        where: { ...visibleWhere, isFeatured: true },
+      }),
+      this.prisma.article.groupBy({
+        by: ['category'],
+        where: visibleWhere,
+        _count: { category: true },
+        orderBy: { _count: { category: 'desc' } },
+        take: 1,
       }),
     ]);
-    return { pending, rejected };
+
+    return {
+      totalVisible,
+      total: totalVisible,
+      published,
+      draft,
+      pending,
+      rejected,
+      featured,
+      topCategory: topCategoryRows[0]
+        ? {
+            category: topCategoryRows[0].category,
+            count: topCategoryRows[0]._count.category,
+          }
+        : null,
+    };
   }
 
   async adminFindAll(
@@ -103,7 +184,17 @@ export class ArticleService {
     const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
     if (!isAdmin && requesterRole === 'STAFF' && requesterId) {
       // Staff chỉ thấy bài của mình
-      where.createdById = requesterId;
+      if (query.status && Object.values(ArticleStatus).includes(query.status as ArticleStatus)) {
+        where.status = query.status as ArticleStatus;
+        if (query.status !== ArticleStatus.PUBLISHED) {
+          where.createdById = requesterId;
+        }
+      } else {
+        where.OR = [
+          { status: ArticleStatus.PUBLISHED },
+          { createdById: requesterId },
+        ];
+      }
     } else if (isAdmin) {
       // Admin thấy tất cả, có thể filter theo status
       if (query.status && Object.values(ArticleStatus).includes(query.status as ArticleStatus)) {
@@ -112,10 +203,17 @@ export class ArticleService {
     }
 
     if (query.search) {
-      where.OR = [
-        { title: { contains: query.search, mode: 'insensitive' } },
-        { author: { contains: query.search, mode: 'insensitive' } },
-      ];
+      const searchFilter = {
+        OR: [
+          { title: { contains: query.search, mode: 'insensitive' } },
+          { author: { contains: query.search, mode: 'insensitive' } },
+        ],
+      };
+      where.AND = Array.isArray(where.AND)
+        ? [...where.AND, searchFilter]
+        : where.AND
+          ? [where.AND, searchFilter]
+          : [searchFilter];
     }
     if (query.category && query.category !== 'ALL') {
       where.category = query.category;
@@ -166,34 +264,34 @@ export class ArticleService {
 
   /** Admin/Staff tạo bài — Admin: PUBLISHED; Staff: DRAFT */
   async adminCreate(
-    dto: {
-      title: string; category: string; excerpt: string;
-      content: string; imageUrl: string; author: string;
-      readTime?: number; isFeatured?: boolean;
-    },
+    dto: ArticleDraftInput,
     creatorId?: number,
     creatorRole?: string,
   ) {
-    const baseSlug = generateSlug(dto.title);
+    const isAdmin = creatorRole === 'ADMIN' || creatorRole === 'SUPER_ADMIN';
+    if (isAdmin) requirePublishableArticle(dto);
+
+    const title = dto.title?.trim() ?? '';
+    const slugSeed = title || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const baseSlug = generateSlug(slugSeed);
     let slug = baseSlug;
     let suffix = 1;
     while (await this.prisma.article.findUnique({ where: { slug } })) {
       slug = `${baseSlug}-${suffix++}`;
     }
 
-    const isAdmin = creatorRole === 'ADMIN' || creatorRole === 'SUPER_ADMIN';
     const status: ArticleStatus = isAdmin ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
 
     return this.prisma.article.create({
       data: {
         slug,
-        title: dto.title,
-        category: dto.category.toUpperCase(),
-        excerpt: dto.excerpt,
-        content: dto.content,
-        imageUrl: dto.imageUrl,
-        author: dto.author,
-        readTime: dto.readTime ?? 5,
+        title,
+        category: (dto.category || 'GUIDES').toUpperCase(),
+        excerpt: dto.excerpt?.trim() ?? '',
+        content: dto.content ?? '',
+        imageUrl: dto.imageUrl?.trim() ?? '',
+        author: dto.author?.trim() ?? '',
+        readTime: dto.readTime ?? 1,
         isFeatured: dto.isFeatured ?? false,
         status,
         publishedAt: isAdmin ? new Date() : null,
@@ -215,6 +313,7 @@ export class ArticleService {
     if (article.status !== ArticleStatus.DRAFT && article.status !== ArticleStatus.REJECTED) {
       throw new BadRequestException(`Bài viết đang ở trạng thái "${article.status}", không thể gửi duyệt`);
     }
+    requirePublishableArticle(article);
 
     return this.prisma.article.update({
       where: { id },
@@ -257,11 +356,7 @@ export class ArticleService {
 
   async adminUpdate(
     id: number,
-    dto: {
-      title?: string; category?: string; excerpt?: string;
-      content?: string; imageUrl?: string; author?: string;
-      readTime?: number; isFeatured?: boolean;
-    },
+    dto: ArticleDraftInput,
     requesterId?: number,
     requesterRole?: string,
   ) {
@@ -281,11 +376,18 @@ export class ArticleService {
       }
     }
 
-    const updateData: any = { ...dto };
+    const updateData: any = {
+      ...dto,
+      ...(dto.title !== undefined && { title: dto.title.trim() }),
+      ...(dto.excerpt !== undefined && { excerpt: dto.excerpt.trim() }),
+      ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl.trim() }),
+      ...(dto.author !== undefined && { author: dto.author.trim() }),
+      ...(dto.readTime !== undefined && { readTime: dto.readTime || 1 }),
+    };
     if (dto.category) updateData.category = dto.category.toUpperCase();
 
-    if (dto.title && dto.title !== existing.title) {
-      const baseSlug = generateSlug(dto.title);
+    if (dto.title?.trim() && dto.title.trim() !== existing.title) {
+      const baseSlug = generateSlug(dto.title.trim());
       let slug = baseSlug;
       let suffix = 1;
       while (

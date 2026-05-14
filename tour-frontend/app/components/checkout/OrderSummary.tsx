@@ -220,30 +220,113 @@ export default function OrderSummary({
                                             {t('checkout.chooseFromWallet')} ({myWalletVouchers.length})
                                             <span className={`material-symbols-outlined text-sm transition-transform ${showWalletDropdown ? 'rotate-180' : ''}`}>expand_more</span>
                                         </button>
-                                        {showWalletDropdown && (
-                                            <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                                                {myWalletVouchers.map((uv: any) => {
-                                                    const v = getTranslatedVoucher(uv.voucher, language);
-                                                    return (
-                                                    <button
-                                                        key={uv.id}
-                                                        onClick={() => {
-                                                            setVoucherCode(v.code);
-                                                            onApplyVoucher(v.code);
-                                                        }}
-                                                        className="w-full text-left p-3 bg-surface-container-low rounded-lg border border-outline-variant/10 hover:border-primary/30 hover:bg-primary/5 transition-all"
-                                                    >
-                                                        <div className="flex justify-between items-center">
-                                                            <span className="font-mono font-bold text-xs text-primary">{v.code}</span>
-                                                            <span className="text-[10px] font-bold text-tertiary">
-                                                                {v.discountType === 'PERCENTAGE' ? `-${v.discountValue}%` : `-${formatPrice(v.discountValue)}`}
-                                                            </span>
+
+                                        {showWalletDropdown && (() => {
+                                            const applicable: any[] = [];
+                                            const notApplicable: { uv: any; reason: string }[] = [];
+
+                                            myWalletVouchers.forEach((uv: any) => {
+                                                const v = getTranslatedVoucher(uv.voucher, language);
+                                                const minOrder = uv.voucher?.minOrderValue ?? 0;
+                                                const expDate = uv.voucher?.expiryDate ? new Date(uv.voucher.expiryDate) : null;
+                                                const isExpired = expDate && expDate < new Date();
+
+                                                if (isExpired) {
+                                                    notApplicable.push({ uv, reason: 'Voucher đã hết hạn' });
+                                                } else if (minOrder > 0 && subtotal < minOrder) {
+                                                    notApplicable.push({ uv, reason: `Cần đặt tối thiểu ${formatPrice(minOrder)}` });
+                                                } else {
+                                                    applicable.push(uv);
+                                                }
+                                            });
+
+                                            return (
+                                                <div className="mt-2 border border-outline-variant/20 rounded-xl overflow-hidden bg-white shadow-sm">
+                                                    {applicable.length > 0 && (
+                                                        <div>
+                                                            <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-100">
+                                                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest flex items-center gap-1">
+                                                                    <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                                                                    Có thể áp dụng ({applicable.length})
+                                                                </span>
+                                                            </div>
+                                                            <div className="divide-y divide-outline-variant/10">
+                                                                {applicable.map((uv: any) => {
+                                                                    const v = getTranslatedVoucher(uv.voucher, language);
+                                                                    return (
+                                                                        <button
+                                                                            key={uv.id}
+                                                                            onClick={() => {
+                                                                                setVoucherCode(v.code);
+                                                                                onApplyVoucher(v.code);
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-3.5 hover:bg-primary/5 transition-all flex items-center gap-3 group"
+                                                                        >
+                                                                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                                                                                <span className="material-symbols-outlined text-primary text-[18px]">confirmation_number</span>
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex justify-between items-center gap-2">
+                                                                                    <span className="font-mono font-bold text-xs text-primary">{v.code}</span>
+                                                                                    <span className="text-[11px] font-bold text-emerald-600 shrink-0">
+                                                                                        {v.discountType === 'PERCENTAGE' ? `-${v.discountValue}%` : `-${formatPrice(v.discountValue)}`}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <p className="text-[11px] text-outline mt-0.5 truncate">{v.label}</p>
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
-                                                        <p className="text-[10px] text-outline mt-1">{v.label}</p>
-                                                    </button>
-                                                )})}
-                                            </div>
-                                        )}
+                                                    )}
+
+                                                    {notApplicable.length > 0 && (
+                                                        <div>
+                                                            <div className="px-3 py-2 bg-slate-50 border-t border-b border-slate-100">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                                    <span className="material-symbols-outlined text-[13px]">block</span>
+                                                                    Không đủ điều kiện ({notApplicable.length})
+                                                                </span>
+                                                            </div>
+                                                            <div className="divide-y divide-outline-variant/10">
+                                                                {notApplicable.map(({ uv, reason }) => {
+                                                                    const v = getTranslatedVoucher(uv.voucher, language);
+                                                                    return (
+                                                                        <div
+                                                                            key={uv.id}
+                                                                            className="px-4 py-3.5 flex items-center gap-3 opacity-50 cursor-not-allowed select-none"
+                                                                        >
+                                                                            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                                                                                <span className="material-symbols-outlined text-slate-400 text-[18px]">confirmation_number</span>
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex justify-between items-center gap-2">
+                                                                                    <span className="font-mono font-bold text-xs text-slate-500 line-through">{v.code}</span>
+                                                                                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
+                                                                                        {v.discountType === 'PERCENTAGE' ? `-${v.discountValue}%` : `-${formatPrice(v.discountValue)}`}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <p className="text-[10px] text-error/70 mt-0.5 flex items-center gap-0.5">
+                                                                                    <span className="material-symbols-outlined text-[11px]">info</span>
+                                                                                    {reason}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {applicable.length === 0 && notApplicable.length > 0 && (
+                                                        <div className="px-4 py-3 text-center text-xs text-outline italic">
+                                                            Không có voucher nào đủ điều kiện cho đơn này.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 )}
                             </div>

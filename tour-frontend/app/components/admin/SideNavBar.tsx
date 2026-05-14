@@ -14,6 +14,7 @@ const navItems = [
     { href: '/admin/customers',  icon: 'group',                label: 'Khách hàng' },
     { href: '/admin/staffs',     icon: 'badge',                label: 'Nhân viên' },
     { href: '/admin/vouchers',   icon: 'confirmation_number',  label: 'Mã giảm giá' },
+    { href: '/admin/marketing',  icon: 'campaign',             label: 'Marketing' },
     { href: '/admin/articles',   icon: 'article',              label: 'Bài viết' },
     { href: '/admin/reviews',    icon: 'reviews',              label: 'Đánh giá' },
     { href: '/admin/support',    icon: 'support_agent',        label: 'Hỗ trợ KH' },

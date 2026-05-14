@@ -53,7 +53,7 @@ export default function HomePage() {
         <div className="absolute inset-0 z-10" style={{ background: 'linear-gradient(to bottom, rgba(0,31,71,0.55) 0%, rgba(0,63,135,0.20) 45%, rgba(0,46,102,0.65) 100%)' }} />
 
         {/* 3. Hero Content */}
-        <div className="relative z-20 text-center text-white px-6 w-full max-w-5xl mx-auto flex flex-col items-center">
+        <div className="relative z-30 text-center text-white px-6 w-full max-w-5xl mx-auto flex flex-col items-center">
 
           {/* Premium badge */}
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/25 bg-white/10 backdrop-blur-sm text-[0.6875rem] font-bold tracking-[0.12em] uppercase mb-6 text-white/90">
@@ -192,10 +192,9 @@ export default function HomePage() {
                           )}
                         </span>
                       </div>
-                      <span className="inline-flex items-center gap-1 px-4 py-2 rounded-full bg-primary/8 text-primary font-headline font-bold text-xs group-hover:bg-primary group-hover:text-white transition-colors duration-200">
-                        {t('featured.viewDetails')}
-                        <span className="material-symbols-outlined text-[14px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
-                      </span>
+                      <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-primary flex items-center justify-center transition-colors duration-300">
+                        <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">arrow_forward</span>
+                      </div>
                     </div>
                   </div>
                 </div>

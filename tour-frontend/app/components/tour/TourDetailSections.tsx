@@ -46,23 +46,52 @@ type ItineraryDay = {
 
 export function ItinerarySection({ itinerary, fallback }: {
     itinerary: ItineraryDay[];
-    fallback: { day: number; title: string; desc: string }[];
+    fallback?: { day: number; title: string; desc: string }[];
 }) {
-    const days = itinerary?.length > 0 ? itinerary : null;
-    const hasMealsInfo = days?.some(d => d.mealsBreakfast || d.mealsLunch || d.mealsDinner);
+    const days = itinerary && itinerary.length > 0 ? itinerary : null;
+    if (!days && (!fallback || fallback.length === 0)) return null;
+
+    // If no real itinerary, render simplified fallback cards
+    if (!days && fallback) {
+        return (
+            <section>
+                <h2 className="text-2xl font-bold font-headline mb-8">Lịch trình chi tiết</h2>
+                <div className="space-y-0">
+                    {fallback.map((fb, i) => (
+                        <div key={fb.day} className="flex gap-4 md:gap-6">
+                            <div className="flex flex-col items-center">
+                                <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center font-bold shadow-md text-sm shrink-0 ${i === 0 ? 'bg-primary text-white' : 'bg-surface-container text-on-surface border-2 border-outline-variant/20'}`}>
+                                    {fb.day}
+                                </div>
+                                {i < fallback.length - 1 && <div className="w-px flex-1 bg-gradient-to-b from-primary/30 to-outline-variant/20 mt-2 min-h-[32px]" />}
+                            </div>
+                            <div className="pb-8 flex-1 min-w-0">
+                                <div className={`rounded-2xl border p-5 ${i === 0 ? 'border-primary/20 bg-primary/[0.03] shadow-sm' : 'border-outline-variant/15 bg-white'}`}>
+                                    <h3 className="text-base md:text-lg font-bold mb-2 text-on-surface">{fb.title}</h3>
+                                    <p className="text-sm text-on-surface-variant leading-relaxed">{fb.desc}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+        );
+    }
+
+    const hasMealsInfo = days!.some(d => d.mealsBreakfast || d.mealsLunch || d.mealsDinner);
 
     return (
         <section>
             <h2 className="text-2xl font-bold font-headline mb-8">Lịch trình chi tiết</h2>
             <div className="space-y-0">
-                {days ? days.map((day, i) => (
+                {days!.map((day, i) => (
                     <div key={day.id} className="flex gap-4 md:gap-6">
                         {/* Số ngày + connector line */}
                         <div className="flex flex-col items-center">
                             <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center font-bold shadow-md text-sm shrink-0 ${i === 0 ? 'bg-primary text-white' : 'bg-surface-container text-on-surface border-2 border-outline-variant/20'}`}>
                                 {day.dayNumber}
                             </div>
-                            {i < days.length - 1 && <div className="w-px flex-1 bg-gradient-to-b from-primary/30 to-outline-variant/20 mt-2 min-h-[32px]" />}
+                            {i < days!.length - 1 && <div className="w-px flex-1 bg-gradient-to-b from-primary/30 to-outline-variant/20 mt-2 min-h-[32px]" />}
                         </div>
 
                         {/* Card nội dung */}
@@ -131,17 +160,6 @@ export function ItinerarySection({ itinerary, fallback }: {
                                     </div>
                                 )}
                             </div>
-                        </div>
-                    </div>
-                )) : fallback.map((item, i, arr) => (
-                    <div key={item.day} className="flex gap-4 md:gap-6">
-                        <div className="flex flex-col items-center">
-                            <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold shadow-md text-sm shrink-0 ${i === 0 ? 'bg-primary text-white' : 'bg-surface-container text-on-surface'}`}>{item.day}</div>
-                            {i < arr.length - 1 && <div className="w-px flex-1 bg-outline-variant/30 mt-2 min-h-[32px]" />}
-                        </div>
-                        <div className="pb-8">
-                            <h3 className="text-base md:text-lg font-bold mb-2 text-on-surface">{item.title}</h3>
-                            <p className="text-sm text-on-surface-variant leading-relaxed">{item.desc}</p>
                         </div>
                     </div>
                 ))}

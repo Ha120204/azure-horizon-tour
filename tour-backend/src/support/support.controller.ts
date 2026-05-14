@@ -42,6 +42,11 @@ class OptionalJwtGuard extends AuthGuard('jwt') {
 export class SupportController {
   constructor(private readonly supportService: SupportService) {}
 
+  @Get('stats')
+  async getStats() {
+    return this.supportService.getStats();
+  }
+
   // GET /support/tickets?status=NEW&category=booking&search=...&page=1&limit=20
   @Get('tickets')
   async getTickets(
@@ -96,7 +101,8 @@ export class SupportController {
     @Request() req: any,
   ) {
     const staffName = req.user?.fullName ?? req.user?.name ?? 'Nhân viên';
-    return this.supportService.replyTicket(id, dto.content, staffName);
+    const staffId = req.user?.sub ?? req.user?.id;
+    return this.supportService.replyTicket(id, dto.content, staffName, staffId);
   }
 }
 
@@ -120,8 +126,7 @@ export class SupportCustomerController {
     @Request() req: any,
   ) {
     const userId: number | undefined = req.user?.sub ?? req.user?.id;
-    const email: string = query.email ?? req.user?.email ?? '';
-    return this.supportService.getMyTickets({ email, userId });
+    return this.supportService.getMyTickets({ userId });
   }
 
   /**
@@ -136,8 +141,8 @@ export class SupportCustomerController {
     @Request() req: any,
   ) {
     const userId: number | undefined = req.user?.sub ?? req.user?.id;
-    const email: string = query.email ?? req.user?.email ?? '';
-    return this.supportService.getTicketDetailForCustomer(id, { email, userId });
+    const accessCode: string | undefined = query.accessCode;
+    return this.supportService.getTicketDetailForCustomer(id, { accessCode, userId });
   }
 
   /**
@@ -152,9 +157,9 @@ export class SupportCustomerController {
     @Request() req: any,
   ) {
     const userId: number | undefined = req.user?.sub ?? req.user?.id;
-    const email: string = dto.email ?? req.user?.email ?? '';
+    const accessCode: string | undefined = dto.accessCode;
     const name:  string = dto.senderName ?? req.user?.fullName ?? 'Khách hàng';
-    return this.supportService.customerReply(id, dto.content, { email, userId, name });
+    return this.supportService.customerReply(id, dto.content, { accessCode, userId, name });
   }
 
   /**
@@ -169,8 +174,8 @@ export class SupportCustomerController {
     @Request() req: any,
   ) {
     const userId: number | undefined = req.user?.sub ?? req.user?.id;
-    const email: string = dto.email ?? req.user?.email ?? '';
-    return this.supportService.rateTicket(id, dto.rating, { email, userId });
+    const accessCode: string | undefined = dto.accessCode;
+    return this.supportService.rateTicket(id, dto.rating, { accessCode, userId });
   }
 
   /**
@@ -185,7 +190,7 @@ export class SupportCustomerController {
     @Request() req: any,
   ) {
     const userId: number | undefined = req.user?.sub ?? req.user?.id;
-    const email: string = dto.email ?? req.user?.email ?? '';
-    return this.supportService.reopenTicket(id, { email, userId });
+    const accessCode: string | undefined = dto.accessCode;
+    return this.supportService.reopenTicket(id, { accessCode, userId });
   }
 }

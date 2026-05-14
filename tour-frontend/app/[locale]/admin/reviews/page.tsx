@@ -516,63 +516,33 @@ function ReviewCard({
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({
-    icon, label, value, sub, gradient, iconBg, iconColor,
+    icon, label, value, sub, gradient, iconBg, iconColor, onClick, active,
 }: {
     icon: string; label: string; value: string | number; sub: string;
     gradient: string; iconBg: string; iconColor: string;
+    onClick?: () => void; active?: boolean;
 }) {
     return (
-        <div className="relative bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/10 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden group">
+        <button
+            type="button"
+            onClick={onClick}
+            className={`relative text-left bg-surface-container-lowest rounded-2xl p-5 border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden group outline-none focus-visible:ring-2 focus-visible:ring-primary ${active ? 'border-primary/50 ring-2 ring-primary/15' : 'border-outline-variant/10'}`}
+        >
             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full -translate-y-8 translate-x-8 bg-gradient-to-br ${gradient} opacity-[0.07] group-hover:opacity-[0.13] transition-opacity`} />
-            <div className={`w-10 h-10 ${iconBg} rounded-xl flex items-center justify-center mb-4`}>
-                <span className={`material-symbols-outlined text-xl ${iconColor}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+            <div className="flex items-start justify-between mb-4">
+                <div className={`w-10 h-10 ${iconBg} rounded-xl flex items-center justify-center`}>
+                    <span className={`material-symbols-outlined text-xl ${iconColor}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+                </div>
+                {onClick && <span className={`material-symbols-outlined text-[18px] ${active ? 'text-primary' : 'text-on-surface-variant/35'}`}>filter_alt</span>}
             </div>
             <p className="text-2xl font-extrabold text-on-surface leading-tight">{value}</p>
             <p className="text-xs font-semibold text-on-surface-variant mt-1">{label}</p>
             <p className="text-[10px] text-on-surface-variant/50 mt-0.5">{sub}</p>
-        </div>
+        </button>
     );
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
-
-function Pagination({ meta, onChange }: { meta: Meta; onChange: (page: number) => void }) {
-    if (meta.totalPages <= 1) return null;
-    const pages: (number | '...')[] = [];
-    const { currentPage: cp, totalPages: tp } = meta;
-    if (tp <= 7) {
-        for (let i = 1; i <= tp; i++) pages.push(i);
-    } else {
-        pages.push(1);
-        if (cp > 3) pages.push('...');
-        for (let i = Math.max(2, cp - 1); i <= Math.min(tp - 1, cp + 1); i++) pages.push(i);
-        if (cp < tp - 2) pages.push('...');
-        pages.push(tp);
-    }
-    return (
-        <div className="flex items-center justify-center gap-1.5 mt-8">
-            <button disabled={cp === 1} onClick={() => onChange(cp - 1)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container disabled:opacity-30 transition-colors">
-                <span className="material-symbols-outlined text-lg">chevron_left</span>
-            </button>
-            {pages.map((p, i) =>
-                p === '...' ? (
-                    <span key={`e-${i}`} className="w-9 h-9 flex items-center justify-center text-on-surface-variant text-sm">…</span>
-                ) : (
-                    <button key={p} onClick={() => onChange(p as number)}
-                        className={`w-9 h-9 rounded-xl text-sm font-semibold transition-colors
-              ${cp === p ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container'}`}>
-                        {p}
-                    </button>
-                )
-            )}
-            <button disabled={cp === tp} onClick={() => onChange(cp + 1)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant hover:bg-surface-container disabled:opacity-30 transition-colors">
-                <span className="material-symbols-outlined text-lg">chevron_right</span>
-            </button>
-        </div>
-    );
-}
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -653,13 +623,13 @@ export default function ReviewManagementPage() {
 
             setReviews(reviews);
             if (metaFromRes) setMeta(metaFromRes);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('[ReviewPage] fetchReviews error:', err);
             showToast('Lỗi tải danh sách đánh giá', false);
         } finally {
             setIsLoading(false);
         }
-    }, [page, pageSize, debouncedSearch, ratingFilter, statusFilter, sortBy]);
+    }, [page, pageSize, debouncedSearch, ratingFilter, statusFilter, sortBy, showToast]);
 
 
     useEffect(() => { fetchReviews(); }, [fetchReviews]);
@@ -764,12 +734,27 @@ export default function ReviewManagementPage() {
         setSearch(''); setRatingFilter(''); setStatusFilter(''); setSortBy('newest'); setPage(1);
     };
     const hasFilter = !!(search || ratingFilter || statusFilter || sortBy !== 'newest');
+    const lowRatingCount = (stats.breakdown[1] ?? 0) + (stats.breakdown[2] ?? 0);
+    const filterByRating = (rating: string) => {
+        setRatingFilter((current) => current === rating ? '' : rating);
+        setPage(1);
+    };
+    const filterByStatus = (status: string) => {
+        setStatusFilter((current) => current === status ? '' : status);
+        setPage(1);
+    };
+    const filterLowRatings = () => {
+        setRatingFilter((current) => current === '1' ? '2' : current === '2' ? '' : '1');
+        setPage(1);
+    };
 
     const kpis = [
         {
             icon: 'rate_review', label: 'Tổng đánh giá', value: stats.total.toLocaleString('vi-VN'),
             sub: `${stats.total - stats.hidden} đang hiển thị`,
             gradient: 'from-blue-600 to-indigo-600', iconBg: 'bg-blue-50', iconColor: 'text-blue-600',
+            onClick: resetFilters,
+            active: !hasFilter,
         },
         {
             icon: 'star', label: 'Điểm trung bình', value: `${stats.averageRating} ★`,
@@ -780,11 +765,22 @@ export default function ReviewManagementPage() {
             icon: 'workspace_premium', label: 'Tỷ lệ 5 sao', value: `${stats.fiveStarRate}%`,
             sub: `${stats.breakdown[5] ?? 0} đánh giá xuất sắc`,
             gradient: 'from-emerald-500 to-teal-600', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600',
+            onClick: () => filterByRating('5'),
+            active: ratingFilter === '5',
+        },
+        {
+            icon: 'report', label: 'Cần kiểm tra', value: lowRatingCount.toLocaleString('vi-VN'),
+            sub: 'đánh giá 1-2 sao',
+            gradient: 'from-orange-400 to-red-500', iconBg: 'bg-orange-50', iconColor: 'text-orange-600',
+            onClick: filterLowRatings,
+            active: ratingFilter === '1' || ratingFilter === '2',
         },
         {
             icon: 'visibility_off', label: 'Đang ẩn', value: stats.hidden.toLocaleString('vi-VN'),
             sub: 'đánh giá bị ẩn',
             gradient: 'from-red-400 to-rose-500', iconBg: 'bg-red-50', iconColor: 'text-red-500',
+            onClick: () => filterByStatus('hidden'),
+            active: statusFilter === 'hidden',
         },
     ];
 
@@ -813,7 +809,7 @@ export default function ReviewManagementPage() {
             </div>
 
             {/* ── KPI Cards ─────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
                 {kpis.map((k) => <KpiCard key={k.label} {...k} />)}
             </div>
 
@@ -828,7 +824,12 @@ export default function ReviewManagementPage() {
                         const count = stats.breakdown[star] ?? 0;
                         const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
                         return (
-                            <div key={star} className="flex items-center gap-3">
+                            <button
+                                key={star}
+                                type="button"
+                                onClick={() => filterByRating(String(star))}
+                                className={`w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary ${ratingFilter === String(star) ? 'bg-primary/5' : 'hover:bg-surface-container'}`}
+                            >
                                 <div className="flex items-center gap-1 w-14 shrink-0">
                                     <span className="text-xs font-semibold text-on-surface-variant">{star}</span>
                                     <span className="material-symbols-outlined text-amber-400 text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
@@ -840,7 +841,7 @@ export default function ReviewManagementPage() {
                                     />
                                 </div>
                                 <span className="text-xs text-on-surface-variant w-16 text-right shrink-0">{count} ({pct}%)</span>
-                            </div>
+                            </button>
                         );
                     })}
                 </div>

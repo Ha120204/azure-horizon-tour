@@ -16,19 +16,29 @@ export default function ReviewsPage() {
     const [isSortOpen, setIsSortOpen] = useState(false);
     const [sortOption, setSortOption] = useState('newest');
     const sortRef = useRef<HTMLDivElement>(null);
+    const reviewsListRef = useRef<HTMLElement>(null);
     const [reviews, setReviews] = useState<any[]>([]);
     const [stats, setStats] = useState<any>(null);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
+    const [isPaginating, setIsPaginating] = useState(false);
 
-    const fetchReviews = async () => {
-        setIsLoading(true);
+    const fetchReviews = async (paginating = false) => {
+        if (paginating) {
+            setIsPaginating(true);
+            if (reviewsListRef.current) {
+                // Cuộn mượt lên trên (trừ đi 120px bù cho Fixed Header)
+                const y = reviewsListRef.current.getBoundingClientRect().top + window.scrollY - 120;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+            }
+        } else {
+            setIsLoading(true);
+        }
         try {
             const limit = 5;
             const sort = sortOption === 'highest' ? 'rating_desc' : sortOption === 'lowest' ? 'rating_asc' : 'newest';
             const filter = activeFilter === 'all' ? '' : activeFilter === 'photos' ? 'photos' : activeFilter;
-            // Dù backend chưa support sort & filter chi tiết, nhưng ta gửi lên cho cấu trúc hoàn chỉnh.
             const res = await fetch(`http://localhost:3000/tour/${params.id}/reviews?page=${page}&limit=${limit}&sortBy=${sort}&filter=${filter}`);
             const json = await res.json();
             if (json.data) {
@@ -40,11 +50,19 @@ export default function ReviewsPage() {
             console.error('Lỗi fetch reviews:', error);
         } finally {
             setIsLoading(false);
+            setIsPaginating(false);
         }
     };
 
+    const isFirstRender = useRef(true);
     useEffect(() => {
-        fetchReviews();
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            fetchReviews();
+        } else {
+            // Khi chuyển trang: giữ content cũ, không flash trắng
+            fetchReviews(true);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.id, page, isModalOpen, sortOption, activeFilter]);
 
@@ -200,7 +218,13 @@ export default function ReviewsPage() {
                 </nav>
 
                 {/* 3. Review List */}
-                <section className="space-y-0 bg-surface-container-lowest rounded-xl ambient-shadow overflow-hidden">
+                <section ref={reviewsListRef} className={`space-y-0 bg-surface-container-lowest rounded-xl ambient-shadow overflow-hidden relative transition-opacity duration-200 ${isPaginating ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                    {/* Spinner overlay khi chuyển trang — không xóa content cũ */}
+                    {isPaginating && (
+                        <div className="absolute inset-0 flex items-center justify-center z-10">
+                            <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        </div>
+                    )}
                     {isLoading ? (
                         <div className="p-12 text-center text-outline-variant font-medium">Loading reviews...</div>
                     ) : reviews.length > 0 ? (
@@ -230,7 +254,11 @@ export default function ReviewsPage() {
                                             ))}
                                         </div>
                                         <span className="text-xs text-on-surface-variant font-label">
-                                            {new Date(review.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                            {new Date(review.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                            {' '}
+                                            <span className="text-outline">
+                                                {new Date(review.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
                                         </span>
                                     </div>
                                 </div>

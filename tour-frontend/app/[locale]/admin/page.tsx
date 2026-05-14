@@ -60,6 +60,20 @@ interface RecentBooking {
     user: { fullName: string; email: string; avatarUrl: string | null };
     tour: { name: string; tourCode: string };
 }
+interface OperationalStats {
+    bookingPending: number;
+    cancelRequested: number;
+    tourPending: number;
+    articlePending: number;
+    supportOpen: number;
+}
+const EMPTY_OPERATIONAL_STATS: OperationalStats = {
+    bookingPending: 0,
+    cancelRequested: 0,
+    tourPending: 0,
+    articlePending: 0,
+    supportOpen: 0,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +91,13 @@ const statusConfig: Record<string, { label: string; bg: string; text: string; do
 };
 
 const PIE_COLORS = ['#3B82F6', '#F59E0B', '#EF4444'];
+
+type ChartPayload = { value?: number };
+type RevenueTooltipProps = {
+    active?: boolean;
+    payload?: ChartPayload[];
+    label?: string;
+};
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -133,7 +154,7 @@ function KpiCard({ icon, title, value, change, sub, gradient }: KpiCardProps) {
 
 // ─── Revenue Tooltip ──────────────────────────────────────────────────────────
 
-function RevenueTooltip({ active, payload, label }: any) {
+function RevenueTooltip({ active, payload, label }: RevenueTooltipProps) {
     if (active && payload?.length) {
         return (
             <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-sm">
@@ -180,6 +201,7 @@ export default function AdminDashboardPage() {
     const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
     const [bookingStatus, setBookingStatus] = useState<BookingStatus | null>(null);
     const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
+    const [operationalStats, setOperationalStats] = useState<OperationalStats>(EMPTY_OPERATIONAL_STATS);
     const [loading, setLoading] = useState(true);
 
     const fetchAll = useCallback(async () => {
@@ -188,16 +210,41 @@ export default function AdminDashboardPage() {
         const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
         const gran = getGranularity(diffDays);
         try {
-            const [ovRes, revRes, bsRes, rbRes] = await Promise.all([
+            const [ovRes, revRes, bsRes, rbRes, bookingStatsRes, tourStatsRes, articleStatsRes, supportStatsRes] = await Promise.all([
                 fetchWithAuth(`${API_BASE_URL}/statistics/overview?dateFrom=${from}&dateTo=${to}`),
                 fetchWithAuth(`${API_BASE_URL}/statistics/revenue?dateFrom=${from}&dateTo=${to}&granularity=${gran}`),
                 fetchWithAuth(`${API_BASE_URL}/statistics/bookings/status?dateFrom=${from}&dateTo=${to}`),
                 fetchWithAuth(`${API_BASE_URL}/booking/admin/all?limit=5&status=ALL`),
+                fetchWithAuth(`${API_BASE_URL}/booking/admin/stats`),
+                fetchWithAuth(`${API_BASE_URL}/tour/admin/stats`),
+                fetchWithAuth(`${API_BASE_URL}/article/admin/stats`),
+                fetchWithAuth(`${API_BASE_URL}/support/stats`),
             ]);
             if (ovRes.ok) { const j = await ovRes.json(); setOverview(j.data); }
             if (revRes.ok) { const j = await revRes.json(); setRevenueData(j.data?.data ?? []); }
             if (bsRes.ok) { const j = await bsRes.json(); setBookingStatus(j.data); }
-            if (rbRes.ok) { const j = await rbRes.json(); setRecentBookings(j.bookings ?? []); }
+            if (rbRes.ok) {
+                const j = await rbRes.json();
+                const payload = j.data ?? j;
+                setRecentBookings(payload.bookings ?? []);
+            }
+            const [bookingStatsJson, tourStatsJson, articleStatsJson, supportStatsJson] = await Promise.all([
+                bookingStatsRes.ok ? bookingStatsRes.json() : Promise.resolve({}),
+                tourStatsRes.ok ? tourStatsRes.json() : Promise.resolve({}),
+                articleStatsRes.ok ? articleStatsRes.json() : Promise.resolve({}),
+                supportStatsRes.ok ? supportStatsRes.json() : Promise.resolve({}),
+            ]);
+            const bookingStats = bookingStatsJson?.data ?? bookingStatsJson;
+            const tourStats = tourStatsJson?.data ?? tourStatsJson;
+            const articleStats = articleStatsJson?.data ?? articleStatsJson;
+            const supportStats = supportStatsJson?.data ?? supportStatsJson;
+            setOperationalStats({
+                bookingPending: bookingStats.pending ?? 0,
+                cancelRequested: bookingStats.cancelRequested ?? 0,
+                tourPending: tourStats.pending ?? 0,
+                articlePending: articleStats.pending ?? 0,
+                supportOpen: supportStats.open ?? 0,
+            });
         } catch (e) {
             console.error('Dashboard error:', e);
         } finally {
@@ -369,6 +416,32 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* ── Charts Row ── */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                {[
+                    { href: '/admin/bookings', icon: 'pending_actions', label: 'Booking chờ xử lý', value: operationalStats.bookingPending, tone: 'bg-amber-50 text-amber-700' },
+                    { href: '/admin/bookings', icon: 'assignment_late', label: 'Yêu cầu hủy', value: operationalStats.cancelRequested, tone: 'bg-orange-50 text-orange-700' },
+                    { href: '/admin/tours', icon: 'approval', label: 'Tour chờ duyệt', value: operationalStats.tourPending, tone: 'bg-blue-50 text-blue-700' },
+                    { href: '/admin/articles', icon: 'article', label: 'Bài chờ duyệt', value: operationalStats.articlePending, tone: 'bg-violet-50 text-violet-700' },
+                    { href: '/admin/support', icon: 'support_agent', label: 'Ticket đang mở', value: operationalStats.supportOpen, tone: 'bg-teal-50 text-teal-700' },
+                ].map((item) => (
+                    <Link
+                        key={item.label}
+                        href={item.href}
+                        className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${item.tone}`}>
+                                <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-xl font-black leading-tight text-slate-900">{item.value.toLocaleString('vi-VN')}</p>
+                                <p className="truncate text-xs font-semibold text-slate-500">{item.label}</p>
+                            </div>
+                        </div>
+                    </Link>
+                ))}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
 
                 {/* Revenue Chart */}

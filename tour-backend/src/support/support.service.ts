@@ -9,6 +9,64 @@ export class SupportService {
   constructor(private prisma: PrismaService) {}
 
   // ─── [ADMIN/STAFF] Danh sách tickets với filter + phân trang ────────────────
+  async getStats() {
+    const overdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [statusRows, total, overdue, firstStaffReplies] = await Promise.all([
+      this.prisma.supportTicket.groupBy({
+        by: ['status'],
+        _count: { status: true },
+      }),
+      this.prisma.supportTicket.count(),
+      this.prisma.supportTicket.count({
+        where: {
+          status: { in: ['NEW', 'IN_PROGRESS'] },
+          createdAt: { lt: overdueSince },
+        },
+      }),
+      this.prisma.supportTicket.findMany({
+        where: { replies: { some: { senderType: 'staff' } } },
+        select: {
+          createdAt: true,
+          replies: {
+            where: { senderType: 'staff' },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
+      }),
+    ]);
+
+    const map: Record<string, number> = {};
+    for (const row of statusRows) map[row.status] = row._count.status;
+
+    const responseTimes = firstStaffReplies
+      .map((ticket) =>
+        ticket.replies[0]?.createdAt
+          ? ticket.replies[0].createdAt.getTime() - ticket.createdAt.getTime()
+          : null,
+      )
+      .filter((value): value is number => typeof value === 'number' && value >= 0);
+    const avgFirstResponseMinutes = responseTimes.length > 0
+      ? Math.round(responseTimes.reduce((sum, value) => sum + value, 0) / responseTimes.length / 60000)
+      : null;
+
+    const newCount = map.NEW || 0;
+    const inProgress = map.IN_PROGRESS || 0;
+    const resolved = map.RESOLVED || 0;
+
+    return {
+      total,
+      new: newCount,
+      inProgress,
+      resolved,
+      open: newCount + inProgress,
+      overdue,
+      avgFirstResponseMinutes,
+    };
+  }
+
   async getTickets(query: {
     status?:   string;
     category?: string;
@@ -41,18 +99,21 @@ export class SupportService {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
-        include: {
-          replies: { orderBy: { createdAt: 'asc' } },
-        },
       }),
       this.prisma.supportTicket.count({ where }),
     ]);
 
-    const [newCount, inProgressCount, resolvedCount] = await Promise.all([
-      this.prisma.supportTicket.count({ where: { status: 'NEW' } }),
-      this.prisma.supportTicket.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.supportTicket.count({ where: { status: 'RESOLVED' } }),
-    ]);
+    const kpiData = await this.prisma.supportTicket.groupBy({
+      by: ['status'],
+      _count: true,
+    });
+
+    let newCount = 0, inProgressCount = 0, resolvedCount = 0;
+    for (const group of kpiData) {
+      if (group.status === 'NEW') newCount = group._count;
+      if (group.status === 'IN_PROGRESS') inProgressCount = group._count;
+      if (group.status === 'RESOLVED') resolvedCount = group._count;
+    }
 
     return {
       tickets,
@@ -95,7 +156,7 @@ export class SupportService {
   }
 
   // ─── [ADMIN/STAFF] Staff phản hồi ticket ────────────────────────────────────
-  async replyTicket(id: number, content: string, staffName: string) {
+  async replyTicket(id: number, content: string, staffName: string, staffId: number) {
     const reply = await this.prisma.ticketReply.create({
       data: {
         ticketId:   id,
@@ -104,10 +165,10 @@ export class SupportService {
         content,
       },
     });
-    // Tự chuyển sang IN_PROGRESS nếu vẫn NEW
+    // Tự chuyển sang IN_PROGRESS và assign staff nếu vẫn NEW
     await this.prisma.supportTicket.update({
       where: { id },
-      data:  { status: 'IN_PROGRESS' },
+      data:  { status: 'IN_PROGRESS', assignedStaffId: staffId },
     });
     return reply;
   }
@@ -139,21 +200,14 @@ export class SupportService {
   }
 
   // ─── [CUSTOMER] Lấy danh sách ticket của mình ────────────────────────────────────────────
-  async getMyTickets(identifier: { email: string; userId?: number }) {
-    // Tìm theo userId (nếu đăng nhập) hoặc email — dùng OR để bao gồm cả ticket cũ
-    // được tạo khi chưa đăng nhập (userId = null) nhưng cùng email
-    const orConditions: any[] = [];
-    if (identifier.userId) {
-      orConditions.push({ userId: identifier.userId });
+  async getMyTickets(identifier: { userId?: number }) {
+    // Chỉ cho phép user đã đăng nhập xem danh sách ticket để chống lộ dữ liệu
+    if (!identifier.userId) {
+      throw new ForbiddenException('Bạn cần đăng nhập để xem danh sách yêu cầu hỗ trợ.');
     }
-    if (identifier.email) {
-      orConditions.push({ customerEmail: { equals: identifier.email, mode: 'insensitive' } });
-    }
-
-    const where = orConditions.length > 0 ? { OR: orConditions } : {};
 
     return this.prisma.supportTicket.findMany({
-      where,
+      where: { userId: identifier.userId },
       orderBy: { updatedAt: 'desc' },
       include: {
         replies: {
@@ -165,7 +219,7 @@ export class SupportService {
   }
 
   // ─── [CUSTOMER] Xem chi tiết 1 ticket (verify quyền truy cập) ───────────────
-  async getTicketDetailForCustomer(id: number, identifier: { email: string; userId?: number }) {
+  async getTicketDetailForCustomer(id: number, identifier: { accessCode?: string; userId?: number }) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id },
       include: { replies: { orderBy: { createdAt: 'asc' } } },
@@ -173,10 +227,10 @@ export class SupportService {
 
     if (!ticket) throw new NotFoundException('Ticket không tồn tại');
 
-    // Verify: phải là chủ ticket mới xem được
+    // Verify: User đăng nhập kiểm tra userId. Khách vãng lai bắt buộc phải có accessCode khớp
     const isOwner = identifier.userId
       ? ticket.userId === identifier.userId
-      : ticket.customerEmail.toLowerCase() === identifier.email.toLowerCase();
+      : (identifier.accessCode && ticket.accessCode === identifier.accessCode);
 
     if (!isOwner) throw new ForbiddenException('Bạn không có quyền xem ticket này');
 
@@ -184,14 +238,14 @@ export class SupportService {
   }
 
   // ─── [CUSTOMER] Phản hồi lại staff (chỉ khi IN_PROGRESS) ───────────────────
-  async customerReply(id: number, content: string, identifier: { email: string; userId?: number; name: string }) {
+  async customerReply(id: number, content: string, identifier: { accessCode?: string; userId?: number; name: string }) {
     const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
     if (!ticket) throw new NotFoundException('Ticket không tồn tại');
 
     // Verify quyền sở hữu
     const isOwner = identifier.userId
       ? ticket.userId === identifier.userId
-      : ticket.customerEmail.toLowerCase() === identifier.email.toLowerCase();
+      : (identifier.accessCode && ticket.accessCode === identifier.accessCode);
     if (!isOwner) throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
 
     // Chỉ cho reply khi đang IN_PROGRESS
@@ -214,7 +268,7 @@ export class SupportService {
   }
 
   // ─── [CUSTOMER] Đánh giá sau khi RESOLVED ───────────────────────────────────
-  async rateTicket(id: number, rating: number, identifier: { email: string; userId?: number }) {
+  async rateTicket(id: number, rating: number, identifier: { accessCode?: string; userId?: number }) {
     if (rating < 1 || rating > 5) throw new ForbiddenException('Đánh giá phải từ 1 đến 5 sao');
 
     const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
@@ -222,7 +276,7 @@ export class SupportService {
 
     const isOwner = identifier.userId
       ? ticket.userId === identifier.userId
-      : ticket.customerEmail.toLowerCase() === identifier.email.toLowerCase();
+      : (identifier.accessCode && ticket.accessCode === identifier.accessCode);
     if (!isOwner) throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
 
     if (ticket.status !== 'RESOLVED') {
@@ -236,13 +290,13 @@ export class SupportService {
   }
 
   // ─── [CUSTOMER] Mở lại ticket đã RESOLVED ───────────────────────────────────
-  async reopenTicket(id: number, identifier: { email: string; userId?: number }) {
+  async reopenTicket(id: number, identifier: { accessCode?: string; userId?: number }) {
     const ticket = await this.prisma.supportTicket.findUnique({ where: { id } });
     if (!ticket) throw new NotFoundException('Ticket không tồn tại');
 
     const isOwner = identifier.userId
       ? ticket.userId === identifier.userId
-      : ticket.customerEmail.toLowerCase() === identifier.email.toLowerCase();
+      : (identifier.accessCode && ticket.accessCode === identifier.accessCode);
     if (!isOwner) throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
 
     if (ticket.status !== 'RESOLVED') {

@@ -213,7 +213,15 @@ export default function HeroSearch() {
                                     {displayDestinations.map(item => (
                                         <div key={`dest-${item.id}`} onClick={() => handleSelectSuggestion(item.name)} className="px-5 py-2.5 hover:bg-slate-50 flex items-center gap-4 cursor-pointer transition-colors">
                                             {item.imageUrl ? (
-                                                <img src={item.imageUrl} alt={item.name} className="w-10 h-10 rounded-md object-cover" />
+                                                <img 
+                                                    src={item.imageUrl} 
+                                                    alt={item.name} 
+                                                    className="w-10 h-10 rounded-md object-cover bg-slate-100" 
+                                                    onError={(e) => {
+                                                        e.currentTarget.onerror = null;
+                                                        e.currentTarget.src = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=100&q=80';
+                                                    }}
+                                                />
                                             ) : (
                                                 <div className="w-10 h-10 rounded-md bg-slate-100 flex items-center justify-center"><span className="material-symbols-outlined text-slate-400">location_city</span></div>
                                             )}

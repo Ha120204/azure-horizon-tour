@@ -35,15 +35,16 @@
     "desc": "Trao đổi với chuyên gia hoặc sử dụng AI để nhận hỗ trợ thiết kế lịch trình cá nhân hóa ngay lập tức.",
     "header": "Gặp Gỡ Trợ Lý Du Lịch AI Cá Nhân Của Bạn.",
     "subheader": "Chào mừng đến với Azure Horizon. Bạn muốn khám phá nơi nào tiếp theo?",
-    "inputPlaceholder": "Mô tả chuyến đi trong mơ của bạn...",
-    "disclaimer": "Hệ thống AI có thể tưởng tượng ra một số điểm đến. Vui lòng luôn xác minh lại lịch trình.",
-    "prompt1": "Cần tìm tuần trăng mật 4 ngày ở Maldives",
-    "prompt2": "Chuyến đi gia đình cao cấp ở Đông Nam Á",
-    "prompt3": "Tìm cho tôi một kỳ nghỉ cuối tuần ở vùng biển",
-    "aiGreeting": "Chào buổi chiều. Tôi là Trợ lý Azure của bạn. Tôi có thể kiến tạo những hành trình thiết kế riêng, tìm kiếm những viên ngọc quý ẩn giấu, hoặc xử lý các đặt phòng. Tôi có thể giúp gì cho chuyến khởi hành tiếp theo của bạn?",
+    "inputPlaceholder": "Hỏi về tour, ngân sách hoặc booking...",
+    "disclaimer": "Azure AI dùng dữ liệu tour khi có sẵn. Vui lòng kiểm tra ngày đi và giá trước khi đặt.",
+    "prompt1": "Tìm tour biển cho gia đình",
+    "prompt2": "Gợi ý tour theo ngân sách",
+    "prompt3": "Kiểm tra booking của tôi",
+    "aiGreeting": "Chào bạn, tôi là trợ lý du lịch Azure Horizon. Tôi có thể tìm tour phù hợp, gợi ý lịch trình và kiểm tra booking của bạn. Bạn muốn bắt đầu từ đâu?",
     "aiResponse": "Kyoto vô cùng tinh tế vào mùa xuân. Tôi đã tuyển chọn các biệt thự tư nhân và quyền đi vào các khu vườn độc quyền cho bạn. Đây là lịch trình đề xuất:",
     "aiCardTitle": "Hành trình đề xuất: 4 ngày tại Kyoto",
     "viewItinerary": "Xem Toàn Bộ Lịch Trình",
-    "tourDesc": "Tham quan khu vườn Zen tư nhân, dùng bữa tối Kaiseki với nhà sử học địa phương, và tham gia các buổi trà đạo độc quyền."
+    "tourDesc": "Tham quan khu vườn Zen tư nhân, dùng bữa tối Kaiseki với nhà sử học địa phương, và tham gia các buổi trà đạo độc quyền.",
+    "prompt4": "Tôi nên đi đâu tháng này?"
   }
 }

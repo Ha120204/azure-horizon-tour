@@ -19,6 +19,8 @@ interface Passenger {
     fullName: string;
     dob: string;
     gender: string;
+    identityType: string;
+    identityNo: string;
 }
 
 function CheckoutContent() {
@@ -36,13 +38,13 @@ function CheckoutContent() {
     const [selectedDeparture, setSelectedDeparture] = useState<any>(null);
     const [isLoadingTour, setIsLoadingTour] = useState(true);
 
-    const [contactInfo, setContactInfo] = useState({ fullName: '', email: '', phone: '', dob: '', gender: '' });
-    const [leadTraveler, setLeadTraveler] = useState({ fullName: '', dob: '', gender: '', notes: '' });
+    const [contactInfo, setContactInfo] = useState({ fullName: '', email: '', phone: '', identityType: 'CCCD', identityNo: '', dob: '', gender: '' });
+    const [leadTraveler, setLeadTraveler] = useState({ fullName: '', dob: '', gender: '', identityType: 'CCCD', identityNo: '', notes: '' });
 
+    const [tempFormData, setTempFormData] = useState({ fullName: '', dob: '', gender: '', identityType: 'CCCD', identityNo: '' });
     const [passengers, setPassengers] = useState<Passenger[]>([]);
     const [isBookForMyself, setIsBookForMyself] = useState(true);
     const [activeFormType, setActiveFormType] = useState<PassengerType | null>(null);
-    const [tempFormData, setTempFormData] = useState({ fullName: '', dob: '', gender: '' });
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
 
     // Toast Alert State
@@ -99,6 +101,8 @@ function CheckoutContent() {
                             fullName: uData.fullName || '', 
                             email: uData.email || '', 
                             phone: uData.phone || '',
+                            identityType: uData.identityType || 'CCCD',
+                            identityNo: uData.identityNo || '',
                             dob: uData.dob || '',
                             gender: uData.gender || ''
                         });
@@ -106,7 +110,9 @@ function CheckoutContent() {
                             ...prev, 
                             fullName: uData.fullName || '',
                             dob: uData.dob || '',
-                            gender: uData.gender || ''
+                            gender: uData.gender || '',
+                            identityType: uData.identityType || 'CCCD',
+                            identityNo: uData.identityNo || '',
                         }));
                     }
                 } catch (error) {
@@ -227,21 +233,26 @@ function CheckoutContent() {
                 ...prev, 
                 fullName: contactInfo.fullName,
                 dob: contactInfo.dob,
-                gender: contactInfo.gender
+                gender: contactInfo.gender,
+                identityType: contactInfo.identityType,
+                identityNo: contactInfo.identityNo,
             }));
         } else {
             setLeadTraveler(prev => ({ 
                 ...prev, 
                 fullName: '',
                 dob: '',
-                gender: ''
+                gender: '',
+                identityType: 'CCCD',
+                identityNo: '',
             }));
         }
     };
 
     const handleOpenForm = (type: PassengerType | null) => {
         setActiveFormType(type);
-        setTempFormData({ fullName: '', dob: '', gender: '' });
+        const defaultIdType = type === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD';
+        setTempFormData({ fullName: '', dob: '', gender: '', identityType: defaultIdType, identityNo: '' });
     };
 
     const handleSavePassenger = () => {
@@ -260,8 +271,18 @@ function CheckoutContent() {
     };
 
     const handlePayment = async () => {
-        if (!contactInfo.fullName || !contactInfo.email || !contactInfo.phone) {
+        if (!contactInfo.fullName || !contactInfo.email || !contactInfo.phone || !contactInfo.identityNo) {
             showError(t('checkout.errors.fillContact'));
+            return;
+        }
+
+        // Validate identity document format
+        if (contactInfo.identityType === 'CCCD' && !/^\d{12}$/.test(contactInfo.identityNo)) {
+            showError('Số CCCD không hợp lệ (phải đủ 12 chữ số).');
+            return;
+        }
+        if (contactInfo.identityType === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(contactInfo.identityNo)) {
+            showError('Số hộ chiếu không hợp lệ (6–15 ký tự, chỉ gồm chữ và số).');
             return;
         }
 
@@ -291,7 +312,15 @@ function CheckoutContent() {
             setIsPaymentLoading(true);
 
             const allPassengers = [
-                { type: 'Adult (12+)', fullName: leadTraveler.fullName, dob: leadTraveler.dob, gender: leadTraveler.gender, notes: leadTraveler.notes },
+                { 
+                    type: 'Adult (12+)', 
+                    fullName: leadTraveler.fullName, 
+                    dob: leadTraveler.dob, 
+                    gender: leadTraveler.gender, 
+                    identityType: leadTraveler.identityType,
+                    identityNo: leadTraveler.identityNo,
+                    notes: leadTraveler.notes 
+                },
                 ...passengers
             ];
 
@@ -388,6 +417,7 @@ function CheckoutContent() {
                         onSavePassenger={handleSavePassenger}
                         onRemovePassenger={handleRemovePassenger}
                         t={t}
+                        maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats}
                     />
                 </div>
 

@@ -10,7 +10,7 @@ import { API_BASE_URL } from '@/app/lib/constants';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 
 // ── Types ────────────────────────────────────────────────────────────
-type TourStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
+type TourStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED' | 'COMPLETED';
 
 interface Tour {
     id: number;
@@ -40,6 +40,34 @@ interface ToastState { message: string; type: 'success' | 'error' }
 
 type ModalMode = 'create' | 'edit' | null;
 
+interface TourStats {
+    totalVisible: number;
+    total: number;
+    published: number;
+    draft: number;
+    pending: number;
+    rejected: number;
+    completed: number;
+    active: number;
+    totalSeats: number;
+    avgPrice: number;
+    loaded: boolean;
+}
+
+const EMPTY_TOUR_STATS: TourStats = {
+    totalVisible: 0,
+    total: 0,
+    published: 0,
+    draft: 0,
+    pending: 0,
+    rejected: 0,
+    completed: 0,
+    active: 0,
+    totalSeats: 0,
+    avgPrice: 0,
+    loaded: false,
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────
 // Format full: 1.500.000 ₫
 const formatCurrency = (n: number) =>
@@ -55,22 +83,92 @@ const formatCurrencyCompact = (n: number): string => {
 const formatDate = (d: string) =>
     new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(d));
 
-const getStatusLabel = (seats: number): { label: string; cls: string } => {
-    if (seats === 0) return { label: 'Full', cls: 'bg-error/10 text-error' };
-    if (seats <= 5) return { label: 'Sắp đầy', cls: 'bg-amber-500/10 text-amber-600' };
-    return { label: 'Available', cls: 'bg-tertiary/10 text-tertiary' };
-};
-
 const getTourStatusBadge = (status: TourStatus): { label: string; cls: string; icon: string } => {
     switch (status) {
         case 'DRAFT': return { label: 'Nháp', cls: 'bg-surface-container text-on-surface-variant border border-outline-variant/20', icon: 'edit_note' };
         case 'PENDING_REVIEW': return { label: 'Chờ duyệt', cls: 'bg-amber-500/10 text-amber-700 border border-amber-300/40', icon: 'pending' };
         case 'PUBLISHED': return { label: 'Đã duyệt', cls: 'bg-emerald-500/10 text-emerald-700 border border-emerald-300/40', icon: 'check_circle' };
         case 'REJECTED': return { label: 'Bị từ chối', cls: 'bg-error/10 text-error border border-error/20', icon: 'cancel' };
+        case 'COMPLETED': return { label: 'Đã kết thúc', cls: 'bg-slate-500/10 text-slate-700 border border-slate-300/40', icon: 'history' };
     }
 };
 
 // ── Main Component ───────────────────────────────────────────────────
+function SubmitTourReviewDialog({ tour, onConfirm, onCancel, isSubmitting }: {
+    tour: Tour;
+    onConfirm: () => void;
+    onCancel: () => void;
+    isSubmitting: boolean;
+}) {
+    useEffect(() => {
+        const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !isSubmitting) onCancel(); };
+        window.addEventListener('keydown', h);
+        return () => window.removeEventListener('keydown', h);
+    }, [isSubmitting, onCancel]);
+
+    const status = getTourStatusBadge(tour.status ?? 'DRAFT');
+    const title = tour.name?.trim() || 'Bản nháp chưa có tên tour';
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="submit-tour-title">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!isSubmitting) onCancel(); }} />
+            <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl animate-fade-slide-up">
+                <div className="border-b border-outline-variant/10 bg-amber-50/80 px-6 py-5">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                            <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>approval</span>
+                        </div>
+                        <div className="min-w-0">
+                            <h3 id="submit-tour-title" className="text-lg font-bold text-on-surface">Gửi tour để Admin duyệt?</h3>
+                            <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">
+                                Sau khi gửi, tour sẽ chuyển sang trạng thái chờ duyệt. Bạn chỉ chỉnh sửa tiếp khi Admin từ chối và gửi phản hồi.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-5">
+                    <div className="rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${status.cls}`}>
+                                <span className="material-symbols-outlined text-[14px]">{status.icon}</span>{status.label}
+                            </span>
+                            <span className="text-[11px] font-semibold text-on-surface-variant">{tour.destination?.name ?? 'Chưa chọn điểm đến'}</span>
+                        </div>
+                        <p className="line-clamp-2 text-sm font-bold leading-snug text-on-surface">&ldquo;{title}&rdquo;</p>
+                        <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-on-surface-variant">
+                            <span className="rounded-lg bg-surface-container px-2 py-1">{tour.duration || 'Chưa có thời lượng'}</span>
+                            <span className="rounded-lg bg-surface-container px-2 py-1">{tour.availableSeats || 0} ghế</span>
+                            <span className="rounded-lg bg-surface-container px-2 py-1">{formatCurrency(tour.price || 0)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex gap-3 px-6 pb-6">
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        disabled={isSubmitting}
+                        className="flex-1 rounded-xl border border-outline-variant/20 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                        Hủy
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        disabled={isSubmitting}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-600 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:opacity-60 outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    >
+                        {isSubmitting
+                            ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang gửi…</>
+                            : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>Xác nhận gửi</>}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function AdminToursPage() {
     // State: data
     const [tours, setTours] = useState<Tour[]>([]);
@@ -100,13 +198,12 @@ export default function AdminToursPage() {
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-    // State: Aggregate stats
-    const [tourStats, setTourStats] = useState({ active: 0, totalSeats: 0, avgPrice: 0, loaded: false });
+    // State: KPI stats
+    const [tourStats, setTourStats] = useState<TourStats>(EMPTY_TOUR_STATS);
 
     // State: Workflow
-    const [pendingCount, setPendingCount] = useState(0);
-    const [rejectedCount, setRejectedCount] = useState(0);
     const [reviewTarget, setReviewTarget] = useState<{ tour: Tour; action: 'approve' | 'reject' } | null>(null);
+    const [submitTarget, setSubmitTarget] = useState<Tour | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
 
     // State: Trash tab
@@ -171,20 +268,17 @@ export default function AdminToursPage() {
 
     // Fetch aggregate stats (toàn bộ hệ thống — chỉ gọi 1 lần khi mount)
     // Dùng fetchWithAuth để Admin thấy đúng số liệu toàn bộ (kể cả DRAFT)
-    useEffect(() => {
-        fetchWithAuth(`${API_BASE_URL}/tour?limit=9999&sortBy=recommended`)
-            .then(r => r.json())
-            .then(json => {
-                const all: Tour[] = json.data ?? [];
-                setTourStats({
-                    active: all.filter(t => t.availableSeats > 0).length,
-                    totalSeats: all.reduce((s, t) => s + t.availableSeats, 0),
-                    avgPrice: all.length > 0 ? all.reduce((s, t) => s + t.price, 0) / all.length : 0,
-                    loaded: true,
-                });
-            })
-            .catch(() => { });
-    }, []);
+    const fetchStats = useCallback(async () => {
+        if (!userRole) return;
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/admin/stats`);
+            const json = await res.json();
+            const data = json?.data ?? json;
+            setTourStats({ ...EMPTY_TOUR_STATS, ...data, loaded: true });
+        } catch {
+            setTourStats(EMPTY_TOUR_STATS);
+        }
+    }, [userRole]);
 
     // Fetch role từ API thay vì localStorage để tránh spoof qua DevTools
     // Backend verify JWT → trả role thực sự từ DB, không thể giả mạo
@@ -205,22 +299,7 @@ export default function AdminToursPage() {
             });
     }, []);
 
-    // Fetch pending + rejected counts for Admin KPIs
-    const fetchPendingCount = useCallback(async () => {
-        if (userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') return;
-        try {
-            const [pendingRes, rejectedRes] = await Promise.all([
-                fetchWithAuth(`${API_BASE_URL}/tour/pending`),
-                fetchWithAuth(`${API_BASE_URL}/tour?status=REJECTED&limit=1`),
-            ]);
-            const pendingJson = await pendingRes.json();
-            const rejectedJson = await rejectedRes.json();
-            setPendingCount(pendingJson?.count ?? pendingJson?.data?.length ?? 0);
-            setRejectedCount(rejectedJson?.meta?.totalItems ?? 0);
-        } catch { /* silent */ }
-    }, [userRole]);
-
-    useEffect(() => { fetchPendingCount(); }, [fetchPendingCount]);
+    useEffect(() => { fetchStats(); }, [fetchStats]);
 
     useEffect(() => {
         fetch(`${API_BASE_URL}/search/destinations`)
@@ -245,9 +324,11 @@ export default function AdminToursPage() {
                 throw new Error(err.message || 'Gửi duyệt thất bại');
             }
             showToast('Đã gửi tour để Admin duyệt!');
+            setSubmitTarget(null);
             fetchTours();
-        } catch (e: any) {
-            showToast(e.message || 'Gửi duyệt thất bại', 'error');
+            fetchStats();
+        } catch (e: unknown) {
+            showToast(e instanceof Error ? e.message : 'Gửi duyệt thất bại', 'error');
         } finally {
             setIsSubmitting(null);
         }
@@ -267,7 +348,7 @@ export default function AdminToursPage() {
         showToast(action === 'approve' ? 'Đã duyệt và phát hành tour!' : 'Đã từ chối tour.');
         setReviewTarget(null);
         fetchTours();
-        fetchPendingCount();
+        fetchStats();
     };
 
     // ── Delete ─────────────────────────────────────────────────────
@@ -279,15 +360,22 @@ export default function AdminToursPage() {
                 method: 'DELETE',
             });
             if (!res.ok) throw new Error();
-            showToast(`Đã xóa tour "${deleteTarget.name}" thành công!`);
+            showToast(
+                isStaff
+                    ? `Đã xóa bản nháp "${deleteTarget.name}" thành công!`
+                    : `Đã xóa tour "${deleteTarget.name}" thành công!`
+            );
             setDeleteTarget(null);
-            // Cập nhật lại danh sách và KPI
             fetchTours();
-            fetchPendingCount();
-            // Tự động chuyển sang tab Thùng rác để user thấy tour vừa xóa
-            setActiveTab('trash');
+            fetchStats();
+            if (isAdmin) setActiveTab('trash');
         } catch {
-            showToast('Xóa tour thất bại. Vui lòng thử lại.', 'error');
+            showToast(
+                isStaff
+                    ? 'Xóa bản nháp thất bại. Vui lòng thử lại.'
+                    : 'Xóa tour thất bại. Vui lòng thử lại.',
+                'error'
+            );
         } finally {
             setIsDeleting(false);
         }
@@ -295,7 +383,7 @@ export default function AdminToursPage() {
 
     const handleEdit = async (tour: Tour) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/tour/${tour.id}`);
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tour.id}`);
             if (!res.ok) throw new Error();
             const json = await res.json();
             setSelectedTour(json.data ?? json);
@@ -307,7 +395,7 @@ export default function AdminToursPage() {
 
     const handleOpenContent = async (tour: Tour) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/tour/${tour.id}`);
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tour.id}`);
             if (!res.ok) throw new Error();
             const json = await res.json();
             setContentDrawerTour(json.data ?? json);
@@ -317,7 +405,11 @@ export default function AdminToursPage() {
     };
 
     // ── KPIs — dùng dữ liệu aggregate toàn hệ thống —————————————————
-    const totalTours = meta.totalItems;
+    const totalTours = isAdmin ? tourStats.total : tourStats.totalVisible;
+    const pendingCount = tourStats.pending;
+    const rejectedCount = tourStats.rejected;
+    const draftCount = tourStats.draft;
+    const staffPendingCount = tourStats.pending;
 
     const kpis = [
         {
@@ -363,21 +455,23 @@ export default function AdminToursPage() {
         ...(isStaff ? [
             {
                 icon: 'edit_note', label: 'Bản Nháp',
-                value: String(tours.filter(t => t.status === 'DRAFT').length),
+                value: String(draftCount),
                 unit: null,
                 color: 'bg-surface-container text-on-surface-variant',
-                highlight: false,
-                onClick: (filterStatus === 'DRAFT' || tours.some(t => t.status === 'DRAFT'))
+                highlight: draftCount > 0,
+                onClick: (filterStatus === 'DRAFT' || draftCount > 0)
                     ? () => { setFilterStatus(f => f === 'DRAFT' ? '' : 'DRAFT'); setPage(1); }
                     : null
             },
             {
                 icon: 'pending', label: 'Chờ Duyệt',
-                value: String(tours.filter(t => t.status === 'PENDING_REVIEW').length),
+                value: String(staffPendingCount),
                 unit: null,
                 color: 'bg-amber-500/10 text-amber-700',
-                highlight: false,
-                onClick: null
+                highlight: staffPendingCount > 0,
+                onClick: (filterStatus === 'PENDING_REVIEW' || staffPendingCount > 0)
+                    ? () => { setFilterStatus(f => f === 'PENDING_REVIEW' ? '' : 'PENDING_REVIEW'); setPage(1); setActiveTab('active'); }
+                    : null
             },
         ] : []),
     ];
@@ -392,7 +486,8 @@ export default function AdminToursPage() {
     const toggleSelectOne = (id: number) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
             return next;
         });
     };
@@ -412,7 +507,7 @@ export default function AdminToursPage() {
         showToast(`Ẩn ${ok}/${ids.length} tour thành công.`);
         // Cập nhật KPI và chuyển sang Thùng rác
         fetchTours();
-        fetchPendingCount();
+        fetchStats();
         setActiveTab('trash');
     };
 
@@ -491,6 +586,7 @@ export default function AdminToursPage() {
                 PENDING_REVIEW: 'Chờ duyệt',
                 DRAFT: 'Nháp',
                 REJECTED: 'Bị từ chối',
+                COMPLETED: 'Đã kết thúc',
             };
             const rows = all.map(t => [
                 t.id,
@@ -546,11 +642,11 @@ export default function AdminToursPage() {
                     {/* Tạo mới — tất cả role có thể tạo, STAFF sẽ lưu dưới dạng Nháp */}
                     <button
                         onClick={() => { setSelectedTour(null); setModalMode('create'); }}
-                        aria-label="Tạo tour mới"
+                        aria-label={isStaff ? 'Tạo bản nháp tour' : 'Tạo tour mới'}
                         className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-90 transition-opacity active:scale-[0.98] flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none"
                     >
-                        <span className="material-symbols-outlined text-sm" aria-hidden="true">add</span>
-                        {isStaff ? 'Tạo Tour Mới' : 'Tạo Tour Mới'}
+                        <span className="material-symbols-outlined text-sm" aria-hidden="true">{isStaff ? 'draft' : 'add'}</span>
+                        {isStaff ? 'Tạo bản nháp' : 'Tạo Tour Mới'}
                     </button>
                 </div>
             </div>
@@ -712,7 +808,7 @@ export default function AdminToursPage() {
             )}
 
             {/* ── Staff Info Banner — hướng dẫn workflow ở trạng thái DRAFT —— */}
-            {isStaff && tours.some(t => t.status === 'DRAFT') && (
+            {isStaff && draftCount > 0 && (
                 <div className="mb-4 flex items-start gap-3 px-5 py-4 bg-primary/5 border border-primary/20 rounded-2xl">
                     <span className="material-symbols-outlined text-primary text-[20px] mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
                     <div>
@@ -783,6 +879,7 @@ export default function AdminToursPage() {
                                 {isAdmin && <option value="PUBLISHED">✅ Đã duyệt</option>}
                                 {isAdmin && <option value="PENDING_REVIEW">⏳ Chờ duyệt</option>}
                                 {isAdmin && <option value="REJECTED">❌ Bị từ chối</option>}
+                                {isAdmin && <option value="COMPLETED">🏁 Đã kết thúc</option>}
                             </select>
                         </>
                     )}
@@ -940,7 +1037,7 @@ export default function AdminToursPage() {
                                     <td colSpan={10} className="py-20 text-center">
                                         <span className="material-symbols-outlined text-4xl text-outline mb-2 block" aria-hidden="true">travel_explore</span>
                                         <p className="font-bold text-on-surface">Không tìm thấy tour nào</p>
-                                        <p className="text-on-surface-variant text-sm mt-1">Thử thay đổi bộ lọc hoặc tạo tour mới.</p>
+                                        <p className="text-on-surface-variant text-sm mt-1">Thử thay đổi bộ lọc hoặc {isStaff ? 'tạo bản nháp mới' : 'tạo tour mới'}.</p>
                                     </td>
                                 </tr>
                             ) : (
@@ -952,6 +1049,7 @@ export default function AdminToursPage() {
                                     const canStaffEdit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
                                     // Staff có thể gửi duyệt: tour của mình ở DRAFT hoặc REJECTED
                                     const canStaffSubmit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
+                                    const canStaffDeleteDraft = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
                                     const canAdminReview = isAdmin && tour.status === 'PENDING_REVIEW';
                                     const stt = (page - 1) * pageSize + rowIndex + 1;
                                     return (
@@ -1059,11 +1157,11 @@ export default function AdminToursPage() {
                                                         </div>
                                                     )}
                                                     {/* Edit:
-                                                        - PENDING_REVIEW: Admin có thể sửa trước khi duyệt
-                                                        - REJECTED: chỉ Staff owner sửa để gửi lại (Admin đã từ chối, không cần sửa)
+                                                        - Admin có thể sửa mọi tour (trừ COMPLETED)
+                                                        - Staff owner sửa tour của mình ở trạng thái DRAFT hoặc REJECTED
                                                     */}
                                                     {(
-                                                        (isAdmin && tour.status === 'PENDING_REVIEW') ||
+                                                        (isAdmin && tour.status !== 'COMPLETED') ||
                                                         canStaffEdit
                                                     ) && (
                                                             <div className="relative group/tip">
@@ -1076,7 +1174,7 @@ export default function AdminToursPage() {
                                                     {/* Gửi Duyệt — Staff owner khi DRAFT hoặc REJECTED: hiện nút text rõ ràng */}
                                                     {canStaffSubmit && (
                                                         <button
-                                                            onClick={() => handleSubmitForReview(tour.id)}
+                                                            onClick={() => setSubmitTarget(tour)}
                                                             disabled={isSubmitting === tour.id}
                                                             aria-label={`Gửi duyệt tour ${tour.name}`}
                                                             className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border border-amber-300/40 text-xs font-semibold transition-all disabled:opacity-50 whitespace-nowrap"
@@ -1111,13 +1209,13 @@ export default function AdminToursPage() {
                                                             <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-error px-2 py-1 text-[10px] font-medium text-on-error opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Từ chối<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-error" /></span>
                                                         </div>
                                                     </>)}
-                                                    {/* Delete — chỉ Admin */}
-                                                    {isAdmin && (
+                                                    {/* Delete: Admin xóa/ẩn tour; Staff chỉ xóa nháp hoặc tour bị từ chối của mình */}
+                                                    {(isAdmin || canStaffDeleteDraft) && (
                                                         <div className="relative group/tip">
-                                                            <button onClick={() => setDeleteTarget(tour)} aria-label={`Xóa tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors focus-visible:ring-2 focus-visible:ring-error outline-none">
+                                                            <button onClick={() => setDeleteTarget(tour)} aria-label={`${canStaffDeleteDraft ? 'Xóa bản nháp' : 'Xóa tour'} ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors focus-visible:ring-2 focus-visible:ring-error outline-none">
                                                                 <span className="material-symbols-outlined text-[18px]">delete</span>
                                                             </button>
-                                                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-error px-2 py-1 text-[10px] font-medium text-on-error opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Xóa tour<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-error" /></span>
+                                                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-error px-2 py-1 text-[10px] font-medium text-on-error opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">{canStaffDeleteDraft ? 'Xóa bản nháp' : 'Xóa tour'}<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-error" /></span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1161,7 +1259,7 @@ export default function AdminToursPage() {
                             </div>
                             <h2 id="perm-delete-dialog-title" className="text-lg font-bold text-on-surface mb-2">Xóa Vĩnh Viễn?</h2>
                             <p className="text-on-surface-variant text-sm leading-relaxed mb-3">
-                                Tour <strong className="text-on-surface">"{permDeleteTarget.name}"</strong> sẽ bị <strong className="text-error">xóa hoàn toàn khỏi cơ sở dữ liệu</strong>, bao gồm tất cả hình ảnh, gói, ngày khởi hành và đánh giá liên quan.
+                                Tour <strong className="text-on-surface">&ldquo;{permDeleteTarget.name}&rdquo;</strong> sẽ bị <strong className="text-error">xóa hoàn toàn khỏi cơ sở dữ liệu</strong>, bao gồm tất cả hình ảnh, gói, ngày khởi hành và đánh giá liên quan.
                             </p>
                             <div className="flex items-start gap-2 p-3 bg-error/8 rounded-xl border border-error/20">
                                 <span className="material-symbols-outlined text-error text-[16px] mt-0.5">warning</span>
@@ -1200,13 +1298,36 @@ export default function AdminToursPage() {
                 />
             )}
 
+            {submitTarget && (
+                <SubmitTourReviewDialog
+                    tour={submitTarget}
+                    onConfirm={() => handleSubmitForReview(submitTarget.id)}
+                    onCancel={() => setSubmitTarget(null)}
+                    isSubmitting={isSubmitting === submitTarget.id}
+                />
+            )}
+
             {/* ── Create / Edit Modal ─── */}
             {modalMode && (
                 <TourFormModal
                     mode={modalMode}
                     initialData={selectedTour ?? undefined}
                     destinations={destinations}
-                    onSuccess={(msg) => { showToast(msg); fetchTours(); }}
+                    userRole={userRole}
+                    onSuccess={(msg, _savedTour, action) => {
+                        showToast(msg);
+                        fetchStats();
+
+                        if (isStaff && action === 'draft') {
+                            setActiveTab('active');
+                            setFilterStatus('DRAFT');
+                            setPage(1);
+                            if (filterStatus === 'DRAFT' && page === 1) fetchTours();
+                            return;
+                        }
+
+                        fetchTours();
+                    }}
                     onClose={() => { setModalMode(null); setSelectedTour(null); }}
                     onDestinationCreated={(dest) => setDestinations(prev =>
                         [...prev, dest].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
@@ -1226,6 +1347,9 @@ export default function AdminToursPage() {
 
             {/* ── Delete Confirmation Dialog ─── */}
             {deleteTarget && (
+                (() => {
+                    const isDraftDelete = isStaff && (deleteTarget.status === 'DRAFT' || deleteTarget.status === 'REJECTED');
+                    return (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center"
                     role="alertdialog"
@@ -1239,9 +1363,13 @@ export default function AdminToursPage() {
                             <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center mb-5">
                                 <span className="material-symbols-outlined text-amber-600 text-2xl" aria-hidden="true">hide_source</span>
                             </div>
-                            <h2 id="delete-dialog-title" className="text-lg font-bold text-on-surface mb-2">Xác nhận Ẩn Tour?</h2>
+                            <h2 id="delete-dialog-title" className="text-lg font-bold text-on-surface mb-2">
+                                {isDraftDelete ? 'Xác nhận xóa bản nháp?' : 'Xác nhận Ẩn Tour?'}
+                            </h2>
                             <p className="text-on-surface-variant text-sm leading-relaxed">
-                                Tour <strong className="text-on-surface">"{deleteTarget.name}"</strong> sẽ bị ẩn khỏi danh sách và không hiển thị với khách hàng. Dữ liệu vẫn được lưu trữ và có thể khôi phục bởi quản trị viên.
+                                {isDraftDelete
+                                    ? <>Bản nháp <strong className="text-on-surface">&ldquo;{deleteTarget.name}&rdquo;</strong> sẽ bị xóa khỏi danh sách của bạn.</>
+                                    : <>Tour <strong className="text-on-surface">&ldquo;{deleteTarget.name}&rdquo;</strong> sẽ bị ẩn khỏi danh sách và không hiển thị với khách hàng. Dữ liệu vẫn được lưu trữ và có thể khôi phục bởi quản trị viên.</>}
                             </p>
                         </div>
                         <div className="px-7 pb-6 flex gap-3 justify-end">
@@ -1262,12 +1390,14 @@ export default function AdminToursPage() {
                                         Đang xử lý…
                                     </>
                                 ) : (
-                                    'Ẩn Tour'
+                                    isDraftDelete ? 'Xóa bản nháp' : 'Ẩn Tour'
                                 )}
                             </button>
                         </div>
                     </div>
                 </div>
+                    );
+                })()
             )}
 
             {/* ── Toast ─── */}

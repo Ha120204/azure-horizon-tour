@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { API_BASE_URL } from '@/app/lib/constants';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 
 // Dynamic import - tránh SSR error
@@ -30,16 +31,40 @@ export interface Article {
   isFeatured: boolean;
   publishedAt: string;
   createdAt?: string;
+  status?: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
+  reviewNote?: string | null;
+  createdById?: number | null;
 }
 
 interface ArticleDrawerProps {
   mode: 'create' | 'edit';
   article?: Article | null;
+  userRole?: string;
   onClose: () => void;
   onSuccess: (message: string) => void;
 }
 
-const API = 'http://localhost:3000';
+type ArticleForm = {
+  title: string;
+  category: string;
+  excerpt: string;
+  content: string;
+  imageUrl: string;
+  author: string;
+  readTime: number;
+  isFeatured: boolean;
+};
+
+const EMPTY_FORM: ArticleForm = {
+  title: '',
+  category: 'GUIDES',
+  excerpt: '',
+  content: '',
+  imageUrl: '',
+  author: '',
+  readTime: 1,
+  isFeatured: false,
+};
 
 const CATEGORIES = [
   { value: 'GUIDES',      label: 'Hướng dẫn',  icon: 'map',          color: 'text-blue-600',   bg: 'bg-blue-50   border-blue-200' },
@@ -64,16 +89,28 @@ const QUILL_FORMATS = [
   'list', 'link', 'image', 'align',
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
-export default function ArticleDrawer({ mode, article, onClose, onSuccess }: ArticleDrawerProps) {
-  const isEdit = mode === 'edit';
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
-  const [form, setForm] = useState({
-    title: '', category: 'GUIDES', excerpt: '', content: '',
-    imageUrl: '', author: '', readTime: 5, isFeatured: false,
-  });
+const articleToForm = (article?: Partial<Article> | null): ArticleForm => ({
+  title: article?.title ?? '',
+  category: article?.category ?? 'GUIDES',
+  excerpt: article?.excerpt ?? '',
+  content: article?.content ?? '',
+  imageUrl: article?.imageUrl ?? '',
+  author: article?.author ?? '',
+  readTime: article?.readTime ?? 1,
+  isFeatured: article?.isFeatured ?? false,
+});
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function ArticleDrawer({ mode, article, userRole = '', onClose, onSuccess }: ArticleDrawerProps) {
+  const isEdit = mode === 'edit';
+  const isStaff = userRole === 'STAFF';
+
+  const [form, setForm] = useState<ArticleForm>(EMPTY_FORM);
   const [errors, setErrors]         = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitAction, setSubmitAction] = useState<'draft' | 'submit' | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imgError, setImgError]     = useState(false);
@@ -82,24 +119,36 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
   // ── Load bài viết khi edit ──
   useEffect(() => {
     if (isEdit && article) {
+      setForm(articleToForm(article));
+      setErrors({});
+      setImgError(false);
       setIsLoadingContent(true);
-      fetchWithAuth(`${API}/article/admin/${article.id}`)
-        .then(r => r.json())
+      fetchWithAuth(`${API_BASE_URL}/article/admin/${article.id}`)
+        .then(async r => {
+          const json = await r.json();
+          if (!r.ok) {
+            const message = json?.message;
+            throw new Error(Array.isArray(message) ? message.join(', ') : String(message ?? 'Không tải được bài viết'));
+          }
+          return json;
+        })
         .then(json => {
           const d = json?.data ?? json;
-          setForm({
-            title: d.title ?? '', category: d.category ?? 'GUIDES',
-            excerpt: d.excerpt ?? '', content: d.content ?? '',
-            imageUrl: d.imageUrl ?? '', author: d.author ?? '',
-            readTime: d.readTime ?? 5, isFeatured: d.isFeatured ?? false,
-          });
+          setForm(articleToForm({ ...article, ...d }));
         })
-        .catch(() => {})
+        .catch((err: unknown) => {
+          setErrors(p => ({
+            ...p,
+            _server: getErrorMessage(err, 'Không tải được nội dung chi tiết. Đang hiển thị dữ liệu trong danh sách.'),
+          }));
+        })
         .finally(() => setIsLoadingContent(false));
     } else {
-      setForm({ title: '', category: 'GUIDES', excerpt: '', content: '', imageUrl: '', author: '', readTime: 5, isFeatured: false });
+      setForm(EMPTY_FORM);
+      setErrors({});
+      setImgError(false);
     }
-  }, [isEdit, article]);
+  }, [isEdit, article?.id, article]);
 
   // ── Keyboard + scroll lock ──
   useEffect(() => {
@@ -132,7 +181,7 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
     }
   }, [form.content, form.readTime]);
 
-  const setField = (key: string, value: any) => {
+  const setField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm(p => ({ ...p, [key]: value }));
     if (errors[key]) setErrors(p => ({ ...p, [key]: '' }));
     if (key === 'imageUrl') setImgError(false);
@@ -146,7 +195,7 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetchWithAuth(`${API}/article/admin/upload`, {
+      const res = await fetchWithAuth(`${API_BASE_URL}/article/admin/upload`, {
         method: 'POST',
         headers: {}, // Do NOT set Content-Type header when sending FormData!
         body: formData,
@@ -154,14 +203,14 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
       const json = await res.json();
       if (!res.ok) throw new Error(json.message ?? 'Lỗi upload ảnh');
       setField('imageUrl', json.data?.url ?? json.url);
-    } catch (err: any) {
-      setErrors(p => ({ ...p, imageUrl: err.message }));
+    } catch (err: unknown) {
+      setErrors(p => ({ ...p, imageUrl: getErrorMessage(err, 'Lỗi upload ảnh') }));
     } finally {
       setIsUploadingImage(false);
     }
   };
 
-  const validate = () => {
+  const validateForReview = () => {
     const e: Record<string, string> = {};
     if (!form.title.trim())    e.title   = 'Tiêu đề không được để trống';
     if (!form.excerpt.trim())  e.excerpt  = 'Tóm tắt không được để trống';
@@ -172,12 +221,12 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-    setIsSubmitting(true);
+  const handleSave = async (action: 'draft' | 'submit') => {
+    if (action === 'submit' && !validateForReview()) return;
+
+    setSubmitAction(action);
     try {
-      const url    = isEdit ? `${API}/article/admin/${article!.id}` : `${API}/article/admin`;
+      const url    = isEdit ? `${API_BASE_URL}/article/admin/${article!.id}` : `${API_BASE_URL}/article/admin`;
       const method = isEdit ? 'PATCH' : 'POST';
       const res    = await fetchWithAuth(url, {
         method,
@@ -189,14 +238,33 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
         const msg = json?.message;
         throw new Error(Array.isArray(msg) ? msg.join(', ') : String(msg ?? 'Thao tác thất bại'));
       }
-      onSuccess(isEdit ? `Đã cập nhật "${form.title}"` : `Đã xuất bản "${form.title}"`);
+
+      const saved: Article = json?.data ?? json;
+      if (isStaff && action === 'submit') {
+        const submitRes = await fetchWithAuth(`${API_BASE_URL}/article/admin/${saved.id}/submit`, { method: 'POST' });
+        const submitJson = await submitRes.json();
+        if (!submitRes.ok) {
+          const msg = submitJson?.message;
+          throw new Error(Array.isArray(msg) ? msg.join(', ') : String(msg ?? 'Gửi duyệt thất bại'));
+        }
+      }
+
+      if (isStaff) {
+        onSuccess(action === 'submit'
+          ? `Đã lưu và gửi duyệt "${form.title.trim() || 'bản nháp'}"`
+          : `Đã lưu bản nháp "${form.title.trim() || 'chưa có tiêu đề'}"`);
+      } else {
+        onSuccess(isEdit ? `Đã cập nhật "${form.title}"` : `Đã xuất bản "${form.title}"`);
+      }
       onClose();
-    } catch (err: any) {
-      setErrors(p => ({ ...p, _server: err.message }));
+    } catch (err: unknown) {
+      setErrors(p => ({ ...p, _server: getErrorMessage(err, 'Thao tác thất bại') }));
     } finally {
-      setIsSubmitting(false);
+      setSubmitAction(null);
     }
   };
+
+  const isSubmitting = submitAction !== null;
 
   const activeCat = CATEGORIES.find(c => c.value === form.category) ?? CATEGORIES[0];
 
@@ -221,7 +289,11 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
               {isEdit ? 'Chỉnh sửa bài viết' : 'Tạo bài viết mới'}
             </h2>
             <p className="text-xs text-on-surface-variant mt-0.5 truncate">
-              {isEdit ? article?.slug : 'Điền thông tin để xuất bản bài viết mới'}
+              {isEdit
+                ? article?.slug
+                : isStaff
+                  ? 'Lưu nháp trước, hoàn thiện sau rồi gửi Admin duyệt'
+                  : 'Điền thông tin để xuất bản bài viết mới'}
             </p>
           </div>
           {/* Status pill */}
@@ -329,7 +401,7 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
                 {/* Author */}
                 <div className="space-y-1.5">
                   <label htmlFor="am-author" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Tác giả <span className="text-error">*</span>
+                    Tác giả {isStaff ? <span className="text-on-surface-variant/40 normal-case">(khi gửi duyệt)</span> : <span className="text-error">*</span>}
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[16px] pointer-events-none">person</span>
@@ -398,7 +470,7 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
                 {/* Title */}
                 <div>
                   <label htmlFor="am-title" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1.5">
-                    Tiêu đề bài viết <span className="text-error">*</span>
+                    Tiêu đề bài viết {isStaff ? <span className="text-on-surface-variant/40 normal-case">(khi gửi duyệt)</span> : <span className="text-error">*</span>}
                   </label>
                   <input
                     id="am-title"
@@ -415,7 +487,7 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
                 {/* Excerpt */}
                 <div>
                   <label htmlFor="am-excerpt" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1.5">
-                    Tóm tắt <span className="text-error">*</span>
+                    Tóm tắt {isStaff ? <span className="text-on-surface-variant/40 normal-case">(khi gửi duyệt)</span> : <span className="text-error">*</span>}
                     <span className="normal-case font-normal ml-1 text-on-surface-variant/50">(hiển thị dưới card bài)</span>
                   </label>
                   <div className="relative">
@@ -507,21 +579,37 @@ export default function ArticleDrawer({ mode, article, onClose, onSuccess }: Art
         <div className="shrink-0 flex items-center justify-between gap-4 px-7 py-4 border-t border-outline-variant/10 bg-surface-container-lowest">
           <div className="flex items-center gap-2 text-xs text-on-surface-variant/60">
             <span className="material-symbols-outlined text-[14px]">info</span>
-            {isEdit ? 'Thay đổi sẽ ghi đè nội dung hiện tại' : 'Bài viết sẽ được xuất bản ngay khi bấm lưu'}
+            {isStaff
+              ? 'Lưu nháp không bắt buộc đủ thông tin. Chỉ “Lưu & gửi duyệt” mới kiểm tra đủ trường.'
+              : isEdit ? 'Thay đổi sẽ ghi đè nội dung hiện tại' : 'Bài viết sẽ được xuất bản ngay khi bấm lưu'}
           </div>
           <div className="flex items-center gap-3">
             <button type="button" onClick={onClose}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary">
-              Hủy bỏ
+              Hủy
             </button>
+            {isStaff && (
+              <button
+                type="button"
+                onClick={() => handleSave('draft')}
+                disabled={isSubmitting || isLoadingContent}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border border-outline-variant/20 bg-surface text-on-surface hover:bg-surface-container disabled:opacity-60 transition-all active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {submitAction === 'draft'
+                  ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang lưu…</>
+                  : <><span className="material-symbols-outlined text-base">draft</span>Lưu nháp</>
+                }
+              </button>
+            )}
             <button
-              onClick={handleSubmit}
+              type="button"
+              onClick={() => handleSave('submit')}
               disabled={isSubmitting || isLoadingContent}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-primary text-on-primary hover:bg-primary/90 disabled:opacity-60 transition-all active:scale-[0.98] shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              {isSubmitting
+              {submitAction === 'submit'
                 ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang lưu…</>
-                : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{isEdit ? 'save' : 'publish'}</span>{isEdit ? 'Lưu thay đổi' : 'Xuất bản ngay'}</>
+                : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{isStaff ? 'send' : isEdit ? 'save' : 'publish'}</span>{isStaff ? 'Lưu & gửi duyệt' : isEdit ? 'Lưu thay đổi' : 'Xuất bản ngay'}</>
               }
             </button>
           </div>

@@ -16,6 +16,7 @@ const PAGE_META: Record<string, { title: string; icon: string; subtitle: string 
     '/admin/customers': { title: 'Khách hàng', icon: 'group', subtitle: 'Danh sách và thông tin khách hàng' },
     '/admin/staffs': { title: 'Nhân viên', icon: 'badge', subtitle: 'Quản lý đội ngũ nhân viên & phân quyền' },
     '/admin/vouchers': { title: 'Mã giảm giá', icon: 'confirmation_number', subtitle: 'Tạo và quản lý chương trình khuyến mãi' },
+    '/admin/marketing': { title: 'Marketing', icon: 'campaign', subtitle: 'Quản lý subscriber và chiến dịch email' },
     '/admin/articles': { title: 'Bài viết', icon: 'article', subtitle: 'Quản lý nội dung & bài đăng blog' },
     '/admin/reviews': { title: 'Đánh giá', icon: 'reviews', subtitle: 'Kiểm duyệt nhận xét từ khách hàng' },
     '/admin/profile': { title: 'Hồ sơ cá nhân', icon: 'manage_accounts', subtitle: 'Quản lý thông tin tài khoản & bảo mật' },

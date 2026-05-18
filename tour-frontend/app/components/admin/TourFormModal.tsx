@@ -113,6 +113,8 @@ const getTomorrowDateString = (): string => {
 
 const MIN_START_DATE = getTomorrowDateString();
 
+const isBookableDepartureDate = (value: string): boolean => value >= MIN_START_DATE;
+
 const UI_TO_API_DEPARTURE_CATEGORY: Record<SaleCategory, string | null> = {
     all: null,
     flash: 'FLASH_SALE',
@@ -418,16 +420,18 @@ export default function TourFormModal({
                 })));
             }
             if (initialData.departures?.length) {
-                setDepartures(initialData.departures.map((d: ExistingTourDeparture) => ({
-                    id: d.id,
-                    departureDate: d.departureDate && !isNaN(new Date(d.departureDate).getTime()) ? new Date(d.departureDate).toISOString().split('T')[0] : '',
-                    price: d.price != null ? String(d.price) : '',
-                    availableSeats: String(d.availableSeats ?? ''),
-                    maxSeats: String(d.maxSeats ?? d.availableSeats ?? ''),
-                    note: d.note || '',
-                    category: toUiDepartureCategory(d.category),
-                    flashSaleEndsAt: d.flashSaleEndsAt && !isNaN(new Date(d.flashSaleEndsAt).getTime()) ? new Date(d.flashSaleEndsAt).toISOString().slice(0, 16) : '',
-                })));
+                setDepartures(initialData.departures
+                    .map((d: ExistingTourDeparture) => ({
+                        id: d.id,
+                        departureDate: d.departureDate && !isNaN(new Date(d.departureDate).getTime()) ? new Date(d.departureDate).toISOString().split('T')[0] : '',
+                        price: d.price != null ? String(d.price) : '',
+                        availableSeats: String(d.availableSeats ?? ''),
+                        maxSeats: String(d.maxSeats ?? d.availableSeats ?? ''),
+                        note: d.note || '',
+                        category: toUiDepartureCategory(d.category),
+                        flashSaleEndsAt: d.flashSaleEndsAt && !isNaN(new Date(d.flashSaleEndsAt).getTime()) ? new Date(d.flashSaleEndsAt).toISOString().slice(0, 16) : '',
+                    }))
+                    .filter(d => d.departureDate && isBookableDepartureDate(d.departureDate)));
             }
             // Pre-fill departure point mode
             if (initialData.departurePoint) {
@@ -524,7 +528,7 @@ export default function TourFormModal({
         if (!form.destinationId) newErrors.destinationId = 'Vui lòng chọn điểm đến';
         
         // Validate departures instead of startDate
-        const validDepartures = departures.filter(d => d.departureDate);
+        const validDepartures = departures.filter(d => d.departureDate && isBookableDepartureDate(d.departureDate));
         if (validDepartures.length === 0) {
             setGlobalError('Vui lòng thêm ít nhất 1 chuyến khởi hành hợp lệ ở Mục 6 (Ngày Khởi Hành).');
             return false;
@@ -547,7 +551,9 @@ export default function TourFormModal({
         }
 
         const finalDuration = durationMode === 'custom' ? customDuration : form.duration;
-        const validDepartures = departures.filter(d => d.departureDate).sort((a, b) => new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime());
+        const validDepartures = departures
+            .filter(d => d.departureDate && isBookableDepartureDate(d.departureDate))
+            .sort((a, b) => new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime());
         const primaryStartDate = validDepartures[0]?.departureDate || form.startDate || MIN_START_DATE;
         const payload = { ...form, duration: finalDuration, startDate: primaryStartDate };
 
@@ -614,7 +620,7 @@ export default function TourFormModal({
 
             if (tourId) {
                 const depPayload = departures
-                    .filter(d => d.departureDate)
+                    .filter(d => d.departureDate && isBookableDepartureDate(d.departureDate))
                     .map((d, i) => ({
                         departureDate: d.departureDate,
                         price: d.price ? Number(d.price) : null,

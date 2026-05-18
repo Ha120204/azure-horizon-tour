@@ -18,6 +18,12 @@ const getTomorrow = () => {
   return date;
 };
 
+const getMinBookableDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return new Date(`${date.toISOString().slice(0, 10)}T00:00:00.000Z`);
+};
+
 type PublishableTourFields = {
   name?: string | null;
   description?: string | null;
@@ -190,7 +196,7 @@ export class TourService {
       where.AND = Array.isArray(where.AND)
         ? [...where.AND, searchFilter]
         : where.AND
-          ? [where.AND as Prisma.TourWhereInput, searchFilter]
+          ? [where.AND, searchFilter]
           : [searchFilter];
     }
 
@@ -230,7 +236,10 @@ export class TourService {
         take: limitNum,
         include: {
           destination: { select: { name: true } },
-          departures: { select: { price: true }, where: { isActive: true } },
+          departures: {
+            select: { price: true },
+            where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
+          },
           createdBy: { select: { id: true, fullName: true } },
         },
       }),
@@ -335,7 +344,7 @@ export class TourService {
           orderBy: { sortOrder: 'asc' },
         },
         departures: {
-          where: { isActive: true },
+          where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
           orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }],
         },
         images: { orderBy: { sortOrder: 'asc' } },
@@ -512,7 +521,7 @@ export class TourService {
       include: {
         destination: { select: { name: true } },
         departures: {
-          where: { isActive: true },
+          where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
           select: { departureDate: true, availableSeats: true, isActive: true },
         },
       },
@@ -742,6 +751,7 @@ export class TourService {
           },
         ],
         isActive: true,
+        departureDate: { gte: getMinBookableDate() },
         // Flash Sale chỉ hiện khi còn hạn; Early Bird/Last Minute không có deadline bắt buộc
         tour: { deletedAt: null, status: TourStatus.PUBLISHED },
       },

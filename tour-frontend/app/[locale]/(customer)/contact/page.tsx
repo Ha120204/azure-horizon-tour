@@ -30,6 +30,15 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const getFlagUrl = (iso: string) => `https://flagcdn.com/24x18/${iso}.png`;
 
+type ContactInfoItem = {
+    icon: string;
+    title: string;
+    body: string;
+    note?: string;
+    href?: string;
+    action?: string;
+};
+
 export default function ContactPage() {
     const { t, language } = useLocale();
 
@@ -48,12 +57,17 @@ export default function ContactPage() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
     const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
     const phoneDropdownRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setIsLoggedIn(Boolean(localStorage.getItem('accessToken')));
+    }, []);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -227,7 +241,7 @@ export default function ContactPage() {
                         </p>
 
                         <div className="space-y-10">
-                            {[
+                            {([
                                 {
                                     icon: 'schedule',
                                     title: t('contact.serviceHours'),
@@ -253,12 +267,12 @@ export default function ContactPage() {
                                 },
                                 {
                                     icon: 'help_outline',
-                                    title: t('contact.faq'),
-                                    body: t('contact.faqDesc'),
-                                    action: t('contact.viewFaq'),
-                                    href: '/support/track',
+                                    title: language === 'vi' ? 'Hỗ trợ trực tiếp' : 'Direct support',
+                                    body: language === 'vi'
+                                        ? 'Gửi yêu cầu qua biểu mẫu bên cạnh, đội ngũ sẽ phản hồi qua email hoặc điện thoại.'
+                                        : 'Send your request through the form and our team will reply by email or phone.',
                                 },
-                            ].map(item => (
+                            ] as ContactInfoItem[]).map(item => (
                                 <div key={item.title} className="group flex items-start gap-5">
                                     <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/5 text-primary transition-colors group-hover:bg-primary/10">
                                         <span className="material-symbols-outlined">{item.icon}</span>
@@ -328,13 +342,13 @@ export default function ContactPage() {
                                     )}
 
                                     <div className="flex flex-col gap-3">
-                                        {submittedTicketId > 0 && (
+                                        {isLoggedIn && (
                                             <Link
-                                                href={`/support/track?id=${submittedTicketId}&email=${encodeURIComponent(formData.email)}`}
+                                                href="/profile"
                                                 className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-colors hover:bg-primary-container"
                                             >
-                                                <span className="material-symbols-outlined text-sm">search</span>
-                                                {language === 'vi' ? 'Theo dõi tiến trình xử lý' : 'Track this request'}
+                                                <span className="material-symbols-outlined text-sm">person</span>
+                                                {language === 'vi' ? 'Xem yêu cầu trong hồ sơ' : 'View requests in profile'}
                                             </Link>
                                         )}
                                         <button

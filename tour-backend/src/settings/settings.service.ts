@@ -78,6 +78,16 @@ const DEFAULT_SETTINGS = [
   },
 ];
 
+export interface PublicSettings {
+  company_name: string;
+  company_address: string;
+  company_phone: string;
+  company_email: string;
+  company_description: string;
+  announcement_enabled: string;
+  announcement_text: string;
+}
+
 @Injectable()
 export class SettingsService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
@@ -125,7 +135,7 @@ export class SettingsService implements OnModuleInit {
   /**
    * Public: chỉ trả các cấu hình an toàn để hiển thị ngoài website.
    */
-  async getPublic() {
+  async getPublic(): Promise<PublicSettings> {
     const allowedKeys = [
       'company_name',
       'company_address',

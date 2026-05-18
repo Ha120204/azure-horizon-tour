@@ -29,6 +29,11 @@ export class MailService {
       .replace(/'/g, '&#039;');
   }
 
+  async sendMail(options: nodemailer.SendMailOptions): Promise<unknown> {
+    const info: unknown = await this.transporter.sendMail(options);
+    return info;
+  }
+
   async sendMarketingCampaignTest(data: {
     to: string;
     subject: string;
@@ -41,7 +46,7 @@ export class MailService {
     const safeBody = this.escapeHtml(data.body).replace(/\n/g, '<br/>');
     const safeCampaignName = this.escapeHtml(data.campaignName || 'Marketing campaign');
 
-    return this.transporter.sendMail({
+    const info: unknown = await this.sendMail({
       from: `"Azure Horizon Marketing" <${this.configService.get('MAIL_USER')}>`,
       to: data.to,
       subject: `[TEST] ${data.subject}`,
@@ -65,6 +70,7 @@ export class MailService {
         </div>
       `,
     });
+    return info;
   }
 
   async sendMarketingCampaignEmail(data: {
@@ -79,7 +85,7 @@ export class MailService {
     const safeBody = this.escapeHtml(data.body).replace(/\n/g, '<br/>');
     const safeCampaignName = this.escapeHtml(data.campaignName || 'Azure Horizon newsletter');
 
-    return this.transporter.sendMail({
+    const info: unknown = await this.sendMail({
       from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
       to: data.to,
       subject: data.subject,
@@ -103,6 +109,7 @@ export class MailService {
         </div>
       `,
     });
+    return info;
   }
 
   async sendPasswordResetEmail(to: string, token: string) {

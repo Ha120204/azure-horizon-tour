@@ -18,14 +18,50 @@ export class TourCronService {
     this.logger.log('Starting daily check for expired tours...');
     try {
       const now = new Date();
+      const minBookableDate = new Date();
+      minBookableDate.setDate(minBookableDate.getDate() + 1);
+      const minBookableDateStart = new Date(
+        `${minBookableDate.toISOString().slice(0, 10)}T00:00:00.000Z`,
+      );
 
-      // Find and update tours that have already started/expired
+      const departureResult = await this.prisma.tourDeparture.updateMany({
+        where: {
+          isActive: true,
+          departureDate: { lt: minBookableDateStart },
+        },
+        data: { isActive: false },
+      });
+
+      if (departureResult.count > 0) {
+        this.logger.log(`Archived ${departureResult.count} expired tour departure(s).`);
+      }
+
+      // Complete a tour only when it has no active upcoming departures left.
+      // Tours without departure rows keep the legacy startDate-based behavior.
       const result = await this.prisma.tour.updateMany({
         where: {
           status: TourStatus.PUBLISHED,
-          startDate: {
-            lt: now, // startDate is strictly before current date
-          },
+          OR: [
+            {
+              AND: [
+                { departures: { some: {} } },
+                {
+                  departures: {
+                    none: {
+                      isActive: true,
+                      departureDate: { gte: minBookableDateStart },
+                    },
+                  },
+                },
+              ],
+            },
+            {
+              AND: [
+                { departures: { none: {} } },
+                { startDate: { lt: now } },
+              ],
+            },
+          ],
         },
         data: {
           status: TourStatus.COMPLETED,

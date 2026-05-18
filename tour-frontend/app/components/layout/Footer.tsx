@@ -129,11 +129,6 @@ export default function Footer() {
                                 </Link>
                             </li>
                             <li>
-                                <Link className="hover:text-primary transition-colors inline-block" href="/support/track">
-                                    {language === 'vi' ? 'Trung tâm hỗ trợ' : 'Help Center'}
-                                </Link>
-                            </li>
-                            <li>
                                 <Link className="hover:text-primary transition-colors inline-block" href="/my-bookings">
                                     {language === 'vi' ? 'Đặt tour của tôi' : 'My Bookings'}
                                 </Link>

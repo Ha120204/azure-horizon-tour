@@ -7,5 +7,5 @@ export default async function SupportPage({
 }) {
     const { locale } = await params;
 
-    redirect({ href: '/support/track', locale });
+    redirect({ href: '/contact', locale });
 }

@@ -15,6 +15,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     // Kiểm tra xem đường dẫn hiện tại có phải trang login admin không
     const isLoginPage = pathname?.replace(/^\/(en|vi)/, '').startsWith('/admin/login');
+    const cleanPath = pathname?.replace(/^\/(en|vi)/, '') || '';
+    const isSuperAdminArea = cleanPath.startsWith('/admin/super');
 
     useEffect(() => {
         // Nếu đang ở trang login admin → bỏ qua kiểm tra xác thực, để trang login tự xử lý
@@ -48,6 +50,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     return;
                 }
 
+                if (isSuperAdminArea && role !== 'SUPER_ADMIN') {
+                    setAuthState('unauthorized');
+                    router.replace('/admin');
+                    return;
+                }
+
                 setAuthState('authorized');
             } catch {
                 setAuthState('unauthorized');
@@ -56,7 +64,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         };
 
         checkAccess();
-    }, [router, isLoginPage]);
+    }, [router, isLoginPage, isSuperAdminArea]);
 
     // Loading state — hiển thị khi đang kiểm tra quyền
     if (authState === 'loading') {

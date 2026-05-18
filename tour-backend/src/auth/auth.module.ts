@@ -6,6 +6,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { MailModule } from '../mail/mail.module';
 import { CloudinaryModule } from '../common/cloudinary/cloudinary.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CloudinaryModule } from '../common/cloudinary/cloudinary.module';
     }),
     MailModule,
     CloudinaryModule,
+    PrismaModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy]

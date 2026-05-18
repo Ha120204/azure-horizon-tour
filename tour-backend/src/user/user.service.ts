@@ -21,7 +21,7 @@ export class UserService {
     phone?: string;
     role: Role;
     sendEmail?: boolean;
-  }) {
+  }, requesterRole: Role) {
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -30,6 +30,10 @@ export class UserService {
     // Không cho phép tạo tài khoản SUPER_ADMIN
     if (data.role === 'SUPER_ADMIN') {
       throw new ForbiddenException('Không thể tạo tài khoản SUPER_ADMIN');
+    }
+
+    if (requesterRole !== Role.SUPER_ADMIN && data.role !== Role.STAFF) {
+      throw new ForbiddenException('Admin chỉ được tạo tài khoản Staff');
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -116,6 +120,7 @@ export class UserService {
           role: true,
           createdAt: true,
           deletedAt: true,
+          authRevokedAt: true,
           _count: {
             select: {
               bookings: true,
@@ -163,6 +168,7 @@ export class UserService {
         createdAt: true,
         updatedAt: true,
         deletedAt: true,
+        authRevokedAt: true,
         _count: {
           select: {
             bookings: true,
@@ -222,12 +228,17 @@ export class UserService {
 
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { role: newRole },
+      data: {
+        role: newRole,
+        authTokenVersion: { increment: 1 },
+        authRevokedAt: new Date(),
+      },
       select: {
         id: true,
         email: true,
         fullName: true,
         role: true,
+        authRevokedAt: true,
       },
     });
 
@@ -237,9 +248,17 @@ export class UserService {
   /**
    * Cập nhật thông tin cơ bản của user (từ Admin)
    */
-  async updateUser(id: number, data: { fullName?: string; phone?: string; dob?: string; gender?: string; }) {
+  async updateUser(id: number, data: { fullName?: string; phone?: string; dob?: string; gender?: string; }, requesterRole: Role) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
+
+    if (user.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Không thể chỉnh sửa tài khoản SUPER_ADMIN');
+    }
+
+    if (requesterRole !== Role.SUPER_ADMIN && user.role !== Role.STAFF) {
+      throw new ForbiddenException('Admin chỉ được chỉnh sửa tài khoản Staff');
+    }
 
     const updated = await this.prisma.user.update({
       where: { id },
@@ -266,7 +285,7 @@ export class UserService {
   /**
    * Activate / Deactivate user (toggle deletedAt)
    */
-  async toggleStatus(id: number, requesterId: number) {
+  async toggleStatus(id: number, requesterId: number, requesterRole: Role) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
@@ -275,22 +294,73 @@ export class UserService {
       throw new ForbiddenException('You cannot deactivate your own account');
     }
 
+    if (user.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Không thể vô hiệu hóa tài khoản SUPER_ADMIN');
+    }
+
+    if (requesterRole !== Role.SUPER_ADMIN && user.role !== Role.STAFF) {
+      throw new ForbiddenException('Admin chỉ được thay đổi trạng thái tài khoản Staff');
+    }
+
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
         deletedAt: user.deletedAt ? null : new Date(),
+        ...(!user.deletedAt
+          ? {
+              authTokenVersion: { increment: 1 },
+              authRevokedAt: new Date(),
+            }
+          : {}),
       },
       select: {
         id: true,
         email: true,
         fullName: true,
         deletedAt: true,
+        authRevokedAt: true,
       },
     });
 
     return {
       ...updated,
       status: updated.deletedAt ? 'Deactivated' : 'Active',
+    };
+  }
+
+  /**
+   * Thu hồi tất cả token hiện tại của một tài khoản quản trị.
+   */
+  async revokeSessions(id: number, requesterId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.id === requesterId) {
+      throw new ForbiddenException('Bạn không thể thu hồi phiên của chính mình');
+    }
+
+    if (user.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Không thể thu hồi phiên của tài khoản SUPER_ADMIN');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        authTokenVersion: { increment: 1 },
+        authRevokedAt: new Date(),
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        authRevokedAt: true,
+      },
+    });
+
+    return {
+      ...updated,
+      message: 'Đã thu hồi tất cả phiên đăng nhập của tài khoản này',
     };
   }
 

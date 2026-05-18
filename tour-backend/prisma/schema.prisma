@@ -51,6 +51,8 @@ model User {
   createdAt DateTime  @default(now())               
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // [PHASE 1] Soft Delete                     
+  authTokenVersion Int @default(0)
+  authRevokedAt DateTime?
 
   bookings        Booking[]
   bookingNotifications BookingNotification[]
@@ -66,6 +68,7 @@ model User {
   assistedDraftsCreated AssistedBookingDraft[] @relation("AssistedDraftCreatedBy")
   assistedDraftsReviewed AssistedBookingDraft[] @relation("AssistedDraftReviewedBy")
   assistedDraftsAsCustomer AssistedBookingDraft[] @relation("AssistedDraftCustomer")
+  superRiskReviews SuperRiskReview[] @relation("SuperRiskReviewedBy")
 }
 
 // =============================================
@@ -423,7 +426,7 @@ model BookingNotification {
 // --- BẢNG NHẬT KÝ HÀNH ĐỘNG (AUDIT LOG) ---
 model SystemLog {
   id          Int      @id @default(autoincrement())
-  action      String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | ROLE_CHANGE | CANCEL_BOOKING | EXPORT
+  action      String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | ROLE_CHANGE | CANCEL_BOOKING | EXPORT | REVOKE_SESSION
   resource    String   // 'Tour' | 'Booking' | 'User' | 'Voucher' | 'Article' | 'Review' | 'Auth'
   resourceId  String?  // ID của object bị tác động
   targetName  String?  // Tên hiển thị của object (VD: "Tour Hội An Heritage Walk")
@@ -440,6 +443,22 @@ model SystemLog {
   @@index([userId, createdAt])
   @@index([resource, resourceId])
   @@index([createdAt])
+}
+
+model SuperRiskReview {
+  id            Int       @id @default(autoincrement())
+  riskKey       String    @unique
+  status        String    @default("OPEN") // OPEN | REVIEWED | RESOLVED
+  note          String?   @db.Text
+  reviewedById Int?
+  reviewedBy   User?     @relation("SuperRiskReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([reviewedById, updatedAt])
 }
 
 

@@ -1,14 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/app/context/LocaleContext';
 import { API_BASE_URL } from '@/app/lib/constants';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/app/lib/publicSettings';
 
 export default function Footer() {
     const { t, language } = useLocale();
     const [email, setEmail] = useState('');
     const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'loading' | 'success' | 'exists' | 'error'>('idle');
+    const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchPublicSettings(controller.signal)
+            .then(setPublicSettings)
+            .catch(error => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    console.error('Error loading public settings:', error);
+                }
+            });
+
+        return () => controller.abort();
+    }, []);
 
     const handleSubscribe = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -50,25 +65,25 @@ export default function Footer() {
                     {/* Cột 1: Thương hiệu & Liên hệ (4 cột) */}
                     <div className="md:col-span-4">
                         <span className="text-3xl font-headline font-black tracking-tight mb-6 block text-white">
-                            Azure Horizon<span className="text-primary">.</span>
+                            {publicSettings.company_name}<span className="text-primary">.</span>
                         </span>
                         <p className="text-slate-400 text-sm leading-relaxed mb-8 pr-4">
-                            {language === 'vi'
+                            {publicSettings.company_description || (language === 'vi'
                                 ? 'Tiên phong thiết kế lại các chuyến đi cao cấp. Chúng tôi tin rằng mỗi lịch trình đều nên mang đậm bản sắc địa phương và để lại dấu ấn cá nhân.'
-                                : 'Pioneering premium travel experiences. We believe every journey should be uniquely personalized and deeply rooted in local culture.'}
+                                : 'Pioneering premium travel experiences. We believe every journey should be uniquely personalized and deeply rooted in local culture.')}
                         </p>
                         <div className="space-y-3 text-sm text-slate-400">
                             <div className="flex items-center gap-3">
                                 <span className="material-symbols-outlined text-[18px] text-primary">location_on</span>
-                                <p>123 Horizon Avenue, District 1, Ho Chi Minh City</p>
+                                <p>{publicSettings.company_address}</p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className="material-symbols-outlined text-[18px] text-primary">call</span>
-                                <p>+84 1900 1234 (24/7 Concierge)</p>
+                                <p>{publicSettings.company_phone} (24/7 Concierge)</p>
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className="material-symbols-outlined text-[18px] text-primary">mail</span>
-                                <p>hello@azurehorizon.com</p>
+                                <p>{publicSettings.company_email}</p>
                             </div>
                         </div>
                     </div>
@@ -188,7 +203,7 @@ export default function Footer() {
                 {/* Bottom bar: Copyright, Payment, Social */}
                 <div className="pt-8 mt-4 border-t border-slate-800 flex flex-col lg:flex-row justify-between items-center gap-6">
                     <div className="flex flex-col md:flex-row items-center gap-6">
-                        <p className="text-xs text-slate-500">{t('footer.copyright')}</p>
+                        <p className="text-xs text-slate-500">© 2026 {publicSettings.company_name}. All rights reserved.</p>
                         <div className="hidden md:flex gap-4 items-center h-5">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png" alt="Visa" className="h-full opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer bg-white/10 px-1 py-0.5 rounded" />
                             <img src="https://upload.wikimedia.org/wikipedia/commons/a/a4/Mastercard_2019_logo.svg" alt="Mastercard" className="h-full opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer bg-white/10 px-1 py-0.5 rounded" />

@@ -8,6 +8,7 @@ import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
 import { useLocale } from '@/app/context/LocaleContext';
 import { API_BASE_URL } from '@/app/lib/constants';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/app/lib/publicSettings';
 
 const COUNTRY_CODES = [
     { code: '+1', country: 'US', iso: 'us' },
@@ -49,6 +50,7 @@ export default function ContactPage() {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
     const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
+    const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
     const phoneDropdownRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +64,19 @@ export default function ContactPage() {
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchPublicSettings(controller.signal)
+            .then(setPublicSettings)
+            .catch(error => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    console.error('Error loading public settings:', error);
+                }
+            });
+
+        return () => controller.abort();
     }, []);
 
     const selectedCountry = COUNTRY_CODES.find(country => country.code === formData.phonePrefix) ?? COUNTRY_CODES[5];
@@ -222,8 +237,19 @@ export default function ContactPage() {
                                 {
                                     icon: 'mail',
                                     title: t('contact.emailUs'),
-                                    body: 'support@azurehorizon.com',
-                                    href: 'mailto:support@azurehorizon.com',
+                                    body: publicSettings.company_email,
+                                    href: `mailto:${publicSettings.company_email}`,
+                                },
+                                {
+                                    icon: 'call',
+                                    title: 'Hotline',
+                                    body: publicSettings.company_phone,
+                                    href: `tel:${publicSettings.company_phone.replace(/\s+/g, '')}`,
+                                },
+                                {
+                                    icon: 'location_on',
+                                    title: language === 'vi' ? 'Van phong' : 'Office',
+                                    body: publicSettings.company_address,
                                 },
                                 {
                                     icon: 'help_outline',

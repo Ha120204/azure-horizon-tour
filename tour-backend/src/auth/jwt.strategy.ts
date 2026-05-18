@@ -1,11 +1,12 @@
 import 'dotenv/config';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly prisma: PrismaService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -13,13 +14,33 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: { sub: number; email?: string; role?: string; tokenVersion?: number }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        deletedAt: true,
+        authTokenVersion: true,
+      },
+    });
+
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedException('Account is inactive or does not exist');
+    }
+
+    const tokenVersion = payload.tokenVersion ?? 0;
+    if (tokenVersion !== user.authTokenVersion) {
+      throw new UnauthorizedException('Session has been revoked');
+    }
+
     return {
-      id: payload.sub,
-      userId: payload.sub,
-      sub: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      id: user.id,
+      userId: user.id,
+      sub: user.id,
+      email: user.email,
+      role: user.role,
     };
   }
 }

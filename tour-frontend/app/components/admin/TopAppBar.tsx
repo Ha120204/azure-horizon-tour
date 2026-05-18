@@ -9,6 +9,7 @@ import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 // ─── Page Metadata ────────────────────────────────────────────────────────────
 
 const PAGE_META: Record<string, { title: string; icon: string; subtitle: string }> = {
+    '/admin/super': { title: 'Super Overview', icon: 'admin_panel_settings', subtitle: 'Giám sát quyền lực hệ thống, rủi ro và cấu hình trọng yếu' },
     '/admin': { title: 'Tổng quan', icon: 'dashboard', subtitle: 'Xem tổng quan hoạt động hệ thống' },
     '/admin/statistics': { title: 'Thống kê', icon: 'bar_chart', subtitle: 'Phân tích & báo cáo chi tiết' },
     '/admin/tours': { title: 'Quản lý Tour', icon: 'explore', subtitle: 'Thêm, sửa và quản lý tour du lịch' },

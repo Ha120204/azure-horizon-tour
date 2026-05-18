@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useLocale } from '@/app/context/LocaleContext';
 import LocaleSwitcher from './LocaleSwitcher';
 import { API_BASE_URL } from '@/app/lib/constants';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/app/lib/publicSettings';
 
 interface SearchResult {
     destinations: { id: number; name: string; type?: string; region?: string }[];
@@ -21,6 +22,7 @@ export default function Header() {
     const [userAvatar, setUserAvatar] = useState('');
     const [logoutMsg, setLogoutMsg] = useState('');
     const [isScrolled, setIsScrolled] = useState(false);
+    const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
     // Search States
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -45,6 +47,19 @@ export default function Header() {
         onScroll();
         return () => window.removeEventListener('scroll', onScroll);
     }, [pathname]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchPublicSettings(controller.signal)
+            .then(setPublicSettings)
+            .catch(error => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    console.error('Error loading public settings:', error);
+                }
+            });
+
+        return () => controller.abort();
+    }, []);
 
     // Kiểm tra đăng nhập
     useEffect(() => {
@@ -191,7 +206,7 @@ export default function Header() {
 
                     {/* 1. BRAND LOGO */}
                     <Link href="/" className={`text-2xl font-bold tracking-tighter font-headline uppercase transition-colors duration-300 ${(isScrolled || !isHomepage) ? 'text-blue-900' : 'text-white drop-shadow-md'}`}>
-                        Azure Horizon
+                        {publicSettings.company_name}
                     </Link>
 
                     {/* 2. MAIN NAVIGATION */}

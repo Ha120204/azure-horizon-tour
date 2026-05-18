@@ -123,6 +123,35 @@ export class SettingsService implements OnModuleInit {
   }
 
   /**
+   * Public: chỉ trả các cấu hình an toàn để hiển thị ngoài website.
+   */
+  async getPublic() {
+    const allowedKeys = [
+      'company_name',
+      'company_address',
+      'company_phone',
+      'company_email',
+      'company_description',
+      'announcement_enabled',
+      'announcement_text',
+    ];
+    const settings = await this.prisma.systemSetting.findMany({
+      where: { key: { in: allowedKeys } },
+    });
+    const flat: Record<string, string> = {};
+    for (const s of settings) flat[s.key] = s.value;
+    return {
+      company_name: flat.company_name ?? 'Azure Horizon',
+      company_address: flat.company_address ?? '',
+      company_phone: flat.company_phone ?? '',
+      company_email: flat.company_email ?? '',
+      company_description: flat.company_description ?? '',
+      announcement_enabled: flat.announcement_enabled ?? 'false',
+      announcement_text: flat.announcement_text ?? '',
+    };
+  }
+
+  /**
    * PATCH /settings — Cập nhật một hoặc nhiều settings
    * Chỉ ADMIN và SUPER_ADMIN
    * @param updates  Record<key, value>

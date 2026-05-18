@@ -4,6 +4,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ActivityLogService, LogQueryDto } from './activity-log.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuditLog } from '../common/decorators/audit-log.decorator';
 
 @Controller('admin/logs')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -20,6 +21,8 @@ export class ActivityLogController {
 
     // GET /admin/logs/export — Download CSV
     @Get('export')
+    @Roles('SUPER_ADMIN')
+    @AuditLog('EXPORT', 'SystemLog')
     async exportCsv(@Query() query: LogQueryDto, @Res() res: Response) {
         const csv = await this.logService.exportCsv(query);
         const fileName = `nhat-ky-${new Date().toISOString().slice(0, 10)}.csv`;

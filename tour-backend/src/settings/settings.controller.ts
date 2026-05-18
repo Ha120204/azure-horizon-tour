@@ -13,14 +13,21 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { SettingsService } from './settings.service';
 
-// ── Guard: chỉ ADMIN và SUPER_ADMIN mới sửa được ────────────────────────────
+type AuthenticatedSettingsRequest = {
+  user: {
+    userId: number;
+    role: string;
+  };
+};
+
+// ── Guard: chỉ SUPER_ADMIN mới sửa được cấu hình hệ thống ───────────────────
 @Injectable()
 class AdminGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const req = ctx.switchToHttp().getRequest();
+    const req = ctx.switchToHttp().getRequest<AuthenticatedSettingsRequest>();
     const role = req.user?.role;
-    if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('Chỉ Admin và Super Admin mới có quyền chỉnh sửa cài đặt');
+    if (role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Chỉ Super Admin mới có quyền chỉnh sửa cài đặt hệ thống');
     }
     return true;
   }
@@ -41,6 +48,15 @@ export class SettingsController {
   }
 
   /**
+   * GET /settings/public — Public website settings
+   */
+  @Get('public')
+  async getPublic() {
+    const data = await this.settingsService.getPublic();
+    return { message: 'Success', data };
+  }
+
+  /**
    * GET /settings/flat — Object phẳng key→value (dùng nhanh cho frontend)
    */
   @UseGuards(AuthGuard('jwt'))
@@ -53,13 +69,13 @@ export class SettingsController {
   /**
    * PATCH /settings — Cập nhật settings
    * Body: { "company_name": "Azure Horizon", "booking_hold_minutes": "20" }
-   * Chỉ ADMIN và SUPER_ADMIN
+   * Chỉ SUPER_ADMIN
    */
   @UseGuards(AuthGuard('jwt'), AdminGuard)
   @Patch()
   async updateMany(
     @Body() body: Record<string, string>,
-    @Request() req,
+    @Request() req: AuthenticatedSettingsRequest,
   ) {
     const adminId = req.user.userId;
     const data = await this.settingsService.updateMany(body, adminId);

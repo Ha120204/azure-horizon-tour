@@ -58,12 +58,12 @@ export class AuthService {
 
     const { password, ...result } = user;
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, email: user.email, role: user.role, tokenVersion: user.authTokenVersion };
     const access_token = this.jwtService.sign(payload);
 
     // Refresh token — payload tối giản, sống 7 ngày
     const refresh_token = this.jwtService.sign(
-      { sub: user.id },
+      { sub: user.id, tokenVersion: user.authTokenVersion },
       { expiresIn: '7d' },
     );
 
@@ -141,12 +141,17 @@ export class AuthService {
 
     // Truy vấn DB lấy thông tin user mới nhất (đề phòng role đã thay đổi)
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user) {
+    if (!user || user.deletedAt) {
       throw new UnauthorizedException('User not found.');
     }
 
+    const tokenVersion = payload.tokenVersion ?? 0;
+    if (tokenVersion !== user.authTokenVersion) {
+      throw new UnauthorizedException('Refresh token has been revoked. Please log in again.');
+    }
+
     // Sinh access_token mới (kế thừa TTL 1h từ JwtModule.register)
-    const newPayload = { sub: user.id, email: user.email, role: user.role };
+    const newPayload = { sub: user.id, email: user.email, role: user.role, tokenVersion: user.authTokenVersion };
     const access_token = this.jwtService.sign(newPayload);
 
     return { access_token };

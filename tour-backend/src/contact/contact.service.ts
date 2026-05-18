@@ -3,6 +3,7 @@ import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 import { SendContactDto } from './dto/create-contact.dto';
 import { SupportService } from '../support/support.service';
+import { SettingsService } from '../settings/settings.service';
 
 
 const SUBJECT_LABELS: Record<string, string> = {
@@ -22,17 +23,23 @@ export class ContactService {
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
     private readonly supportService: SupportService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async sendContactEmail(dto: SendContactDto): Promise<{ message: string; ticketId: number }> {
     const adminEmail = this.configService.get<string>('MAIL_USER');
+    const publicSettings = await this.settingsService.getPublic();
+    const companyName = publicSettings.company_name || 'Azure Horizon';
+    const supportEmail = publicSettings.company_email || adminEmail || 'support@azurehorizon.com';
+    const supportPhone = publicSettings.company_phone || '';
+    const mailSender = adminEmail ?? supportEmail;
     const subjectLabel = SUBJECT_LABELS[dto.subject] ?? dto.subject;
     const fullPhone = `${dto.phonePrefix} ${dto.phone}`;
 
     const html = `
       <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
         <div style="background:linear-gradient(135deg,#003f87,#0066cc);padding:36px 32px;text-align:center;">
-          <h1 style="color:white;margin:0;font-size:24px;font-weight:700;">Azure Horizon</h1>
+          <h1 style="color:white;margin:0;font-size:24px;font-weight:700;">${companyName}</h1>
           <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:12px;text-transform:uppercase;letter-spacing:2px;">Tin nhắn liên hệ mới</p>
         </div>
 
@@ -73,15 +80,15 @@ export class ContactService {
         </div>
 
         <div style="background:#f8fafc;padding:20px 32px;text-align:center;border-top:1px solid #e2e8f0;">
-          <p style="color:#94a3b8;font-size:11px;margin:0;">© 2026 Azure Horizon. Tin nhắn được gửi qua trang Contact.</p>
+          <p style="color:#94a3b8;font-size:11px;margin:0;">© 2026 ${companyName}. Tin nhắn được gửi qua trang Contact.</p>
         </div>
       </div>
     `;
 
     // Gửi đến admin
     await this.mailService['transporter'].sendMail({
-      from: `"Azure Horizon Contact" <${adminEmail}>`,
-      to: adminEmail,
+      from: `"${companyName} Contact" <${mailSender}>`,
+      to: adminEmail ?? supportEmail,
       replyTo: dto.email,
       subject: `[Contact] ${subjectLabel} — ${dto.name}`,
       html,
@@ -89,13 +96,13 @@ export class ContactService {
 
     // Gửi email xác nhận đến người liên hệ
     await this.mailService['transporter'].sendMail({
-      from: `"Azure Horizon" <${adminEmail}>`,
+      from: `"${companyName}" <${mailSender}>`,
       to: dto.email,
-      subject: 'Chúng tôi đã nhận được tin nhắn của bạn — Azure Horizon',
+      subject: `Chúng tôi đã nhận được tin nhắn của bạn — ${companyName}`,
       html: `
         <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;border-radius:16px;overflow:hidden;">
           <div style="background:linear-gradient(135deg,#003f87,#0066cc);padding:40px 30px;text-align:center;">
-            <h1 style="color:white;margin:0;font-size:26px;font-weight:700;">Azure Horizon</h1>
+            <h1 style="color:white;margin:0;font-size:26px;font-weight:700;">${companyName}</h1>
           </div>
           <div style="padding:36px 30px;">
             <h2 style="color:#1a1a2e;margin:0 0 12px;font-size:20px;">Cảm ơn bạn, ${dto.name}!</h2>
@@ -104,10 +111,10 @@ export class ContactService {
               <p style="color:#64748b;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Nội dung bạn đã gửi:</p>
               <p style="color:#1e293b;margin:0;font-size:14px;line-height:1.6;white-space:pre-wrap;">${dto.message}</p>
             </div>
-            <p style="color:#94a3b8;font-size:13px;">Nếu cần hỗ trợ khẩn cấp, liên hệ: <strong>support@azurehorizon.com</strong></p>
+            <p style="color:#94a3b8;font-size:13px;">Nếu cần hỗ trợ khẩn cấp, liên hệ: <strong>${supportEmail}${supportPhone ? ` - ${supportPhone}` : ''}</strong></p>
           </div>
           <div style="background:#f1f5f9;padding:20px 30px;text-align:center;border-top:1px solid #e2e8f0;">
-            <p style="color:#94a3b8;font-size:12px;margin:0;">© 2026 Azure Horizon. All rights reserved.</p>
+            <p style="color:#94a3b8;font-size:12px;margin:0;">© 2026 ${companyName}. All rights reserved.</p>
           </div>
         </div>
       `,
@@ -146,13 +153,13 @@ export class ContactService {
       const trackingUrl = `${frontendUrl}/support/track?id=${ticketId}&email=${encodeURIComponent(dto.email)}`;
 
       await this.mailService['transporter'].sendMail({
-        from: `"Azure Horizon" <${adminEmail}>`,
+        from: `"${companyName}" <${mailSender}>`,
         to: dto.email,
-        subject: 'Chúng tôi đã nhận được tin nhắn của bạn — Azure Horizon',
+        subject: `Chúng tôi đã nhận được tin nhắn của bạn — ${companyName}`,
         html: `
           <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;border-radius:16px;overflow:hidden;">
             <div style="background:linear-gradient(135deg,#003f87,#0066cc);padding:40px 30px;text-align:center;">
-              <h1 style="color:white;margin:0;font-size:26px;font-weight:700;">Azure Horizon</h1>
+              <h1 style="color:white;margin:0;font-size:26px;font-weight:700;">${companyName}</h1>
             </div>
             <div style="padding:36px 30px;">
               <h2 style="color:#1a1a2e;margin:0 0 12px;font-size:20px;">Cảm ơn bạn, ${dto.name}!</h2>
@@ -177,10 +184,10 @@ export class ContactService {
                 </a>
               </div>
 
-              <p style="color:#94a3b8;font-size:13px;text-align:center;">Nếu cần hỗ trợ khẩn cấp: <strong>support@azurehorizon.com</strong></p>
+              <p style="color:#94a3b8;font-size:13px;text-align:center;">Nếu cần hỗ trợ khẩn cấp: <strong>${supportEmail}${supportPhone ? ` - ${supportPhone}` : ''}</strong></p>
             </div>
             <div style="background:#f1f5f9;padding:20px 30px;text-align:center;border-top:1px solid #e2e8f0;">
-              <p style="color:#94a3b8;font-size:12px;margin:0;">© 2026 Azure Horizon. All rights reserved.</p>
+              <p style="color:#94a3b8;font-size:12px;margin:0;">© 2026 ${companyName}. All rights reserved.</p>
             </div>
           </div>
         `,

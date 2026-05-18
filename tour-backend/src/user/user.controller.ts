@@ -18,6 +18,15 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
+import { Role } from '@prisma/client';
+
+type AuthenticatedAdminRequest = {
+  user: {
+    userId: number;
+    id?: number;
+    role: Role;
+  };
+};
 
 @Controller('user')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -31,8 +40,8 @@ export class UserController {
   @Post()
   @Roles('ADMIN', 'SUPER_ADMIN')
   @AuditLog('CREATE', 'User')
-  createUser(@Body() dto: CreateUserDto) {
-    return this.userService.createUser(dto as any);
+  createUser(@Body() dto: CreateUserDto, @Request() req: AuthenticatedAdminRequest) {
+    return this.userService.createUser({ ...dto, role: dto.role as Role }, req.user.role);
   }
 
 
@@ -88,8 +97,9 @@ export class UserController {
   updateUser(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
+    @Request() req: AuthenticatedAdminRequest,
   ) {
-    return this.userService.updateUser(id, dto);
+    return this.userService.updateUser(id, dto, req.user.role);
   }
 
   /**
@@ -102,9 +112,9 @@ export class UserController {
   updateRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRoleDto,
-    @Request() req,
+    @Request() req: AuthenticatedAdminRequest,
   ) {
-    return this.userService.updateRole(id, dto.role as any, req.user.userId);
+    return this.userService.updateRole(id, dto.role as unknown as Role, req.user.userId);
   }
 
   /**
@@ -116,8 +126,22 @@ export class UserController {
   @AuditLog('UPDATE', 'User')
   toggleStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Request() req,
+    @Request() req: AuthenticatedAdminRequest,
   ) {
-    return this.userService.toggleStatus(id, req.user.userId);
+    return this.userService.toggleStatus(id, req.user.userId, req.user.role);
+  }
+
+  /**
+   * PATCH /user/:id/revoke-sessions — Thu hồi phiên đăng nhập
+   * Chỉ SUPER_ADMIN
+   */
+  @Patch(':id/revoke-sessions')
+  @Roles('SUPER_ADMIN')
+  @AuditLog('REVOKE_SESSION', 'User')
+  revokeSessions(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedAdminRequest,
+  ) {
+    return this.userService.revokeSessions(id, req.user.userId);
   }
 }

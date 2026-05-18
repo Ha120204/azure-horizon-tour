@@ -51,9 +51,11 @@ const requirePublishableTour = (
   if (!hasText(tour.description)) errors.push('Mo ta');
   if (tour.price == null || Number(tour.price) <= 0) errors.push('Gia');
   if (!tour.destinationId) errors.push('Diem den');
-  if (tour.destination?.name === DRAFT_DESTINATION_NAME) errors.push('Diem den');
+  if (tour.destination?.name === DRAFT_DESTINATION_NAME)
+    errors.push('Diem den');
   if (!hasText(tour.duration)) errors.push('Thoi luong');
-  if (tour.availableSeats == null || Number(tour.availableSeats) < 1) errors.push('So ghe');
+  if (tour.availableSeats == null || Number(tour.availableSeats) < 1)
+    errors.push('So ghe');
 
   const startDate = tour.startDate ? new Date(tour.startDate) : null;
   if (!startDate || Number.isNaN(startDate.getTime())) {
@@ -111,7 +113,8 @@ export class TourService {
       requirePublishableTour(createTourDto);
     }
 
-    const resolvedDestinationId = await this.resolveDestinationId(destinationId);
+    const resolvedDestinationId =
+      await this.resolveDestinationId(destinationId);
 
     return this.prisma.tour.create({
       data: {
@@ -159,10 +162,7 @@ export class TourService {
 
     // Visibility: Staff chỉ thấy tour của mình; Admin thấy tất cả; Public chỉ thấy PUBLISHED
     if (requesterRole === 'STAFF' && requesterId) {
-      if (
-        status &&
-        Object.values(TourStatus).includes(status as TourStatus)
-      ) {
+      if (status && Object.values(TourStatus).includes(status as TourStatus)) {
         where.status = status as TourStatus;
         if (status !== TourStatus.PUBLISHED) {
           where.createdById = requesterId;
@@ -238,7 +238,10 @@ export class TourService {
           destination: { select: { name: true } },
           departures: {
             select: { price: true },
-            where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
+            where: {
+              isActive: true,
+              departureDate: { gte: getMinBookableDate() },
+            },
           },
           createdBy: { select: { id: true, fullName: true } },
         },
@@ -306,7 +309,9 @@ export class TourService {
       this.prisma.tour.count({ where: { deletedAt: null } }),
       this.prisma.tour.count({ where: publishedWhere }),
       this.prisma.tour.count({ where: workflowWhere(TourStatus.DRAFT) }),
-      this.prisma.tour.count({ where: workflowWhere(TourStatus.PENDING_REVIEW) }),
+      this.prisma.tour.count({
+        where: workflowWhere(TourStatus.PENDING_REVIEW),
+      }),
       this.prisma.tour.count({ where: workflowWhere(TourStatus.REJECTED) }),
       this.prisma.tour.count({ where: workflowWhere(TourStatus.COMPLETED) }),
       this.prisma.tour.aggregate({
@@ -333,9 +338,31 @@ export class TourService {
     };
   }
 
-  async findOne(id: number) {
-    const tour = await this.prisma.tour.findUnique({
-      where: { id, deletedAt: null },
+  async findOne(id: number, requesterId?: number, requesterRole?: string) {
+    const where: Prisma.TourWhereInput = { id, deletedAt: null };
+
+    if (requesterRole === 'STAFF' && requesterId) {
+      where.OR = [
+        { status: TourStatus.PUBLISHED },
+        { createdById: requesterId },
+      ];
+    } else if (requesterRole !== 'SUPER_ADMIN' && requesterRole !== 'ADMIN') {
+      where.status = TourStatus.PUBLISHED;
+      where.OR = [
+        { startDate: { gte: getMinBookableDate() } },
+        {
+          departures: {
+            some: {
+              isActive: true,
+              departureDate: { gte: getMinBookableDate() },
+            },
+          },
+        },
+      ];
+    }
+
+    const tour = await this.prisma.tour.findFirst({
+      where,
       include: {
         destination: true,
         itinerary: { orderBy: { dayNumber: 'asc' } },
@@ -344,7 +371,10 @@ export class TourService {
           orderBy: { sortOrder: 'asc' },
         },
         departures: {
-          where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
+          where: {
+            isActive: true,
+            departureDate: { gte: getMinBookableDate() },
+          },
           orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }],
         },
         images: { orderBy: { sortOrder: 'asc' } },
@@ -521,7 +551,10 @@ export class TourService {
       include: {
         destination: { select: { name: true } },
         departures: {
-          where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
+          where: {
+            isActive: true,
+            departureDate: { gte: getMinBookableDate() },
+          },
           select: { departureDate: true, availableSeats: true, isActive: true },
         },
       },
@@ -622,7 +655,7 @@ export class TourService {
       sortOrder: baseOrder + i,
     }));
     await this.prisma.tourImage.createMany({ data });
-    return this.findOne(tourId);
+    return this.findOne(tourId, undefined, 'SUPER_ADMIN');
   }
 
   async removeGalleryImage(tourId: number, imageId: number) {

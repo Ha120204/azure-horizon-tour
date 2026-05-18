@@ -109,7 +109,7 @@ export default function BookingDetailPage() {
         const token = localStorage.getItem('accessToken');
         if (!token) { router.push('/login'); return; }
         try {
-            const res = await fetchWithAuth(`http://localhost:3000/booking/${params.id}`);
+            const res = await fetchWithAuth(`http://localhost:3000/booking/my/${params.id}`);
             if (res.ok) {
                 const result = await res.json();
                 if (result.data) setBooking(result.data);

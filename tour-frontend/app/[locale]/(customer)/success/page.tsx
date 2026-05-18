@@ -5,18 +5,42 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
+import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
 import QRCode from 'react-qr-code';
 import { useLocale } from '@/app/context/LocaleContext';
 
+type TicketData = {
+    bookingCode: string;
+    status: string;
+    paymentStatus: string;
+    paymentMethod?: string | null;
+    numberOfPeople: number;
+    totalPrice: number;
+    user?: {
+        fullName?: string | null;
+    } | null;
+    tour?: {
+        name?: string | null;
+        imageUrl?: string | null;
+        startDate?: string | null;
+        duration?: string | null;
+    } | null;
+};
+
+type TicketResponse = {
+    data?: TicketData;
+    message?: string;
+};
+
 function SuccessTicketContent() {
     const searchParams = useSearchParams();
     const bookingId = searchParams.get('bookingId');
     const { formatPrice } = useLocale();
 
-    const [ticketData, setTicketData] = useState<any>(null);
+    const [ticketData, setTicketData] = useState<TicketData | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [isDownloading, setIsDownloading] = useState(false);
@@ -32,12 +56,12 @@ function SuccessTicketContent() {
             try {
                 // Dùng fetch thông thường (không cần auth) — bookingCode là UUID đủ bảo mật
                 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-                const res = await fetch(`${apiUrl}/booking/code/${bookingId}`, {
+                const res = await fetchWithAuth(`${apiUrl}/booking/my/code/${bookingId}`, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' },
                 });
 
-                const result = await res.json();
+                const result = (await res.json()) as TicketResponse;
 
                 if (res.ok && result.data) {
                     setTicketData(result.data);
@@ -60,7 +84,7 @@ function SuccessTicketContent() {
 
         // --- BẮT ĐẦU VÁ LỖI BẢO MẬT CSS ---
         // Lưu lại bộ quy tắc gốc của trình duyệt
-        const styleSheetProto = CSSStyleSheet.prototype as any;
+        const styleSheetProto = CSSStyleSheet.prototype;
         const originalCssRules = Object.getOwnPropertyDescriptor(styleSheetProto, 'cssRules');
 
         // Ghi đè tạm thời: Bỏ qua các file CSS từ Google Fonts gây văng lỗi
@@ -70,7 +94,7 @@ function SuccessTicketContent() {
                     try {
                         // Added optional chaining (?.) and fallback (|| [])
                         return originalCssRules.get?.call(this) || [];
-                    } catch (e) {
+                    } catch {
                         return []; // Bypass lỗi một cách êm ái
                     }
                 }
@@ -167,7 +191,7 @@ function SuccessTicketContent() {
                         Your journey awaits, {ticketData.user?.fullName || 'bạn'}!
                     </h1>
                     <p className="text-on-surface-variant text-base md:text-lg max-w-xl mx-auto leading-relaxed">
-                        Payment successful and your booking is confirmed. We've sent the itinerary details to your email.
+                        Payment successful and your booking is confirmed. We&apos;ve sent the itinerary details to your email.
                     </p>
                 </section>
 
@@ -180,6 +204,7 @@ function SuccessTicketContent() {
 
                         {/* Image Side */}
                         <div className="md:w-1/3 h-48 md:h-auto overflow-hidden">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 alt="Tour Image"
                                 className="w-full h-full object-cover"

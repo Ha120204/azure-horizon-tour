@@ -5,7 +5,6 @@ import { SendContactDto } from './dto/create-contact.dto';
 import { SupportService } from '../support/support.service';
 import { SettingsService } from '../settings/settings.service';
 
-
 const SUBJECT_LABELS: Record<string, string> = {
   booking: 'Hỗ trợ đặt tour / Booking Assistance',
   payment: 'Vấn đề thanh toán / Payment Issue',
@@ -26,11 +25,14 @@ export class ContactService {
     private readonly settingsService: SettingsService,
   ) {}
 
-  async sendContactEmail(dto: SendContactDto): Promise<{ message: string; ticketId: number }> {
+  async sendContactEmail(
+    dto: SendContactDto,
+  ): Promise<{ message: string; ticketId: number; accessCode?: string }> {
     const adminEmail = this.configService.get<string>('MAIL_USER');
     const publicSettings = await this.settingsService.getPublic();
     const companyName = publicSettings.company_name || 'Azure Horizon';
-    const supportEmail = publicSettings.company_email || adminEmail || 'support@azurehorizon.com';
+    const supportEmail =
+      publicSettings.company_email || adminEmail || 'support@azurehorizon.com';
     const supportPhone = publicSettings.company_phone || '';
     const mailSender = adminEmail ?? supportEmail;
     const subjectLabel = SUBJECT_LABELS[dto.subject] ?? dto.subject;
@@ -57,20 +59,28 @@ export class ContactService {
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#94a3b8;font-size:13px;vertical-align:top;">Số điện thoại</td>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-size:14px;">${fullPhone}</td>
             </tr>
-            ${dto.reference ? `
+            ${
+              dto.reference
+                ? `
             <tr>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#94a3b8;font-size:13px;vertical-align:top;">Mã đặt chỗ</td>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-size:14px;font-family:'Courier New',monospace;font-weight:700;">${dto.reference}</td>
-            </tr>` : ''}
+            </tr>`
+                : ''
+            }
             <tr>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#94a3b8;font-size:13px;vertical-align:top;">Chủ đề</td>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#003f87;font-size:14px;font-weight:600;">${subjectLabel}</td>
             </tr>
-            ${dto.attachmentName ? `
+            ${
+              dto.attachmentName
+                ? `
             <tr>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#94a3b8;font-size:13px;vertical-align:top;">File đính kèm</td>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-size:14px;">📎 ${dto.attachmentName}</td>
-            </tr>` : ''}
+            </tr>`
+                : ''
+            }
           </table>
 
           <div style="background:#f8fafc;border-left:4px solid #003f87;border-radius:0 8px 8px 0;padding:20px 24px;margin-top:8px;">
@@ -97,30 +107,39 @@ export class ContactService {
     this.logger.log(`✅ Contact email sent: ${dto.name} <${dto.email}>`);
 
     // ── Lưu ticket vào DB để Staff theo dõi ──────────────────────────────────
-    type TicketCat = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
+    type TicketCat =
+      | 'booking'
+      | 'payment'
+      | 'reschedule'
+      | 'complaint'
+      | 'general';
     const CATEGORY_MAP: Record<string, TicketCat> = {
-      booking:      'booking',
-      payment:      'payment',
+      booking: 'booking',
+      payment: 'payment',
       cancellation: 'reschedule',
-      complaint:    'complaint',
-      general:      'general',
-      partnership:  'general',
+      complaint: 'complaint',
+      general: 'general',
+      partnership: 'general',
     };
 
     let ticketId = 0;
+    let accessCode: string | undefined;
     try {
       const ticket = await this.supportService.createFromContact({
-        customerName:  dto.name,
+        customerName: dto.name,
         customerEmail: dto.email,
         customerPhone: `${dto.phonePrefix} ${dto.phone}`.trim(),
-        bookingRef:    dto.reference,
-        subject:       subjectLabel,
-        message:       dto.message,
-        category:      CATEGORY_MAP[dto.subject] ?? 'general',
-        userId:        dto.userId ? Number(dto.userId) : undefined,
+        bookingRef: dto.reference,
+        subject: subjectLabel,
+        message: dto.message,
+        category: CATEGORY_MAP[dto.subject] ?? 'general',
+        userId: dto.userId ? Number(dto.userId) : undefined,
       });
       ticketId = ticket.id;
-      this.logger.log(`📋 Support ticket #${ticketId} created for: ${dto.email}`);
+      accessCode = ticket.accessCode ?? undefined;
+      this.logger.log(
+        `📋 Support ticket #${ticketId} created for: ${dto.email}`,
+      );
 
       // Gửi email xác nhận kèm mã yêu cầu để khách đối chiếu khi trao đổi với đội ngũ hỗ trợ.
 
@@ -145,6 +164,17 @@ export class ContactService {
                 <p style="color:#1e3a8a;font-size:28px;font-weight:800;margin:0;font-family:'Courier New',monospace;">#${ticketId}</p>
               </div>
 
+              ${
+                accessCode
+                  ? `
+              <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;margin-bottom:24px;text-align:center;">
+                <p style="color:#9a3412;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Ma truy cap danh cho khach vang lai</p>
+                <p style="color:#7c2d12;font-size:18px;font-weight:800;margin:0;font-family:'Courier New',monospace;">${accessCode}</p>
+              </div>
+              `
+                  : ''
+              }
+
               <div style="background:#f0f6ff;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
                 <p style="color:#64748b;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Nội dung bạn đã gửi:</p>
                 <p style="color:#1e293b;margin:0;font-size:14px;line-height:1.6;white-space:pre-wrap;">${dto.message}</p>
@@ -164,9 +194,12 @@ export class ContactService {
       });
     } catch (err) {
       // Không để lỗi DB phá vỡ luồng gửi mail chính
-      this.logger.error('Failed to create support ticket or send ticket confirmation email', err);
+      this.logger.error(
+        'Failed to create support ticket or send ticket confirmation email',
+        err,
+      );
     }
 
-    return { message: 'Message sent successfully', ticketId };
+    return { message: 'Message sent successfully', ticketId, accessCode };
   }
 }

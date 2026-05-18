@@ -1,7 +1,21 @@
 import {
-  Controller, Get, Post, Body, Patch, Param, Delete,
-  UseGuards, Query, UseInterceptors, UploadedFile, UploadedFiles,
-  ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, Put, Req,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
+  Put,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
@@ -15,17 +29,44 @@ import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 
-const getAuthUserId = (req: any): number | undefined => {
+type AuthUser = {
+  id?: number | string;
+  userId?: number | string;
+  sub?: number | string;
+  role?: string;
+};
+
+type AuthenticatedRequest = {
+  user?: AuthUser;
+};
+
+type ItineraryDayUpdateBody = {
+  title?: string;
+  description?: string;
+  mealsBreakfast?: boolean;
+  mealsLunch?: boolean;
+  mealsDinner?: boolean;
+  accommodation?: string;
+  transport?: string;
+  activities?: string[];
+  imageUrl?: string;
+  timeline?: unknown[];
+};
+
+const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
   const rawId = req.user?.id ?? req.user?.userId ?? req.user?.sub;
   return rawId == null ? undefined : Number(rawId);
 };
+
+const getAuthRole = (req: AuthenticatedRequest): string | undefined =>
+  req.user?.role;
 
 @Controller('tour')
 export class TourController {
   constructor(
     private readonly tourService: TourService,
     private readonly cloudinaryService: CloudinaryService,
-  ) { }
+  ) {}
 
   /**
    * Tạo Tour mới.
@@ -38,7 +79,7 @@ export class TourController {
   @AuditLog('CREATE', 'Tour')
   @UseInterceptors(FileInterceptor('image'))
   async create(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Body() createTourDto: CreateTourDto,
     @UploadedFile(
       new ParseFilePipe({
@@ -52,11 +93,14 @@ export class TourController {
     file?: Express.Multer.File,
   ) {
     if (file) {
-      const result = await this.cloudinaryService.uploadFile(file, 'azure-horizon/tours');
+      const result = await this.cloudinaryService.uploadFile(
+        file,
+        'azure-horizon/tours',
+      );
       createTourDto.imageUrl = result.secure_url;
     }
     const creatorId = getAuthUserId(req);
-    const creatorRole: string = req.user?.role;
+    const creatorRole = getAuthRole(req);
     return this.tourService.create(createTourDto, creatorId, creatorRole);
   }
 
@@ -70,17 +114,17 @@ export class TourController {
    */
   @UseGuards(OptionalJwtGuard)
   @Get()
-  findAll(@Query() query: FilterTourDto, @Req() req: any) {
+  findAll(@Query() query: FilterTourDto, @Req() req: AuthenticatedRequest) {
     const requesterId = getAuthUserId(req);
-    const requesterRole: string | undefined = req.user?.role;
+    const requesterRole = getAuthRole(req);
     return this.tourService.findAll(query, requesterId, requesterRole);
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Get('admin/stats')
-  getAdminStats(@Req() req: any) {
-    return this.tourService.getAdminStats(getAuthUserId(req), req.user?.role);
+  getAdminStats(@Req() req: AuthenticatedRequest) {
+    return this.tourService.getAdminStats(getAuthUserId(req), getAuthRole(req));
   }
 
   @Get('sale-deals')
@@ -113,9 +157,10 @@ export class TourController {
     );
   }
 
+  @UseGuards(OptionalJwtGuard)
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tourService.findOne(+id);
+  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.tourService.findOne(+id, getAuthUserId(req), getAuthRole(req));
   }
 
   @Get(':id/rating-stats')
@@ -134,7 +179,7 @@ export class TourController {
   @AuditLog('UPDATE', 'Tour')
   @UseInterceptors(FileInterceptor('image'))
   async update(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Body() updateTourDto: UpdateTourDto,
     @UploadedFile(
@@ -149,20 +194,28 @@ export class TourController {
     file?: Express.Multer.File,
   ) {
     if (file) {
-      const result = await this.cloudinaryService.uploadFile(file, 'azure-horizon/tours');
+      const result = await this.cloudinaryService.uploadFile(
+        file,
+        'azure-horizon/tours',
+      );
       updateTourDto.imageUrl = result.secure_url;
     }
     const requesterId = getAuthUserId(req);
-    const requesterRole: string = req.user?.role;
-    return this.tourService.update(+id, updateTourDto, requesterId, requesterRole);
+    const requesterRole = getAuthRole(req);
+    return this.tourService.update(
+      +id,
+      updateTourDto,
+      requesterId,
+      requesterRole,
+    );
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Delete(':id')
   @AuditLog('DELETE', 'Tour')
-  remove(@Req() req: any, @Param('id') id: string) {
-    return this.tourService.remove(+id, getAuthUserId(req), req.user?.role);
+  remove(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.tourService.remove(+id, getAuthUserId(req), getAuthRole(req));
   }
 
   // ── Trash Management ─────────────────────────────────────
@@ -195,7 +248,7 @@ export class TourController {
   @Roles('STAFF')
   @Post(':id/submit')
   @AuditLog('UPDATE', 'Tour')
-  submitForReview(@Param('id') id: string, @Req() req: any) {
+  submitForReview(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.tourService.submitForReview(+id, getAuthUserId(req)!);
   }
 
@@ -210,10 +263,15 @@ export class TourController {
   @AuditLog('UPDATE', 'Tour')
   reviewTour(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Body() body: { action: 'approve' | 'reject'; note?: string },
   ) {
-    return this.tourService.reviewTour(+id, getAuthUserId(req)!, body.action, body.note);
+    return this.tourService.reviewTour(
+      +id,
+      getAuthUserId(req)!,
+      body.action,
+      body.note,
+    );
   }
 
   // ── Gallery ─────────────────────────────────────────────────────────
@@ -226,7 +284,10 @@ export class TourController {
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    const urls = await this.cloudinaryService.uploadFiles(files, 'azure-horizon/tours/gallery');
+    const urls = await this.cloudinaryService.uploadFiles(
+      files,
+      'azure-horizon/tours/gallery',
+    );
     return this.tourService.addGalleryImages(+id, urls);
   }
 
@@ -247,7 +308,10 @@ export class TourController {
   @Put(':id/highlights')
   upsertHighlights(
     @Param('id') id: string,
-    @Body() body: { highlights: { content: string; icon?: string; sortOrder?: number }[] },
+    @Body()
+    body: {
+      highlights: { content: string; icon?: string; sortOrder?: number }[];
+    },
   ) {
     return this.tourService.upsertHighlights(+id, body.highlights ?? []);
   }
@@ -259,7 +323,8 @@ export class TourController {
   @Put(':id/faqs')
   upsertFaqs(
     @Param('id') id: string,
-    @Body() body: { faqs: { question: string; answer: string; sortOrder?: number }[] },
+    @Body()
+    body: { faqs: { question: string; answer: string; sortOrder?: number }[] },
   ) {
     return this.tourService.upsertFaqs(+id, body.faqs ?? []);
   }
@@ -272,7 +337,7 @@ export class TourController {
   updateItineraryDay(
     @Param('id') id: string,
     @Param('dayId') dayId: string,
-    @Body() data: any,
+    @Body() data: ItineraryDayUpdateBody,
   ) {
     return this.tourService.updateItineraryDay(+id, +dayId, data);
   }

@@ -1,4 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Ip, Query, Req, Res, BadRequestException, Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Request,
+  Ip,
+  Query,
+  Req,
+  Res,
+  BadRequestException,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import { Prisma } from '@prisma/client';
@@ -25,8 +44,10 @@ type PayosReturnQuery = {
   status?: string;
 };
 
-const getAuthUserId = (req: AuthenticatedRequest): number => Number(req.user?.userId ?? req.user?.id);
-const getAuthRole = (req: AuthenticatedRequest): string => String(req.user?.role ?? '');
+const getAuthUserId = (req: AuthenticatedRequest): number =>
+  Number(req.user?.userId ?? req.user?.id);
+const getAuthRole = (req: AuthenticatedRequest): string =>
+  String(req.user?.role ?? '');
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
@@ -34,7 +55,8 @@ const getAuthRole = (req: AuthenticatedRequest): string => String(req.user?.role
 @Injectable()
 class StaffOrAdminGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const role = ctx.switchToHttp().getRequest<AuthenticatedRequest>().user?.role;
+    const role = ctx.switchToHttp().getRequest<AuthenticatedRequest>()
+      .user?.role;
     if (role !== 'ADMIN' && role !== 'SUPER_ADMIN' && role !== 'STAFF') {
       throw new ForbiddenException('Bạn không có quyền truy cập tính năng này');
     }
@@ -46,9 +68,12 @@ class StaffOrAdminGuard implements CanActivate {
 @Injectable()
 class AdminOnlyGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const role = ctx.switchToHttp().getRequest<AuthenticatedRequest>().user?.role;
+    const role = ctx.switchToHttp().getRequest<AuthenticatedRequest>()
+      .user?.role;
     if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('Chỉ Admin mới có quyền thực hiện thao tác này');
+      throw new ForbiddenException(
+        'Chỉ Admin mới có quyền thực hiện thao tác này',
+      );
     }
     return true;
   }
@@ -60,7 +85,7 @@ export class BookingController {
     private readonly bookingService: BookingService,
     private readonly paymentService: PaymentService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   // ============== PAYOS PAYMENT FLOW ==============
 
@@ -71,7 +96,10 @@ export class BookingController {
    */
   @Get('payos-return')
   async payosReturn(@Query() query: PayosReturnQuery, @Res() res: Response) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3001');
+    const frontendUrl = this.configService.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3001',
+    );
 
     try {
       const orderCode = Number(query.orderCode);
@@ -91,17 +119,19 @@ export class BookingController {
       }
 
       // Gọi PayOS API xác nhận trạng thái thanh toán thực tế
-      const paymentInfo = await this.bookingService.handlePayosReturn(orderCode);
+      const paymentInfo =
+        await this.bookingService.handlePayosReturn(orderCode);
 
       if (paymentInfo.status === 'PAID') {
         // Thanh toán thành công → Lấy bookingCode để hiển thị vé điện tử
         const booking = await this.bookingService.findByOrderCode(orderCode);
-        return res.redirect(`${frontendUrl}/success?bookingId=${booking.bookingCode}`);
+        return res.redirect(
+          `${frontendUrl}/success?bookingId=${booking.bookingCode}`,
+        );
       }
 
       // Thanh toán thất bại hoặc chưa hoàn tất
       return res.redirect(`${frontendUrl}/checkout?error=payment_failed`);
-
     } catch (error) {
       console.error('PayOS Return Error:', error);
       return res.redirect(`${frontendUrl}/checkout?error=payment_failed`);
@@ -115,7 +145,9 @@ export class BookingController {
    * Lưu ý: Cần expose port 3000 ra internet (Ngrok) để PayOS gọi được.
    */
   @Post('payos-webhook')
-  async payosWebhook(@Body() body: Parameters<PaymentService['verifyWebhook']>[0]) {
+  async payosWebhook(
+    @Body() body: Parameters<PaymentService['verifyWebhook']>[0],
+  ) {
     try {
       // Xác thực chữ ký webhook từ PayOS
       const webhookData = await this.paymentService.verifyWebhook(body);
@@ -134,7 +166,11 @@ export class BookingController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post()
-  create(@Request() req: AuthenticatedRequest, @Body() createBookingDto: CreateBookingDto, @Ip() ip: string) {
+  create(
+    @Request() req: AuthenticatedRequest,
+    @Body() createBookingDto: CreateBookingDto,
+    @Ip() ip: string,
+  ) {
     return this.bookingService.create(getAuthUserId(req), createBookingDto, ip);
   }
 
@@ -142,8 +178,36 @@ export class BookingController {
   @Get('history/my-bookings')
   async getMyBookings(@Req() req: AuthenticatedRequest) {
     // Lấy danh sách booking của đúng user đang đăng nhập
-    const bookings = await this.bookingService.getMyBookings(getAuthUserId(req));
+    const bookings = await this.bookingService.getMyBookings(
+      getAuthUserId(req),
+    );
     return { message: 'Success', data: bookings };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my/code/:bookingCode')
+  async getMyBookingByCode(
+    @Param('bookingCode') bookingCode: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const booking = await this.bookingService.findMyByBookingCode(
+      bookingCode,
+      getAuthUserId(req),
+    );
+    return { message: 'Success', data: booking };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my/:id')
+  async getMyBookingById(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const booking = await this.bookingService.getMyBookingById(
+      Number(id),
+      getAuthUserId(req),
+    );
+    return { message: 'Success', data: booking };
   }
 
   /**
@@ -173,7 +237,11 @@ export class BookingController {
     @Query('limit') limit?: string,
   ) {
     const result = await this.bookingService.getAllBookings(
-      status, paymentStatus, search, dateFrom, dateTo,
+      status,
+      paymentStatus,
+      search,
+      dateFrom,
+      dateTo,
       page ? Number(page) : 1,
       limit ? Number(limit) : 10,
     );
@@ -189,7 +257,12 @@ export class BookingController {
   ) {
     const userId = getAuthUserId(req);
     const role = getAuthRole(req);
-    const data = await this.bookingService.getAssistedDrafts(userId, role, status, search);
+    const data = await this.bookingService.getAssistedDrafts(
+      userId,
+      role,
+      status,
+      search,
+    );
     return { message: 'Success', data };
   }
 
@@ -215,17 +288,29 @@ export class BookingController {
   ) {
     const userId = getAuthUserId(req);
     const role = getAuthRole(req);
-    const data = await this.bookingService.updateAssistedDraft(Number(id), userId, role, dto);
+    const data = await this.bookingService.updateAssistedDraft(
+      Number(id),
+      userId,
+      role,
+      dto,
+    );
     return { message: 'Success', data };
   }
 
   @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
   @Post('admin/assisted-drafts/:id/submit')
   @AuditLog('UPDATE', 'AssistedBookingDraft')
-  async submitAssistedDraft(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+  async submitAssistedDraft(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
     const userId = getAuthUserId(req);
     const role = getAuthRole(req);
-    const data = await this.bookingService.submitAssistedDraft(Number(id), userId, role);
+    const data = await this.bookingService.submitAssistedDraft(
+      Number(id),
+      userId,
+      role,
+    );
     return { message: 'Success', data };
   }
 
@@ -238,7 +323,11 @@ export class BookingController {
     @Body() dto: ReviewAssistedBookingDraftDto,
   ) {
     const userId = getAuthUserId(req);
-    const data = await this.bookingService.approveAssistedDraft(Number(id), userId, dto.note);
+    const data = await this.bookingService.approveAssistedDraft(
+      Number(id),
+      userId,
+      dto.note,
+    );
     return { message: 'Success', data };
   }
 
@@ -251,7 +340,11 @@ export class BookingController {
     @Body('forceEmail') forceEmail?: boolean,
   ) {
     const userId = getAuthUserId(req);
-    const data = await this.bookingService.resendPaymentRequest(Number(id), userId, Boolean(forceEmail));
+    const data = await this.bookingService.resendPaymentRequest(
+      Number(id),
+      userId,
+      Boolean(forceEmail),
+    );
     return { message: 'Success', data };
   }
 
@@ -268,7 +361,11 @@ export class BookingController {
       throw new BadRequestException('Vui long nhap ly do tu choi');
     }
     const userId = getAuthUserId(req);
-    const data = await this.bookingService.rejectAssistedDraft(Number(id), userId, reason);
+    const data = await this.bookingService.rejectAssistedDraft(
+      Number(id),
+      userId,
+      reason,
+    );
     return { message: 'Success', data };
   }
 
@@ -285,7 +382,11 @@ export class BookingController {
       throw new BadRequestException('Vui long nhap noi dung can chinh sua');
     }
     const userId = getAuthUserId(req);
-    const data = await this.bookingService.requestRevisionAssistedDraft(Number(id), userId, reason);
+    const data = await this.bookingService.requestRevisionAssistedDraft(
+      Number(id),
+      userId,
+      reason,
+    );
     return { message: 'Success', data };
   }
 
@@ -295,7 +396,10 @@ export class BookingController {
    */
   @UseGuards(AuthGuard('jwt'))
   @Post(':id/retry-payment')
-  async retryPayment(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+  async retryPayment(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.bookingService.retryPayment(Number(id), getAuthUserId(req));
   }
 
@@ -316,7 +420,12 @@ export class BookingController {
     if (!reason || reason.trim().length < 3) {
       throw new BadRequestException('Vui lòng cung cấp lý do hủy hợp lệ');
     }
-    return this.bookingService.requestCancellation(Number(id), getAuthUserId(req), reason.trim(), bankDetails);
+    return this.bookingService.requestCancellation(
+      Number(id),
+      getAuthUserId(req),
+      reason.trim(),
+      bankDetails,
+    );
   }
 
   /**
@@ -360,12 +469,17 @@ export class BookingController {
     if (!rejectReason || rejectReason.trim().length < 3) {
       throw new BadRequestException('Vui lòng cung cấp lý do từ chối');
     }
-    return this.bookingService.rejectCancellation(Number(id), rejectReason.trim());
+    return this.bookingService.rejectCancellation(
+      Number(id),
+      rejectReason.trim(),
+    );
   }
 
-  @Get('code/:bookingCode')
-  findByBookingCode(@Param('bookingCode') bookingCode: string) {
-    return this.bookingService.findByBookingCode(bookingCode);
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Get('admin/code/:bookingCode')
+  async adminFindByBookingCode(@Param('bookingCode') bookingCode: string) {
+    const booking = await this.bookingService.findByBookingCode(bookingCode);
+    return { message: 'Success', data: booking };
   }
 
   @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
@@ -380,14 +494,14 @@ export class BookingController {
 
     return {
       message: 'Success',
-      data: booking
+      data: booking,
     };
   }
 
   @Get('proxy-image')
   async getProxiedImage(
     @Query('imageUrl') imageUrl: string, // Nhận link Unsplash từ Query String
-    @Res() res: Response // Dùng Response của Express để stream dữ liệu
+    @Res() res: Response, // Dùng Response của Express để stream dữ liệu
   ) {
     if (!imageUrl) {
       throw new BadRequestException('Please provide an image URL');

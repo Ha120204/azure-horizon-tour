@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { AdminQueryReviewDto } from './dto/admin-query-review.dto';
@@ -10,6 +11,12 @@ import { AdminQueryReviewDto } from './dto/admin-query-review.dto';
 @Injectable()
 export class ReviewService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private getDurationDays(duration?: string | null): number {
+    const match = duration?.match(/\d+/);
+    const days = match ? Number(match[0]) : 1;
+    return Number.isFinite(days) && days > 0 ? days : 1;
+  }
 
   // ─── Customer APIs ────────────────────────────────────────────────────────
 
@@ -25,10 +32,34 @@ export class ReviewService {
         status: 'CONFIRMED',
         paymentStatus: 'PAID',
       },
+      include: {
+        tour: { select: { startDate: true, duration: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
     if (!confirmedBooking) {
       throw new BadRequestException(
         'Bạn cần đặt và hoàn thành chuyến đi để có thể gửi đánh giá.',
+      );
+    }
+
+    let tripStartDate = confirmedBooking.tour.startDate;
+    if (confirmedBooking.departureId) {
+      const departure = await this.prisma.tourDeparture.findUnique({
+        where: { id: confirmedBooking.departureId },
+        select: { departureDate: true },
+      });
+      tripStartDate = departure?.departureDate ?? tripStartDate;
+    }
+
+    const completedAt = new Date(tripStartDate);
+    completedAt.setDate(
+      completedAt.getDate() +
+        this.getDurationDays(confirmedBooking.tour.duration),
+    );
+    if (new Date() < completedAt) {
+      throw new BadRequestException(
+        'Chá»‰ cÃ³ thá»ƒ Ä‘Ã¡nh giÃ¡ sau khi chuyáº¿n Ä‘i Ä‘Ã£ hoÃ n táº¥t.',
       );
     }
 
@@ -65,7 +96,7 @@ export class ReviewService {
   ) {
     const skip = (page - 1) * limit;
 
-    let whereClause: any = { tourId, isHidden: false };
+    const whereClause: Prisma.ReviewWhereInput = { tourId, isHidden: false };
     if (filter === '5stars') whereClause.rating = 5;
     else if (filter === '4stars') whereClause.rating = 4;
     else if (filter === '3stars') whereClause.rating = 3;
@@ -73,7 +104,9 @@ export class ReviewService {
     else if (filter === '1star') whereClause.rating = 1;
     else if (filter === 'photos') whereClause.imageUrls = { isEmpty: false };
 
-    let orderByClause: any = { createdAt: 'desc' };
+    let orderByClause: Prisma.ReviewOrderByWithRelationInput = {
+      createdAt: 'desc',
+    };
     if (sortBy === 'rating_desc') orderByClause = { rating: 'desc' };
     else if (sortBy === 'rating_asc') orderByClause = { rating: 'asc' };
 
@@ -103,8 +136,7 @@ export class ReviewService {
     const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     groupByRatings.forEach((group) => {
       if (group.rating >= 1 && group.rating <= 5) {
-        breakdown[group.rating as keyof typeof breakdown] =
-          group._count.rating;
+        breakdown[group.rating as keyof typeof breakdown] = group._count.rating;
       }
     });
 
@@ -141,13 +173,13 @@ export class ReviewService {
     const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     groupByRatings.forEach((group) => {
       if (group.rating >= 1 && group.rating <= 5) {
-        breakdown[group.rating as keyof typeof breakdown] =
-          group._count.rating;
+        breakdown[group.rating as keyof typeof breakdown] = group._count.rating;
       }
     });
 
     const fiveStarCount = breakdown[5];
-    const fiveStarRate = total > 0 ? Math.round((fiveStarCount / total) * 100) : 0;
+    const fiveStarRate =
+      total > 0 ? Math.round((fiveStarCount / total) * 100) : 0;
 
     return {
       total,
@@ -159,10 +191,18 @@ export class ReviewService {
   }
 
   async getAllReviewsAdmin(query: AdminQueryReviewDto) {
-    const { page = 1, limit = 10, search, rating, status, tourId, sortBy } = query;
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      rating,
+      status,
+      tourId,
+      sortBy,
+    } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.ReviewWhereInput = {};
     if (status === 'hidden') where.isHidden = true;
     else if (status === 'visible') where.isHidden = false;
     if (rating) where.rating = Number(rating);
@@ -175,7 +215,9 @@ export class ReviewService {
       ];
     }
 
-    let orderBy: any = { createdAt: 'desc' };
+    let orderBy: Prisma.ReviewOrderByWithRelationInput = {
+      createdAt: 'desc',
+    };
     if (sortBy === 'oldest') orderBy = { createdAt: 'asc' };
     else if (sortBy === 'rating_desc') orderBy = { rating: 'desc' };
     else if (sortBy === 'rating_asc') orderBy = { rating: 'asc' };
@@ -187,7 +229,9 @@ export class ReviewService {
         skip,
         take: Number(limit),
         include: {
-          user: { select: { id: true, fullName: true, avatarUrl: true, email: true } },
+          user: {
+            select: { id: true, fullName: true, avatarUrl: true, email: true },
+          },
           tour: { select: { id: true, name: true, tourCode: true } },
         },
       }),
@@ -214,7 +258,9 @@ export class ReviewService {
       where: { id },
       data: { isHidden: !review.isHidden },
       include: {
-        user: { select: { id: true, fullName: true, avatarUrl: true, email: true } },
+        user: {
+          select: { id: true, fullName: true, avatarUrl: true, email: true },
+        },
         tour: { select: { id: true, name: true, tourCode: true } },
       },
     });
@@ -241,7 +287,9 @@ export class ReviewService {
       where: { id },
       data: { adminReply: content },
       include: {
-        user: { select: { id: true, fullName: true, avatarUrl: true, email: true } },
+        user: {
+          select: { id: true, fullName: true, avatarUrl: true, email: true },
+        },
         tour: { select: { id: true, name: true, tourCode: true } },
       },
     });

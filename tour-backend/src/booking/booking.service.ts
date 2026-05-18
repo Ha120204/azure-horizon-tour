@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   AssistedDraftStatus,
@@ -13,7 +19,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
-import { PaymentService, type PaymentLinkResult } from '../payment/payment.service';
+import {
+  PaymentService,
+  type PaymentLinkResult,
+} from '../payment/payment.service';
 import { VoucherService } from '../voucher/voucher.service';
 import { MailService } from '../mail/mail.service';
 import { HttpService } from '@nestjs/axios';
@@ -62,7 +71,11 @@ type AssistedDraftRecord = AssistedBookingDraft & Record<string, unknown>;
 
 type AssistedCustomerDraft = Pick<
   AssistedBookingDraft,
-  'customerId' | 'customerEmail' | 'customerPhone' | 'customerIdentityNo' | 'customerName'
+  | 'customerId'
+  | 'customerEmail'
+  | 'customerPhone'
+  | 'customerIdentityNo'
+  | 'customerName'
 >;
 
 type PayosError = {
@@ -86,7 +99,9 @@ type PaymentNotificationPayload = {
 };
 
 function isAssistedDraftStatus(value: string): value is AssistedDraftStatus {
-  return Object.values(AssistedDraftStatus).includes(value as AssistedDraftStatus);
+  return Object.values(AssistedDraftStatus).includes(
+    value as AssistedDraftStatus,
+  );
 }
 
 function isBookingStatus(value: string): value is BookingStatus {
@@ -111,7 +126,10 @@ function normalizePassengerType(type: unknown): string {
   return PASSENGER_TYPE_ALIASES[raw.toUpperCase()] ?? raw;
 }
 
-function normalizePassengers(value: unknown, fallbackPeople: number): PassengerInput[] {
+function normalizePassengers(
+  value: unknown,
+  fallbackPeople: number,
+): PassengerInput[] {
   const inputs = asPassengerInputs(value);
   if (inputs?.length) {
     return inputs.map((passenger) => {
@@ -129,7 +147,12 @@ function normalizePassengers(value: unknown, fallbackPeople: number): PassengerI
 }
 
 function isPayosDuplicateError(error: unknown): error is PayosError {
-  return typeof error === 'object' && error !== null && 'code' in error && (error as PayosError).code === '231';
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as PayosError).code === '231'
+  );
 }
 
 function getErrorMessage(error: unknown): string {
@@ -147,7 +170,7 @@ export class BookingService {
     private readonly mailService: MailService,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   // Hàm hỗ trợ tạo mã Booking chuyên nghiệp
   private generateBookingCode(): string {
@@ -183,7 +206,11 @@ export class BookingService {
     return `ABD-${d}${m}${y}-${randomString}`;
   }
 
-  private getPassengerTotal(basePrice: number, people: number, passengers?: PassengerInput[]): number {
+  private getPassengerTotal(
+    basePrice: number,
+    people: number,
+    passengers?: PassengerInput[],
+  ): number {
     const multipliers: Record<string, number> = {
       'Adult (12+)': 1,
       'Child (4-11)': 0.7,
@@ -212,7 +239,10 @@ export class BookingService {
     return `${Math.round(amount).toLocaleString('vi-VN')} đ`;
   }
 
-  private getPassengerBreakdown(passengers: unknown, fallbackPeople: number): string {
+  private getPassengerBreakdown(
+    passengers: unknown,
+    fallbackPeople: number,
+  ): string {
     const counts: Record<string, number> = {
       'Adult (12+)': 0,
       'Child (4-11)': 0,
@@ -234,7 +264,10 @@ export class BookingService {
     return parts.length ? parts.join(', ') : `${fallbackPeople} khach`;
   }
 
-  private buildPaymentRequestContent(payload: PaymentNotificationPayload, paymentUrl: string): string {
+  private buildPaymentRequestContent(
+    payload: PaymentNotificationPayload,
+    paymentUrl: string,
+  ): string {
     return [
       'Azure Horizon xac nhan thong tin dat tour cua anh/chi:',
       '',
@@ -252,43 +285,106 @@ export class BookingService {
       paymentUrl,
       '',
       'Neu thong tin chua dung, vui long phan hoi voi nhan vien tu van truoc khi thanh toan.',
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
-  private async createPaymentRequestForBooking(bookingId: number, actorUserId?: number, forceEmail = false) {
+  private async markVoucherAsUsed(
+    tx: TransactionClient,
+    userId: number,
+    voucherCode?: string | null,
+  ) {
+    const code = voucherCode?.trim().toUpperCase();
+    if (!code) return;
+
+    const voucher = await tx.voucher.findUnique({ where: { code } });
+    if (!voucher) return;
+
+    const updateResult = await tx.voucher.updateMany({
+      where: {
+        id: voucher.id,
+        usedCount: { lt: voucher.maxUses },
+      },
+      data: { usedCount: { increment: 1 } },
+    });
+
+    if (updateResult.count === 0) {
+      this.logger.warn(
+        `[VOUCHER] Voucher ${code} da het luot khi booking thanh toan thanh cong.`,
+      );
+      return;
+    }
+
+    await tx.userVoucher.updateMany({
+      where: { userId, voucherId: voucher.id, isUsed: false },
+      data: { isUsed: true },
+    });
+  }
+
+  private async createPaymentRequestForBooking(
+    bookingId: number,
+    actorUserId?: number,
+    forceEmail = false,
+  ) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
       include: {
-        user: { select: { id: true, fullName: true, email: true, phone: true } },
-        tour: { select: { id: true, name: true, startDate: true, duration: true } },
+        user: {
+          select: { id: true, fullName: true, email: true, phone: true },
+        },
+        tour: {
+          select: { id: true, name: true, startDate: true, duration: true },
+        },
         assistedDraft: true,
       },
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.paymentStatus === 'PAID') {
-      throw new BadRequestException('Booking da thanh toan, khong the gui yeu cau thanh toan');
+      throw new BadRequestException(
+        'Booking da thanh toan, khong the gui yeu cau thanh toan',
+      );
     }
 
-    const channel = forceEmail ? 'EMAIL' : String(booking.assistedDraft?.confirmationChannel || 'ZALO').toUpperCase();
-    const normalizedChannel = ['EMAIL', 'ZALO', 'PHONE', 'MANUAL'].includes(channel) ? channel : 'MANUAL';
-    const emailRecipient = booking.assistedDraft?.emailForTicket || booking.assistedDraft?.customerEmail || booking.user.email;
-    const recipient = normalizedChannel === 'EMAIL'
-      ? emailRecipient
-      : booking.assistedDraft?.customerPhone || booking.user.phone || null;
+    const channel = forceEmail
+      ? 'EMAIL'
+      : String(
+          booking.assistedDraft?.confirmationChannel || 'ZALO',
+        ).toUpperCase();
+    const normalizedChannel = ['EMAIL', 'ZALO', 'PHONE', 'MANUAL'].includes(
+      channel,
+    )
+      ? channel
+      : 'MANUAL';
+    const emailRecipient =
+      booking.assistedDraft?.emailForTicket ||
+      booking.assistedDraft?.customerEmail ||
+      booking.user.email;
+    const recipient =
+      normalizedChannel === 'EMAIL'
+        ? emailRecipient
+        : booking.assistedDraft?.customerPhone || booking.user.phone || null;
     const amountVND = Math.round(booking.totalPrice);
     const description = `AH ${booking.bookingCode}`;
     const deadlineText = '15 phut ke tu khi nhan yeu cau';
 
     const payload: PaymentNotificationPayload = {
       bookingCode: booking.bookingCode,
-      customerName: booking.assistedDraft?.customerName || booking.user.fullName,
+      customerName:
+        booking.assistedDraft?.customerName || booking.user.fullName,
       tourName: booking.tour.name,
       startDate: booking.tour.startDate.toLocaleDateString('vi-VN'),
       duration: booking.tour.duration,
-      passengerBreakdown: this.getPassengerBreakdown(booking.passengers, booking.numberOfPeople),
+      passengerBreakdown: this.getPassengerBreakdown(
+        booking.passengers,
+        booking.numberOfPeople,
+      ),
       totalPrice: this.formatMoney(amountVND),
-      discountAmount: booking.discountAmount > 0 ? this.formatMoney(booking.discountAmount) : undefined,
+      discountAmount:
+        booking.discountAmount > 0
+          ? this.formatMoney(booking.discountAmount)
+          : undefined,
       deadlineText,
     };
 
@@ -300,7 +396,10 @@ export class BookingService {
         description,
       );
     } catch (error) {
-      const content = this.buildPaymentRequestContent(payload, 'Khong tao duoc link thanh toan. Vui long gui lai.');
+      const content = this.buildPaymentRequestContent(
+        payload,
+        'Khong tao duoc link thanh toan. Vui long gui lai.',
+      );
       const notification = await this.prisma.bookingNotification.create({
         data: {
           bookingId: booking.id,
@@ -314,7 +413,9 @@ export class BookingService {
           createdById: actorUserId,
         },
       });
-      this.logger.error(`[ASSISTED PAYMENT] Khong tao duoc PayOS link cho booking #${booking.id}: ${getErrorMessage(error)}`);
+      this.logger.error(
+        `[ASSISTED PAYMENT] Khong tao duoc PayOS link cho booking #${booking.id}: ${getErrorMessage(error)}`,
+      );
       return { notification, paymentRequest: null };
     }
 
@@ -334,7 +435,10 @@ export class BookingService {
       },
     });
 
-    const content = this.buildPaymentRequestContent(payload, paymentRequest.checkoutUrl);
+    const content = this.buildPaymentRequestContent(
+      payload,
+      paymentRequest.checkoutUrl,
+    );
     let notification = await this.prisma.bookingNotification.create({
       data: {
         bookingId: booking.id,
@@ -345,7 +449,9 @@ export class BookingService {
         subject: `Yeu cau thanh toan ${booking.bookingCode}`,
         content,
         paymentUrl: paymentRequest.checkoutUrl,
-        qrCodeUrl: paymentRequest.qrCode || `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(paymentRequest.checkoutUrl)}`,
+        qrCodeUrl:
+          paymentRequest.qrCode ||
+          `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(paymentRequest.checkoutUrl)}`,
         createdById: actorUserId,
       },
     });
@@ -365,7 +471,8 @@ export class BookingService {
             ...payload,
             to: emailRecipient,
             paymentUrl: paymentRequest.checkoutUrl,
-            qrCodeUrl: paymentRequest.qrCode || notification.qrCodeUrl || undefined,
+            qrCodeUrl:
+              paymentRequest.qrCode || notification.qrCodeUrl || undefined,
           });
           notification = await this.prisma.bookingNotification.update({
             where: { id: notification.id },
@@ -386,19 +493,30 @@ export class BookingService {
     return { notification, paymentRequest };
   }
 
-  private async calculateAssistedQuote(tx: TransactionClient, dto: AssistedQuoteDto): Promise<AssistedQuote> {
+  private async calculateAssistedQuote(
+    tx: TransactionClient,
+    dto: AssistedQuoteDto,
+  ): Promise<AssistedQuote> {
     const tour = await tx.tour.findUnique({
       where: { id: dto.tourId, deletedAt: null },
     });
     if (!tour) throw new NotFoundException('Tour not found');
     if (tour.startDate < new Date()) {
-      throw new BadRequestException('Tour nay da dien ra, khong the tao dat ho');
+      throw new BadRequestException(
+        'Tour nay da dien ra, khong the tao dat ho',
+      );
     }
 
     let selectedDeparture: TourDeparture | null = null;
     if (dto.departureId) {
-      selectedDeparture = await tx.tourDeparture.findUnique({ where: { id: dto.departureId } });
-      if (!selectedDeparture || selectedDeparture.tourId !== tour.id || !selectedDeparture.isActive) {
+      selectedDeparture = await tx.tourDeparture.findUnique({
+        where: { id: dto.departureId },
+      });
+      if (
+        !selectedDeparture ||
+        selectedDeparture.tourId !== tour.id ||
+        !selectedDeparture.isActive
+      ) {
         throw new BadRequestException('Invalid departure');
       }
       if (selectedDeparture.availableSeats < dto.numberOfPeople) {
@@ -410,19 +528,32 @@ export class BookingService {
 
     let basePrice = selectedDeparture?.price ?? tour.price;
     if (dto.packageId) {
-      const selectedPackage = await tx.tourPackage.findUnique({ where: { id: dto.packageId } });
-      if (!selectedPackage || selectedPackage.tourId !== tour.id || !selectedPackage.isActive) {
+      const selectedPackage = await tx.tourPackage.findUnique({
+        where: { id: dto.packageId },
+      });
+      if (
+        !selectedPackage ||
+        selectedPackage.tourId !== tour.id ||
+        !selectedPackage.isActive
+      ) {
         throw new BadRequestException('Invalid tour package');
       }
       basePrice += selectedPackage.price;
     }
 
-    let totalPrice = this.getPassengerTotal(basePrice, dto.numberOfPeople, dto.passengers);
+    let totalPrice = this.getPassengerTotal(
+      basePrice,
+      dto.numberOfPeople,
+      dto.passengers,
+    );
     let discountAmount = 0;
     let voucherCode: string | null = null;
 
     if (dto.voucherCode) {
-      const voucherResult = await this.voucherService.validateVoucher(dto.voucherCode, totalPrice);
+      const voucherResult = await this.voucherService.validateVoucher(
+        dto.voucherCode,
+        totalPrice,
+      );
       discountAmount = voucherResult.discountAmount;
       totalPrice = voucherResult.finalPrice;
       voucherCode = dto.voucherCode.trim().toUpperCase();
@@ -437,7 +568,9 @@ export class BookingService {
     };
   }
 
-  private formatAssistedDraft<T extends AssistedDraftRecord>(draft: T): T & {
+  private formatAssistedDraft<T extends AssistedDraftRecord>(
+    draft: T,
+  ): T & {
     quotedPrice: number;
     unitPriceAtDraft: number | null;
     discountAmount: number;
@@ -445,26 +578,36 @@ export class BookingService {
     return {
       ...draft,
       quotedPrice: Number(draft.quotedPrice),
-      unitPriceAtDraft: draft.unitPriceAtDraft == null ? null : Number(draft.unitPriceAtDraft),
+      unitPriceAtDraft:
+        draft.unitPriceAtDraft == null ? null : Number(draft.unitPriceAtDraft),
       discountAmount: Number(draft.discountAmount || 0),
     };
   }
 
-  private async findOrCreateAssistedCustomer(tx: TransactionClient, draft: AssistedCustomerDraft) {
+  private async findOrCreateAssistedCustomer(
+    tx: TransactionClient,
+    draft: AssistedCustomerDraft,
+  ) {
     if (draft.customerId) {
-      const user = await tx.user.findUnique({ where: { id: draft.customerId } });
+      const user = await tx.user.findUnique({
+        where: { id: draft.customerId },
+      });
       if (!user) throw new NotFoundException('Customer not found');
       return user;
     }
 
-    const email = String(draft.customerEmail || '').trim().toLowerCase();
+    const email = String(draft.customerEmail || '')
+      .trim()
+      .toLowerCase();
     const existing = await tx.user.findFirst({ where: { email } });
     if (existing) {
       return tx.user.update({
         where: { id: existing.id },
         data: {
           phone: draft.customerPhone || existing.phone,
-          identityType: draft.customerIdentityNo ? 'CCCD' : existing.identityType,
+          identityType: draft.customerIdentityNo
+            ? 'CCCD'
+            : existing.identityType,
           identityNo: draft.customerIdentityNo || existing.identityNo,
         },
       });
@@ -485,7 +628,10 @@ export class BookingService {
     });
   }
 
-  async createAssistedDraft(actorUserId: number, dto: CreateAssistedBookingDraftDto) {
+  async createAssistedDraft(
+    actorUserId: number,
+    dto: CreateAssistedBookingDraftDto,
+  ) {
     const payload = {
       ...dto,
       customerName: dto.customerName?.trim(),
@@ -493,19 +639,35 @@ export class BookingService {
       customerPhone: dto.customerPhone?.trim() || null,
       customerIdentityNo: dto.customerIdentityNo?.trim() || null,
       sourceChannel: dto.sourceChannel?.trim() || 'LIVE_CHAT',
-      confirmationChannel: dto.confirmationChannel?.trim().toUpperCase() || 'ZALO',
-      emailForTicket: dto.emailForTicket?.trim().toLowerCase() || dto.customerEmail?.trim().toLowerCase() || null,
+      confirmationChannel:
+        dto.confirmationChannel?.trim().toUpperCase() || 'ZALO',
+      emailForTicket:
+        dto.emailForTicket?.trim().toLowerCase() ||
+        dto.customerEmail?.trim().toLowerCase() ||
+        null,
       voucherCode: dto.voucherCode?.trim() || undefined,
       specialRequests: dto.specialRequests?.trim() || null,
       internalNote: dto.internalNote?.trim() || null,
-      passengers: normalizePassengers(dto.passengers, Number(dto.numberOfPeople) || 1),
+      passengers: normalizePassengers(
+        dto.passengers,
+        Number(dto.numberOfPeople) || 1,
+      ),
     };
     const numberOfPeople = payload.passengers.length;
 
     const draft = await this.prisma.$transaction(async (tx) => {
       const quote = payload.tourId
-        ? await this.calculateAssistedQuote(tx, { ...payload, tourId: payload.tourId, numberOfPeople })
-        : { basePrice: null, totalPrice: 0, discountAmount: 0, voucherCode: null };
+        ? await this.calculateAssistedQuote(tx, {
+            ...payload,
+            tourId: payload.tourId,
+            numberOfPeople,
+          })
+        : {
+            basePrice: null,
+            totalPrice: 0,
+            discountAmount: 0,
+            voucherCode: null,
+          };
 
       return tx.assistedBookingDraft.create({
         data: {
@@ -539,14 +701,23 @@ export class BookingService {
     return this.formatAssistedDraft(draft);
   }
 
-  async updateAssistedDraft(id: number, actorUserId: number, actorRole: string, dto: CreateAssistedBookingDraftDto) {
-    const existing = await this.prisma.assistedBookingDraft.findUnique({ where: { id } });
+  async updateAssistedDraft(
+    id: number,
+    actorUserId: number,
+    actorRole: string,
+    dto: CreateAssistedBookingDraftDto,
+  ) {
+    const existing = await this.prisma.assistedBookingDraft.findUnique({
+      where: { id },
+    });
     if (!existing) throw new NotFoundException('Draft not found');
     if (actorRole === 'STAFF' && existing.createdByStaffId !== actorUserId) {
       throw new ForbiddenException('Ban khong co quyen sua ban nhap nay');
     }
     if (!['DRAFT', 'NEEDS_REVISION'].includes(existing.status)) {
-      throw new BadRequestException('Chi co the sua ban nhap hoac ban can chinh sua');
+      throw new BadRequestException(
+        'Chi co the sua ban nhap hoac ban can chinh sua',
+      );
     }
 
     const payload = {
@@ -555,20 +726,40 @@ export class BookingService {
       customerEmail: dto.customerEmail?.trim().toLowerCase(),
       customerPhone: dto.customerPhone?.trim() || null,
       customerIdentityNo: dto.customerIdentityNo?.trim() || null,
-      sourceChannel: dto.sourceChannel?.trim() || existing.sourceChannel || 'LIVE_CHAT',
-      confirmationChannel: dto.confirmationChannel?.trim().toUpperCase() || existing.confirmationChannel || 'ZALO',
-      emailForTicket: dto.emailForTicket?.trim().toLowerCase() || dto.customerEmail?.trim().toLowerCase() || existing.emailForTicket || null,
+      sourceChannel:
+        dto.sourceChannel?.trim() || existing.sourceChannel || 'LIVE_CHAT',
+      confirmationChannel:
+        dto.confirmationChannel?.trim().toUpperCase() ||
+        existing.confirmationChannel ||
+        'ZALO',
+      emailForTicket:
+        dto.emailForTicket?.trim().toLowerCase() ||
+        dto.customerEmail?.trim().toLowerCase() ||
+        existing.emailForTicket ||
+        null,
       voucherCode: dto.voucherCode?.trim() || undefined,
       specialRequests: dto.specialRequests?.trim() || null,
       internalNote: dto.internalNote?.trim() || null,
-      passengers: normalizePassengers(dto.passengers, Number(dto.numberOfPeople) || existing.numberOfPeople || 1),
+      passengers: normalizePassengers(
+        dto.passengers,
+        Number(dto.numberOfPeople) || existing.numberOfPeople || 1,
+      ),
     };
     const numberOfPeople = payload.passengers.length;
 
     const draft = await this.prisma.$transaction(async (tx) => {
       const quote = payload.tourId
-        ? await this.calculateAssistedQuote(tx, { ...payload, tourId: payload.tourId, numberOfPeople })
-        : { basePrice: null, totalPrice: 0, discountAmount: 0, voucherCode: null };
+        ? await this.calculateAssistedQuote(tx, {
+            ...payload,
+            tourId: payload.tourId,
+            numberOfPeople,
+          })
+        : {
+            basePrice: null,
+            totalPrice: 0,
+            discountAmount: 0,
+            voucherCode: null,
+          };
 
       return tx.assistedBookingDraft.update({
         where: { id },
@@ -603,16 +794,49 @@ export class BookingService {
 
   private assistedDraftInclude(): Prisma.AssistedBookingDraftInclude {
     return {
-      tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, destination: { select: { name: true } } } },
-      customer: { select: { id: true, fullName: true, email: true, phone: true } },
-      createdByStaff: { select: { id: true, fullName: true, email: true, role: true } },
-      reviewedByAdmin: { select: { id: true, fullName: true, email: true, role: true } },
-      convertedBooking: { select: { id: true, bookingCode: true, status: true, paymentStatus: true } },
-      sourceTicket: { select: { id: true, subject: true, customerName: true, customerEmail: true } },
+      tour: {
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          tourCode: true,
+          destination: { select: { name: true } },
+        },
+      },
+      customer: {
+        select: { id: true, fullName: true, email: true, phone: true },
+      },
+      createdByStaff: {
+        select: { id: true, fullName: true, email: true, role: true },
+      },
+      reviewedByAdmin: {
+        select: { id: true, fullName: true, email: true, role: true },
+      },
+      convertedBooking: {
+        select: {
+          id: true,
+          bookingCode: true,
+          status: true,
+          paymentStatus: true,
+        },
+      },
+      sourceTicket: {
+        select: {
+          id: true,
+          subject: true,
+          customerName: true,
+          customerEmail: true,
+        },
+      },
     };
   }
 
-  async getAssistedDrafts(actorUserId: number, actorRole: string, status?: string, search?: string) {
+  async getAssistedDrafts(
+    actorUserId: number,
+    actorRole: string,
+    status?: string,
+    search?: string,
+  ) {
     const where: Prisma.AssistedBookingDraftWhereInput = {};
     if (actorRole === 'STAFF') where.createdByStaffId = actorUserId;
     if (status && status !== 'ALL') {
@@ -638,54 +862,93 @@ export class BookingService {
       take: 100,
     });
 
-    return drafts.map(d => this.formatAssistedDraft(d));
+    return drafts.map((d) => this.formatAssistedDraft(d));
   }
 
-  async submitAssistedDraft(id: number, actorUserId: number, actorRole: string) {
+  async submitAssistedDraft(
+    id: number,
+    actorUserId: number,
+    actorRole: string,
+  ) {
     const draft = await this.prisma.assistedBookingDraft.findUnique({
       where: { id },
-      include: { tour: { include: { departures: { where: { isActive: true }, select: { id: true } } } } },
+      include: {
+        tour: {
+          include: {
+            departures: { where: { isActive: true }, select: { id: true } },
+          },
+        },
+      },
     });
     if (!draft) throw new NotFoundException('Draft not found');
     if (actorRole === 'STAFF' && draft.createdByStaffId !== actorUserId) {
       throw new ForbiddenException('Ban khong co quyen gui ban nhap nay');
     }
     if (!['DRAFT', 'NEEDS_REVISION'].includes(draft.status)) {
-      throw new BadRequestException('Chi co the gui ban nhap hoac ban can chinh sua');
+      throw new BadRequestException(
+        'Chi co the gui ban nhap hoac ban can chinh sua',
+      );
     }
     if (!draft.customerName?.trim()) {
-      throw new BadRequestException('Customer name is required before submitting for approval');
+      throw new BadRequestException(
+        'Customer name is required before submitting for approval',
+      );
     }
-    if (!draft.customerEmail?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.customerEmail)) {
-      throw new BadRequestException('Valid customer email is required before submitting for approval');
+    if (
+      !draft.customerEmail?.trim() ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.customerEmail)
+    ) {
+      throw new BadRequestException(
+        'Valid customer email is required before submitting for approval',
+      );
     }
     if (!draft.customerPhone?.trim()) {
-      throw new BadRequestException('Customer phone is required before submitting for approval');
+      throw new BadRequestException(
+        'Customer phone is required before submitting for approval',
+      );
     }
-    if (!/^(0|\+84)(\d{9})$/.test(draft.customerPhone.trim().replace(/\s+/g, ''))) {
-      throw new BadRequestException('Valid Vietnamese customer phone is required before submitting for approval');
+    if (
+      !/^(0|\+84)(\d{9})$/.test(draft.customerPhone.trim().replace(/\s+/g, ''))
+    ) {
+      throw new BadRequestException(
+        'Valid Vietnamese customer phone is required before submitting for approval',
+      );
     }
     if (!draft.customerIdentityNo?.trim()) {
-      throw new BadRequestException('Customer CCCD is required before submitting for approval');
+      throw new BadRequestException(
+        'Customer CCCD is required before submitting for approval',
+      );
     }
     if (!/^\d{12}$/.test(draft.customerIdentityNo.trim())) {
       throw new BadRequestException('Customer CCCD must be exactly 12 digits');
     }
-    const confirmationChannel = String(draft.confirmationChannel || 'ZALO').toUpperCase();
+    const confirmationChannel = String(
+      draft.confirmationChannel || 'ZALO',
+    ).toUpperCase();
     if (!['ZALO', 'EMAIL', 'PHONE', 'MANUAL'].includes(confirmationChannel)) {
       throw new BadRequestException('Invalid confirmation channel');
     }
-    if (confirmationChannel === 'EMAIL' && !draft.emailForTicket?.trim() && !draft.customerEmail?.trim()) {
-      throw new BadRequestException('Email is required when confirmation channel is email');
+    if (
+      confirmationChannel === 'EMAIL' &&
+      !draft.emailForTicket?.trim() &&
+      !draft.customerEmail?.trim()
+    ) {
+      throw new BadRequestException(
+        'Email is required when confirmation channel is email',
+      );
     }
     if (!draft.tourId) {
-      throw new BadRequestException('Tour is required before submitting for approval');
+      throw new BadRequestException(
+        'Tour is required before submitting for approval',
+      );
     }
     if (!draft.numberOfPeople || draft.numberOfPeople < 1) {
       throw new BadRequestException('Number of people must be at least 1');
     }
     if ((draft.tour?.departures?.length ?? 0) > 0 && !draft.departureId) {
-      throw new BadRequestException('Departure is required before submitting for approval');
+      throw new BadRequestException(
+        'Departure is required before submitting for approval',
+      );
     }
 
     const quote = await this.prisma.$transaction((tx) =>
@@ -716,11 +979,19 @@ export class BookingService {
     return this.formatAssistedDraft(updated);
   }
 
-  async requestRevisionAssistedDraft(id: number, adminId: number, reason: string) {
-    const draft = await this.prisma.assistedBookingDraft.findUnique({ where: { id } });
+  async requestRevisionAssistedDraft(
+    id: number,
+    adminId: number,
+    reason: string,
+  ) {
+    const draft = await this.prisma.assistedBookingDraft.findUnique({
+      where: { id },
+    });
     if (!draft) throw new NotFoundException('Draft not found');
     if (draft.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException('Chi ban nhap dang cho duyet moi co the yeu cau chinh sua');
+      throw new BadRequestException(
+        'Chi ban nhap dang cho duyet moi co the yeu cau chinh sua',
+      );
     }
 
     const updated = await this.prisma.assistedBookingDraft.update({
@@ -737,10 +1008,14 @@ export class BookingService {
   }
 
   async rejectAssistedDraft(id: number, adminId: number, reason: string) {
-    const draft = await this.prisma.assistedBookingDraft.findUnique({ where: { id } });
+    const draft = await this.prisma.assistedBookingDraft.findUnique({
+      where: { id },
+    });
     if (!draft) throw new NotFoundException('Draft not found');
     if (draft.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException('Chi ban nhap dang cho duyet moi co the bi tu choi');
+      throw new BadRequestException(
+        'Chi ban nhap dang cho duyet moi co the bi tu choi',
+      );
     }
 
     const updated = await this.prisma.assistedBookingDraft.update({
@@ -764,13 +1039,23 @@ export class BookingService {
       });
       if (!draft) throw new NotFoundException('Draft not found');
       if (draft.status !== 'PENDING_APPROVAL') {
-        throw new BadRequestException('Chi ban nhap dang cho duyet moi co the duyet');
+        throw new BadRequestException(
+          'Chi ban nhap dang cho duyet moi co the duyet',
+        );
       }
       if (draft.convertedBooking) {
         throw new BadRequestException('Ban nhap nay da tao booking');
       }
-      if (!draft.tourId || !draft.customerName?.trim() || !draft.customerEmail?.trim() || !draft.customerPhone?.trim() || !draft.customerIdentityNo?.trim()) {
-        throw new BadRequestException('Ban nhap chua du thong tin de tao booking');
+      if (
+        !draft.tourId ||
+        !draft.customerName?.trim() ||
+        !draft.customerEmail?.trim() ||
+        !draft.customerPhone?.trim() ||
+        !draft.customerIdentityNo?.trim()
+      ) {
+        throw new BadRequestException(
+          'Ban nhap chua du thong tin de tao booking',
+        );
       }
 
       const tourId = draft.tourId;
@@ -859,7 +1144,10 @@ export class BookingService {
 
       return { draft: updatedDraft, booking };
     });
-    const paymentRequestResult = await this.createPaymentRequestForBooking(result.booking.id, adminId);
+    const paymentRequestResult = await this.createPaymentRequestForBooking(
+      result.booking.id,
+      adminId,
+    );
 
     return {
       draft: this.formatAssistedDraft(result.draft),
@@ -868,8 +1156,16 @@ export class BookingService {
     };
   }
 
-  async resendPaymentRequest(bookingId: number, actorUserId: number, forceEmail = false) {
-    return this.createPaymentRequestForBooking(bookingId, actorUserId, forceEmail);
+  async resendPaymentRequest(
+    bookingId: number,
+    actorUserId: number,
+    forceEmail = false,
+  ) {
+    return this.createPaymentRequestForBooking(
+      bookingId,
+      actorUserId,
+      forceEmail,
+    );
   }
 
   async create(userId: number, dto: CreateBookingDto, ip: string) {
@@ -914,7 +1210,9 @@ export class BookingService {
       let basePrice = selectedDeparture?.price ?? tour.price;
       let selectedPackage: TourPackage | null = null;
       if (dto.packageId) {
-        selectedPackage = await tx.tourPackage.findUnique({ where: { id: dto.packageId } });
+        selectedPackage = await tx.tourPackage.findUnique({
+          where: { id: dto.packageId },
+        });
         if (!selectedPackage || selectedPackage.tourId !== tour.id) {
           throw new BadRequestException('Invalid tour package');
         }
@@ -923,7 +1221,11 @@ export class BookingService {
       }
 
       // [FIX] Tính giá dựa trên loại hành khách (Adult / Child / Infant)
-      let totalPrice = this.getPassengerTotal(basePrice, dto.numberOfPeople, asPassengerInputs(dto.passengers));
+      let totalPrice = this.getPassengerTotal(
+        basePrice,
+        dto.numberOfPeople,
+        asPassengerInputs(dto.passengers),
+      );
 
       let discountAmount = 0;
       let voucherCode: string | null = null;
@@ -936,7 +1238,7 @@ export class BookingService {
         );
         discountAmount = voucherResult.discountAmount;
         totalPrice = voucherResult.finalPrice;
-        voucherCode = dto.voucherCode;
+        voucherCode = dto.voucherCode.trim().toUpperCase();
       }
 
       // 3. Trừ ghế bằng Atomic Decrement
@@ -974,38 +1276,6 @@ export class BookingService {
         },
       });
 
-      // 6. Cập nhật lượt dùng Voucher & ví trực tiếp trong Transaction để chống Race Condition
-      if (voucherCode) {
-        const voucherToUpdate = await tx.voucher.findUnique({
-          where: { code: voucherCode },
-        });
-
-        if (voucherToUpdate) {
-          // Tăng lượt sử dụng một cách an toàn
-          const updatedVoucher = await tx.voucher.update({
-            where: { id: voucherToUpdate.id },
-            data: { usedCount: { increment: 1 } },
-          });
-
-          // (Tùy chọn nâng cao): Nếu vượt quá maxUses sau khi increment, ép rollback!
-          if (updatedVoucher.usedCount > updatedVoucher.maxUses) {
-            throw new BadRequestException('Voucher đã hết lượt sử dụng ngay khoảnh khắc bạn đặt hàng!');
-          }
-
-          // Cập nhật trong ví của user (nếu đã lưu)
-          const userVoucher = await tx.userVoucher.findUnique({
-            where: { userId_voucherId: { userId, voucherId: voucherToUpdate.id } },
-          });
-
-          if (userVoucher) {
-            await tx.userVoucher.update({
-              where: { id: userVoucher.id },
-              data: { isUsed: true },
-            });
-          }
-        }
-      }
-
       return newBooking;
     }); // ← Nếu có exception → toàn bộ rollback tự động
 
@@ -1033,10 +1303,14 @@ export class BookingService {
     } catch (payosError: unknown) {
       // PayOS lỗi 231: Link thanh toán đã tồn tại → lấy lại link cũ thay vì tạo mới
       if (isPayosDuplicateError(payosError)) {
-        this.logger.warn(`[BOOKING] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`);
+        this.logger.warn(
+          `[BOOKING] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`,
+        );
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) {
-          throw new BadRequestException('Không thể tạo liên kết thanh toán. Vui lòng thử lại sau.');
+          throw new BadRequestException(
+            'Không thể tạo liên kết thanh toán. Vui lòng thử lại sau.',
+          );
         }
         // PaymentLink.id là paymentLinkId, dùng để tạo URL checkout
         checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
@@ -1055,7 +1329,11 @@ export class BookingService {
       },
     });
 
-    return { message: 'Booking successful, please proceed to payment', booking, paymentUrl: checkoutUrl };
+    return {
+      message: 'Booking successful, please proceed to payment',
+      booking,
+      paymentUrl: checkoutUrl,
+    };
   }
 
   /**
@@ -1068,7 +1346,8 @@ export class BookingService {
 
     // Phục hồi booking.id từ orderCode (cắt bỏ 6 số cuối)
     // Nếu orderCode nhỏ (cũ) thì dùng chính orderCode.
-    const bookingId = orderCode >= 1000000 ? Math.floor(orderCode / 1000000) : orderCode;
+    const bookingId =
+      orderCode >= 1000000 ? Math.floor(orderCode / 1000000) : orderCode;
 
     // 2. Tìm booking theo ID (orderCode = booking.id)
     const booking = await this.prisma.booking.findUnique({
@@ -1086,16 +1365,21 @@ export class BookingService {
 
     // 3. Cập nhật trạng thái dựa vào kết quả từ PayOS
     if (paymentInfo.status === 'PAID') {
-      const txnRef = paymentInfo.transactions?.[0]?.reference || `PAYOS-${orderCode}`;
+      const txnRef =
+        paymentInfo.transactions?.[0]?.reference || `PAYOS-${orderCode}`;
 
-      await this.prisma.booking.update({
-        where: { id: bookingId },
-        data: {
-          paymentStatus: 'PAID',
-          status: 'CONFIRMED',
-          // Lưu mã tham chiếu giao dịch ngân hàng từ PayOS
-          vnpayTxnRef: txnRef,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            paymentStatus: 'PAID',
+            status: 'CONFIRMED',
+            // Lưu mã tham chiếu giao dịch ngân hàng từ PayOS
+            vnpayTxnRef: txnRef,
+          },
+        });
+
+        await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
       });
 
       // [PHASE 1] Ghi log thanh toán thành công vào PaymentTransaction
@@ -1117,7 +1401,9 @@ export class BookingService {
           include: { user: true, tour: true, assistedDraft: true },
         });
 
-        const ticketEmail = fullBooking?.assistedDraft?.emailForTicket || fullBooking?.user?.email;
+        const ticketEmail =
+          fullBooking?.assistedDraft?.emailForTicket ||
+          fullBooking?.user?.email;
         if (fullBooking && ticketEmail) {
           await this.mailService.sendBookingConfirmation({
             to: ticketEmail,
@@ -1128,16 +1414,26 @@ export class BookingService {
             duration: fullBooking.tour.duration,
             numberOfPeople: fullBooking.numberOfPeople,
             totalPrice: `${fullBooking.totalPrice.toLocaleString('vi-VN')}₫`,
-            discountAmount: fullBooking.discountAmount > 0 ? `${fullBooking.discountAmount.toLocaleString('vi-VN')}₫` : undefined,
+            discountAmount:
+              fullBooking.discountAmount > 0
+                ? `${fullBooking.discountAmount.toLocaleString('vi-VN')}₫`
+                : undefined,
           });
         }
       } catch (emailError) {
         this.logger.error('[EMAIL] Lỗi gửi email xác nhận:', emailError);
         // Không throw — email lỗi không ảnh hưởng luồng thanh toán chính
       }
-    } else if (paymentInfo.status === 'CANCELLED' || paymentInfo.status === 'EXPIRED') {
+    } else if (
+      paymentInfo.status === 'CANCELLED' ||
+      paymentInfo.status === 'EXPIRED'
+    ) {
       // Hủy booking + hoàn trả ghế cho Tour
-      await this.cancelAndRestoreSeats(booking.id, booking.tourId, booking.numberOfPeople);
+      await this.cancelAndRestoreSeats(
+        booking.id,
+        booking.tourId,
+        booking.numberOfPeople,
+      );
 
       // [PHASE 1] Ghi log thanh toán thất bại
       await this.prisma.paymentTransaction.create({
@@ -1159,7 +1455,8 @@ export class BookingService {
    * Tìm booking theo ID (orderCode của PayOS)
    */
   async findByOrderCode(orderCode: number) {
-    const bookingId = orderCode >= 1000000 ? Math.floor(orderCode / 1000000) : orderCode;
+    const bookingId =
+      orderCode >= 1000000 ? Math.floor(orderCode / 1000000) : orderCode;
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -1178,7 +1475,11 @@ export class BookingService {
    * Hủy 1 booking cụ thể và cộng lại số ghế vào Tour.
    * Dùng chung cho: PayOS cancel, Webhook cancel, và Cron job tự hủy.
    */
-  private async cancelAndRestoreSeats(bookingId: number, tourId: number, numberOfPeople: number) {
+  private async cancelAndRestoreSeats(
+    bookingId: number,
+    tourId: number,
+    numberOfPeople: number,
+  ) {
     await this.prisma.$transaction([
       this.prisma.booking.update({
         where: { id: bookingId },
@@ -1200,7 +1501,10 @@ export class BookingService {
    * CRON JOB: Quét đơn hàng PENDING quá 15 phút và tự động hủy + hoàn trả ghế.
    * Được gọi bởi @nestjs/schedule mỗi 5 phút.
    */
-  async cancelExpiredBookings(): Promise<{ batchSize: number; processedCount: number }> {
+  async cancelExpiredBookings(): Promise<{
+    batchSize: number;
+    processedCount: number;
+  }> {
     const EXPIRY_MINUTES = 15;
     const expiryTime = new Date(Date.now() - EXPIRY_MINUTES * 60 * 1000);
 
@@ -1218,16 +1522,26 @@ export class BookingService {
       return { batchSize: 0, processedCount: 0 };
     }
 
-    this.logger.log(`[CRON] Tìm thấy ${expiredBookings.length} đơn hàng PENDING quá hạn. Đang hủy...`);
+    this.logger.log(
+      `[CRON] Tìm thấy ${expiredBookings.length} đơn hàng PENDING quá hạn. Đang hủy...`,
+    );
 
     let processedCount = 0;
     for (const booking of expiredBookings) {
-      await this.cancelAndRestoreSeats(booking.id, booking.tourId, booking.numberOfPeople);
+      await this.cancelAndRestoreSeats(
+        booking.id,
+        booking.tourId,
+        booking.numberOfPeople,
+      );
       processedCount += 1;
-      this.logger.log(`[CRON] Đã hủy booking #${booking.id} (${booking.bookingCode}) và hoàn ${booking.numberOfPeople} ghế cho tour #${booking.tourId}`);
+      this.logger.log(
+        `[CRON] Đã hủy booking #${booking.id} (${booking.bookingCode}) và hoàn ${booking.numberOfPeople} ghế cho tour #${booking.tourId}`,
+      );
     }
 
-    this.logger.log(`[CRON] Hoàn tất dọn dẹp ${processedCount}/${expiredBookings.length} đơn hàng.`);
+    this.logger.log(
+      `[CRON] Hoàn tất dọn dẹp ${processedCount}/${expiredBookings.length} đơn hàng.`,
+    );
     return { batchSize: expiredBookings.length, processedCount };
   }
 
@@ -1247,19 +1561,32 @@ export class BookingService {
     });
 
     if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.status === 'CONFIRMED') throw new BadRequestException('Đơn hàng đã được xác nhận trước đó');
-    if (booking.status === 'CANCELLED') throw new BadRequestException('Không thể xác nhận đơn hàng đã hủy');
+    if (booking.status === 'CONFIRMED')
+      throw new BadRequestException('Đơn hàng đã được xác nhận trước đó');
+    if (booking.status === 'CANCELLED')
+      throw new BadRequestException('Không thể xác nhận đơn hàng đã hủy');
 
-    const updated = await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: 'CONFIRMED', paymentStatus: 'PAID' },
-      include: {
-        user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
-        tour: { select: { id: true, name: true, imageUrl: true, tourCode: true } },
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const confirmed = await tx.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CONFIRMED', paymentStatus: 'PAID' },
+        include: {
+          user: {
+            select: { id: true, fullName: true, email: true, avatarUrl: true },
+          },
+          tour: {
+            select: { id: true, name: true, imageUrl: true, tourCode: true },
+          },
+        },
+      });
+
+      await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
+      return confirmed;
     });
 
-    this.logger.log(`[ADMIN MANUAL] Đã xác nhận thủ công booking #${bookingId} (${booking.bookingCode})`);
+    this.logger.log(
+      `[ADMIN MANUAL] Đã xác nhận thủ công booking #${bookingId} (${booking.bookingCode})`,
+    );
 
     return {
       ...updated,
@@ -1279,6 +1606,42 @@ export class BookingService {
       include: { tour: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getMyBookingById(bookingId: number, userId: number) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, userId, deletedAt: null },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true, phone: true },
+        },
+        tour: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    return booking;
+  }
+
+  async findMyByBookingCode(bookingCode: string, userId: number) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { bookingCode, userId, deletedAt: null },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true, phone: true },
+        },
+        tour: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    return booking;
   }
 
   /**
@@ -1337,8 +1700,18 @@ export class BookingService {
       this.prisma.booking.findMany({
         where,
         include: {
-          tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, destination: { select: { name: true } } } },
-          user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+          tour: {
+            select: {
+              id: true,
+              name: true,
+              imageUrl: true,
+              tourCode: true,
+              destination: { select: { name: true } },
+            },
+          },
+          user: {
+            select: { id: true, fullName: true, email: true, avatarUrl: true },
+          },
           notifications: {
             where: { type: 'PAYMENT_REQUEST' },
             orderBy: { createdAt: 'desc' },
@@ -1353,27 +1726,28 @@ export class BookingService {
     ]);
 
     // Thống kê tổng hợp (toàn bộ, không bị ảnh hưởng bởi filter)
-    const [globalStats, paymentStats, revenueResult, assistedDraftStats] = await Promise.all([
-      this.prisma.booking.groupBy({
-        by: ['status'],
-        where: { deletedAt: null },
-        _count: { status: true },
-      }),
-      this.prisma.booking.groupBy({
-        by: ['paymentStatus'],
-        where: { deletedAt: null },
-        _count: { paymentStatus: true },
-      }),
-      this.prisma.booking.aggregate({
-        where: { deletedAt: null, paymentStatus: 'PAID' },
-        _sum: { totalPrice: true },
-        _count: { id: true },
-      }),
-      this.prisma.assistedBookingDraft.groupBy({
-        by: ['status'],
-        _count: { status: true },
-      }),
-    ]);
+    const [globalStats, paymentStats, revenueResult, assistedDraftStats] =
+      await Promise.all([
+        this.prisma.booking.groupBy({
+          by: ['status'],
+          where: { deletedAt: null },
+          _count: { status: true },
+        }),
+        this.prisma.booking.groupBy({
+          by: ['paymentStatus'],
+          where: { deletedAt: null },
+          _count: { paymentStatus: true },
+        }),
+        this.prisma.booking.aggregate({
+          where: { deletedAt: null, paymentStatus: 'PAID' },
+          _sum: { totalPrice: true },
+          _count: { id: true },
+        }),
+        this.prisma.assistedBookingDraft.groupBy({
+          by: ['status'],
+          _count: { status: true },
+        }),
+      ]);
 
     const statsMap: Record<string, number> = {};
     for (const s of globalStats) {
@@ -1389,7 +1763,7 @@ export class BookingService {
     }
 
     return {
-      bookings: bookings.map(b => ({
+      bookings: bookings.map((b) => ({
         ...b,
         totalPrice: Number(b.totalPrice),
         unitPriceAtBooking: Number(b.unitPriceAtBooking),
@@ -1441,13 +1815,19 @@ export class BookingService {
 
     // Chỉ cho retry nếu booking vẫn PENDING và chưa thanh toán
     if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
-      throw new BadRequestException('Booking này không ở trạng thái chờ thanh toán');
+      throw new BadRequestException(
+        'Booking này không ở trạng thái chờ thanh toán',
+      );
     }
 
     // Kiểm tra xem booking đã quá 15 phút chưa
-    const expiryTime = new Date(booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000);
+    const expiryTime = new Date(
+      booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000,
+    );
     if (new Date() > expiryTime) {
-      throw new BadRequestException('Booking đã hết hạn thanh toán (quá 15 phút). Vui lòng đặt tour mới.');
+      throw new BadRequestException(
+        'Booking đã hết hạn thanh toán (quá 15 phút). Vui lòng đặt tour mới.',
+      );
     }
 
     // Lấy lại checkout URL từ PayOS thay vì tạo mới (tránh lỗi 231 "order đã tồn tại")
@@ -1469,11 +1849,13 @@ export class BookingService {
     } catch (payosError: unknown) {
       // PayOS lỗi 231: đã tồn tại PayOS order này → lấy lại link cũ
       if (isPayosDuplicateError(payosError)) {
-        this.logger.warn(`[RETRY] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`);
+        this.logger.warn(
+          `[RETRY] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`,
+        );
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) {
           throw new BadRequestException(
-            'Không thể lấy liên kết thanh toán. Link có thể đã hết hạn. Vui lòng đặt tour mới.'
+            'Không thể lấy liên kết thanh toán. Link có thể đã hết hạn. Vui lòng đặt tour mới.',
           );
         }
         // PaymentLink.id là paymentLinkId, dùng để tạo URL checkout
@@ -1483,7 +1865,9 @@ export class BookingService {
       }
     }
 
-    this.logger.log(`[RETRY] Tạo lại link thanh toán cho booking #${booking.id} (${booking.bookingCode})`);
+    this.logger.log(
+      `[RETRY] Tạo lại link thanh toán cho booking #${booking.id} (${booking.bookingCode})`,
+    );
 
     return { checkoutUrl, expiresAt: expiryTime.toISOString() };
   }
@@ -1512,7 +1896,7 @@ export class BookingService {
     }
 
     // Bọc trong object { data: ... } để khớp 100% với Frontend của em
-    return { data: booking };
+    return booking;
   }
 
   async proxyImage(imageUrl: string, res: Response) {
@@ -1527,12 +1911,16 @@ export class BookingService {
       // Đặt thẻ tiêu đề cho phép CORS để Frontend chụp ảnh được
       res.setHeader('Access-Control-Allow-Origin', '*');
       const contentType: unknown = response.headers['content-type'];
-      res.setHeader('Content-Type', typeof contentType === 'string' ? contentType : 'application/octet-stream');
+      res.setHeader(
+        'Content-Type',
+        typeof contentType === 'string'
+          ? contentType
+          : 'application/octet-stream',
+      );
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache ảnh để tăng tốc
 
       // Stream dữ liệu ảnh về cho Frontend
       response.data.pipe(res);
-
     } catch (error) {
       this.logger.error('Lỗi khi proxy ảnh:', getErrorMessage(error));
       throw new NotFoundException('Failed to proxy image');
@@ -1592,14 +1980,20 @@ export class BookingService {
    * - PENDING (chưa thanh toán): hủy ngay, không cần admin duyệt.
    * - CONFIRMED (đã thanh toán): chuyển sang CANCEL_REQUESTED, chờ admin.
    */
-  async requestCancellation(bookingId: number, userId: number, reason: string, bankDetails?: Prisma.InputJsonValue) {
+  async requestCancellation(
+    bookingId: number,
+    userId: number,
+    reason: string,
+    bankDetails?: Prisma.InputJsonValue,
+  ) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
       include: { user: true, tour: true },
     });
 
     if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.userId !== userId) throw new BadRequestException('Không có quyền hủy booking này');
+    if (booking.userId !== userId)
+      throw new BadRequestException('Không có quyền hủy booking này');
 
     if (booking.status === 'CANCELLED') {
       throw new BadRequestException('Booking này đã được hủy trước đó');
@@ -1631,7 +2025,9 @@ export class BookingService {
         });
 
         if (updateResult.count === 0) {
-          throw new BadRequestException('Trạng thái đơn hàng đã thay đổi, không thể hủy tự động. Vui lòng tải lại trang.');
+          throw new BadRequestException(
+            'Trạng thái đơn hàng đã thay đổi, không thể hủy tự động. Vui lòng tải lại trang.',
+          );
         }
 
         await tx.tour.update({
@@ -1642,13 +2038,24 @@ export class BookingService {
 
       // [FIX] Hủy link thanh toán bên PayOS để khách không thanh toán nhầm vào đơn đã hủy
       try {
-        await this.paymentService.cancelPaymentLink(bookingId, 'Khách hàng chủ động hủy đơn');
+        await this.paymentService.cancelPaymentLink(
+          bookingId,
+          'Khách hàng chủ động hủy đơn',
+        );
       } catch {
-        this.logger.warn(`[PAYOS] Không thể hủy link PayOS cho booking #${bookingId} (có thể link đã hết hạn).`);
+        this.logger.warn(
+          `[PAYOS] Không thể hủy link PayOS cho booking #${bookingId} (có thể link đã hết hạn).`,
+        );
       }
 
-      this.logger.log(`[CANCEL] Khách hủy booking PENDING #${bookingId} trước khi thanh toán`);
-      return { message: 'Đã hủy đặt tour thành công', refundAmount: 0, refundNote: 'Chưa thanh toán — không có hoàn tiền' };
+      this.logger.log(
+        `[CANCEL] Khách hủy booking PENDING #${bookingId} trước khi thanh toán`,
+      );
+      return {
+        message: 'Đã hủy đặt tour thành công',
+        refundAmount: 0,
+        refundNote: 'Chưa thanh toán — không có hoàn tiền',
+      };
     }
 
     // CONFIRMED = đã thanh toán → chuyển sang CANCEL_REQUESTED, chờ admin
@@ -1660,7 +2067,8 @@ export class BookingService {
         cancelRequestedAt: new Date(),
         refundAmount,
         refundNote,
-        refundBankDetails: bankDetails === undefined ? Prisma.JsonNull : bankDetails, // Luu thong tin ngan hang neu co
+        refundBankDetails:
+          bankDetails === undefined ? Prisma.JsonNull : bankDetails, // Luu thong tin ngan hang neu co
       },
     });
 
@@ -1681,8 +2089,14 @@ export class BookingService {
       this.logger.error('[EMAIL] Lỗi gửi email yêu cầu hủy:', emailError);
     }
 
-    this.logger.log(`[CANCEL] Booking #${bookingId} chuyển sang CANCEL_REQUESTED. Dự kiến hoàn: ${refundAmount}đ`);
-    return { message: 'Yêu cầu hủy đã được ghi nhận, đang chờ xử lý', refundAmount, refundNote };
+    this.logger.log(
+      `[CANCEL] Booking #${bookingId} chuyển sang CANCEL_REQUESTED. Dự kiến hoàn: ${refundAmount}đ`,
+    );
+    return {
+      message: 'Yêu cầu hủy đã được ghi nhận, đang chờ xử lý',
+      refundAmount,
+      refundNote,
+    };
   }
 
   /**
@@ -1696,7 +2110,9 @@ export class BookingService {
 
     if (!booking) throw new NotFoundException('Booking không tồn tại');
     if (booking.status !== 'CANCEL_REQUESTED') {
-      throw new BadRequestException('Booking này không ở trạng thái chờ duyệt hủy');
+      throw new BadRequestException(
+        'Booking này không ở trạng thái chờ duyệt hủy',
+      );
     }
 
     const refundAmount = Number(booking.refundAmount ?? 0);
@@ -1749,7 +2165,9 @@ export class BookingService {
       this.logger.error('[EMAIL] Lỗi gửi email duyệt hủy:', emailError);
     }
 
-    this.logger.log(`[ADMIN] Đã duyệt hủy booking #${bookingId}. Hoàn tiền: ${refundAmount}đ`);
+    this.logger.log(
+      `[ADMIN] Đã duyệt hủy booking #${bookingId}. Hoàn tiền: ${refundAmount}đ`,
+    );
     return { message: 'Đã duyệt hủy booking và hoàn trả ghế', refundAmount };
   }
 
@@ -1764,7 +2182,9 @@ export class BookingService {
 
     if (!booking) throw new NotFoundException('Booking không tồn tại');
     if (booking.status !== 'CANCEL_REQUESTED') {
-      throw new BadRequestException('Booking này không ở trạng thái chờ duyệt hủy');
+      throw new BadRequestException(
+        'Booking này không ở trạng thái chờ duyệt hủy',
+      );
     }
 
     await this.prisma.booking.update({
@@ -1793,7 +2213,9 @@ export class BookingService {
       this.logger.error('[EMAIL] Lỗi gửi email từ chối hủy:', emailError);
     }
 
-    this.logger.log(`[ADMIN] Đã từ chối hủy booking #${bookingId}. Lý do: ${rejectReason}`);
+    this.logger.log(
+      `[ADMIN] Đã từ chối hủy booking #${bookingId}. Lý do: ${rejectReason}`,
+    );
     return { message: 'Đã từ chối yêu cầu hủy, booking tiếp tục hiệu lực' };
   }
 
@@ -1805,13 +2227,23 @@ export class BookingService {
     const requests = await this.prisma.booking.findMany({
       where: { status: 'CANCEL_REQUESTED', deletedAt: null },
       include: {
-        user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
-        tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, startDate: true } },
+        user: {
+          select: { id: true, fullName: true, email: true, avatarUrl: true },
+        },
+        tour: {
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            tourCode: true,
+            startDate: true,
+          },
+        },
       },
       orderBy: { cancelRequestedAt: 'asc' }, // Xử lý theo thứ tự gửi
     });
 
-    const formattedRequests = requests.map(b => ({
+    const formattedRequests = requests.map((b) => ({
       ...b,
       totalPrice: Number(b.totalPrice),
       unitPriceAtBooking: Number(b.unitPriceAtBooking),
@@ -1821,11 +2253,18 @@ export class BookingService {
 
     // 2. Tính toán thống kê hoàn tiền
     const pendingCancelCount = formattedRequests.length;
-    const pendingRefundAmount = formattedRequests.reduce((sum, r) => sum + r.refundAmount, 0);
+    const pendingRefundAmount = formattedRequests.reduce(
+      (sum, r) => sum + r.refundAmount,
+      0,
+    );
 
     // Lấy tổng tiền đã hoàn (những booking đã CANCELLED và có refundedAt)
     const refundedAgg = await this.prisma.booking.aggregate({
-      where: { status: 'CANCELLED', refundedAt: { not: null }, deletedAt: null },
+      where: {
+        status: 'CANCELLED',
+        refundedAt: { not: null },
+        deletedAt: null,
+      },
       _sum: { refundAmount: true },
     });
     const totalRefundedAmount = Number(refundedAgg._sum.refundAmount ?? 0);
@@ -1836,7 +2275,7 @@ export class BookingService {
         pendingCancelCount,
         pendingRefundAmount,
         totalRefundedAmount,
-      }
+      },
     };
   }
 
@@ -1845,30 +2284,35 @@ export class BookingService {
    * Accessible by STAFF | ADMIN | SUPER_ADMIN.
    */
   async getAdminQuickStats() {
-    const [grouped, paymentGrouped, myToursCount, assistedDraftGrouped] = await Promise.all([
-      this.prisma.booking.groupBy({
-        by: ['status'],
-        where: { deletedAt: null },
-        _count: { status: true },
-      }),
-      this.prisma.booking.groupBy({
-        by: ['paymentStatus'],
-        where: { deletedAt: null },
-        _count: { paymentStatus: true },
-      }),
-      this.prisma.tour.count({ where: { deletedAt: null, status: 'PUBLISHED' } }),
-      this.prisma.assistedBookingDraft.groupBy({
-        by: ['status'],
-        _count: { status: true },
-      }),
-    ]);
+    const [grouped, paymentGrouped, myToursCount, assistedDraftGrouped] =
+      await Promise.all([
+        this.prisma.booking.groupBy({
+          by: ['status'],
+          where: { deletedAt: null },
+          _count: { status: true },
+        }),
+        this.prisma.booking.groupBy({
+          by: ['paymentStatus'],
+          where: { deletedAt: null },
+          _count: { paymentStatus: true },
+        }),
+        this.prisma.tour.count({
+          where: { deletedAt: null, status: 'PUBLISHED' },
+        }),
+        this.prisma.assistedBookingDraft.groupBy({
+          by: ['status'],
+          _count: { status: true },
+        }),
+      ]);
 
     const map: Record<string, number> = {};
     for (const row of grouped) map[row.status] = row._count.status;
     const paymentMap: Record<string, number> = {};
-    for (const row of paymentGrouped) paymentMap[row.paymentStatus] = row._count.paymentStatus;
+    for (const row of paymentGrouped)
+      paymentMap[row.paymentStatus] = row._count.paymentStatus;
     const assistedDraftMap: Record<string, number> = {};
-    for (const row of assistedDraftGrouped) assistedDraftMap[row.status] = row._count.status;
+    for (const row of assistedDraftGrouped)
+      assistedDraftMap[row.status] = row._count.status;
 
     return {
       pending: map['PENDING'] || 0,
@@ -1902,4 +2346,3 @@ export class BookingService {
     return `This action removes a #${id} booking`;
   }
 }
-

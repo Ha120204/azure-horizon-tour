@@ -26,6 +26,11 @@ enum TourStatus {
   COMPLETED
 }
 
+enum TravelScope {
+  DOMESTIC
+  INTERNATIONAL
+}
+
 enum ArticleStatus {
   DRAFT
   PENDING_REVIEW
@@ -81,11 +86,15 @@ model Destination {
   description String?  @db.Text
   imageUrl    String?  
   region      String?  
+  travelScope TravelScope @default(DOMESTIC)
+  countryCode String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   tours       Tour[]   
+
+  @@index([travelScope])
 }
 
 // =============================================

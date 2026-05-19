@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import { API_BASE_URL } from '@/app/lib/constants';
 
@@ -15,6 +16,22 @@ interface Reply {
     createdAt: string;
 }
 
+interface LinkedBooking {
+    id: number;
+    bookingCode: string;
+    tourId: number;
+    tourName: string;
+    tourStartDate: string;
+    tourDuration: string;
+    departureId: number | null;
+    departureDate: string | null;
+    status: string;
+    paymentStatus: string;
+    numberOfPeople: number;
+    totalPrice: number;
+    createdAt: string;
+}
+
 interface Ticket {
     id: number;
     customerName: string;
@@ -26,6 +43,8 @@ interface Ticket {
     message: string;
     status: TicketStatus;
     assignedStaffId?: number;
+    linkedBooking?: LinkedBooking | null;
+    bookingMatchStatus?: 'NO_REFERENCE' | 'MATCHED' | 'NOT_FOUND';
     createdAt: string;
     replies: Reply[];
 }
@@ -39,6 +58,26 @@ interface Kpi {
     overdue: number;
     avgFirstResponseMinutes: number | null;
 }
+
+type FetchTicketsOptions = {
+    silent?: boolean;
+};
+
+type TicketListResponse = {
+    data?: {
+        tickets?: Ticket[];
+    };
+    tickets?: Ticket[];
+};
+
+type TicketResponse = Ticket | { data: Ticket };
+
+type ReplyResponse = Reply | { data: Reply };
+
+type StatsResponse = Partial<Kpi> | { data?: Partial<Kpi> };
+
+const POLL_INTERVAL_MS = 10000;
+const OPEN_TICKET_STATUSES = new Set<TicketStatus>(['NEW', 'IN_PROGRESS']);
 
 const EMPTY_KPI: Kpi = {
     total: 0,
@@ -72,6 +111,19 @@ const STS: Record<TicketStatus, { label: string; dot: string; text: string; tone
     RESOLVED: { label: 'Đã giải quyết', dot: 'bg-slate-400', text: 'text-slate-500', tone: 'bg-slate-100 text-slate-600 border-slate-200', icon: 'check_circle' },
 };
 
+const BOOKING_STATUS: Record<string, { label: string; tone: string }> = {
+    PENDING: { label: 'Chờ xử lý', tone: 'bg-amber-50 text-amber-700 ring-amber-100' },
+    CONFIRMED: { label: 'Đã xác nhận', tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100' },
+    CANCEL_REQUESTED: { label: 'Chờ duyệt hủy', tone: 'bg-orange-50 text-orange-700 ring-orange-100' },
+    CANCELLED: { label: 'Đã hủy', tone: 'bg-slate-100 text-slate-600 ring-slate-200' },
+};
+
+const PAYMENT_STATUS: Record<string, { label: string; tone: string }> = {
+    UNPAID: { label: 'Chưa thanh toán', tone: 'bg-amber-50 text-amber-700 ring-amber-100' },
+    PAID: { label: 'Đã thanh toán', tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100' },
+    FAILED: { label: 'Thanh toán lỗi', tone: 'bg-red-50 text-red-700 ring-red-100' },
+};
+
 const statusOptions: { key: TicketStatus | 'ALL'; label: string; icon: string }[] = [
     { key: 'ALL', label: 'Tất cả', icon: 'inbox' },
     { key: 'NEW', label: 'Mới', icon: 'fiber_new' },
@@ -81,6 +133,25 @@ const statusOptions: { key: TicketStatus | 'ALL'; label: string; icon: string }[
 
 function normalizeTicket(ticket: Ticket): Ticket {
     return { ...ticket, replies: Array.isArray(ticket.replies) ? ticket.replies : [] };
+}
+
+function resolveTicket(payload: TicketResponse): Ticket | undefined {
+    if ('data' in payload) return payload.data;
+    return payload;
+}
+
+function resolveReply(payload: ReplyResponse): Reply {
+    if ('data' in payload && payload.data) return payload.data;
+    return payload as Reply;
+}
+
+function resolveStats(payload: StatsResponse): Partial<Kpi> {
+    if ('data' in payload && payload.data) return payload.data;
+    return payload as Partial<Kpi>;
+}
+
+function isOpenTicket(status?: TicketStatus) {
+    return Boolean(status && OPEN_TICKET_STATUSES.has(status));
 }
 
 function getInitials(name: string) {
@@ -107,6 +178,35 @@ function fmtResponse(minutes: number | null) {
     return rest ? `${hours}h ${rest}p` : `${hours}h`;
 }
 
+function fmtSyncTime(date: Date) {
+    return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtMoney(value: number) {
+    return new Intl.NumberFormat('vi-VN', {
+        style: 'currency',
+        currency: 'VND',
+        maximumFractionDigits: 0,
+    }).format(value);
+}
+
+function fmtDate(value?: string | null) {
+    if (!value) return 'Chua co lich';
+    return new Date(value).toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+}
+
+function resolveBookingStatus(status: string) {
+    return BOOKING_STATUS[status] ?? { label: status, tone: 'bg-slate-100 text-slate-700 ring-slate-200' };
+}
+
+function resolvePaymentStatus(status: string) {
+    return PAYMENT_STATUS[status] ?? { label: status, tone: 'bg-slate-100 text-slate-700 ring-slate-200' };
+}
+
 export default function SupportPage() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [kpi, setKpi] = useState<Kpi>(EMPTY_KPI);
@@ -117,10 +217,13 @@ export default function SupportPage() {
     const [search, setSearch] = useState('');
     const [activeStatus, setActiveStatus] = useState<TicketStatus | 'ALL'>('ALL');
     const [activeCategory, setActiveCategory] = useState<TicketCategory | 'ALL'>('ALL');
+    const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
     const threadRef = useRef<HTMLDivElement>(null);
+    const selectedTicketId = selected?.id;
+    const selectedTicketStatus = selected?.status;
 
-    const fetchTickets = useCallback(async () => {
-        setLoading(true);
+    const fetchTickets = useCallback(async (options: FetchTicketsOptions = {}) => {
+        if (!options.silent) setLoading(true);
         try {
             const qs = new URLSearchParams();
             if (activeStatus !== 'ALL') qs.set('status', activeStatus);
@@ -131,13 +234,14 @@ export default function SupportPage() {
                 fetchWithAuth(`${API_BASE_URL}/support/tickets?${qs}`),
                 fetchWithAuth(`${API_BASE_URL}/support/stats`),
             ]);
-            const json = await ticketsRes.json();
-            const statsJson = await statsRes.json();
+            const json = (await ticketsRes.json()) as TicketListResponse;
+            const statsJson = (await statsRes.json()) as StatsResponse;
             const data = json?.data ?? json;
             const nextTickets = ((data.tickets ?? []) as Ticket[]).map(normalizeTicket);
 
             setTickets(nextTickets);
-            setKpi({ ...EMPTY_KPI, ...(statsJson?.data ?? statsJson) });
+            setKpi({ ...EMPTY_KPI, ...resolveStats(statsJson) });
+            setLastSyncedAt(new Date());
             setSelected((prev) => {
                 if (nextTickets.length === 0) return null;
                 const sameTicket = nextTickets.find((ticket) => ticket.id === prev?.id);
@@ -147,16 +251,57 @@ export default function SupportPage() {
                 return nextTickets[0];
             });
         } catch {
-            setTickets([]);
-            setSelected(null);
+            if (!options.silent) {
+                setTickets([]);
+                setSelected(null);
+            }
         } finally {
-            setLoading(false);
+            if (!options.silent) setLoading(false);
         }
     }, [activeStatus, activeCategory, search]);
+
+    const fetchSelectedDetail = useCallback(async (ticketId: number) => {
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${ticketId}`);
+            if (!res.ok) return;
+
+            const json = (await res.json()) as TicketResponse;
+            const resolvedTicket = resolveTicket(json);
+            if (!resolvedTicket) return;
+
+            const nextTicket = normalizeTicket(resolvedTicket);
+            setSelected((prev) => (prev?.id === ticketId ? nextTicket : prev));
+            setTickets((prev) => prev.map((ticket) => (ticket.id === ticketId ? { ...ticket, ...nextTicket } : ticket)));
+            setLastSyncedAt(new Date());
+        } catch {
+            // Polling is best-effort; keep the current admin thread visible.
+        }
+    }, []);
 
     useEffect(() => {
         void fetchTickets();
     }, [fetchTickets]);
+
+    useEffect(() => {
+        const pollSupportDesk = () => {
+            if (document.visibilityState !== 'visible') return;
+            void fetchTickets({ silent: true });
+            if (selectedTicketId && isOpenTicket(selectedTicketStatus)) {
+                void fetchSelectedDetail(selectedTicketId);
+            }
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') pollSupportDesk();
+        };
+
+        const intervalId = window.setInterval(pollSupportDesk, POLL_INTERVAL_MS);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [fetchSelectedDetail, fetchTickets, selectedTicketId, selectedTicketStatus]);
 
     useEffect(() => {
         if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
@@ -164,9 +309,7 @@ export default function SupportPage() {
 
     const handleSelect = async (ticket: Ticket) => {
         setSelected(ticket);
-        const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${ticket.id}`);
-        const json = await res.json();
-        setSelected(normalizeTicket(json?.data ?? json ?? ticket));
+        await fetchSelectedDetail(ticket.id);
     };
 
     const handleStatusChange = async (id: number, status: TicketStatus) => {
@@ -177,7 +320,7 @@ export default function SupportPage() {
         });
         setSelected((prev) => prev ? { ...prev, status } : prev);
         setTickets((prev) => prev.map((ticket) => ticket.id === id ? { ...ticket, status } : ticket));
-        void fetchTickets();
+        void fetchTickets({ silent: true });
     };
 
     const handleSendReply = async () => {
@@ -189,12 +332,12 @@ export default function SupportPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: reply.trim() }),
             });
-            const json = await res.json();
-            const newReply: Reply = json?.data ?? json;
+            const json = (await res.json()) as ReplyResponse;
+            const newReply = resolveReply(json);
             setSelected((prev) => prev ? { ...prev, status: 'IN_PROGRESS', replies: [...(prev.replies ?? []), newReply] } : prev);
             setTickets((prev) => prev.map((ticket) => ticket.id === selected.id ? { ...ticket, status: 'IN_PROGRESS' } : ticket));
             setReply('');
-            void fetchTickets();
+            void fetchTickets({ silent: true });
         } finally {
             setSending(false);
         }
@@ -216,6 +359,9 @@ export default function SupportPage() {
 
     const selectedCategory = selected ? CAT[selected.category] ?? CAT.general : CAT.general;
     const selectedStatus = selected ? STS[selected.status] : null;
+    const linkedBooking = selected?.linkedBooking ?? null;
+    const bookingStatus = linkedBooking ? resolveBookingStatus(linkedBooking.status) : null;
+    const paymentStatus = linkedBooking ? resolvePaymentStatus(linkedBooking.paymentStatus) : null;
 
     return (
         <main className="flex h-[calc(100dvh-68px)] max-h-[calc(100dvh-68px)] min-h-0 flex-1 overflow-hidden bg-surface text-on-surface">
@@ -329,6 +475,12 @@ export default function SupportPage() {
                             </div>
                         ))}
                     </div>
+                    {lastSyncedAt && (
+                        <p className="mt-3 flex items-center justify-end gap-1.5 text-[11px] font-semibold text-outline">
+                            <span className="material-symbols-outlined text-[14px]">sync</span>
+                            Cap nhat {fmtSyncTime(lastSyncedAt)}
+                        </p>
+                    )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
@@ -447,13 +599,70 @@ export default function SupportPage() {
                                     <p className="font-bold text-outline">Điện thoại</p>
                                     <p className="mt-1 font-semibold text-on-surface">{selected.customerPhone || '—'}</p>
                                 </div>
-                                <div className={`col-span-2 rounded-2xl border p-3 ${selected.bookingRef ? 'border-primary/20 bg-primary/5' : 'border-outline-variant/30 bg-surface-container-low'}`}>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-outline">Booking ref</p>
-                                            <p className="mt-1 font-mono text-sm font-black text-slate-950">{selected.bookingRef || 'Chưa liên kết booking'}</p>
+                                <div className={`col-span-2 rounded-2xl border p-3.5 ${linkedBooking ? 'border-primary/20 bg-primary/5' : selected.bookingRef ? 'border-orange-200 bg-orange-50' : 'border-outline-variant/30 bg-surface-container-low'}`}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-outline">Booking ref</p>
+                                                    <p className="mt-1 font-mono text-sm font-black tracking-wide text-slate-950">{selected.bookingRef || 'Chưa liên kết booking'}</p>
+                                                </div>
+                                                {linkedBooking && (
+                                                    <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-100">
+                                                        Đã khớp
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {linkedBooking && bookingStatus && paymentStatus ? (
+                                                <div className="mt-4 space-y-3">
+                                                    <div>
+                                                        <p className="line-clamp-2 text-sm font-black leading-5 text-slate-950">{linkedBooking.tourName}</p>
+                                                        <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-semibold text-on-surface-variant">
+                                                            <span>Khởi hành {fmtDate(linkedBooking.departureDate ?? linkedBooking.tourStartDate)}</span>
+                                                            <span className="text-outline">·</span>
+                                                            <span>{linkedBooking.tourDuration}</span>
+                                                        </p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="rounded-xl bg-surface/80 p-2.5">
+                                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Đơn hàng</p>
+                                                            <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black ring-1 ${bookingStatus.tone}`}>
+                                                                {bookingStatus.label}
+                                                            </span>
+                                                        </div>
+                                                        <div className="rounded-xl bg-surface/80 p-2.5">
+                                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Thanh toán</p>
+                                                            <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black ring-1 ${paymentStatus.tone}`}>
+                                                                {paymentStatus.label}
+                                                            </span>
+                                                        </div>
+                                                        <div className="rounded-xl bg-surface/80 p-2.5">
+                                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Số khách</p>
+                                                            <p className="mt-1 text-sm font-black text-slate-950">{linkedBooking.numberOfPeople}</p>
+                                                        </div>
+                                                        <div className="rounded-xl bg-surface/80 p-2.5">
+                                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Tổng tiền</p>
+                                                            <p className="mt-1 text-sm font-black text-slate-950">{fmtMoney(linkedBooking.totalPrice)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <Link
+                                                        href={`./bookings?search=${encodeURIComponent(linkedBooking.bookingCode)}`}
+                                                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-black text-on-primary transition hover:bg-primary-container focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+                                                    >
+                                                        Mở đơn đặt
+                                                        <span className="material-symbols-outlined text-[17px]">open_in_new</span>
+                                                    </Link>
+                                                </div>
+                                            ) : selected.bookingRef ? (
+                                                <div className="mt-3 rounded-xl border border-orange-200 bg-surface/80 p-3 text-xs font-semibold leading-5 text-orange-700">
+                                                    Không tìm thấy đơn đặt tương ứng. Cần hỏi lại khách mã đặt chỗ chính xác.
+                                                </div>
+                                            ) : (
+                                                <p className="mt-2 text-xs font-semibold text-outline">Ticket này không yêu cầu đối soát đơn đặt.</p>
+                                            )}
                                         </div>
-                                        <span className="material-symbols-outlined text-[18px] text-outline">confirmation_number</span>
+                                        <span className="material-symbols-outlined mt-0.5 text-[18px] text-outline">confirmation_number</span>
                                     </div>
                                 </div>
                             </div>

@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, TourStatus } from '@prisma/client';
+import { Prisma, TourStatus, TravelScope } from '@prisma/client';
 import { CreateTourDto } from './dto/create-tour.dto';
 import { FilterTourDto } from './dto/filter-tour.dto';
 import { UpdateTourDto } from './dto/update-tour.dto';
@@ -22,6 +22,14 @@ const getMinBookableDate = () => {
   const date = new Date();
   date.setDate(date.getDate() + 1);
   return new Date(`${date.toISOString().slice(0, 10)}T00:00:00.000Z`);
+};
+
+const parseTravelScope = (input?: string): TravelScope | undefined => {
+  if (!input) return undefined;
+  if (input === TravelScope.DOMESTIC || input === TravelScope.INTERNATIONAL) {
+    return input;
+  }
+  throw new BadRequestException('travelScope khong hop le');
 };
 
 type PublishableTourFields = {
@@ -144,6 +152,7 @@ export class TourService {
   ) {
     const {
       dest,
+      travelScope: travelScopeInput,
       minPrice,
       maxPrice,
       date,
@@ -159,6 +168,7 @@ export class TourService {
     const skip = (pageNum - 1) * limitNum;
 
     const where: Prisma.TourWhereInput = { deletedAt: null };
+    const travelScope = parseTravelScope(travelScopeInput);
 
     // Visibility: Staff chỉ thấy tour của mình; Admin thấy tất cả; Public chỉ thấy PUBLISHED
     if (requesterRole === 'STAFF' && requesterId) {
@@ -200,6 +210,17 @@ export class TourService {
           : [searchFilter];
     }
 
+    if (travelScope) {
+      const scopeFilter: Prisma.TourWhereInput = {
+        destination: { travelScope },
+      };
+      where.AND = Array.isArray(where.AND)
+        ? [...where.AND, scopeFilter]
+        : where.AND
+          ? [where.AND, scopeFilter]
+          : [scopeFilter];
+    }
+
     if (minPrice || maxPrice) {
       where.price = {
         ...(minPrice ? { gte: parseFloat(minPrice) } : {}),
@@ -235,7 +256,7 @@ export class TourService {
         skip,
         take: limitNum,
         include: {
-          destination: { select: { name: true } },
+          destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
           departures: {
             select: { price: true },
             where: {
@@ -501,7 +522,7 @@ export class TourService {
         skip,
         take: limit,
         include: {
-          destination: { select: { name: true } },
+          destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
           createdBy: { select: { id: true, fullName: true } },
         },
       }),
@@ -549,7 +570,7 @@ export class TourService {
     const tour = await this.prisma.tour.findUnique({
       where: { id, deletedAt: null },
       include: {
-        destination: { select: { name: true } },
+        destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
         departures: {
           where: {
             isActive: true,
@@ -629,7 +650,7 @@ export class TourService {
         where: { status: TourStatus.PENDING_REVIEW, deletedAt: null },
         orderBy: { updatedAt: 'asc' }, // FIFO — cũ nhất duyệt trước
         include: {
-          destination: { select: { name: true } },
+          destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
           createdBy: { select: { id: true, fullName: true, avatarUrl: true } },
         },
       }),
@@ -790,7 +811,7 @@ export class TourService {
       },
       include: {
         tour: {
-          include: { destination: { select: { name: true } } },
+          include: { destination: { select: { id: true, name: true, travelScope: true, countryCode: true } } },
         },
       },
       orderBy: [

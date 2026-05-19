@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import AdminPagination from '@/app/components/admin/AdminPagination';
 import { API_BASE_URL } from '@/app/lib/constants';
@@ -2171,6 +2172,9 @@ function AssistedBookingWorkspace({
 }
 
 export default function BookingManagementPage() {
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get('search') ?? '';
+
   // Data state
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [stats, setStats] = useState<Stats>({
@@ -2189,7 +2193,7 @@ export default function BookingManagementPage() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Filter state
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');

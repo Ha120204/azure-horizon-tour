@@ -11,6 +11,44 @@ import CancelBookingModal from '@/app/components/booking/CancelBookingModal';
 
 const EXPIRY_MINUTES = 15;
 
+type TripLifecycle = 'UPCOMING' | 'DEPARTING_TODAY' | 'COMPLETED';
+
+type CancellationPolicy = {
+    canCancel: boolean;
+    tripLifecycle: TripLifecycle;
+    cancelUnavailableReason?: string;
+    refundPercent: number;
+    estimatedRefundAmount: number;
+    refundNote: string;
+    policyTier: string;
+    departureDate: string;
+    daysUntilDeparture: number;
+};
+
+type BookingDetail = {
+    id: number;
+    bookingCode: string;
+    status: string;
+    paymentStatus: string;
+    createdAt: string;
+    numberOfPeople: number;
+    totalPrice: number | string;
+    cancelReason?: string | null;
+    cancelRequestedAt?: string | null;
+    cancelledAt?: string | null;
+    refundAmount?: number | string | null;
+    refundNote?: string | null;
+    cancellationPolicy?: CancellationPolicy;
+    tour?: {
+        id?: number;
+        name?: string;
+        tourCode?: string;
+        imageUrl?: string | null;
+        duration?: string | null;
+        startDate?: string | null;
+    } | null;
+};
+
 function useCountdown(createdAt: string | undefined) {
     const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
     useEffect(() => {
@@ -91,7 +129,7 @@ function StatusBadge({ status, paymentStatus }: { status: string; paymentStatus:
 export default function BookingDetailPage() {
     const params = useParams();
     const router = useRouter();
-    const [booking, setBooking] = useState<any>(null);
+    const [booking, setBooking] = useState<BookingDetail | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isPaying, setIsPaying] = useState(false);
     const [payError, setPayError] = useState('');
@@ -154,7 +192,18 @@ export default function BookingDetailPage() {
     const isPending = booking.paymentStatus === 'UNPAID' && booking.status === 'PENDING';
     const isCancelled = booking.status === 'CANCELLED';
     const isCancelRequested = booking.status === 'CANCEL_REQUESTED';
-    const isConfirmed = booking.paymentStatus === 'PAID' && booking.status === 'CONFIRMED';
+    const cancellationPolicy = booking.cancellationPolicy;
+    const canCancelBooking = Boolean(cancellationPolicy?.canCancel);
+    const tripLifecycle = cancellationPolicy?.tripLifecycle ?? 'UPCOMING';
+    const departureDate =
+        cancellationPolicy?.departureDate ?? booking.tour?.startDate;
+    const tripUnavailableReason =
+        cancellationPolicy?.cancelUnavailableReason ??
+        (tripLifecycle === 'COMPLETED'
+            ? 'Chuyến đi đã hoàn thành.'
+            : 'Không thể hủy online ở thời điểm này.');
+    const totalPriceNumber = Number(booking.totalPrice);
+    const refundAmountNumber = Number(booking.refundAmount ?? 0);
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
@@ -230,13 +279,13 @@ export default function BookingDetailPage() {
                                             </div>
                                             <span className="font-bold">{booking.tour?.duration || t('my_bookings.unspecified')}</span>
                                         </div>
-                                        {booking.tour?.startDate && (
+                                        {departureDate && (
                                             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                                                 <div className="flex items-center gap-3 text-on-surface-variant">
                                                     <span className="material-symbols-outlined text-primary">flight_takeoff</span>
                                                     <span className="font-medium">Ngày khởi hành</span>
                                                 </div>
-                                                <span className="font-bold">{new Date(booking.tour.startDate).toLocaleDateString('vi-VN')}</span>
+                                                <span className="font-bold">{new Date(departureDate).toLocaleDateString('vi-VN')}</span>
                                             </div>
                                         )}
                                     </div>
@@ -266,9 +315,9 @@ export default function BookingDetailPage() {
                                             {booking.refundAmount !== undefined && booking.refundAmount !== null && (
                                                 <div className="flex justify-between pt-2 border-t border-slate-200">
                                                     <span className="text-slate-500 font-semibold">Hoàn tiền</span>
-                                                    <span className={`font-bold text-base ${booking.refundAmount > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                        {booking.refundAmount > 0
-                                                            ? booking.refundAmount.toLocaleString('vi-VN') + 'đ'
+                                                    <span className={`font-bold text-base ${refundAmountNumber > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                        {refundAmountNumber > 0
+                                                            ? refundAmountNumber.toLocaleString('vi-VN') + 'đ'
                                                             : 'Không hoàn tiền'}
                                                     </span>
                                                 </div>
@@ -293,7 +342,7 @@ export default function BookingDetailPage() {
                                 {/* Total */}
                                 <div className="flex justify-between items-end">
                                     <span className="text-on-surface-variant font-medium">{t('my_bookings.totalPrice')}</span>
-                                    <span className="text-3xl font-extrabold font-headline text-primary">{formatPrice(booking.totalPrice)}</span>
+                                    <span className="text-3xl font-extrabold font-headline text-primary">{formatPrice(totalPriceNumber)}</span>
                                 </div>
 
                                 {/* Refund info if CANCEL_REQUESTED */}
@@ -301,8 +350,8 @@ export default function BookingDetailPage() {
                                     <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 space-y-1">
                                         <p className="text-xs font-bold text-orange-700 uppercase tracking-wider">Dự Kiến Hoàn Tiền</p>
                                         <p className="text-lg font-extrabold text-orange-600">
-                                            {booking.refundAmount > 0
-                                                ? Number(booking.refundAmount).toLocaleString('vi-VN') + 'đ'
+                                            {refundAmountNumber > 0
+                                                ? refundAmountNumber.toLocaleString('vi-VN') + 'đ'
                                                 : 'Không hoàn tiền'}
                                         </p>
                                         <p className="text-xs text-orange-600 opacity-80">{booking.refundNote}</p>
@@ -320,6 +369,36 @@ export default function BookingDetailPage() {
                                     </div>
                                 )}
 
+                                {cancellationPolicy && !isCancelRequested && !isCancelled && (
+                                    <div className={`rounded-xl border px-4 py-3 text-sm ${
+                                        canCancelBooking
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                            : tripLifecycle === 'COMPLETED'
+                                                ? 'border-slate-200 bg-slate-50 text-slate-700'
+                                                : 'border-amber-200 bg-amber-50 text-amber-800'
+                                    }`}>
+                                        <div className="flex items-start gap-2">
+                                            <span className="material-symbols-outlined text-base mt-0.5">
+                                                {canCancelBooking ? 'event_available' : tripLifecycle === 'COMPLETED' ? 'task_alt' : 'event_busy'}
+                                            </span>
+                                            <div>
+                                                <p className="font-bold">
+                                                    {canCancelBooking
+                                                        ? `Có thể hủy online - hoàn dự kiến ${cancellationPolicy.refundPercent}%`
+                                                        : tripLifecycle === 'COMPLETED'
+                                                            ? 'Chuyến đi đã hoàn thành'
+                                                            : 'Không thể hủy online'}
+                                                </p>
+                                                <p className="mt-1 text-xs opacity-80">
+                                                    {canCancelBooking
+                                                        ? cancellationPolicy.refundNote
+                                                        : tripUnavailableReason}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* CTA Buttons */}
                                 {isPaid ? (
                                     <div className="space-y-3">
@@ -330,14 +409,15 @@ export default function BookingDetailPage() {
                                             <span className="material-symbols-outlined text-lg">qr_code_scanner</span>
                                             {t('my_bookings.eTicket')}
                                         </Link>
-                                        {/* Cancel button for CONFIRMED paid */}
-                                        <button
+                                        {canCancelBooking ? (
+                                            <button
                                             onClick={() => setShowCancelModal(true)}
                                             className="w-full border-2 border-red-200 text-red-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-50 transition-all text-sm"
                                         >
                                             <span className="material-symbols-outlined text-base">cancel</span>
                                             Yêu Cầu Hủy Tour
-                                        </button>
+                                            </button>
+                                        ) : null}
                                     </div>
                                 ) : isCancelRequested ? (
                                     <div className="space-y-3">
@@ -393,6 +473,7 @@ export default function BookingDetailPage() {
                                                 <><span className="material-symbols-outlined text-lg">account_balance_wallet</span>{t('my_bookings.payNow')}</>
                                             )}
                                         </button>
+                                        {canCancelBooking && (
                                         <button
                                             onClick={() => setShowCancelModal(true)}
                                             className="w-full border-2 border-slate-200 text-slate-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
@@ -400,6 +481,7 @@ export default function BookingDetailPage() {
                                             <span className="material-symbols-outlined text-base">cancel</span>
                                             Hủy Đặt Tour
                                         </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -414,11 +496,12 @@ export default function BookingDetailPage() {
                 <CancelBookingModal
                     bookingId={booking.id}
                     bookingCode={booking.bookingCode}
-                    tourName={booking.tour?.name}
-                    tourStartDate={booking.tour?.startDate}
-                    totalPrice={Number(booking.totalPrice)}
+                    tourName={booking.tour?.name ?? 'Tour'}
+                    tourStartDate={departureDate ?? new Date().toISOString()}
+                    totalPrice={totalPriceNumber}
                     paymentStatus={booking.paymentStatus}
                     bookingStatus={booking.status}
+                    cancellationPolicy={cancellationPolicy}
                     onClose={() => setShowCancelModal(false)}
                     onSuccess={handleCancelSuccess}
                 />

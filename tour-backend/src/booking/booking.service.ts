@@ -35,6 +35,26 @@ import { randomBytes } from 'crypto';
 import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-draft.dto';
 
 type TransactionClient = Prisma.TransactionClient;
+type TripLifecycle = 'UPCOMING' | 'DEPARTING_TODAY' | 'COMPLETED';
+type CancellationPolicyTier =
+  | 'UNPAID'
+  | 'FULL_REFUND_24H'
+  | 'EIGHTY_REFUND'
+  | 'HALF_REFUND'
+  | 'NO_REFUND'
+  | 'NOT_CANCELABLE';
+
+type CancellationPolicy = {
+  canCancel: boolean;
+  tripLifecycle: TripLifecycle;
+  cancelUnavailableReason?: string;
+  refundPercent: number;
+  estimatedRefundAmount: number;
+  refundNote: string;
+  policyTier: CancellationPolicyTier;
+  departureDate: Date;
+  daysUntilDeparture: number;
+};
 
 type PassengerInput = {
   type?: string;
@@ -1623,7 +1643,9 @@ export class BookingService {
       throw new NotFoundException('Booking not found');
     }
 
-    return booking;
+    const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
+
+    return { ...booking, cancellationPolicy };
   }
 
   async findMyByBookingCode(bookingCode: string, userId: number) {
@@ -1930,49 +1952,156 @@ export class BookingService {
   // ============ CANCELLATION FLOW ============
 
   /**
-   * Tính số tiền hoàn theo chính sách 3 tier:
-   * >= 7 ngày trước khởi hành → hoàn 100%
-   * 3-6 ngày → hoàn 50%
-   * < 3 ngày hoặc đã qua → không hoàn
-   * PENDING (chưa thanh toán) → hoàn 100% ngay
+   * Centralized cancellation policy for both customer booking detail and
+   * cancellation requests. Do not calculate refunds separately in the UI.
    */
-  calculateRefund(booking: {
-    paymentStatus: string;
-    totalPrice: number;
+  private async resolveBookingDepartureDate(booking: {
+    departureId?: number | null;
     tour: { startDate: Date };
-  }): { refundAmount: number; refundNote: string; policyTier: string } {
+  }): Promise<Date> {
+    if (!booking.departureId) return booking.tour.startDate;
+
+    const departure = await this.prisma.tourDeparture.findUnique({
+      where: { id: booking.departureId },
+      select: { departureDate: true },
+    });
+
+    return departure?.departureDate ?? booking.tour.startDate;
+  }
+
+  private buildCancellationPolicy(booking: {
+    status: BookingStatus;
+    paymentStatus: PaymentStatus;
+    totalPrice: number | Prisma.Decimal;
+    createdAt: Date;
+    departureDate: Date;
+  }): CancellationPolicy {
+    const today = moment().startOf('day');
+    const departureDay = moment(booking.departureDate).startOf('day');
+    const daysUntilDeparture = departureDay.diff(today, 'days');
+    const tripLifecycle: TripLifecycle =
+      daysUntilDeparture < 0
+        ? 'COMPLETED'
+        : daysUntilDeparture === 0
+          ? 'DEPARTING_TODAY'
+          : 'UPCOMING';
+    const totalPrice = Number(booking.totalPrice);
+
+    if (booking.status === 'CANCELLED') {
+      return {
+        canCancel: false,
+        tripLifecycle,
+        cancelUnavailableReason: 'Đơn đặt tour đã được hủy.',
+        refundPercent: 0,
+        estimatedRefundAmount: 0,
+        refundNote: 'Đơn đặt tour đã được hủy.',
+        policyTier: 'NOT_CANCELABLE',
+        departureDate: booking.departureDate,
+        daysUntilDeparture,
+      };
+    }
+
+    if (booking.status === 'CANCEL_REQUESTED') {
+      return {
+        canCancel: false,
+        tripLifecycle,
+        cancelUnavailableReason: 'Yêu cầu hủy đang chờ xử lý.',
+        refundPercent: 0,
+        estimatedRefundAmount: 0,
+        refundNote: 'Yêu cầu hủy đang chờ admin xử lý.',
+        policyTier: 'NOT_CANCELABLE',
+        departureDate: booking.departureDate,
+        daysUntilDeparture,
+      };
+    }
+
+    if (tripLifecycle === 'DEPARTING_TODAY') {
+      return {
+        canCancel: false,
+        tripLifecycle,
+        cancelUnavailableReason: 'Tour khởi hành hôm nay, không thể hủy online.',
+        refundPercent: 0,
+        estimatedRefundAmount: 0,
+        refundNote: 'Không hỗ trợ hủy online vào ngày khởi hành.',
+        policyTier: 'NOT_CANCELABLE',
+        departureDate: booking.departureDate,
+        daysUntilDeparture,
+      };
+    }
+
+    if (tripLifecycle === 'COMPLETED') {
+      return {
+        canCancel: false,
+        tripLifecycle,
+        cancelUnavailableReason: 'Chuyến đi đã hoàn thành.',
+        refundPercent: 0,
+        estimatedRefundAmount: 0,
+        refundNote: 'Chuyến đi đã hoàn thành, không thể hủy booking.',
+        policyTier: 'NOT_CANCELABLE',
+        departureDate: booking.departureDate,
+        daysUntilDeparture,
+      };
+    }
+
     if (booking.paymentStatus !== 'PAID') {
       return {
-        refundAmount: Number(booking.totalPrice),
-        refundNote: 'Hoàn 100% — chưa thanh toán',
-        policyTier: 'FULL_UNPAID',
+        canCancel: true,
+        tripLifecycle,
+        refundPercent: 0,
+        estimatedRefundAmount: 0,
+        refundNote: 'Chưa thanh toán - không có khoản hoàn tiền.',
+        policyTier: 'UNPAID',
+        departureDate: booking.departureDate,
+        daysUntilDeparture,
       };
     }
 
-    // [FIX] Sử dụng moment để tính toán số ngày lịch (tính từ đầu ngày) để tránh sai số múi giờ và sai số giờ lẻ.
-    const today = moment().startOf('day');
-    const tourStartDate = moment(booking.tour.startDate).startOf('day');
-    const daysUntilTour = tourStartDate.diff(today, 'days');
+    const hoursSinceBooking = moment().diff(
+      moment(booking.createdAt),
+      'hours',
+      true,
+    );
+    let refundPercent = 0;
+    let refundNote = 'Không hoàn tiền (hủy dưới 3 ngày trước khởi hành).';
+    let policyTier: CancellationPolicyTier = 'NO_REFUND';
 
-    if (daysUntilTour >= 7) {
-      return {
-        refundAmount: Number(booking.totalPrice),
-        refundNote: 'Hoàn 100% (hủy trước 7 ngày khởi hành)',
-        policyTier: 'FULL_REFUND',
-      };
-    } else if (daysUntilTour >= 3) {
-      return {
-        refundAmount: Number(booking.totalPrice) * 0.5,
-        refundNote: 'Hoàn 50% (hủy trong vòng 3-6 ngày trước khởi hành)',
-        policyTier: 'HALF_REFUND',
-      };
-    } else {
-      return {
-        refundAmount: 0,
-        refundNote: 'Không hoàn tiền (hủy dưới 3 ngày hoặc sau ngày khởi hành)',
-        policyTier: 'NO_REFUND',
-      };
+    if (hoursSinceBooking <= 24) {
+      refundPercent = 100;
+      refundNote = 'Hoàn 100% do hủy trong 24h sau khi đặt.';
+      policyTier = 'FULL_REFUND_24H';
+    } else if (daysUntilDeparture >= 7) {
+      refundPercent = 80;
+      refundNote = 'Hoàn 80% do hủy trước ngày khởi hành từ 7 ngày trở lên.';
+      policyTier = 'EIGHTY_REFUND';
+    } else if (daysUntilDeparture >= 3) {
+      refundPercent = 50;
+      refundNote =
+        'Hoàn 50% do hủy trước ngày khởi hành từ 3 đến dưới 7 ngày.';
+      policyTier = 'HALF_REFUND';
     }
+
+    return {
+      canCancel: true,
+      tripLifecycle,
+      refundPercent,
+      estimatedRefundAmount: Math.round((totalPrice * refundPercent) / 100),
+      refundNote,
+      policyTier,
+      departureDate: booking.departureDate,
+      daysUntilDeparture,
+    };
+  }
+
+  private async getCancellationPolicyForBooking(booking: {
+    status: BookingStatus;
+    paymentStatus: PaymentStatus;
+    totalPrice: number | Prisma.Decimal;
+    createdAt: Date;
+    departureId?: number | null;
+    tour: { startDate: Date };
+  }): Promise<CancellationPolicy> {
+    const departureDate = await this.resolveBookingDepartureDate(booking);
+    return this.buildCancellationPolicy({ ...booking, departureDate });
   }
 
   /**
@@ -2002,11 +2131,15 @@ export class BookingService {
       throw new BadRequestException('Yêu cầu hủy của bạn đang chờ xử lý');
     }
 
-    const { refundAmount, refundNote } = this.calculateRefund({
-      paymentStatus: booking.paymentStatus,
-      totalPrice: Number(booking.totalPrice),
-      tour: booking.tour,
-    });
+    const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
+    if (!cancellationPolicy.canCancel) {
+      throw new BadRequestException(
+        cancellationPolicy.cancelUnavailableReason ??
+          'Không thể hủy booking này.',
+      );
+    }
+    const refundAmount = cancellationPolicy.estimatedRefundAmount;
+    const refundNote = cancellationPolicy.refundNote;
 
     // PENDING = chưa thanh toán → hủy ngay, hoàn ghế
     if (booking.status === 'PENDING') {

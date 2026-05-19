@@ -3,6 +3,15 @@ import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { TravelScope } from '@prisma/client';
+
+function parseTravelScope(input?: string): TravelScope | undefined {
+    if (!input) return undefined;
+    if (input === TravelScope.DOMESTIC || input === TravelScope.INTERNATIONAL) {
+        return input;
+    }
+    throw new BadRequestException('travelScope không hợp lệ');
+}
 
 @Controller('search')
 export class SearchController {
@@ -12,13 +21,17 @@ export class SearchController {
      * Trả toàn bộ danh sách Destinations (dùng cho dropdown gợi ý khi focus input)
      */
     @Get('destinations')
-    async getAllDestinations() {
+    async getAllDestinations(@Query('travelScope') travelScopeInput?: string) {
+        const travelScope = parseTravelScope(travelScopeInput);
         return this.prisma.destination.findMany({
+            where: travelScope ? { travelScope } : undefined,
             select: {
                 id: true,
                 name: true,
                 imageUrl: true,
                 region: true,
+                travelScope: true,
+                countryCode: true,
             },
             orderBy: { name: 'asc' },
         });
@@ -30,10 +43,12 @@ export class SearchController {
     @UseGuards(AuthGuard('jwt'), RolesGuard)
     @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
     @Post('destinations')
-    async createDestination(@Body() body: { name: string }) {
+    async createDestination(@Body() body: { name: string; travelScope?: string; countryCode?: string }) {
         const name = (body.name || '').trim();
         if (!name) throw new BadRequestException('Tên điểm đến không được để trống');
-        
+        const travelScope = parseTravelScope(body.travelScope) ?? TravelScope.DOMESTIC;
+        const countryCode = (body.countryCode || '').trim().toUpperCase() || (travelScope === TravelScope.DOMESTIC ? 'VN' : null);
+
         // Check if destination already exists (case insensitive)
         const existingDestination = await this.prisma.destination.findFirst({
             where: {
@@ -58,8 +73,8 @@ export class SearchController {
             .trim()
             .replace(/\s+/g, '-');
         return this.prisma.destination.create({
-            data: { name, slug: `${slug}-${Date.now()}` },
-            select: { id: true, name: true },
+            data: { name, slug: `${slug}-${Date.now()}`, travelScope, countryCode },
+            select: { id: true, name: true, travelScope: true, countryCode: true },
         });
     }
 
@@ -83,22 +98,28 @@ export class SearchController {
      * Live search: tìm Destinations + Tours theo từ khóa
      */
     @Get()
-    async liveSearch(@Query('q') query: string) {
+    async liveSearch(@Query('q') query: string, @Query('travelScope') travelScopeInput?: string) {
         if (!query || query.length < 2) {
             return { destinations: [], tours: [] };
         }
+        const travelScope = parseTravelScope(travelScopeInput);
 
         // Dùng mode 'insensitive' để tìm không phân biệt chữ hoa/thường
         const [destinations, tours] = await Promise.all([
             // 1. Lấy trực tiếp từ bảng Destination (kèm imageUrl cho thumbnail)
             this.prisma.destination.findMany({
-                where: { name: { contains: query, mode: 'insensitive' } },
+                where: {
+                    name: { contains: query, mode: 'insensitive' },
+                    ...(travelScope ? { travelScope } : {}),
+                },
                 take: 5,
                 select: {
                     id: true,
                     name: true,
                     imageUrl: true,
                     region: true,
+                    travelScope: true,
+                    countryCode: true,
                 },
             }),
 
@@ -107,6 +128,7 @@ export class SearchController {
                 where: {
                     name: { contains: query, mode: 'insensitive' },
                     deletedAt: null,
+                    ...(travelScope ? { destination: { travelScope } } : {}),
                 },
                 take: 4,
                 select: { id: true, name: true, price: true }
@@ -116,4 +138,4 @@ export class SearchController {
         // Trả thẳng dữ liệu về
         return { destinations, tours };
     }
-}
+}

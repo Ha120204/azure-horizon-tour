@@ -5,7 +5,14 @@ import { API_BASE_URL } from '@/app/lib/constants';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 
 // ── Types ──────────────────────────────────────────────────────────────
-interface Destination { id: number; name: string; }
+type TravelScope = 'DOMESTIC' | 'INTERNATIONAL';
+
+interface Destination {
+    id: number;
+    name: string;
+    travelScope?: TravelScope;
+    countryCode?: string | null;
+}
 
 interface TourPackage {
     id?: number;
@@ -365,6 +372,8 @@ export default function TourFormModal({
     // Destination creation state
     const [showNewDest, setShowNewDest] = useState(false);
     const [newDestName, setNewDestName] = useState('');
+    const [newDestTravelScope, setNewDestTravelScope] = useState<TravelScope>('DOMESTIC');
+    const [newDestCountryCode, setNewDestCountryCode] = useState('VN');
     const [isCreatingDest, setIsCreatingDest] = useState(false);
     const [newDestError, setNewDestError] = useState('');
 
@@ -492,7 +501,11 @@ export default function TourFormModal({
             const res = await fetchWithAuth(`${API_BASE_URL}/search/destinations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name }),
+                body: JSON.stringify({
+                    name,
+                    travelScope: newDestTravelScope,
+                    countryCode: newDestCountryCode.trim() || undefined,
+                }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -509,6 +522,8 @@ export default function TourFormModal({
             handleChange('destinationId', String(newDest.id));
             onDestinationCreated?.(newDest);
             setNewDestName('');
+            setNewDestTravelScope('DOMESTIC');
+            setNewDestCountryCode('VN');
             setShowNewDest(false);
         } catch (e: unknown) {
             setNewDestError(e instanceof Error ? e.message : 'Tạo điểm đến thất bại');
@@ -894,7 +909,9 @@ export default function TourFormModal({
                                             >
                                                 <option value="">Chọn điểm đến…</option>
                                                 {destinations.map(d => (
-                                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                                    <option key={d.id} value={d.id}>
+                                                        {d.name} · {(d.travelScope ?? 'DOMESTIC') === 'DOMESTIC' ? 'Trong nước' : 'Nước ngoài'}
+                                                    </option>
                                                 ))}
                                             </select>
                                             <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 text-base pointer-events-none">expand_more</span>
@@ -917,7 +934,7 @@ export default function TourFormModal({
                                             <span className="material-symbols-outlined text-[15px]">add_location_alt</span>
                                             Thêm điểm đến mới
                                         </p>
-                                        <div className="flex gap-2">
+                                        <div className="grid gap-3">
                                             <div className="relative flex-1">
                                                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">edit_location</span>
                                                 <input
@@ -930,6 +947,38 @@ export default function TourFormModal({
                                                     className={`w-full bg-surface-container-lowest border rounded-xl pl-10 pr-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors ${newDestError ? 'border-error' : 'border-outline-variant/20'}`}
                                                 />
                                             </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-2">
+                                                <div className="grid grid-cols-2 gap-2 rounded-xl bg-surface-container-lowest border border-outline-variant/20 p-1">
+                                                    {([
+                                                        { value: 'DOMESTIC' as TravelScope, label: 'Trong nước', icon: 'home_pin' },
+                                                        { value: 'INTERNATIONAL' as TravelScope, label: 'Nước ngoài', icon: 'public' },
+                                                    ]).map(option => {
+                                                        const active = newDestTravelScope === option.value;
+                                                        return (
+                                                            <button
+                                                                key={option.value}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setNewDestTravelScope(option.value);
+                                                                    setNewDestCountryCode(option.value === 'DOMESTIC' ? 'VN' : '');
+                                                                }}
+                                                                className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${active ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">{option.icon}</span>
+                                                                {option.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={newDestCountryCode}
+                                                    onChange={e => setNewDestCountryCode(e.target.value.toUpperCase().slice(0, 2))}
+                                                    placeholder="Mã QG"
+                                                    className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm font-semibold uppercase focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+                                                />
+                                            </div>
+                                            <div className="flex gap-2">
                                             <button
                                                 type="button"
                                                 onClick={handleCreateDestination}
@@ -943,11 +992,12 @@ export default function TourFormModal({
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => { setShowNewDest(false); setNewDestName(''); setNewDestError(''); }}
+                                                onClick={() => { setShowNewDest(false); setNewDestName(''); setNewDestTravelScope('DOMESTIC'); setNewDestCountryCode('VN'); setNewDestError(''); }}
                                                 className="w-10 h-10 flex items-center justify-center rounded-xl border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
                                             >
                                                 <span className="material-symbols-outlined text-base">close</span>
                                             </button>
+                                            </div>
                                         </div>
                                         {newDestError && <p className="text-error text-xs mt-2 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">error</span>{newDestError}</p>}
                                     </div>

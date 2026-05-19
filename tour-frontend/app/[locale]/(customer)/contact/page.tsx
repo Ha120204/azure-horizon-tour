@@ -27,6 +27,7 @@ const COUNTRY_CODES = [
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const BOOKING_REF_REQUIRED_SUBJECTS = new Set(['payment', 'cancellation', 'complaint']);
 
 const getFlagUrl = (iso: string) => `https://flagcdn.com/24x18/${iso}.png`;
 
@@ -37,6 +38,11 @@ type ContactInfoItem = {
     note?: string;
     href?: string;
     action?: string;
+};
+
+type ContactSubmitResponse = {
+    ticketId?: number;
+    accessCode?: string;
 };
 
 export default function ContactPage() {
@@ -59,6 +65,7 @@ export default function ContactPage() {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
+    const [submittedAccessCode, setSubmittedAccessCode] = useState('');
     const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
@@ -94,6 +101,15 @@ export default function ContactPage() {
     }, []);
 
     const selectedCountry = COUNTRY_CODES.find(country => country.code === formData.phonePrefix) ?? COUNTRY_CODES[5];
+    const isBookingRefRequired = BOOKING_REF_REQUIRED_SUBJECTS.has(formData.subject);
+    const bookingRefLabel = language === 'vi' ? 'Mã đặt chỗ' : 'Booking reference';
+    const bookingRefHelp = isBookingRefRequired
+        ? language === 'vi'
+            ? 'Bắt buộc để nhân viên tra cứu đúng đơn đặt tour của bạn.'
+            : 'Required so support staff can look up the correct booking.'
+        : language === 'vi'
+            ? 'Không bắt buộc với câu hỏi tư vấn chung.'
+            : 'Optional for general planning questions.';
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
@@ -107,6 +123,12 @@ export default function ContactPage() {
         if (!formData.phone.trim()) newErrors.phone = t('contact.errors.required');
         else if (!isValidPhoneNumber(formData.phone, selectedCountry.iso.toUpperCase() as CountryCode)) {
             newErrors.phone = t('contact.errors.invalidPhone');
+        }
+
+        if (isBookingRefRequired && !formData.reference.trim()) {
+            newErrors.reference = language === 'vi'
+                ? 'Vui lòng nhập mã đặt chỗ cho loại yêu cầu này'
+                : 'Please enter your booking reference for this request type';
         }
 
         if (!formData.message.trim()) newErrors.message = t('contact.errors.required');
@@ -181,8 +203,9 @@ export default function ContactPage() {
 
             if (!response.ok) throw new Error('Server error');
 
-            const data = await response.json();
+            const data = (await response.json()) as ContactSubmitResponse;
             setSubmittedTicketId(data.ticketId ?? 0);
+            setSubmittedAccessCode(data.accessCode ?? '');
             setIsSubmitted(true);
         } catch {
             setErrors({
@@ -197,6 +220,7 @@ export default function ContactPage() {
 
     const resetForm = () => {
         setIsSubmitted(false);
+        setSubmittedAccessCode('');
         setSelectedFile(null);
         setFileError('');
         setErrors({});
@@ -338,6 +362,16 @@ export default function ContactPage() {
                                                 {language === 'vi' ? 'Mã yêu cầu hỗ trợ' : 'Support ticket ID'}
                                             </p>
                                             <p className="mt-2 font-mono text-4xl font-bold text-primary">#{submittedTicketId}</p>
+                                            {!isLoggedIn && submittedAccessCode && (
+                                                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                                    <p className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-amber-700">
+                                                        {language === 'vi' ? 'Ma truy cap' : 'Access code'}
+                                                    </p>
+                                                    <p className="mt-2 break-all font-mono text-sm font-bold text-amber-800">
+                                                        {submittedAccessCode}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -349,6 +383,15 @@ export default function ContactPage() {
                                             >
                                                 <span className="material-symbols-outlined text-sm">person</span>
                                                 {language === 'vi' ? 'Xem yêu cầu trong hồ sơ' : 'View requests in profile'}
+                                            </Link>
+                                        )}
+                                        {!isLoggedIn && submittedTicketId > 0 && submittedAccessCode && (
+                                            <Link
+                                                href={`/support/track/${submittedTicketId}?accessCode=${encodeURIComponent(submittedAccessCode)}`}
+                                                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-colors hover:bg-primary-container"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">support_agent</span>
+                                                {language === 'vi' ? 'Theo doi yeu cau' : 'Track request'}
                                             </Link>
                                         )}
                                         <button
@@ -474,16 +517,29 @@ export default function ContactPage() {
 
                                         <div className="space-y-2">
                                             <label htmlFor="contact-ref" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
-                                                {t('contact.bookingRef')}
+                                                {bookingRefLabel}{' '}
+                                                {isBookingRefRequired ? (
+                                                    <span className="text-error">*</span>
+                                                ) : (
+                                                    <span className="text-outline">
+                                                        {language === 'vi' ? '(Không bắt buộc)' : '(Optional)'}
+                                                    </span>
+                                                )}
                                             </label>
                                             <input
                                                 id="contact-ref"
                                                 type="text"
-                                                className={minimalFieldClass}
+                                                aria-describedby={errors.reference ? 'contact-ref-error' : 'contact-ref-help'}
+                                                className={inputClass('reference')}
                                                 value={formData.reference}
                                                 onChange={event => setFormData({ ...formData, reference: event.target.value })}
                                                 placeholder="AH-98234-X"
                                             />
+                                            {errors.reference ? (
+                                                <p id="contact-ref-error" className="text-xs font-medium text-error">{errors.reference}</p>
+                                            ) : (
+                                                <p id="contact-ref-help" className="text-xs text-outline">{bookingRefHelp}</p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -496,7 +552,17 @@ export default function ContactPage() {
                                                 id="contact-subject"
                                                 className={`${minimalFieldClass} cursor-pointer appearance-none pr-10`}
                                                 value={formData.subject}
-                                                onChange={event => setFormData({ ...formData, subject: event.target.value })}
+                                                onChange={event => {
+                                                    const nextSubject = event.target.value;
+                                                    setFormData({ ...formData, subject: nextSubject });
+                                                    if (!BOOKING_REF_REQUIRED_SUBJECTS.has(nextSubject)) {
+                                                        setErrors(current => {
+                                                            const nextErrors = { ...current };
+                                                            delete nextErrors.reference;
+                                                            return nextErrors;
+                                                        });
+                                                    }
+                                                }}
                                             >
                                                 <option value="booking">{t('contact.subjectOptions.booking')}</option>
                                                 <option value="payment">{t('contact.subjectOptions.payment')}</option>

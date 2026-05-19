@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense, useCallback } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
@@ -11,6 +11,25 @@ import Pagination from '@/app/components/destinations/Pagination';
 import { getTranslatedTour } from '@/app/lib/mockTranslations';
 import { API_BASE_URL } from '@/app/lib/constants';
 
+type TravelScope = '' | 'DOMESTIC' | 'INTERNATIONAL';
+
+interface DestinationOption {
+    id: number;
+    name: string;
+    imageUrl?: string | null;
+    region?: string | null;
+    travelScope?: Exclude<TravelScope, ''>;
+    countryCode?: string | null;
+}
+
+interface TourListItem {
+    id: number;
+    [key: string]: unknown;
+}
+
+const normalizeTravelScope = (value: string | null): TravelScope =>
+    value === 'DOMESTIC' || value === 'INTERNATIONAL' ? value : '';
+
 function DestinationsContent() {
     const searchParams = useSearchParams();
     const { t, formatPrice, language } = useLocale();
@@ -19,13 +38,15 @@ function DestinationsContent() {
     const initialDest = searchParams.get('dest') || '';
     const initialDate = searchParams.get('date') || '';
     const initialBudget = searchParams.get('budget') || '';
+    const initialTravelScope = normalizeTravelScope(searchParams.get('travelScope'));
 
     // 2. State cho thanh tìm kiếm
     const [dest, setDest] = useState(initialDest);
     const [date, setDate] = useState(initialDate);
+    const [travelScope, setTravelScope] = useState<TravelScope>(initialTravelScope);
 
     // 3. State lưu dữ liệu API
-    const [filteredTours, setFilteredTours] = useState<any[]>([]);
+    const [filteredTours, setFilteredTours] = useState<TourListItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // 4. State cho bộ lọc sidebar
@@ -36,17 +57,18 @@ function DestinationsContent() {
     const [sortBy, setSortBy] = useState('recommended');
 
     // 4b. Dynamic data
-    const [allDestinations, setAllDestinations] = useState<any[]>([]);
+    const [allDestinations, setAllDestinations] = useState<DestinationOption[]>([]);
     const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 1000 });
 
     // 5. State Phân trang
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
-    const [limit, setLimit] = useState(9);
+    const [limit, setLimit] = useState(12);
 
     const buildQueryString = () => {
         const query = new URLSearchParams();
+        if (travelScope) query.append('travelScope', travelScope);
         if (dest) query.append('dest', dest);
         if (date) query.append('date', date);
         if (sidebarBudget && sidebarBudget !== 'unlimited') {
@@ -101,8 +123,11 @@ function DestinationsContent() {
     useEffect(() => {
         const fetchFilterData = async () => {
             try {
+                const destUrl = travelScope
+                    ? `${API_BASE_URL}/search/destinations?travelScope=${travelScope}`
+                    : `${API_BASE_URL}/search/destinations`;
                 const [destRes, priceRes] = await Promise.all([
-                    fetch(`${API_BASE_URL}/search/destinations`),
+                    fetch(destUrl),
                     fetch(`${API_BASE_URL}/search/price-range`),
                 ]);
                 const destJson = await destRes.json();
@@ -114,7 +139,7 @@ function DestinationsContent() {
             }
         };
         fetchFilterData();
-    }, []);
+    }, [travelScope]);
 
     // 7. Toggle star rating
     const toggleRating = (rating: number) => {
@@ -132,6 +157,7 @@ function DestinationsContent() {
 
     // 9. Clear all filters
     const handleClearAll = () => {
+        setTravelScope('');
         setDest('');
         setDate('');
         setSidebarBudget('');
@@ -148,7 +174,16 @@ function DestinationsContent() {
     };
 
     // Đếm tổng bộ lọc đang active
-    const activeFilterCount = selectedRatings.length + selectedTypes.length + (sidebarBudget ? 1 : 0) + (dest ? 1 : 0) + (date ? 1 : 0);
+    const activeFilterCount = selectedRatings.length + selectedTypes.length + (sidebarBudget ? 1 : 0) + (dest ? 1 : 0) + (date ? 1 : 0) + (travelScope ? 1 : 0);
+    const totalTourCount = totalItems || filteredTours.length;
+    const resultSummary =
+        language === 'vi'
+            ? `Tìm thấy tổng cộng ${totalTourCount} tour`
+            : `Found ${totalTourCount} tours in total`;
+    const visibleSummary =
+        language === 'vi'
+            ? `Đang hiển thị ${filteredTours.length} tour trên trang này`
+            : `Showing ${filteredTours.length} tours on this page`;
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
@@ -194,6 +229,7 @@ function DestinationsContent() {
                         {showMobileFilter && (
                             <div className="mt-4">
                                 <FilterSidebar
+                                    travelScope={travelScope} setTravelScope={setTravelScope}
                                     dest={dest} setDest={setDest}
                                     date={date} setDate={setDate}
                                     sidebarBudget={sidebarBudget} setSidebarBudget={setSidebarBudget}
@@ -213,6 +249,7 @@ function DestinationsContent() {
                         <aside className="hidden lg:block lg:col-span-3">
                             <div className="sticky top-28">
                                 <FilterSidebar
+                                    travelScope={travelScope} setTravelScope={setTravelScope}
                                     dest={dest} setDest={setDest}
                                     date={date} setDate={setDate}
                                     sidebarBudget={sidebarBudget} setSidebarBudget={setSidebarBudget}
@@ -232,8 +269,11 @@ function DestinationsContent() {
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
                                 <div>
                                     <p className="text-on-surface-variant font-medium">
-                                        {t('dest.showing')} <span className="text-on-surface font-bold">{filteredTours.length} {t('dest.tours')}</span> {t('dest.available')}
+                                        <span className="text-on-surface font-bold">{resultSummary}</span>
                                     </p>
+                                    {totalTourCount > filteredTours.length && (
+                                        <p className="mt-1 text-xs font-medium text-outline">{visibleSummary}</p>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="text-sm text-outline font-medium whitespace-nowrap">{t('dest.sortBy')}</span>
@@ -257,7 +297,7 @@ function DestinationsContent() {
                                 <div className="text-center text-xl text-primary font-bold py-10">{t('dest.loadingData')}</div>
                             ) : filteredTours.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                                    {filteredTours.map((tour: any) => (
+                                    {filteredTours.map((tour) => (
                                         <TourCard key={tour.id} tour={getTranslatedTour(tour, language)} t={t} formatPrice={formatPrice} />
                                     ))}
                                 </div>

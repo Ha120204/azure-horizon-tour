@@ -29,6 +29,8 @@ export interface Destination {
     name: string;
     region?: string;
     imageUrl?: string;
+    travelScope?: 'DOMESTIC' | 'INTERNATIONAL';
+    countryCode?: string | null;
 }
 
 export interface TourPackage {

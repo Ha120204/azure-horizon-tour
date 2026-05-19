@@ -7,6 +7,10 @@ export class FilterTourDto {
 
   @IsOptional()
   @IsString()
+  travelScope?: string;
+
+  @IsOptional()
+  @IsString()
   minPrice?: string;
 
   @IsOptional()

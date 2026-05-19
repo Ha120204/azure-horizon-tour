@@ -1,8 +1,22 @@
 'use client';
 
 import { useRef, useCallback, useEffect, useState } from 'react';
+import { API_BASE_URL } from '@/app/lib/constants';
+
+type TravelScope = '' | 'DOMESTIC' | 'INTERNATIONAL';
+
+interface DestinationOption {
+    id: number;
+    name: string;
+    imageUrl?: string | null;
+    region?: string | null;
+    travelScope?: Exclude<TravelScope, ''>;
+    countryCode?: string | null;
+}
 
 interface FilterSidebarProps {
+    travelScope: TravelScope;
+    setTravelScope: (v: TravelScope) => void;
     dest: string;
     setDest: (v: string) => void;
     date: string;
@@ -17,13 +31,14 @@ interface FilterSidebarProps {
     onApplyFilters: () => void;
     activeFilterCount: number;
     priceRange: { min: number; max: number };
-    allDestinations: any[];
+    allDestinations: DestinationOption[];
     t: (key: string) => string;
     formatPrice: (price: number) => string;
     language: string;
 }
 
 export default function FilterSidebar({
+    travelScope, setTravelScope,
     dest, setDest,
     date, setDate,
     sidebarBudget, setSidebarBudget,
@@ -31,11 +46,10 @@ export default function FilterSidebar({
     selectedTypes, toggleType,
     onClearAll, onApplyFilters,
     activeFilterCount,
-    priceRange,
     allDestinations,
     t, formatPrice, language,
 }: FilterSidebarProps) {
-    const [sidebarSuggestions, setSidebarSuggestions] = useState<any[]>([]);
+    const [sidebarSuggestions, setSidebarSuggestions] = useState<DestinationOption[]>([]);
     const [isSidebarDestFocused, setIsSidebarDestFocused] = useState(false);
     const sidebarDebounceRef = useRef<NodeJS.Timeout | null>(null);
     const sidebarDestRef = useRef<HTMLDivElement>(null);
@@ -49,13 +63,14 @@ export default function FilterSidebar({
         }
         sidebarDebounceRef.current = setTimeout(async () => {
             try {
-                const res = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(value)}`);
+                const scopeQuery = travelScope ? `&travelScope=${travelScope}` : '';
+                const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(value)}${scopeQuery}`);
                 const json = await res.json();
                 const data = json.data || json;
                 setSidebarSuggestions(data.destinations || []);
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
         }, 300);
-    }, [setDest]);
+    }, [setDest, travelScope]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -74,6 +89,11 @@ export default function FilterSidebar({
         { value: 'Khám Phá',         icon: 'hiking',          label: t('filter.tourType_adventure'), desc: t('filter.tourType_adventureDesc') },
         { value: 'Văn Hóa & Lịch Sử', icon: 'museum',         label: t('filter.tourType_culture'),   desc: t('filter.tourType_cultureDesc') },
         { value: 'Tour Ghép Đoàn',   icon: 'groups',          label: t('filter.tourType_group'),     desc: t('filter.tourType_groupDesc') },
+    ];
+    const tripScopeOptions: { value: TravelScope; icon: string; label: string; desc: string }[] = [
+        { value: '', icon: 'travel_explore', label: t('filter.allTrips'), desc: language === 'vi' ? 'Hiển thị toàn bộ hành trình' : 'Show every available journey' },
+        { value: 'DOMESTIC', icon: 'home_pin', label: t('search.domestic'), desc: language === 'vi' ? 'Tour khởi hành và trải nghiệm tại Việt Nam' : 'Journeys within Vietnam' },
+        { value: 'INTERNATIONAL', icon: 'public', label: t('search.international'), desc: language === 'vi' ? 'Hành trình ra nước ngoài' : 'Journeys outside Vietnam' },
     ];
 
     return (
@@ -97,6 +117,51 @@ export default function FilterSidebar({
                 >
                     {t('filter.clearAll')}
                 </button>
+            </div>
+
+            {/* Trip Scope Section */}
+            <div className="px-6 py-6 border-b border-outline-variant/10">
+                <h3 className="font-bold text-[11px] text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm text-primary">public</span>
+                    {t('filter.tripScope')}
+                </h3>
+                <div className="space-y-2">
+                    {tripScopeOptions.map((option) => {
+                        const isActive = travelScope === option.value;
+                        return (
+                            <button
+                                key={option.value || 'all'}
+                                onClick={() => {
+                                    setTravelScope(option.value);
+                                    setDest('');
+                                    setSidebarSuggestions([]);
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 group active:scale-[0.98]
+                                    ${isActive
+                                        ? 'bg-primary/5 border-primary/25'
+                                        : 'border-outline-variant/15 bg-white hover:border-primary/15'
+                                    }`}
+                            >
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors
+                                    ${isActive ? 'bg-primary/15' : 'bg-surface-container-low group-hover:bg-surface-container'}`}
+                                >
+                                    <span className={`material-symbols-outlined text-base ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}>{option.icon}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-semibold leading-tight ${isActive ? 'text-primary' : 'text-on-surface'}`}>{option.label}</p>
+                                    <p className="text-[11px] text-on-surface-variant leading-tight mt-0.5">{option.desc}</p>
+                                </div>
+                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all
+                                    ${isActive ? 'bg-primary border-primary' : 'border-outline-variant/30'}`}
+                                >
+                                    {isActive && (
+                                        <span className="material-symbols-outlined text-white text-xs font-bold">check</span>
+                                    )}
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* Search Section */}
@@ -132,7 +197,7 @@ export default function FilterSidebar({
                         if (suggestions.length === 0) return null;
                         return (
                             <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-[100] max-h-[240px] overflow-y-auto">
-                                {suggestions.map((item: any) => (
+                                {suggestions.map((item) => (
                                     <div
                                         key={item.id}
                                         onClick={() => { setDest(item.name); setIsSidebarDestFocused(false); }}

@@ -19,6 +19,13 @@ interface CancelBookingModalProps {
   totalPrice: number;
   paymentStatus: string; // 'UNPAID' | 'PAID'
   bookingStatus: string; // 'PENDING' | 'CONFIRMED'
+  cancellationPolicy?: {
+    canCancel: boolean;
+    refundPercent: number;
+    estimatedRefundAmount: number;
+    refundNote: string;
+    policyTier: string;
+  };
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -38,11 +45,11 @@ function calculateRefundPreview(
   const daysUntilTour = Math.ceil((tourStart.getTime() - now.getTime()) / msPerDay);
 
   if (daysUntilTour >= 7) {
-    return { refundAmount: totalPrice, refundNote: 'Hủy trước 7 ngày — hoàn 100%', tier: 'FULL' };
+    return { refundAmount: totalPrice * 0.8, refundNote: 'Hủy trước 7 ngày - hoàn 80%', tier: 'EIGHTY_REFUND' };
   } else if (daysUntilTour >= 3) {
-    return { refundAmount: totalPrice * 0.5, refundNote: 'Hủy trong 3–6 ngày — hoàn 50%', tier: 'HALF' };
+    return { refundAmount: totalPrice * 0.5, refundNote: 'Hủy trong 3-6 ngày - hoàn 50%', tier: 'HALF_REFUND' };
   } else {
-    return { refundAmount: 0, refundNote: 'Hủy dưới 3 ngày — không hoàn tiền', tier: 'NONE' };
+    return { refundAmount: 0, refundNote: 'Hủy dưới 3 ngày - không hoàn tiền', tier: 'NO_REFUND' };
   }
 }
 
@@ -54,6 +61,7 @@ export default function CancelBookingModal({
   totalPrice,
   paymentStatus,
   bookingStatus,
+  cancellationPolicy,
   onClose,
   onSuccess,
 }: CancelBookingModalProps) {
@@ -89,7 +97,13 @@ export default function CancelBookingModal({
   );
   const selectedBankObj = banksList.find(b => b.shortName === bankName);
 
-  const refundPreview = calculateRefundPreview(paymentStatus, totalPrice, tourStartDate);
+  const refundPreview = cancellationPolicy
+    ? {
+        refundAmount: cancellationPolicy.estimatedRefundAmount,
+        refundNote: cancellationPolicy.refundNote,
+        tier: cancellationPolicy.policyTier,
+      }
+    : calculateRefundPreview(paymentStatus, totalPrice, tourStartDate);
   const isPaid = paymentStatus === 'PAID';
   const isPending = bookingStatus === 'PENDING';
 
@@ -164,8 +178,12 @@ export default function CancelBookingModal({
 
   const tierColor = ({
     FULL:   { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', amount: 'text-emerald-700' },
+    FULL_REFUND_24H: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', amount: 'text-emerald-700' },
+    EIGHTY_REFUND: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', amount: 'text-emerald-700' },
     HALF:   { bg: 'bg-amber-50',   border: 'border-amber-200',   text: 'text-amber-700',   amount: 'text-amber-700'   },
+    HALF_REFUND: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', amount: 'text-amber-700' },
     NONE:   { bg: 'bg-red-50',     border: 'border-red-200',     text: 'text-red-700',     amount: 'text-red-600'     },
+    NO_REFUND: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', amount: 'text-red-600' },
     UNPAID: { bg: 'bg-slate-50',   border: 'border-slate-200',   text: 'text-slate-600',   amount: 'text-slate-600'   },
   } as Record<string, { bg: string; border: string; text: string; amount: string }>)[refundPreview.tier]
     ?? { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', amount: 'text-slate-600' };
@@ -221,12 +239,6 @@ export default function CancelBookingModal({
                 <span>Tổng đã thanh toán</span>
                 <span className="font-semibold">{isPaid ? totalPrice.toLocaleString('vi-VN') + 'đ' : '—'}</span>
               </div>
-              {isPaid && refundPreview.refundAmount < totalPrice && (
-                <div className="flex justify-between text-red-500">
-                  <span>Phí hủy tour</span>
-                  <span className="font-semibold">−{(totalPrice - refundPreview.refundAmount).toLocaleString('vi-VN')}đ</span>
-                </div>
-              )}
               <div className={`flex justify-between font-bold pt-2 border-t ${tierColor.border}`}>
                 <span className={tierColor.text}>
                   {isPaid ? '💰 Bạn sẽ được hoàn' : 'Hoàn tiền'}

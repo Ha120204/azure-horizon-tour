@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
@@ -9,9 +9,118 @@ import { useLocale } from '@/app/context/LocaleContext';
 import { getTranslatedTour } from '@/app/lib/mockTranslations';
 import { API_BASE_URL } from '@/app/lib/constants';
 
+type TravelScope = 'DOMESTIC' | 'INTERNATIONAL';
+
+interface TourDepartureSummary {
+  price?: number | null;
+}
+
+interface TourSummary {
+  id: number | string;
+  name: string;
+  description: string;
+  imageUrl?: string | null;
+  duration: number | string;
+  price: number;
+  averageRating?: number;
+  departures?: TourDepartureSummary[];
+}
+
+const VIDEO_TRANSITION_MS = 900;
+
+const HERO_VIDEOS: Record<TravelScope, { publicId: string; label: string }> = {
+  DOMESTIC: {
+    publicId: 'njxnvt756vwk7tp0xz8o',
+    label: 'Domestic travel background',
+  },
+  INTERNATIONAL: {
+    publicId: 'bopzrsspd8bkgcrmdihz',
+    label: 'International travel background',
+  },
+};
+
+const getCloudinaryVideoUrl = (publicId: string) =>
+  `https://res.cloudinary.com/azurehorizon/video/upload/q_auto:good,w_1920,c_limit/${publicId}.mp4`;
+
+function HeroVideoBackground({ travelScope }: { travelScope: TravelScope }) {
+  const activeScopeRef = useRef(travelScope);
+  const [videoState, setVideoState] = useState({
+    activeScope: travelScope,
+    previousScope: null as TravelScope | null,
+    showActive: true,
+  });
+
+  useEffect(() => {
+    if (activeScopeRef.current === travelScope) return;
+
+    const previousScope = activeScopeRef.current;
+    activeScopeRef.current = travelScope;
+
+    setVideoState({
+      activeScope: travelScope,
+      previousScope,
+      showActive: false,
+    });
+
+    const frameId = window.requestAnimationFrame(() => {
+      setVideoState((current) =>
+        current.activeScope === travelScope ? { ...current, showActive: true } : current
+      );
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      setVideoState((current) =>
+        current.activeScope === travelScope ? { ...current, previousScope: null } : current
+      );
+    }, VIDEO_TRANSITION_MS);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [travelScope]);
+
+  const activeVideo = HERO_VIDEOS[videoState.activeScope];
+
+  return (
+    <div className="absolute inset-0 z-0 overflow-hidden bg-slate-950">
+      {videoState.previousScope && (
+        <video
+          key={videoState.previousScope}
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-[1.02] object-cover opacity-0 transition-[opacity,transform] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:scale-100 motion-reduce:transition-none"
+          style={{ filter: 'brightness(1.05) saturate(1.1)' }}
+        >
+          <source src={getCloudinaryVideoUrl(HERO_VIDEOS[videoState.previousScope].publicId)} type="video/mp4" />
+        </video>
+      )}
+
+      <video
+        key={videoState.activeScope}
+        autoPlay
+        loop
+        muted
+        playsInline
+        aria-label={activeVideo.label}
+        className={`absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:scale-100 motion-reduce:transition-none ${
+          videoState.showActive ? 'scale-100 opacity-100' : 'scale-[1.015] opacity-0'
+        }`}
+        style={{ filter: 'brightness(1.05) saturate(1.1)' }}
+      >
+        <source src={getCloudinaryVideoUrl(activeVideo.publicId)} type="video/mp4" />
+      </video>
+    </div>
+  );
+}
+
 export default function HomePage() {
-  const [tours, setTours] = useState([]);
+  const [tours, setTours] = useState<TourSummary[]>([]);
   const [isLoadingTours, setIsLoadingTours] = useState(true);
+  const [travelScope, setTravelScope] = useState<TravelScope>('DOMESTIC');
   const router = useRouter();
   const { t, formatPrice, language } = useLocale();
 
@@ -41,13 +150,7 @@ export default function HomePage() {
       <section className="relative h-screen min-h-[640px] flex flex-col items-center justify-center overflow-hidden">
 
         {/* 1. Video Background */}
-        <video
-          autoPlay loop muted playsInline
-          className="absolute inset-0 w-full h-full object-cover z-0"
-          style={{ filter: 'brightness(1.05) saturate(1.1)' }}
-        >
-          <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_170732_8a9ccda6-5cff-4628-b164-059c500a2b41.mp4" type="video/mp4" />
-        </video>
+        <HeroVideoBackground travelScope={travelScope} />
 
         {/* 2. Cinematic gradient overlay */}
         <div className="absolute inset-0 z-10" style={{ background: 'linear-gradient(to bottom, rgba(0,31,71,0.55) 0%, rgba(0,63,135,0.20) 45%, rgba(0,46,102,0.65) 100%)' }} />
@@ -74,7 +177,7 @@ export default function HomePage() {
 
           {/* Search Bar — white pill floats on dark video */}
           <div className="w-full max-w-4xl mx-auto">
-            <HeroSearch />
+            <HeroSearch travelScope={travelScope} onTravelScopeChange={setTravelScope} />
           </div>
         </div>
 
@@ -134,9 +237,9 @@ export default function HomePage() {
                   </div>
                 </div>
               ))
-            ) : tours.length > 0 ? tours.slice(0, 6).map((originalTour: any) => {
+            ) : tours.length > 0 ? tours.slice(0, 6).map((originalTour) => {
 
-              const tour = getTranslatedTour(originalTour, language);
+              const tour = getTranslatedTour(originalTour, language) as TourSummary;
               return (
                 <div
                   key={tour.id}
@@ -155,10 +258,10 @@ export default function HomePage() {
                       {tour.duration} {t('featured.days')}
                     </div>
                     {/* Rating badge — only shown when there are actual reviews */}
-                    {tour.averageRating > 0 && (
+                    {(tour.averageRating ?? 0) > 0 && (
                       <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full">
                         <span className="material-symbols-outlined text-amber-400 text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                        <span className="text-white text-[0.65rem] font-bold">{tour.averageRating.toFixed(1)}</span>
+                        <span className="text-white text-[0.65rem] font-bold">{(tour.averageRating ?? 0).toFixed(1)}</span>
                       </div>
                     )}
                   </div>
@@ -187,7 +290,7 @@ export default function HomePage() {
                         <span className="text-xl font-headline font-extrabold text-on-surface">
                           {formatPrice(
                             tour.departures && tour.departures.length > 0
-                              ? Math.min(...tour.departures.map((d: any) => d.price ?? tour.price))
+                              ? Math.min(...tour.departures.map((d) => d.price ?? tour.price))
                               : tour.price
                           )}
                         </span>

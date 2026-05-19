@@ -34,7 +34,12 @@ interface TrashedTour extends Tour {
     deletedAt: string | null;
 }
 
-interface Destination { id: number; name: string; }
+interface Destination {
+    id: number;
+    name: string;
+    travelScope?: 'DOMESTIC' | 'INTERNATIONAL';
+    countryCode?: string | null;
+}
 
 interface ToastState { message: string; type: 'success' | 'error' }
 

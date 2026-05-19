@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/app/context/LocaleContext';
+import { API_BASE_URL } from '@/app/lib/constants';
+
+type TravelScope = 'DOMESTIC' | 'INTERNATIONAL';
 
 // Kiểu dữ liệu từ API
 interface Destination {
@@ -10,6 +13,8 @@ interface Destination {
     name: string;
     imageUrl: string | null;
     region: string | null;
+    travelScope?: TravelScope;
+    countryCode?: string | null;
 }
 
 interface TourResult {
@@ -23,11 +28,18 @@ interface PriceRange {
     max: number;
 }
 
-export default function HeroSearch() {
+interface HeroSearchProps {
+    travelScope?: TravelScope;
+    onTravelScopeChange?: (scope: TravelScope) => void;
+}
+
+export default function HeroSearch({ travelScope: controlledTravelScope, onTravelScopeChange }: HeroSearchProps = {}) {
     const router = useRouter();
     const { t, formatPrice, language } = useLocale();
 
     const [destination, setDestination] = useState('');
+    const [internalTravelScope, setInternalTravelScope] = useState<TravelScope>('DOMESTIC');
+    const travelScope = controlledTravelScope ?? internalTravelScope;
 
     // Mặc định ngày đi = ngày mai
     const getTomorrow = () => {
@@ -48,33 +60,40 @@ export default function HeroSearch() {
     const [allDestinations, setAllDestinations] = useState<Destination[]>([]);
     const [searchDestinations, setSearchDestinations] = useState<Destination[]>([]);
     const [searchTours, setSearchTours] = useState<TourResult[]>([]);
-    const [priceRange, setPriceRange] = useState<PriceRange>({ min: 0, max: 1000 });
+    const [, setPriceRange] = useState<PriceRange>({ min: 0, max: 1000 });
     const [isSearching, setIsSearching] = useState(false);
 
     const destRef = useRef<HTMLDivElement>(null);
     const budgetRef = useRef<HTMLDivElement>(null);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-    // ═══ Fetch dữ liệu lần đầu khi mount ═══
+    // ═══ Fetch price range once ═══
     useEffect(() => {
-        const fetchInitialData = async () => {
+        const fetchPriceRange = async () => {
             try {
-                const [destRes, priceRes] = await Promise.all([
-                    fetch('http://localhost:3000/search/destinations'),
-                    fetch('http://localhost:3000/search/price-range'),
-                ]);
-                const destJson = await destRes.json();
+                const priceRes = await fetch(`${API_BASE_URL}/search/price-range`);
                 const priceJson = await priceRes.json();
-
-                // API có thể bọc trong { data: ... } từ TransformInterceptor
-                setAllDestinations(destJson.data || destJson);
                 setPriceRange(priceJson.data || priceJson);
             } catch (error) {
                 console.error('Lỗi fetch dữ liệu search:', error);
             }
         };
-        fetchInitialData();
+        fetchPriceRange();
     }, []);
+
+    // ═══ Fetch destinations by trip scope ═══
+    useEffect(() => {
+        const fetchDestinations = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/search/destinations?travelScope=${travelScope}`);
+                const json = await res.json();
+                setAllDestinations(json.data || json);
+            } catch (error) {
+                console.error('Lỗi fetch điểm đến:', error);
+            }
+        };
+        fetchDestinations();
+    }, [travelScope]);
 
     // ═══ Live search — gọi API khi user gõ (debounce 300ms) ═══
     const performSearch = useCallback(async (query: string) => {
@@ -85,7 +104,7 @@ export default function HeroSearch() {
         }
         setIsSearching(true);
         try {
-            const res = await fetch(`http://localhost:3000/search?q=${encodeURIComponent(query)}`);
+            const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&travelScope=${travelScope}`);
             const json = await res.json();
             const data = json.data || json;
             setSearchDestinations(data.destinations || []);
@@ -95,7 +114,17 @@ export default function HeroSearch() {
         } finally {
             setIsSearching(false);
         }
-    }, []);
+    }, [travelScope]);
+
+    const handleTravelScopeChange = (nextScope: TravelScope) => {
+        if (nextScope === travelScope) return;
+        setInternalTravelScope(nextScope);
+        onTravelScopeChange?.(nextScope);
+        setDestination('');
+        setSearchDestinations([]);
+        setSearchTours([]);
+        setIsDestFocused(false);
+    };
 
     const handleDestinationChange = (value: string) => {
         setDestination(value);
@@ -139,6 +168,7 @@ export default function HeroSearch() {
         e.preventDefault();
         if (!destination.trim()) return;
         const params = new URLSearchParams();
+        params.append('travelScope', travelScope);
         params.append('dest', destination);
         if (date) params.append('date', date);
         if (budget) params.append('budget', budget);
@@ -168,11 +198,45 @@ export default function HeroSearch() {
     const hasSearchQuery = destination.length >= 2;
     const displayDestinations = hasSearchQuery ? searchDestinations : allDestinations;
     const displayTours = hasSearchQuery ? searchTours : [];
+    const scopeOptions: { value: TravelScope; label: string; icon: string }[] = [
+        { value: 'DOMESTIC', label: t('search.domestic'), icon: 'home_pin' },
+        { value: 'INTERNATIONAL', label: t('search.international'), icon: 'public' },
+    ];
 
     return (
+        <div className="relative z-50 max-w-4xl mx-auto w-full">
+            <div className="mb-3 flex justify-center">
+                <div className="relative grid grid-cols-2 rounded-full bg-white/15 p-1 border border-white/20 backdrop-blur-md shadow-lg shadow-slate-950/10">
+                    <span
+                        aria-hidden="true"
+                        className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                            travelScope === 'INTERNATIONAL' ? 'translate-x-full' : 'translate-x-0'
+                        }`}
+                    />
+                    {scopeOptions.map((option) => {
+                        const active = travelScope === option.value;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => handleTravelScopeChange(option.value)}
+                                className={`relative z-10 flex min-w-[7.25rem] items-center justify-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-bold transition-[color,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98] motion-reduce:transition-none ${
+                                    active
+                                        ? 'text-primary'
+                                        : 'text-white/80 hover:text-white'
+                                }`}
+                            >
+                                <span className={`material-symbols-outlined text-[17px] transition-transform duration-300 motion-reduce:transition-none ${active ? 'scale-110' : 'scale-100'}`}>{option.icon}</span>
+                                {option.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
         <form
             onSubmit={handleSearch}
-            className="bg-white rounded-full shadow-2xl flex flex-col md:flex-row items-center p-2 border border-slate-100 max-w-4xl mx-auto w-full relative z-50"
+            className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:flex-row items-center p-2 border border-slate-100 w-full"
         >
             {/* 1. Destination */}
             <div ref={destRef} className="flex-1 flex items-center gap-4 px-6 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative">
@@ -328,5 +392,6 @@ export default function HeroSearch() {
                 {t('search.searchPath')}
             </button>
         </form>
+        </div>
     );
 }

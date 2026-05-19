@@ -1,4 +1,13 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
+
+const SUBJECTS_REQUIRING_REFERENCE = ['payment', 'cancellation', 'complaint'];
 
 export class SendContactDto {
   @IsNotEmpty({ message: 'Full name is required' })
@@ -17,8 +26,12 @@ export class SendContactDto {
   @IsString()
   phonePrefix: string;
 
-  @IsOptional()
+  @ValidateIf((dto: SendContactDto) =>
+    SUBJECTS_REQUIRING_REFERENCE.includes(dto.subject),
+  )
+  @IsNotEmpty({ message: 'Booking reference is required for this request type' })
   @IsString()
+  @MaxLength(50)
   reference?: string;
 
   @IsNotEmpty()

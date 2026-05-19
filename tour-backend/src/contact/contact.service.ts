@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 import { SendContactDto } from './dto/create-contact.dto';
@@ -14,6 +14,12 @@ const SUBJECT_LABELS: Record<string, string> = {
   general: 'Câu hỏi chung / General Question',
 };
 
+const SUBJECTS_REQUIRING_REFERENCE = new Set([
+  'payment',
+  'cancellation',
+  'complaint',
+]);
+
 @Injectable()
 export class ContactService {
   private readonly logger = new Logger(ContactService.name);
@@ -28,6 +34,13 @@ export class ContactService {
   async sendContactEmail(
     dto: SendContactDto,
   ): Promise<{ message: string; ticketId: number; accessCode?: string }> {
+    const reference = dto.reference?.trim();
+    if (SUBJECTS_REQUIRING_REFERENCE.has(dto.subject) && !reference) {
+      throw new BadRequestException(
+        'Booking reference is required for this request type',
+      );
+    }
+
     const adminEmail = this.configService.get<string>('MAIL_USER');
     const publicSettings = await this.settingsService.getPublic();
     const companyName = publicSettings.company_name || 'Azure Horizon';
@@ -60,11 +73,11 @@ export class ContactService {
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-size:14px;">${fullPhone}</td>
             </tr>
             ${
-              dto.reference
+              reference
                 ? `
             <tr>
               <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#94a3b8;font-size:13px;vertical-align:top;">Mã đặt chỗ</td>
-              <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-size:14px;font-family:'Courier New',monospace;font-weight:700;">${dto.reference}</td>
+              <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-size:14px;font-family:'Courier New',monospace;font-weight:700;">${reference}</td>
             </tr>`
                 : ''
             }
@@ -129,7 +142,7 @@ export class ContactService {
         customerName: dto.name,
         customerEmail: dto.email,
         customerPhone: `${dto.phonePrefix} ${dto.phone}`.trim(),
-        bookingRef: dto.reference,
+        bookingRef: reference,
         subject: subjectLabel,
         message: dto.message,
         category: CATEGORY_MAP[dto.subject] ?? 'general',
@@ -142,6 +155,14 @@ export class ContactService {
       );
 
       // Gửi email xác nhận kèm mã yêu cầu để khách đối chiếu khi trao đổi với đội ngũ hỗ trợ.
+
+      const frontendUrl = this.configService.get<string>(
+        'FRONTEND_URL',
+        'http://localhost:3001',
+      );
+      const ticketLookupUrl = accessCode
+        ? `${frontendUrl}/support/track/${ticketId}?accessCode=${encodeURIComponent(accessCode)}`
+        : undefined;
 
       await this.mailService.sendMail({
         from: `"${companyName}" <${mailSender}>`,
@@ -170,6 +191,7 @@ export class ContactService {
               <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;margin-bottom:24px;text-align:center;">
                 <p style="color:#9a3412;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Ma truy cap danh cho khach vang lai</p>
                 <p style="color:#7c2d12;font-size:18px;font-weight:800;margin:0;font-family:'Courier New',monospace;">${accessCode}</p>
+                ${ticketLookupUrl ? `<p style="margin:14px 0 0;"><a href="${ticketLookupUrl}" style="display:inline-block;background:#003f87;color:white;text-decoration:none;border-radius:999px;padding:10px 18px;font-size:13px;font-weight:700;">Xem yeu cau ho tro</a></p>` : ''}
               </div>
               `
                   : ''

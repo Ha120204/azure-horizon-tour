@@ -12,7 +12,7 @@ interface PaginationProps {
     setLimit?: (limit: number) => void;
 }
 
-const DEFAULT_PAGE_SIZES = [9, 18, 36, 72];
+const DEFAULT_PAGE_SIZES = [12, 24, 48, 96];
 
 function generatePageNumbers(current: number, total: number): number[] {
     if (total <= 3) return Array.from({ length: total }, (_, i) => i + 1);
@@ -33,7 +33,7 @@ function generatePageNumbers(current: number, total: number): number[] {
     return pages;
 }
 
-export default function Pagination({ page, totalPages, setPage, totalItems = 0, limit = 9, setLimit }: PaginationProps) {
+export default function Pagination({ page, totalPages, setPage, totalItems = 0, limit = 12, setLimit }: PaginationProps) {
     const { t } = useLocale();
     const [sizeOpen, setSizeOpen] = useState(false);
     const sizeRef = useRef<HTMLDivElement>(null);

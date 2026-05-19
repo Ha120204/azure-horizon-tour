@@ -1,12 +1,127 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type TicketStatus   = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
+type BookingMatchStatus = 'NO_REFERENCE' | 'MATCHED' | 'NOT_FOUND';
+
+type BookingSummary = {
+  id: number;
+  bookingCode: string;
+  tourId: number;
+  tourName: string;
+  tourStartDate: Date;
+  tourDuration: string;
+  departureId: number | null;
+  departureDate: Date | null;
+  status: string;
+  paymentStatus: string;
+  numberOfPeople: number;
+  totalPrice: number;
+  createdAt: Date;
+};
 
 @Injectable()
 export class SupportService {
   constructor(private prisma: PrismaService) {}
+
+  private normalizeBookingRef(bookingRef?: string | null) {
+    const trimmed = bookingRef?.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private async attachBookingSummaries<T extends { bookingRef: string | null }>(
+    tickets: T[],
+  ): Promise<Array<T & { linkedBooking: BookingSummary | null; bookingMatchStatus: BookingMatchStatus }>> {
+    const refs = Array.from(
+      new Set(
+        tickets
+          .map((ticket) => this.normalizeBookingRef(ticket.bookingRef))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+
+    if (refs.length === 0) {
+      return tickets.map((ticket) => ({
+        ...ticket,
+        linkedBooking: null,
+        bookingMatchStatus: 'NO_REFERENCE',
+      }));
+    }
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        deletedAt: null,
+        OR: refs.map((ref) => ({
+          bookingCode: { equals: ref, mode: 'insensitive' },
+        })),
+      },
+      select: {
+        id: true,
+        bookingCode: true,
+        tourId: true,
+        departureId: true,
+        status: true,
+        paymentStatus: true,
+        numberOfPeople: true,
+        totalPrice: true,
+        createdAt: true,
+        tour: {
+          select: {
+            name: true,
+            startDate: true,
+            duration: true,
+          },
+        },
+      },
+    });
+
+    const departureIds = bookings
+      .map((booking) => booking.departureId)
+      .filter((value): value is number => typeof value === 'number');
+    const departures = departureIds.length > 0
+      ? await this.prisma.tourDeparture.findMany({
+          where: { id: { in: departureIds } },
+          select: { id: true, departureDate: true },
+        })
+      : [];
+    const departureMap = new Map(
+      departures.map((departure) => [departure.id, departure.departureDate]),
+    );
+    const bookingMap = new Map(
+      bookings.map((booking) => [
+        booking.bookingCode.toUpperCase(),
+        {
+          id: booking.id,
+          bookingCode: booking.bookingCode,
+          tourId: booking.tourId,
+          tourName: booking.tour.name,
+          tourStartDate: booking.tour.startDate,
+          tourDuration: booking.tour.duration,
+          departureId: booking.departureId,
+          departureDate: booking.departureId
+            ? departureMap.get(booking.departureId) ?? null
+            : null,
+          status: booking.status,
+          paymentStatus: booking.paymentStatus,
+          numberOfPeople: booking.numberOfPeople,
+          totalPrice: booking.totalPrice,
+          createdAt: booking.createdAt,
+        } satisfies BookingSummary,
+      ]),
+    );
+
+    return tickets.map((ticket) => {
+      const ref = this.normalizeBookingRef(ticket.bookingRef);
+      const linkedBooking = ref ? bookingMap.get(ref.toUpperCase()) ?? null : null;
+      return {
+        ...ticket,
+        linkedBooking,
+        bookingMatchStatus: ref ? (linkedBooking ? 'MATCHED' : 'NOT_FOUND') : 'NO_REFERENCE',
+      };
+    });
+  }
 
   // ─── [ADMIN/STAFF] Danh sách tickets với filter + phân trang ────────────────
   async getStats() {
@@ -78,7 +193,7 @@ export class SupportService {
     const limit = Math.min(50, query.limit ?? 20);
     const skip  = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.SupportTicketWhereInput = {};
     if (query.status && query.status !== 'ALL') {
       where.status = query.status as TicketStatus;
     }
@@ -89,6 +204,7 @@ export class SupportService {
       where.OR = [
         { customerName:  { contains: query.search, mode: 'insensitive' } },
         { customerEmail: { contains: query.search, mode: 'insensitive' } },
+        { bookingRef:     { contains: query.search, mode: 'insensitive' } },
         { subject:       { contains: query.search, mode: 'insensitive' } },
       ];
     }
@@ -114,9 +230,10 @@ export class SupportService {
       if (group.status === 'IN_PROGRESS') inProgressCount = group._count;
       if (group.status === 'RESOLVED') resolvedCount = group._count;
     }
+    const ticketsWithBooking = await this.attachBookingSummaries(tickets);
 
     return {
-      tickets,
+      tickets: ticketsWithBooking,
       meta: {
         total,
         page,
@@ -133,10 +250,14 @@ export class SupportService {
 
   // ─── [ADMIN/STAFF] Chi tiết một ticket ──────────────────────────────────────
   async getTicketById(id: number) {
-    return this.prisma.supportTicket.findUnique({
+    const ticket = await this.prisma.supportTicket.findUnique({
       where: { id },
       include: { replies: { orderBy: { createdAt: 'asc' } } },
     });
+
+    if (!ticket) return null;
+    const [ticketWithBooking] = await this.attachBookingSummaries([ticket]);
+    return ticketWithBooking;
   }
 
   // ─── [ADMIN/STAFF] Assign staff vào ticket ───────────────────────────────────

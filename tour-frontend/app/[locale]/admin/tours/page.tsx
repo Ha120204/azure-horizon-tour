@@ -32,6 +32,8 @@ interface Tour {
 /** Tour đã bị soft-delete — có thêm `deletedAt` từ backend */
 interface TrashedTour extends Tour {
     deletedAt: string | null;
+    bookingCount?: number;
+    canPermanentDelete?: boolean;
 }
 
 interface Destination {
@@ -217,9 +219,17 @@ export default function AdminToursPage() {
     const [trashMeta, setTrashMeta] = useState({ totalItems: 0, totalPages: 1, currentPage: 1 });
     const [trashPage, setTrashPage] = useState(1);
     const [isLoadingTrash, setIsLoadingTrash] = useState(false);
+    const [trashSearchInput, setTrashSearchInput] = useState('');
+    const [trashSearch, setTrashSearch] = useState('');
+    const [trashStatus, setTrashStatus] = useState('');
+    const [trashDeletable, setTrashDeletable] = useState('');
+    const [trashSelectedIds, setTrashSelectedIds] = useState<Set<number>>(new Set());
     const [restoring, setRestoring] = useState<number | null>(null);
-    const [permDeleteTarget, setPermDeleteTarget] = useState<Tour | null>(null);
+    const [permDeleteTarget, setPermDeleteTarget] = useState<TrashedTour | null>(null);
     const [isPermDeleting, setIsPermDeleting] = useState(false);
+    const [isTrashBulkRestoring, setIsTrashBulkRestoring] = useState(false);
+    const [isTrashBulkDeleting, setIsTrashBulkDeleting] = useState(false);
+    const [showTrashBulkDeleteConfirm, setShowTrashBulkDeleteConfirm] = useState(false);
 
     // State: Bulk confirm dialog
     const [showBulkConfirm, setShowBulkConfirm] = useState(false);
@@ -229,7 +239,6 @@ export default function AdminToursPage() {
     const [userId, setUserId] = useState<number | null>(null);
     const isStaff = userRole === 'STAFF';
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
-    const isSuperAdmin = userRole === 'SUPER_ADMIN';
 
     // ── Fetch ──────────────────────────────────────────────────────
     const fetchTours = useCallback(async () => {
@@ -520,7 +529,13 @@ export default function AdminToursPage() {
     const fetchTrashedTours = useCallback(async () => {
         setIsLoadingTrash(true);
         try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/tour/trash?page=${trashPage}&limit=10`);
+            const qs = new URLSearchParams();
+            qs.set('page', String(trashPage));
+            qs.set('limit', '10');
+            if (trashSearch) qs.set('search', trashSearch);
+            if (trashStatus) qs.set('status', trashStatus);
+            if (trashDeletable) qs.set('deletable', trashDeletable);
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/trash?${qs.toString()}`);
             const json = await res.json();
             setTrashedTours(json.data ?? []);
             if (json.meta) setTrashMeta(json.meta);
@@ -529,11 +544,23 @@ export default function AdminToursPage() {
         } finally {
             setIsLoadingTrash(false);
         }
-    }, [trashPage]);
+    }, [trashPage, trashSearch, trashStatus, trashDeletable]);
 
     useEffect(() => {
         if (activeTab === 'trash' && isAdmin) fetchTrashedTours();
     }, [activeTab, fetchTrashedTours, isAdmin]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setTrashSearch(trashSearchInput);
+            setTrashPage(1);
+        }, 350);
+        return () => clearTimeout(timer);
+    }, [trashSearchInput]);
+
+    useEffect(() => {
+        setTrashSelectedIds(new Set());
+    }, [trashPage, trashSearch, trashStatus, trashDeletable, activeTab]);
 
     // Fetch trash count khi mount để tab "Thùng rác" hiện số lượng đúng ngay từ đầu
     useEffect(() => {
@@ -551,7 +578,7 @@ export default function AdminToursPage() {
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tour.id}/restore`, { method: 'PATCH' });
             if (!res.ok) throw new Error();
-            showToast(`Đã khôi phục tour "${tour.name}" về trạng thái Nháp!`);
+            showToast(`Đã khôi phục tour "${tour.name}".`);
             fetchTrashedTours();
             fetchTours(); // cập nhật lại tab active
         } catch {
@@ -566,14 +593,93 @@ export default function AdminToursPage() {
         setIsPermDeleting(true);
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/tour/${permDeleteTarget.id}/permanent`, { method: 'DELETE' });
-            if (!res.ok) throw new Error();
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || 'Xóa vĩnh viễn thất bại.');
+            }
             showToast(`Đã xóa vĩnh viễn "${permDeleteTarget.name}".`);
             setPermDeleteTarget(null);
             fetchTrashedTours();
         } catch {
-            showToast('Xóa vĩnh viễn thất bại.', 'error');
+            showToast(
+                permDeleteTarget.bookingCount
+                    ? 'Tour đã có booking, không thể xóa vĩnh viễn.'
+                    : 'Xóa vĩnh viễn thất bại.',
+                'error'
+            );
         } finally {
             setIsPermDeleting(false);
+        }
+    };
+
+    const isTrashAllSelected = trashedTours.length > 0 && trashedTours.every(t => trashSelectedIds.has(t.id));
+    const isTrashSomeSelected = trashSelectedIds.size > 0;
+
+    const toggleTrashSelectAll = () => {
+        setTrashSelectedIds(isTrashAllSelected ? new Set() : new Set(trashedTours.map(t => t.id)));
+    };
+
+    const toggleTrashSelectOne = (id: number) => {
+        setTrashSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleTrashBulkRestore = async () => {
+        const ids = [...trashSelectedIds];
+        if (ids.length === 0) return;
+        setIsTrashBulkRestoring(true);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/trash/bulk-restore`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json.message || 'Khôi phục thất bại.');
+            const data = json.data ?? json;
+            showToast(`Đã khôi phục ${data.restored ?? 0}/${data.requested ?? ids.length} tour.`);
+            setTrashSelectedIds(new Set());
+            fetchTrashedTours();
+            fetchTours();
+            fetchStats();
+        } catch (e: unknown) {
+            showToast(e instanceof Error ? e.message : 'Khôi phục thất bại.', 'error');
+        } finally {
+            setIsTrashBulkRestoring(false);
+        }
+    };
+
+    const handleTrashBulkPermanentDelete = async () => {
+        const ids = [...trashSelectedIds];
+        if (ids.length === 0) return;
+        setIsTrashBulkDeleting(true);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/trash/bulk-permanent`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json.message || 'Xóa vĩnh viễn thất bại.');
+            const data = json.data ?? json;
+            const blockedCount = Array.isArray(data.blocked) ? data.blocked.length : 0;
+            showToast(
+                blockedCount > 0
+                    ? `Đã xóa ${data.deleted ?? 0} tour. ${blockedCount} tour bị giữ lại vì đã có booking.`
+                    : `Đã xóa vĩnh viễn ${data.deleted ?? 0} tour.`
+            );
+            setShowTrashBulkDeleteConfirm(false);
+            setTrashSelectedIds(new Set());
+            fetchTrashedTours();
+            fetchStats();
+        } catch (e: unknown) {
+            showToast(e instanceof Error ? e.message : 'Xóa vĩnh viễn thất bại.', 'error');
+        } finally {
+            setIsTrashBulkDeleting(false);
         }
     };
 
@@ -647,11 +753,11 @@ export default function AdminToursPage() {
                     {/* Tạo mới — tất cả role có thể tạo, STAFF sẽ lưu dưới dạng Nháp */}
                     <button
                         onClick={() => { setSelectedTour(null); setModalMode('create'); }}
-                        aria-label={isStaff ? 'Tạo bản nháp tour' : 'Tạo tour mới'}
+                        aria-label={isStaff ? 'Tạo bản nháp tour' : 'Tạo tour hoặc bản nháp'}
                         className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-90 transition-opacity active:scale-[0.98] flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none"
                     >
                         <span className="material-symbols-outlined text-sm" aria-hidden="true">{isStaff ? 'draft' : 'add'}</span>
-                        {isStaff ? 'Tạo bản nháp' : 'Tạo Tour Mới'}
+                        {isStaff ? 'Tạo bản nháp' : 'Tạo Tour / Nháp'}
                     </button>
                 </div>
             </div>
@@ -791,7 +897,7 @@ export default function AdminToursPage() {
                             }`}
                     >
                         <span className="material-symbols-outlined text-[16px]">travel_explore</span>
-                        Đang hoạt động
+                        Đang quản lý
                         <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${activeTab === 'active' ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'
                             }`}>{meta.totalItems}</span>
                     </button>
@@ -881,6 +987,7 @@ export default function AdminToursPage() {
                                 {isStaff && <option value="PENDING_REVIEW">⏳ Chờ duyệt</option>}
                                 {isStaff && <option value="REJECTED">❌ Bị từ chối</option>}
                                 {isStaff && <option value="PUBLISHED">✅ Đã duyệt</option>}
+                                {isAdmin && <option value="DRAFT">📝 Bản nháp</option>}
                                 {isAdmin && <option value="PUBLISHED">✅ Đã duyệt</option>}
                                 {isAdmin && <option value="PENDING_REVIEW">⏳ Chờ duyệt</option>}
                                 {isAdmin && <option value="REJECTED">❌ Bị từ chối</option>}
@@ -891,6 +998,81 @@ export default function AdminToursPage() {
                 </div>
             </div>}
 
+            {activeTab === 'trash' && isAdmin && (
+                <div className="mb-4 space-y-3">
+                    <div className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/10 shadow-sm flex flex-wrap gap-3 items-center">
+                        <div className="flex-1 min-w-[220px] relative">
+                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg pointer-events-none" aria-hidden="true">search</span>
+                            <label htmlFor="search-trash-tours" className="sr-only">Tìm kiếm tour trong thùng rác</label>
+                            <input
+                                id="search-trash-tours"
+                                type="search"
+                                autoComplete="off"
+                                placeholder="Tìm theo tên, ID hoặc điểm đến..."
+                                value={trashSearchInput}
+                                onChange={e => setTrashSearchInput(e.target.value)}
+                                className="w-full bg-surface-container-low border border-outline-variant/15 rounded-xl pl-11 pr-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+                            />
+                        </div>
+                        <select
+                            value={trashStatus}
+                            onChange={e => { setTrashStatus(e.target.value); setTrashPage(1); }}
+                            className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
+                            aria-label="Lọc trạng thái trong thùng rác"
+                        >
+                            <option value="">Tất cả trạng thái</option>
+                            <option value="DRAFT">Bản nháp</option>
+                            <option value="PENDING_REVIEW">Chờ duyệt</option>
+                            <option value="PUBLISHED">Đã duyệt</option>
+                            <option value="REJECTED">Bị từ chối</option>
+                            <option value="COMPLETED">Đã kết thúc</option>
+                        </select>
+                        <select
+                            value={trashDeletable}
+                            onChange={e => { setTrashDeletable(e.target.value); setTrashPage(1); }}
+                            className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
+                            aria-label="Lọc khả năng xóa vĩnh viễn"
+                        >
+                            <option value="">Tất cả khả năng xóa</option>
+                            <option value="true">Có thể xóa vĩnh viễn</option>
+                            <option value="false">Đã có booking</option>
+                        </select>
+                    </div>
+
+                    {isTrashSomeSelected && (
+                        <div className="flex items-center gap-3 px-5 py-3.5 bg-error/5 border border-error/20 rounded-2xl">
+                            <span className="material-symbols-outlined text-error text-[20px]">delete_sweep</span>
+                            <span className="text-sm font-semibold text-on-surface flex-1">
+                                Đã chọn <strong className="text-error">{trashSelectedIds.size}</strong> tour trong thùng rác
+                            </span>
+                            <button
+                                onClick={() => setTrashSelectedIds(new Set())}
+                                className="text-xs text-on-surface-variant hover:text-on-surface font-medium px-3 py-1.5 rounded-lg hover:bg-surface-container transition-colors"
+                            >
+                                Bỏ chọn
+                            </button>
+                            <button
+                                onClick={handleTrashBulkRestore}
+                                disabled={isTrashBulkRestoring || isTrashBulkDeleting}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                            >
+                                <span className={`material-symbols-outlined text-[16px] ${isTrashBulkRestoring ? 'animate-spin' : ''}`}>
+                                    {isTrashBulkRestoring ? 'progress_activity' : 'restore'}
+                                </span>
+                                Khôi phục
+                            </button>
+                            <button
+                                onClick={() => setShowTrashBulkDeleteConfirm(true)}
+                                disabled={isTrashBulkRestoring || isTrashBulkDeleting}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-error text-on-error rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">delete_forever</span>
+                                Xóa vĩnh viễn
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* ── TRASH TABLE ─── */}
             {activeTab === 'trash' && isAdmin && (
@@ -900,7 +1082,7 @@ export default function AdminToursPage() {
                         <span className="material-symbols-outlined text-error text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>delete</span>
                         <div>
                             <p className="font-semibold text-sm text-on-surface">Thùng Rác — Tour Đã Ẩn</p>
-                            <p className="text-xs text-on-surface-variant mt-0.5">Tour trong đây bị ẩn khỏi khách hàng. Admin có thể khôi phục; Super Admin có thể xóa vĩnh viễn.</p>
+                            <p className="text-xs text-on-surface-variant mt-0.5">Tour đã có booking sẽ được lưu trữ để bảo toàn lịch sử. Admin và Super Admin chỉ xóa vĩnh viễn tour chưa phát sinh booking.</p>
                         </div>
                     </div>
 
@@ -908,26 +1090,49 @@ export default function AdminToursPage() {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-outline-variant/15 bg-surface-container/40">
+                                    <th className="py-3.5 pl-5 pr-2 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={isTrashAllSelected}
+                                            onChange={toggleTrashSelectAll}
+                                            className="w-4 h-4 rounded border-outline-variant accent-error cursor-pointer"
+                                            aria-label="Chọn tất cả tour trong thùng rác"
+                                        />
+                                    </th>
                                     <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Tour</th>
                                     <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Điểm Đến</th>
                                     <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Người Tạo</th>
+                                    <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Booking</th>
                                     <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Ngày Ẩn</th>
                                     <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-right">Thao Tác</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-outline-variant/10">
                                 {isLoadingTrash ? (
-                                    <tr><td colSpan={5} className="py-16 text-center">
+                                    <tr><td colSpan={7} className="py-16 text-center">
                                         <span className="material-symbols-outlined text-3xl text-primary animate-spin">progress_activity</span>
                                     </td></tr>
                                 ) : trashedTours.length === 0 ? (
-                                    <tr><td colSpan={5} className="py-16 text-center">
+                                    <tr><td colSpan={7} className="py-16 text-center">
                                         <span className="material-symbols-outlined text-4xl text-outline mb-2 block">delete_sweep</span>
                                         <p className="font-semibold text-on-surface">Thùng rác trống</p>
                                         <p className="text-sm text-on-surface-variant mt-1">Không có tour nào bị ẩn.</p>
                                     </td></tr>
-                                ) : trashedTours.map(tour => (
-                                    <tr key={tour.id} className="hover:bg-error/5 transition-colors">
+                                ) : trashedTours.map(tour => {
+                                    const isTrashChecked = trashSelectedIds.has(tour.id);
+                                    const bookingCount = tour.bookingCount ?? 0;
+                                    const canPermanentDelete = tour.canPermanentDelete ?? bookingCount === 0;
+                                    return (
+                                    <tr key={tour.id} className={`hover:bg-error/5 transition-colors ${isTrashChecked ? 'bg-error/5' : ''}`}>
+                                        <td className="py-3 pl-5 pr-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={isTrashChecked}
+                                                onChange={() => toggleTrashSelectOne(tour.id)}
+                                                className="w-4 h-4 rounded border-outline-variant accent-error cursor-pointer"
+                                                aria-label={`Chọn tour ${tour.name}`}
+                                            />
+                                        </td>
                                         <td className="py-3 px-5">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-surface-container shrink-0 opacity-60">
@@ -944,6 +1149,12 @@ export default function AdminToursPage() {
                                         </td>
                                         <td className="py-3 px-5 text-sm text-on-surface-variant">{tour.destination?.name ?? '—'}</td>
                                         <td className="py-3 px-5 text-sm text-on-surface-variant">{tour.createdBy?.fullName ?? '—'}</td>
+                                        <td className="py-3 px-5">
+                                            <span className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${bookingCount > 0 ? 'bg-amber-500/10 text-amber-700' : 'bg-emerald-500/10 text-emerald-700'}`}>
+                                                <span className="material-symbols-outlined text-[13px]">{bookingCount > 0 ? 'lock' : 'delete_forever'}</span>
+                                                {bookingCount > 0 ? `${bookingCount} booking` : 'Có thể xóa'}
+                                            </span>
+                                        </td>
                                         <td className="py-3 px-5 text-sm text-on-surface-variant">
                                             {tour.deletedAt
                                                 ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(tour.deletedAt))
@@ -963,20 +1174,25 @@ export default function AdminToursPage() {
                                                     }
                                                     Khôi phục
                                                 </button>
-                                                {/* Permanent delete — chỉ Super Admin */}
-                                                {isSuperAdmin && (
-                                                    <button
-                                                        onClick={() => setPermDeleteTarget(tour)}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-error/10 text-error hover:bg-error/20 text-xs font-semibold transition-colors"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[14px]">delete_forever</span>
-                                                        Xóa vĩnh viễn
-                                                    </button>
-                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        if (canPermanentDelete) setPermDeleteTarget(tour);
+                                                    }}
+                                                    disabled={!canPermanentDelete}
+                                                    title={canPermanentDelete ? 'Xóa vĩnh viễn' : 'Tour đã có booking, chỉ được lưu trữ'}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${canPermanentDelete
+                                                            ? 'bg-error/10 text-error hover:bg-error/20'
+                                                            : 'bg-surface-container text-on-surface-variant/50 cursor-not-allowed'
+                                                        }`}
+                                                >
+                                                    <span className="material-symbols-outlined text-[14px]">{canPermanentDelete ? 'delete_forever' : 'lock'}</span>
+                                                    {canPermanentDelete ? 'Xóa vĩnh viễn' : 'Không thể xóa'}
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -1249,6 +1465,52 @@ export default function AdminToursPage() {
             </div>}
 
             {/* ── Permanent Delete Confirmation (Super Admin) ─── */}
+            {showTrashBulkDeleteConfirm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    role="alertdialog"
+                    aria-modal="true"
+                    aria-labelledby="bulk-perm-delete-dialog-title"
+                >
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                        <div className="p-7">
+                            <div className="w-12 h-12 bg-error/10 rounded-2xl flex items-center justify-center mb-5">
+                                <span className="material-symbols-outlined text-error text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>delete_forever</span>
+                            </div>
+                            <h2 id="bulk-perm-delete-dialog-title" className="text-lg font-bold text-on-surface mb-2">Xóa vĩnh viễn tour đã chọn?</h2>
+                            <p className="text-on-surface-variant text-sm leading-relaxed mb-3">
+                                Bạn đang chọn <strong className="text-on-surface">{trashSelectedIds.size}</strong> tour. Hệ thống chỉ xóa vĩnh viễn tour chưa phát sinh booking; tour đã có booking sẽ được giữ lại.
+                            </p>
+                            <div className="flex items-start gap-2 p-3 bg-error/8 rounded-xl border border-error/20">
+                                <span className="material-symbols-outlined text-error text-[16px] mt-0.5">warning</span>
+                                <p className="text-xs text-error font-semibold">Hành động này không thể hoàn tác với các tour đủ điều kiện xóa.</p>
+                            </div>
+                        </div>
+                        <div className="px-7 pb-6 flex gap-3 justify-end">
+                            <button
+                                onClick={() => setShowTrashBulkDeleteConfirm(false)}
+                                disabled={isTrashBulkDeleting}
+                                className="px-6 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors disabled:opacity-60"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleTrashBulkPermanentDelete}
+                                disabled={isTrashBulkDeleting}
+                                className="px-6 py-2.5 bg-error text-on-error rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center gap-2"
+                            >
+                                {isTrashBulkDeleting ? (
+                                    <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang xóa...</>
+                                ) : (
+                                    <><span className="material-symbols-outlined text-base">delete_forever</span>Xóa vĩnh viễn</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {permDeleteTarget && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center"
@@ -1264,11 +1526,11 @@ export default function AdminToursPage() {
                             </div>
                             <h2 id="perm-delete-dialog-title" className="text-lg font-bold text-on-surface mb-2">Xóa Vĩnh Viễn?</h2>
                             <p className="text-on-surface-variant text-sm leading-relaxed mb-3">
-                                Tour <strong className="text-on-surface">&ldquo;{permDeleteTarget.name}&rdquo;</strong> sẽ bị <strong className="text-error">xóa hoàn toàn khỏi cơ sở dữ liệu</strong>, bao gồm tất cả hình ảnh, gói, ngày khởi hành và đánh giá liên quan.
+                                Tour <strong className="text-on-surface">&ldquo;{permDeleteTarget.name}&rdquo;</strong> sẽ bị <strong className="text-error">xóa hoàn toàn khỏi cơ sở dữ liệu</strong>, bao gồm hình ảnh, gói tour và ngày khởi hành liên quan.
                             </p>
                             <div className="flex items-start gap-2 p-3 bg-error/8 rounded-xl border border-error/20">
                                 <span className="material-symbols-outlined text-error text-[16px] mt-0.5">warning</span>
-                                <p className="text-xs text-error font-semibold">Hành động này không thể hoàn tác. Chỉ Super Admin mới có quyền thực hiện.</p>
+                                <p className="text-xs text-error font-semibold">Hành động này không thể hoàn tác. Tour đã có booking sẽ bị backend chặn xóa vĩnh viễn.</p>
                             </div>
                         </div>
                         <div className="px-7 pb-6 flex gap-3 justify-end">
@@ -1323,7 +1585,7 @@ export default function AdminToursPage() {
                         showToast(msg);
                         fetchStats();
 
-                        if (isStaff && action === 'draft') {
+                        if ((isStaff || isAdmin) && action === 'draft') {
                             setActiveTab('active');
                             setFilterStatus('DRAFT');
                             setPage(1);

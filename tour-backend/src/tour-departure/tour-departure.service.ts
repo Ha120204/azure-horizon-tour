@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TourPermissionService } from '../tour/tour-permission.service';
+import { localizeDeparture, normalizeLocale } from '../tour/tour-localization';
 
 export interface CreateDepartureDto {
   departureDate: string;
@@ -7,6 +9,7 @@ export interface CreateDepartureDto {
   availableSeats: number;
   maxSeats?: number;
   note?: string;
+  noteEn?: string;
   category?: string;
   flashSaleEndsAt?: string | null;
   sortOrder?: number;
@@ -33,11 +36,15 @@ const parseDepartureDate = (value: string) => {
 
 @Injectable()
 export class TourDepartureService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tourPermission: TourPermissionService,
+  ) {}
 
   /** Public: only active upcoming departures are bookable. */
-  async findByTour(tourId: number) {
-    return this.prisma.tourDeparture.findMany({
+  async findByTour(tourId: number, localeInput?: string) {
+    const locale = normalizeLocale(localeInput);
+    const departures = await this.prisma.tourDeparture.findMany({
       where: {
         tourId,
         isActive: true,
@@ -45,6 +52,7 @@ export class TourDepartureService {
       },
       orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }],
     });
+    return departures.map((departure) => localizeDeparture(departure, locale));
   }
 
   /**
@@ -52,9 +60,17 @@ export class TourDepartureService {
    * Past departures are archived with isActive=false; unchanged future departures
    * are updated in-place to preserve IDs that may be referenced by bookings.
    */
-  async bulkReplace(tourId: number, dtos: CreateDepartureDto[]) {
-    const tour = await this.prisma.tour.findUnique({ where: { id: tourId } });
-    if (!tour) throw new NotFoundException(`Tour #${tourId} not found`);
+  async bulkReplace(
+    tourId: number,
+    dtos: CreateDepartureDto[],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
 
     if (!Array.isArray(dtos)) {
       throw new BadRequestException('departures phai la mang');
@@ -124,6 +140,7 @@ export class TourDepartureService {
           availableSeats: item.dto.availableSeats ?? 0,
           maxSeats: item.dto.maxSeats ?? null,
           note: item.dto.note ?? null,
+          noteEn: item.dto.noteEn ?? null,
           category: item.dto.category ?? null,
           flashSaleEndsAt: item.dto.flashSaleEndsAt
             ? new Date(item.dto.flashSaleEndsAt)

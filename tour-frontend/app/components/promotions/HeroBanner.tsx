@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 
 
 interface HeroBannerProps {
@@ -12,14 +12,9 @@ interface HeroBannerProps {
 }
 
 const VIDEO_URL =
-    'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260403_050628_c4e32401-fab4-4a27-b7a8-6e9291cd5959.mp4';
-
-const FADE_DURATION = 0.5; // seconds
+    'https://res.cloudinary.com/azurehorizon/video/upload/f_auto,q_auto/nkk9gjzae7g9j8xf3h9q.mp4';
 
 export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEndsAt }: HeroBannerProps) {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const rafRef = useRef<number>(0);
-
     // Countdown thực tế từ Flash Sale gần nhất
     const [flashLeft, setFlashLeft] = React.useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
     useEffect(() => {
@@ -44,53 +39,10 @@ export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEnd
     const isFlashCountdown = !!(nearestFlashSaleEndsAt && flashLeft);
 
     // ── Smooth fade loop via requestAnimationFrame ──────────────────
-    useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
-
-        const tick = () => {
-            if (!video.duration || isNaN(video.duration)) {
-                rafRef.current = requestAnimationFrame(tick);
-                return;
-            }
-
-            const t = video.currentTime;
-            const d = video.duration;
-
-            if (t < FADE_DURATION) {
-                // Fade in at start
-                video.style.opacity = String(t / FADE_DURATION);
-            } else if (t > d - FADE_DURATION) {
-                // Fade out near end
-                video.style.opacity = String((d - t) / FADE_DURATION);
-            } else {
-                video.style.opacity = '1';
-            }
-
-            rafRef.current = requestAnimationFrame(tick);
-        };
-
-        const handleEnded = () => {
-            video.style.opacity = '0';
-            setTimeout(() => {
-                video.currentTime = 0;
-                video.play().catch(() => { });
-            }, 100);
-        };
-
-        video.addEventListener('ended', handleEnded);
-        rafRef.current = requestAnimationFrame(tick);
-
-        return () => {
-            cancelAnimationFrame(rafRef.current);
-            video.removeEventListener('ended', handleEnded);
-        };
-    }, []);
-
     return (
         <section
             className="relative w-full overflow-hidden"
-            style={{ height: '100vh', minHeight: '680px' }}
+            style={{ height: '100vh', minHeight: '680px', backgroundColor: '#06152b' }}
         >
             <style>{`
                 @keyframes fade-rise {
@@ -106,12 +58,13 @@ export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEnd
 
             {/* ── Video layer ── */}
             <video
-                ref={videoRef}
                 autoPlay
+                loop
                 muted
                 playsInline
+                preload="auto"
                 className="absolute inset-0 w-full h-full object-cover z-0"
-                style={{ opacity: 0, transition: 'none', filter: 'brightness(1.05) saturate(1.1)' }}
+                style={{ filter: 'brightness(1.05) saturate(1.1)' }}
             >
                 <source src={VIDEO_URL} type="video/mp4" />
             </video>

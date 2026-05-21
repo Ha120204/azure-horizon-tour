@@ -1617,25 +1617,153 @@ export class BookingService {
   }
 
   async getMyBookings(userId: number) {
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where: {
         userId,
         deletedAt: null,
         // Hiện tất cả trạng thái, kể cả CANCELLED và CANCEL_REQUESTED
       },
-      include: { tour: true },
+      select: {
+        id: true,
+        bookingCode: true,
+        status: true,
+        paymentStatus: true,
+        createdAt: true,
+        numberOfPeople: true,
+        totalPrice: true,
+        tour: {
+          select: {
+            id: true,
+            name: true,
+            tourCode: true,
+            imageUrl: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
+
+    return bookings.map((booking) => ({
+      ...booking,
+      totalPrice: Number(booking.totalPrice),
+    }));
+  }
+
+  private toCustomerBookingDetail(
+    booking: {
+      id: number;
+      bookingCode: string;
+      status: BookingStatus;
+      paymentStatus: PaymentStatus;
+      createdAt: Date;
+      numberOfPeople: number;
+      totalPrice: number | Prisma.Decimal;
+      cancelReason?: string | null;
+      cancelRequestedAt?: Date | null;
+      cancelledAt?: Date | null;
+      refundAmount?: number | Prisma.Decimal | null;
+      refundNote?: string | null;
+      departureId?: number | null;
+      tour: {
+        id: number;
+        name: string;
+        tourCode: string;
+        imageUrl?: string | null;
+        duration?: string | null;
+        startDate: Date;
+      };
+    },
+    cancellationPolicy: CancellationPolicy,
+  ) {
+    return {
+      id: booking.id,
+      bookingCode: booking.bookingCode,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      createdAt: booking.createdAt,
+      numberOfPeople: booking.numberOfPeople,
+      totalPrice: Number(booking.totalPrice),
+      cancelReason: booking.cancelReason ?? null,
+      cancelRequestedAt: booking.cancelRequestedAt ?? null,
+      cancelledAt: booking.cancelledAt ?? null,
+      refundAmount:
+        booking.refundAmount == null ? null : Number(booking.refundAmount),
+      refundNote: booking.refundNote ?? null,
+      cancellationPolicy,
+      tour: {
+        id: booking.tour.id,
+        name: booking.tour.name,
+        tourCode: booking.tour.tourCode,
+        imageUrl: booking.tour.imageUrl ?? null,
+        duration: booking.tour.duration ?? null,
+        startDate: booking.tour.startDate,
+      },
+    };
+  }
+
+  private async toETicketDto(booking: {
+    bookingCode: string;
+    status: BookingStatus;
+    paymentStatus: PaymentStatus;
+    numberOfPeople: number;
+    totalPrice: number | Prisma.Decimal;
+    departureId?: number | null;
+    user: { fullName: string };
+    tour: {
+      id: number;
+      name: string;
+      imageUrl?: string | null;
+      startDate: Date;
+      duration?: string | null;
+    };
+  }) {
+    const departureDate = await this.resolveBookingDepartureDate(booking);
+
+    return {
+      bookingCode: booking.bookingCode,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      numberOfPeople: booking.numberOfPeople,
+      totalPrice: Number(booking.totalPrice),
+      leadTravelerName: booking.user.fullName,
+      user: { fullName: booking.user.fullName },
+      tour: {
+        id: booking.tour.id,
+        name: booking.tour.name,
+        imageUrl: booking.tour.imageUrl ?? null,
+        startDate: departureDate,
+        duration: booking.tour.duration ?? null,
+      },
+    };
   }
 
   async getMyBookingById(bookingId: number, userId: number) {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, userId, deletedAt: null },
-      include: {
-        user: {
-          select: { id: true, fullName: true, email: true, phone: true },
+      select: {
+        id: true,
+        bookingCode: true,
+        status: true,
+        paymentStatus: true,
+        createdAt: true,
+        numberOfPeople: true,
+        totalPrice: true,
+        cancelReason: true,
+        cancelRequestedAt: true,
+        cancelledAt: true,
+        refundAmount: true,
+        refundNote: true,
+        departureId: true,
+        tour: {
+          select: {
+            id: true,
+            name: true,
+            tourCode: true,
+            imageUrl: true,
+            duration: true,
+            startDate: true,
+          },
         },
-        tour: true,
       },
     });
 
@@ -1645,17 +1773,31 @@ export class BookingService {
 
     const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
 
-    return { ...booking, cancellationPolicy };
+    return this.toCustomerBookingDetail(booking, cancellationPolicy);
   }
 
   async findMyByBookingCode(bookingCode: string, userId: number) {
     const booking = await this.prisma.booking.findFirst({
       where: { bookingCode, userId, deletedAt: null },
-      include: {
+      select: {
+        bookingCode: true,
+        status: true,
+        paymentStatus: true,
+        numberOfPeople: true,
+        totalPrice: true,
+        departureId: true,
         user: {
-          select: { id: true, fullName: true, email: true, phone: true },
+          select: { fullName: true },
         },
-        tour: true,
+        tour: {
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            startDate: true,
+            duration: true,
+          },
+        },
       },
     });
 
@@ -1663,7 +1805,7 @@ export class BookingService {
       throw new NotFoundException('Booking not found');
     }
 
-    return booking;
+    return this.toETicketDto(booking);
   }
 
   /**

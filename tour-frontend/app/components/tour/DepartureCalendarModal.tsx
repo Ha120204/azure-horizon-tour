@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TourDeparture } from '@/app/types';
 
+type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
+
 interface DepartureCalendarModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -9,7 +11,8 @@ interface DepartureCalendarModalProps {
     onSelectDeparture: (dep: TourDeparture) => void;
     formatPrice: (n: number) => string;
     tourPrice: number;
-    t: any;
+    t: TranslationFn;
+    language: string;
 }
 
 export default function DepartureCalendarModal({
@@ -21,6 +24,7 @@ export default function DepartureCalendarModal({
     formatPrice,
     tourPrice,
     t,
+    language,
 }: DepartureCalendarModalProps) {
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
@@ -58,8 +62,12 @@ export default function DepartureCalendarModal({
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
     const startDayIndex = (firstDayOfMonth + 6) % 7; 
 
-    const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
-    const dayNames = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+    const monthNames = language === 'vi'
+        ? ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
+        : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const dayNames = language === 'vi'
+        ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+        : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     const handlePrevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
     const handleNextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
@@ -104,9 +112,9 @@ export default function DepartureCalendarModal({
                         <div className="w-full flex justify-between items-start">
                             <span className={`text-sm sm:text-base font-bold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{day}</span>
                             {departure.availableSeats === 0 ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-100 hidden sm:block">Hết</span>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-100 hidden sm:block">{t('tour_detail.soldOutShort')}</span>
                             ) : departure.availableSeats <= 5 ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 hidden sm:block">{departure.availableSeats} chỗ</span>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 hidden sm:block">{t('tour_detail.seatsLeft', { seats: departure.availableSeats })}</span>
                             ) : (
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 mr-0.5 hidden sm:block"></span>
                             )}
@@ -117,7 +125,7 @@ export default function DepartureCalendarModal({
                             </p>
                             {/* Mobile badge */}
                             <p className="text-[9px] mt-0.5 sm:hidden font-medium">
-                                {departure.availableSeats === 0 ? <span className="text-red-500">Hết chỗ</span> : departure.availableSeats <= 5 ? <span className="text-amber-600">{departure.availableSeats} chỗ</span> : <span className="text-emerald-600">Còn chỗ</span>}
+                                {departure.availableSeats === 0 ? <span className="text-red-500">{t('tour_detail.soldOut')}</span> : departure.availableSeats <= 5 ? <span className="text-amber-600">{t('tour_detail.seatsLeft', { seats: departure.availableSeats })}</span> : <span className="text-emerald-600">{t('tour_detail.availableSeats')}</span>}
                             </p>
                         </div>
                     </button>
@@ -138,8 +146,8 @@ export default function DepartureCalendarModal({
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
                     <div>
-                        <h2 className="text-xl font-bold font-headline text-on-surface">Chọn ngày khởi hành</h2>
-                        <p className="text-xs text-on-surface-variant mt-0.5">Giá có thể thay đổi tùy thuộc vào ngày bạn chọn</p>
+                        <h2 className="text-xl font-bold font-headline text-on-surface">{t('tour_detail.selectDeparture')}</h2>
+                        <p className="text-xs text-on-surface-variant mt-0.5">{t('tour_detail.departurePriceHint')}</p>
                     </div>
                     <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant transition-colors">
                         <span className="material-symbols-outlined text-[20px]">close</span>
@@ -178,16 +186,16 @@ export default function DepartureCalendarModal({
                     {/* Legend */}
                     <div className="mt-6 flex flex-wrap items-center gap-4 text-[11px] font-medium text-on-surface-variant justify-center bg-surface-container-lowest py-3 rounded-2xl border border-outline-variant/10">
                         <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Có sẵn
+                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span> {t('tour_detail.available')}
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-amber-400"></span> Sắp hết
+                            <span className="w-2 h-2 rounded-full bg-amber-400"></span> {t('tour_detail.runningLow')}
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-red-400"></span> Hết chỗ
+                            <span className="w-2 h-2 rounded-full bg-red-400"></span> {t('tour_detail.soldOut')}
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <div className="w-4 h-4 rounded border-2 border-primary bg-primary/5"></div> Đang chọn
+                            <div className="w-4 h-4 rounded border-2 border-primary bg-primary/5"></div> {t('tour_detail.selectedDate')}
                         </div>
                     </div>
                 </div>

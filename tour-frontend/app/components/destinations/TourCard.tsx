@@ -1,25 +1,56 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 
+interface TourCardDeparture {
+    price?: number | null;
+}
+
+interface TourCardData {
+    id: number;
+    name: string;
+    imageUrl?: string | null;
+    duration?: string | null;
+    price: number;
+    averageRating?: number | null;
+    reviewCount?: number | null;
+    _count?: {
+        reviews?: number;
+    };
+    departures?: TourCardDeparture[];
+}
+
 interface TourCardProps {
-    tour: any;
+    tour: TourCardData;
     t: (key: string) => string;
     formatPrice: (price: number) => string;
 }
 
 export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
+    const reviewCount = Number(tour.reviewCount ?? tour._count?.reviews ?? 0);
+    const averageRating = Number(tour.averageRating ?? 0);
+    const hasReviews = reviewCount > 0 && averageRating > 0;
+
     return (
         <Link href={`/tour/${tour.id}`} className="block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1">
             <div className="relative aspect-[4/3] overflow-hidden">
-                <img alt={tour.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" src={tour.imageUrl || "https://images.unsplash.com/photo-1499681404123-6c7102ce0033"} />
+                <Image
+                    alt={tour.name}
+                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    src={tour.imageUrl || 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=1200'}
+                    fill
+                    sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                />
                 <div className="absolute top-4 left-4">
                     <span className="bg-tertiary-container text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest shadow-md">{t('dest.available_badge')}</span>
                 </div>
                 <div className="absolute bottom-4 right-4 bg-surface-container-lowest px-3 py-1.5 rounded-xl editorial-shadow">
-                    <div className="flex items-center text-secondary-container">
+                    <div className={`flex items-center ${hasReviews ? 'text-secondary-container' : 'text-outline'}`}>
                         <span className="material-symbols-outlined text-sm mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                        <span className="text-xs font-bold text-on-surface">5.0</span>
+                        <span className="text-xs font-bold text-on-surface">
+                            {hasReviews ? averageRating.toFixed(1) : t('reviews.notRated')}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -35,7 +66,7 @@ export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
                         <span className="text-xl font-extrabold text-primary">
                             {formatPrice(
                                 tour.departures && tour.departures.length > 0
-                                    ? Math.min(...tour.departures.map((d: any) => d.price ?? tour.price))
+                                    ? Math.min(...tour.departures.map((d) => d.price ?? tour.price))
                                     : tour.price
                             )}
                         </span>

@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
 import ReviewModal from '@/app/components/features/review/ReviewModal';
@@ -15,16 +16,24 @@ import {
     RatingBreakdown,
     ImportantInfoSection,
 } from '@/app/components/tour/TourDetailSections';
-import { getTranslatedTour } from '@/app/lib/mockTranslations';
 
 import PackageCard from '@/app/components/tour/PackageCard';
 import BookingSidebarNew from '@/app/components/tour/BookingSidebar';
 import { Tour, TourPackage, Review, ReviewStats } from '@/app/types';
 
+interface RatingBreakdownStats {
+    averageRating: number;
+    totalReviews: number;
+    breakdown: { star: number; count: number; percent: number }[];
+}
+
 // ─── Main Page ─
 export default function TourDetailPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const { t, formatPrice, language } = useLocale();
+    const initialDepartureIdParam = searchParams.get('departureId');
+    const initialDepartureId = initialDepartureIdParam ? Number(initialDepartureIdParam) : null;
 
     const [tour, setTour] = useState<Tour | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +41,7 @@ export default function TourDetailPage() {
     const [selectedPackage, setSelectedPackage] = useState<TourPackage | null>(null);
     const [reviews, setReviews] = useState<Review[]>([]);
     const [reviewStats, setReviewStats] = useState<ReviewStats>({ averageRating: 0, totalReviews: 0 });
-    const [ratingBreakdown, setRatingBreakdown] = useState<any>(null);
+    const [ratingBreakdown, setRatingBreakdown] = useState<RatingBreakdownStats | null>(null);
     const [similarTours, setSimilarTours] = useState<Tour[]>([]);
 
     const fetchReviews = async () => {
@@ -57,7 +66,7 @@ export default function TourDetailPage() {
                 
                 // Parallel data fetching for performance
                 const [tourRes, reviewsRes, ratingStatsRes] = await Promise.allSettled([
-                    fetch(`${apiUrl}/tour/${params.id}`),
+                    fetch(`${apiUrl}/tour/${params.id}?locale=${language}`),
                     fetch(`${apiUrl}/tour/${params.id}/reviews?limit=2`),
                     fetch(`${apiUrl}/tour/${params.id}/rating-stats`)
                 ]);
@@ -66,7 +75,7 @@ export default function TourDetailPage() {
 
                 if (tourRes.status === 'fulfilled' && tourRes.value.ok) {
                     const json = await tourRes.value.json();
-                    fetchedTour = getTranslatedTour(json.data || json, language);
+                    fetchedTour = json.data || json;
                     setTour(fetchedTour);
                 }
                 if (reviewsRes.status === 'fulfilled' && reviewsRes.value.ok) {
@@ -82,11 +91,11 @@ export default function TourDetailPage() {
                 // Fetch similar tours after tour data is available
                 if (fetchedTour) {
                     const dest = fetchedTour.destination?.name ? `&dest=${encodeURIComponent(fetchedTour.destination.name)}` : '';
-                    const similarRes = await fetch(`${apiUrl}/tour?limit=3${dest}`);
+                    const similarRes = await fetch(`${apiUrl}/tour?limit=3&locale=${language}${dest}`);
                     if (similarRes.ok) {
                         const json = await similarRes.json();
                         const all: Tour[] = json.data || [];
-                        setSimilarTours(all.filter((t: Tour) => t.id !== fetchedTour.id).slice(0, 3).map(t => getTranslatedTour(t, language)));
+                        setSimilarTours(all.filter((t: Tour) => t.id !== fetchedTour.id).slice(0, 3));
                     }
                 }
             } catch (error) {
@@ -114,7 +123,7 @@ export default function TourDetailPage() {
     }
 
     const hasPackages = (tour.packages && tour.packages.length > 0) ?? false;
-    const hasItinerary = (tour.itinerary && tour.itinerary.length > 0) ?? false;
+    const hasReviewStats = reviewStats.totalReviews > 0 && reviewStats.averageRating > 0;
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
@@ -139,7 +148,7 @@ export default function TourDetailPage() {
                 <TourGallery tour={tour} t={t} />
 
                 {/* ── Highlights ── */}
-                <HighlightsSection highlights={tour.highlights ?? []} />
+                <HighlightsSection highlights={tour.highlights ?? []} t={t} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                     {/* ── Left: Detail Content ── */}
@@ -151,10 +160,18 @@ export default function TourDetailPage() {
                                 <span className="bg-secondary-container/10 text-secondary-container px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase border border-secondary-container/20">
                                     {t('tour_detail.premiumExp')}
                                 </span>
-                                <div className="flex items-center text-secondary-container">
+                                <div className={`flex items-center ${hasReviewStats ? 'text-secondary-container' : 'text-outline'}`}>
                                     <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                                    <span className="text-sm font-bold ml-1 text-on-surface">{reviewStats.averageRating ? reviewStats.averageRating.toFixed(1) : '—'}</span>
-                                    <span className="text-xs text-outline ml-1">({reviewStats.totalReviews || 0} {reviewStats.totalReviews === 1 ? 'review' : 'reviews'})</span>
+                                    {hasReviewStats ? (
+                                        <>
+                                            <span className="text-sm font-bold ml-1 text-on-surface">{reviewStats.averageRating.toFixed(1)}</span>
+                                            <span className="text-xs text-outline ml-1">
+                                                ({reviewStats.totalReviews} {reviewStats.totalReviews === 1 ? t('tour_detail.reviewSingular') : t('tour_detail.reviewsLabel')})
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className="text-xs font-bold ml-1 text-outline">{t('reviews.notRated')}</span>
+                                    )}
                                 </div>
                             </div>
                             <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold font-headline leading-tight tracking-tight text-primary mb-6">
@@ -200,7 +217,9 @@ export default function TourDetailPage() {
                                             key={pkg.id}
                                             pkg={pkg}
                                             selected={selectedPackage?.id === pkg.id}
-                                            onSelect={() => setSelectedPackage(pkg)}
+                                            onSelect={() => {
+                                                setSelectedPackage((current) => current?.id === pkg.id ? null : pkg);
+                                            }}
                                             formatPrice={formatPrice}
                                             t={t}
                                         />
@@ -212,6 +231,7 @@ export default function TourDetailPage() {
                         {/* ── Lịch trình chi tiết (nâng cấp) ── */}
                         <ItinerarySection
                             itinerary={tour.itinerary ?? []}
+                            t={t}
                             fallback={[
                                 { day: 1, title: t('tour_detail.day1Title'), desc: t('tour_detail.day1Desc') },
                                 { day: 2, title: t('tour_detail.day2Title'), desc: t('tour_detail.day2Desc') },
@@ -331,7 +351,7 @@ export default function TourDetailPage() {
                         </section>
 
                         {/* ── FAQ ── */}
-                        <FAQSection faqs={tour.faqs ?? []} />
+                        <FAQSection faqs={tour.faqs ?? []} t={t} />
 
                         {/* Reviews */}
                         <section className="pt-8 border-t border-outline-variant/20">
@@ -347,7 +367,7 @@ export default function TourDetailPage() {
                                 </button>
                             </div>
                             {/* Rating Breakdown */}
-                            <RatingBreakdown stats={ratingBreakdown} />
+                            <RatingBreakdown stats={ratingBreakdown} t={t} />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {reviews.length > 0 ? reviews.map(r => (
                                     <div key={r.id} className="bg-white p-6 rounded-xl shadow-sm border border-outline-variant/20">
@@ -365,8 +385,14 @@ export default function TourDetailPage() {
                                             </div>
                                         )}
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0">
-                                                <img className="w-full h-full object-cover" alt={r.user?.fullName} src={r.user?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'} />
+                                            <div className="relative w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0">
+                                                <Image
+                                                    className="object-cover"
+                                                    alt={r.user?.fullName || 'Reviewer avatar'}
+                                                    src={r.user?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'}
+                                                    fill
+                                                    sizes="40px"
+                                                />
                                             </div>
                                             <div>
                                                 <p className="font-bold text-sm text-on-surface">{r.user?.fullName}</p>
@@ -376,7 +402,7 @@ export default function TourDetailPage() {
                                     </div>
                                 )) : (
                                     <div className="col-span-2 text-center py-6 text-outline-variant italic">
-                                        {t('reviews.noReviewsYet') || 'Chưa có đánh giá nào.'}
+                                        {t('reviews.noReviewsYet')}
                                     </div>
                                 )}
                             </div>
@@ -391,9 +417,11 @@ export default function TourDetailPage() {
                     {/* ── Right: Booking Sidebar ── */}
                     <BookingSidebarNew
                         tour={tour}
+                        initialDepartureId={initialDepartureId}
                         selectedPackage={selectedPackage}
                         formatPrice={formatPrice}
                         t={t}
+                        language={language}
                     />
                 </div>
 
@@ -418,10 +446,12 @@ export default function TourDetailPage() {
                                 return (
                                     <Link key={st.id} href={`/tour/${st.id}`} className="group flex flex-col bg-white rounded-2xl overflow-hidden border border-outline-variant/10 shadow-sm hover:shadow-lg transition-all duration-300">
                                         <div className="relative h-48 overflow-hidden">
-                                            <img
+                                            <Image
                                                 src={st.imageUrl || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb'}
                                                 alt={st.name}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                fill
+                                                sizes="(min-width: 768px) 33vw, 100vw"
                                             />
                                             <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-primary shadow-sm">
                                                 {st.duration}

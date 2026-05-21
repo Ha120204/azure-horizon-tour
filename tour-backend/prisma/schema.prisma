@@ -82,10 +82,12 @@ model User {
 model Destination {
   id          Int      @id @default(autoincrement())
   name        String   @unique 
+  nameEn      String?
   slug        String?  @unique // URL thân thiện (vd: da-nang)
   description String?  @db.Text
   imageUrl    String?  
   region      String?  
+  regionEn    String?
   travelScope TravelScope @default(DOMESTIC)
   countryCode String?
 
@@ -104,19 +106,23 @@ model Tour {
   id             Int         @id @default(autoincrement())
   tourCode       String      @unique @default(uuid())
   name           String
+  nameEn         String?
   description    String      @db.Text
+  descriptionEn  String?     @db.Text
   price          Float
   
   destinationId  Int
   destination    Destination @relation(fields: [destinationId], references: [id])
   
   startDate      DateTime
+  durationEn     String?
   duration       String      @default("Chưa xác định")
   availableSeats Int
   imageUrl       String?
   averageRating  Float       @default(0)
   tourType       String      @default("Luxury Retreat")
   departurePoint String?                             // Điểm khởi hành mặc định (VD: "TP. Hồ Chí Minh")
+  departurePointEn String?
   
   // ── Workflow fields ──────────────────────────────────────────────
   status         TourStatus  @default(PUBLISHED)    // Trạng thái duyệt
@@ -156,17 +162,23 @@ model TourItinerary {
   tour            Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
   dayNumber       Int      // Ngày thứ mấy (1, 2, 3...)
   title           String   // "Khám phá Hội An cổ kính"
+  titleEn         String?
   description     String   @db.Text // Mô tả chi tiết hoạt động trong ngày
+  descriptionEn   String?  @db.Text
 
   // [PHASE 2] Thông tin chi tiết theo ngày
   mealsBreakfast  Boolean  @default(false) // Bữa sáng included
   mealsLunch      Boolean  @default(false) // Bữa trưa included
   mealsDinner     Boolean  @default(false) // Bữa tối included
   accommodation   String?                  // "Vinpearl Resort 5⭐"
+  accommodationEn String?
   transport       String?                  // "Xe du lịch 45 chỗ"
+  transportEn     String?
   activities      String[]                 // ["Lặn ngắm san hô", "Tắm biển Hòn Tằm"]
+  activitiesEn    String[] @default([])
   imageUrl        String?                  // Ảnh minh họa cho ngày
   timeline        Json?                    // [{"time":"08:00","activity":"Ăn sáng tại KS"}, ...]
+  timelineEn      Json?
 
   @@index([tourId, dayNumber])
 }
@@ -179,6 +191,7 @@ model TourHighlight {
   tourId    Int
   tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
   content   String // "Lặn ngắm san hô tại Hòn Mun — 10 vịnh đẹp nhất thế giới"
+  contentEn String?
   icon      String @default("auto_awesome") // Material Symbol icon name
   sortOrder Int    @default(0)
 
@@ -193,7 +206,9 @@ model TourFAQ {
   tourId    Int
   tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
   question  String
+  questionEn String?
   answer    String @db.Text
+  answerEn  String? @db.Text
   sortOrder Int    @default(0)
 
   @@index([tourId, sortOrder])
@@ -222,13 +237,17 @@ model TourPackage {
   tour        Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
 
   name        String   // "Gói Tiêu Chuẩn" | "Gói Cao Cấp" | "Gói Luxury"
+  nameEn      String?
   description String?  @db.Text // Mô tả ngắn về gói
+  descriptionEn String? @db.Text
   price       Float    // Giá/người cho gói này
   badge       String?  // "POPULAR" | "BEST VALUE" | "LUXURY" | null
 
   // Lưu dạng JSON string array: ["Vé máy bay khứ hồi", "Khách sạn 4★"]
   includes    String[] // Danh sách dịch vụ bao gồm
+  includesEn  String[] @default([])
   excludes    String[] // Danh sách không bao gồm
+  excludesEn  String[] @default([])
 
   sortOrder   Int      @default(0) // Thứ tự hiển thị
   isActive    Boolean  @default(true)
@@ -252,6 +271,7 @@ model TourDeparture {
   availableSeats Int      @default(0)  // Số ghế còn lại cho ngày này
   maxSeats       Int?                  // [FLASH SALE] Tổng ghế ban đầu — dùng tính % đã đặt thực tế
   note           String?               // Ghi chú tự do (VD: "Giá ưu đãi cuối tuần")
+  noteEn         String?
   category       String?               // [FLASH SALE] 'FLASH_SALE' | 'EARLY_BIRD' | 'LAST_MINUTE' | null
   flashSaleEndsAt DateTime?            // [FLASH SALE] Thời điểm kết thúc ưu đãi (null = không giới hạn)
 

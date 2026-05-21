@@ -29,10 +29,10 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
   const [isSaving, setIsSaving] = useState(false);
 
   // ── Highlights state ──────────────────────────────────────────
-  const [highlights, setHighlights] = useState<{ content: string; icon: string }[]>([]);
+  const [highlights, setHighlights] = useState<{ content: string; contentEn: string; icon: string }[]>([]);
 
   // ── FAQs state ────────────────────────────────────────────────
-  const [faqs, setFaqs] = useState<{ question: string; answer: string }[]>([]);
+  const [faqs, setFaqs] = useState<{ question: string; questionEn: string; answer: string; answerEn: string }[]>([]);
 
   // ── Itinerary state ───────────────────────────────────────────
   const [itinerary, setItinerary] = useState<any[]>([]);
@@ -42,19 +42,23 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
   useEffect(() => {
     if (!tour) return;
     setHighlights(tour.highlights?.length > 0
-      ? tour.highlights.map((h: any) => ({ content: h.content, icon: h.icon || 'auto_awesome' }))
-      : [{ content: '', icon: 'auto_awesome' }]
+      ? tour.highlights.map((h: any) => ({ content: h.content, contentEn: h.contentEn || '', icon: h.icon || 'auto_awesome' }))
+      : [{ content: '', contentEn: '', icon: 'auto_awesome' }]
     );
     setFaqs(tour.faqs?.length > 0
-      ? tour.faqs.map((f: any) => ({ question: f.question, answer: f.answer }))
-      : [{ question: '', answer: '' }]
+      ? tour.faqs.map((f: any) => ({ question: f.question, questionEn: f.questionEn || '', answer: f.answer, answerEn: f.answerEn || '' }))
+      : [{ question: '', questionEn: '', answer: '', answerEn: '' }]
     );
     setItinerary(tour.itinerary?.length > 0
       ? tour.itinerary.map((d: any) => ({
           ...d,
           activitiesText: Array.isArray(d.activities) ? d.activities.join('\n') : '',
+          activitiesEnText: Array.isArray(d.activitiesEn) ? d.activitiesEn.join('\n') : '',
           timelineText: Array.isArray(d.timeline)
             ? d.timeline.map((t: any) => `${t.time} - ${t.activity}`).join('\n')
+            : '',
+          timelineEnText: Array.isArray(d.timelineEn)
+            ? d.timelineEn.map((t: any) => `${t.time} - ${t.activity}`).join('\n')
             : '',
         }))
       : []
@@ -107,7 +111,12 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
     setSavingDayId(day.id);
     try {
       const activities = day.activitiesText.split('\n').map((s: string) => s.trim()).filter(Boolean);
+      const activitiesEn = (day.activitiesEnText || '').split('\n').map((s: string) => s.trim()).filter(Boolean);
       const timeline = day.timelineText.split('\n').map((line: string) => {
+        const [time, ...rest] = line.split('-');
+        return { time: time?.trim() || '', activity: rest.join('-').trim() };
+      }).filter((t: any) => t.time && t.activity);
+      const timelineEn = (day.timelineEnText || '').split('\n').map((line: string) => {
         const [time, ...rest] = line.split('-');
         return { time: time?.trim() || '', activity: rest.join('-').trim() };
       }).filter((t: any) => t.time && t.activity);
@@ -116,14 +125,20 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: day.title,
+          titleEn: day.titleEn || null,
           description: day.description,
+          descriptionEn: day.descriptionEn || null,
           mealsBreakfast: !!day.mealsBreakfast,
           mealsLunch: !!day.mealsLunch,
           mealsDinner: !!day.mealsDinner,
           accommodation: day.accommodation || null,
+          accommodationEn: day.accommodationEn || null,
           transport: day.transport || null,
+          transportEn: day.transportEn || null,
           activities,
+          activitiesEn,
           timeline,
+          timelineEn,
         }),
       });
       if (!res.ok) throw new Error();
@@ -260,6 +275,12 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                       placeholder="Ví dụ: Lặn ngắm san hô tại Hòn Mun..."
                       className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-300 bg-white"
                     />
+                    <input
+                      value={h.contentEn}
+                      onChange={e => setHighlights(prev => prev.map((x, xi) => xi === i ? { ...x, contentEn: e.target.value } : x))}
+                      placeholder="English highlight..."
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                    />
                     <button
                       onClick={() => setHighlights(prev => prev.filter((_, xi) => xi !== i))}
                       className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
@@ -270,7 +291,7 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                 ))}
               </div>
               <button
-                onClick={() => setHighlights(prev => [...prev, { content: '', icon: 'auto_awesome' }])}
+                onClick={() => setHighlights(prev => [...prev, { content: '', contentEn: '', icon: 'auto_awesome' }])}
                 className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-2xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-all flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-[18px]">add_circle</span>
@@ -314,11 +335,24 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                       rows={3}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300 resize-none bg-gray-50"
                     />
+                    <input
+                      value={f.questionEn}
+                      onChange={e => setFaqs(prev => prev.map((x, xi) => xi === i ? { ...x, questionEn: e.target.value } : x))}
+                      placeholder="Question in English..."
+                      className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50"
+                    />
+                    <textarea
+                      value={f.answerEn}
+                      onChange={e => setFaqs(prev => prev.map((x, xi) => xi === i ? { ...x, answerEn: e.target.value } : x))}
+                      placeholder="Answer in English..."
+                      rows={3}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300 resize-none bg-gray-50"
+                    />
                   </div>
                 ))}
               </div>
               <button
-                onClick={() => setFaqs(prev => [...prev, { question: '', answer: '' }])}
+                onClick={() => setFaqs(prev => [...prev, { question: '', questionEn: '', answer: '', answerEn: '' }])}
                 className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-2xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition-all flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-[18px]">add_circle</span>
@@ -367,11 +401,24 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                   </div>
 
                   {/* Description */}
+                  <input
+                    value={day.titleEn || ''}
+                    onChange={e => updateDay(day.id, 'titleEn', e.target.value)}
+                    placeholder="Day title in English..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300"
+                  />
                   <textarea
                     value={day.description}
                     onChange={e => updateDay(day.id, 'description', e.target.value)}
                     rows={2}
                     placeholder="Mô tả ngày..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                  />
+                  <textarea
+                    value={day.descriptionEn || ''}
+                    onChange={e => updateDay(day.id, 'descriptionEn', e.target.value)}
+                    rows={2}
+                    placeholder="Day description in English..."
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300 resize-none"
                   />
 
@@ -407,6 +454,12 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                         placeholder="Vinpearl Resort 5★"
                         className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
                       />
+                      <input
+                        value={day.accommodationEn || ''}
+                        onChange={e => updateDay(day.id, 'accommodationEn', e.target.value)}
+                        placeholder="Accommodation in English"
+                        className="mt-1.5 w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
+                      />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
@@ -417,6 +470,12 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                         onChange={e => updateDay(day.id, 'transport', e.target.value)}
                         placeholder="Xe du lịch 45 chỗ"
                         className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                      <input
+                        value={day.transportEn || ''}
+                        onChange={e => updateDay(day.id, 'transportEn', e.target.value)}
+                        placeholder="Transport in English"
+                        className="mt-1.5 w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-300"
                       />
                     </div>
                   </div>
@@ -433,6 +492,13 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                       placeholder={"Hòn Mun\nHòn Tằm"}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-300 resize-none"
                     />
+                    <textarea
+                      value={day.activitiesEnText || ''}
+                      onChange={e => updateDay(day.id, 'activitiesEnText', e.target.value)}
+                      rows={2}
+                      placeholder={"Hon Mun\nHon Tam"}
+                      className="mt-2 w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                    />
                   </div>
 
                   {/* Timeline */}
@@ -446,6 +512,13 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                       rows={3}
                       placeholder={"07:00 - Ăn sáng tại khách sạn\n08:30 - Khởi hành"}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-300 resize-none font-mono"
+                    />
+                    <textarea
+                      value={day.timelineEnText || ''}
+                      onChange={e => updateDay(day.id, 'timelineEnText', e.target.value)}
+                      rows={3}
+                      placeholder={"07:00 - Breakfast at hotel\n08:30 - Departure"}
+                      className="mt-2 w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-300 resize-none font-mono"
                     />
                   </div>
                 </div>

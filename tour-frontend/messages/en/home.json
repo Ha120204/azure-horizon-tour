@@ -20,13 +20,18 @@
   },
   "philosophy": {
     "badge": "Our Philosophy",
-    "title": "The Art of the Path.",
-    "desc": "We don't just book trips — we craft experiences. Every journey is a story woven from local secrets, architectural wonders, and quiet moments that shape a lifetime of memories.",
+    "title": "Journeys Designed With Intention.",
+    "desc": "We shape every itinerary around the texture of a place: where you stay, who guides you, what you see before the crowds arrive, and which quiet moments are worth protecting.",
+    "noteLabel": "Field Notes",
+    "note": "A well-made journey should feel effortless to the traveler and deeply considered behind the scenes.",
     "accommodation": "Curated Accommodations",
-    "accommodationDesc": "Stay in places that tell a story.",
+    "accommodationDesc": "Boutique stays, villas, and resorts selected for character, comfort, and setting.",
     "concierge": "Local Concierge",
-    "conciergeDesc": "Access to the inaccessible.",
-    "cta": "Discover Our Story"
+    "conciergeDesc": "Guides and hosts who add context, timing, and rare local access.",
+    "tailored": "Tailored Pace",
+    "tailoredDesc": "Balanced days that leave room for discovery instead of rushing through a checklist.",
+    "cta": "Discover Our Story",
+    "secondaryCta": "Find Your Journey"
   },
   "conciergeApp": {
     "btn": "Azure AI Concierge",

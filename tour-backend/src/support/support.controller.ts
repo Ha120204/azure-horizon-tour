@@ -10,7 +10,7 @@ import {
   UseGuards,
   Request,
   NotFoundException,
-  Optional,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SupportService } from './support.service';
@@ -24,14 +24,43 @@ import {
 } from './dto/support.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 
-// ─── Guard không bắt buộc (soft auth) ────────────────────────────────────────
-// Dùng cho các endpoint customer không bắt auth cứng nhắc
-class OptionalJwtGuard extends AuthGuard('jwt') {
-  handleRequest(err: any, user: any) {
-    return user ?? null; // Không ném lỗi nếu không có token
+type AuthUser = {
+  id?: number | string;
+  userId?: number | string;
+  sub?: number | string;
+  fullName?: string;
+  name?: string;
+};
+
+type AuthenticatedRequest = {
+  user?: AuthUser;
+};
+
+const toNumberOrUndefined = (
+  value: number | string | undefined,
+): number | undefined => {
+  if (value == null) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const getAuthUserId = (req: AuthenticatedRequest): number | undefined =>
+  toNumberOrUndefined(req.user?.userId ?? req.user?.sub ?? req.user?.id);
+
+const getRequiredAuthUserId = (req: AuthenticatedRequest): number => {
+  const userId = getAuthUserId(req);
+  if (userId == null) {
+    throw new UnauthorizedException('Invalid authenticated user');
   }
-}
+  return userId;
+};
+
+const getAuthDisplayName = (
+  req: AuthenticatedRequest,
+  fallback: string,
+): string => req.user?.fullName ?? req.user?.name ?? fallback;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN / STAFF ENDPOINTS (yêu cầu JWT + role)
@@ -87,9 +116,9 @@ export class SupportController {
   async assignTicket(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignTicketDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
-    const staffId = dto.staffId ?? req.user?.sub ?? req.user?.id;
+    const staffId = dto.staffId ?? getRequiredAuthUserId(req);
     return this.supportService.assignTicket(id, staffId);
   }
 
@@ -98,17 +127,17 @@ export class SupportController {
   async replyTicket(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateTicketReplyDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
-    const staffName = req.user?.fullName ?? req.user?.name ?? 'Nhân viên';
-    const staffId = req.user?.sub ?? req.user?.id;
+    const staffName = getAuthDisplayName(req, 'Nhân viên');
+    const staffId = getRequiredAuthUserId(req);
     return this.supportService.replyTicket(id, dto.content, staffName, staffId);
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CUSTOMER ENDPOINTS (công khai hoặc soft-auth)
-// Xác minh quyền truy cập qua email + ticketId (không cần login)
+// Guest dùng accessCode; khách đã đăng nhập dùng userId từ JWT.
 // ═══════════════════════════════════════════════════════════════════════════════
 @Controller('support/customer')
 export class SupportCustomerController {
@@ -116,31 +145,28 @@ export class SupportCustomerController {
 
   /**
    * GET /support/customer/my-tickets
-   * - Nếu có JWT: dùng userId từ token
-   * - Nếu không: dùng query ?email=... (khách vãng lai)
+   * - Chỉ trả danh sách ticket của user đã đăng nhập.
+   * - Guest xem từng ticket qua link có accessCode trong email xác nhận.
    */
   @UseGuards(OptionalJwtGuard)
   @Get('my-tickets')
-  async getMyTickets(
-    @Query() query: LookupQueryDto,
-    @Request() req: any,
-  ) {
-    const userId: number | undefined = req.user?.sub ?? req.user?.id;
+  async getMyTickets(@Request() req: AuthenticatedRequest) {
+    const userId = getAuthUserId(req);
     return this.supportService.getMyTickets({ userId });
   }
 
   /**
    * GET /support/customer/ticket/:id
-   * - Xem chi tiết ticket; verify bằng email query param hoặc JWT userId
+   * - Xem chi tiết ticket; verify bằng accessCode hoặc JWT userId.
    */
   @UseGuards(OptionalJwtGuard)
   @Get('ticket/:id')
   async getTicketDetail(
     @Param('id', ParseIntPipe) id: number,
     @Query() query: LookupQueryDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
-    const userId: number | undefined = req.user?.sub ?? req.user?.id;
+    const userId = getAuthUserId(req);
     const accessCode: string | undefined = query.accessCode;
     return this.supportService.getTicketDetailForCustomer(id, { accessCode, userId });
   }
@@ -154,11 +180,11 @@ export class SupportCustomerController {
   async customerReply(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CustomerReplyDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
-    const userId: number | undefined = req.user?.sub ?? req.user?.id;
+    const userId = getAuthUserId(req);
     const accessCode: string | undefined = dto.accessCode;
-    const name:  string = dto.senderName ?? req.user?.fullName ?? 'Khách hàng';
+    const name = dto.senderName ?? getAuthDisplayName(req, 'Khách hàng');
     return this.supportService.customerReply(id, dto.content, { accessCode, userId, name });
   }
 
@@ -171,9 +197,9 @@ export class SupportCustomerController {
   async rateTicket(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RateTicketDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
-    const userId: number | undefined = req.user?.sub ?? req.user?.id;
+    const userId = getAuthUserId(req);
     const accessCode: string | undefined = dto.accessCode;
     return this.supportService.rateTicket(id, dto.rating, { accessCode, userId });
   }
@@ -187,9 +213,9 @@ export class SupportCustomerController {
   async reopenTicket(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: LookupQueryDto,
-    @Request() req: any,
+    @Request() req: AuthenticatedRequest,
   ) {
-    const userId: number | undefined = req.user?.sub ?? req.user?.id;
+    const userId = getAuthUserId(req);
     const accessCode: string | undefined = dto.accessCode;
     return this.supportService.reopenTicket(id, { accessCode, userId });
   }

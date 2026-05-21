@@ -204,9 +204,11 @@ export default function StaffManagementPage() {
         setIsLoading(true);
         try {
             const qs = new URLSearchParams();
+            const roleParam = currentUserRole === 'SUPER_ADMIN'
+                ? (filterRole || 'STAFF,ADMIN')
+                : 'STAFF';
             if (debouncedSearch) qs.append('search', debouncedSearch);
-            if (filterRole) qs.append('role', filterRole);
-            else qs.append('role', 'STAFF,ADMIN');
+            qs.append('role', roleParam);
             if (filterStatus) qs.append('status', filterStatus);
             qs.append('page', String(page));
             qs.append('limit', String(pageSize));
@@ -222,7 +224,7 @@ export default function StaffManagementPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearch, filterRole, filterStatus, page, pageSize]);
+    }, [currentUserRole, debouncedSearch, filterRole, filterStatus, page, pageSize]);
 
 
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
@@ -349,10 +351,31 @@ export default function StaffManagementPage() {
                 throw new Error(getApiMessage(err, 'Failed'));
             }
             const result = await res.json();
-            const action = result.status === 'Active' ? 'kích hoạt' : 'vô hiệu hóa';
+            const payload = result?.data ?? result;
+            const nextStatus = payload?.status ?? (payload?.deletedAt ? 'Deactivated' : 'Active');
+            const nextDeletedAt = nextStatus === 'Active' ? null : (payload?.deletedAt ?? new Date().toISOString());
+            const action = nextStatus === 'Active' ? 'kích hoạt' : 'vô hiệu hóa';
             showToast(`Đã ${action} tài khoản "${toggleTarget.fullName}"`);
+            setUsers(prev => prev.map(user => (
+                user.id === toggleTarget.id
+                    ? { ...user, deletedAt: nextDeletedAt, status: nextStatus }
+                    : user
+            )));
+            setDetailUser(prev => (
+                prev?.id === toggleTarget.id
+                    ? { ...prev, deletedAt: nextDeletedAt, status: nextStatus }
+                    : prev
+            ));
             setToggleTarget(null);
-            fetchUsers();
+            const shouldClearStatusFilter =
+                (filterStatus === 'active' && nextStatus === 'Deactivated') ||
+                (filterStatus === 'deactivated' && nextStatus === 'Active');
+            if (shouldClearStatusFilter) {
+                setFilterStatus('');
+                setPage(1);
+            } else {
+                fetchUsers();
+            }
             fetchStats();
         } catch (e: unknown) {
             showToast(getErrorMessage(e, 'Thao tác thất bại.'), 'error');
@@ -380,20 +403,23 @@ export default function StaffManagementPage() {
             const res = await fetchWithAuth(`${API_BASE_URL}/user`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(createForm),
+                body: JSON.stringify({
+                    ...createForm,
+                    role: currentUserRole === 'SUPER_ADMIN' ? createForm.role : 'STAFF',
+                }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(getApiMessage(err, 'Tạo tài khoản thất bại'));
+                throw new Error(getApiMessage(err, 'Thêm nhân viên thất bại'));
             }
-            showToast(`Tạo tài khoản "${createForm.fullName}" thành công!`);
+            showToast(`Thêm nhân viên "${createForm.fullName}" thành công!`);
             setShowCreateModal(false);
             setCreateForm({ email: '', password: '', fullName: '', phone: '', role: 'STAFF', sendEmail: true });
             setConfirmPassword('');
             fetchUsers();
             fetchStats();
         } catch (e: unknown) {
-            showToast(getErrorMessage(e, 'Tạo tài khoản thất bại.'), 'error');
+            showToast(getErrorMessage(e, 'Thêm nhân viên thất bại.'), 'error');
         } finally {
             setIsCreating(false);
         }
@@ -428,7 +454,7 @@ export default function StaffManagementPage() {
                     className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-sm focus-visible:ring-2 focus-visible:ring-primary outline-none"
                 >
                     <span className="material-symbols-outlined text-lg" aria-hidden="true">person_add</span>
-                    Tạo tài khoản
+                    Thêm nhân viên
                 </button>
                 )}
             </div>
@@ -469,12 +495,12 @@ export default function StaffManagementPage() {
                     <label htmlFor="filter-role" className="sr-only">Lọc theo role</label>
                     <select
                         id="filter-role"
-                        value={filterRole}
+                        value={currentUserRole === 'SUPER_ADMIN' ? filterRole : 'STAFF'}
                         onChange={e => { setFilterRole(e.target.value); setPage(1); }}
                         className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
                     >
                         <option value="">Tất cả Role</option>
-                        <option value="ADMIN">Admin</option>
+                        {currentUserRole === 'SUPER_ADMIN' && <option value="ADMIN">Admin</option>}
                         <option value="STAFF">Staff</option>
                     </select>
                     <label htmlFor="filter-status" className="sr-only">Lọc theo trạng thái</label>
@@ -1160,8 +1186,8 @@ export default function StaffManagementPage() {
                                         <span className="material-symbols-outlined text-white text-xl">person_add</span>
                                     </div>
                                     <div>
-                                        <h2 id="create-dialog-title" className="text-lg font-bold text-white">Tạo tài khoản mới</h2>
-                                        <p className="text-white/60 text-xs mt-0.5">Thêm nhân viên hoặc quản trị viên</p>
+                                        <h2 id="create-dialog-title" className="text-lg font-bold text-white">Thêm nhân viên mới</h2>
+                                        <p className="text-white/60 text-xs mt-0.5">Tạo tài khoản nhân viên nội bộ</p>
                                     </div>
                                 </div>
                                 <button
@@ -1298,23 +1324,6 @@ export default function StaffManagementPage() {
                                 {createErrors.confirmPassword && <p className="mt-1 text-xs text-red-500 font-medium">{createErrors.confirmPassword}</p>}
                             </div>
 
-                            {/* Role Row */}
-                            <div>
-                                <label htmlFor="create-role" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5">
-                                    Vai trò <span className="text-red-500">*</span>
-                                </label>
-                                <select
-                                    id="create-role"
-                                    value={createForm.role}
-                                    onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))}
-                                    className="w-full bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
-                                >
-                                    <option value="STAFF">Staff</option>
-                                    <option value="ADMIN">Admin</option>
-
-                                </select>
-                            </div>
-                            
                             {/* Send Email Checkbox */}
                             <div className="mt-4 pt-4 border-t border-outline-variant/15 flex items-center">
                                 <label className="flex items-center gap-2 cursor-pointer group">
@@ -1355,7 +1364,7 @@ export default function StaffManagementPage() {
                                 ) : (
                                     <>
                                         <span className="material-symbols-outlined text-base" aria-hidden="true">person_add</span>
-                                        Tạo tài khoản
+                                        Thêm nhân viên
                                     </>
                                 )}
                             </button>

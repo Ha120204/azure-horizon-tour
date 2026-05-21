@@ -4,6 +4,8 @@ import { MailService } from '../mail/mail.service';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
+const ADMIN_VISIBLE_USER_ROLES: Role[] = [Role.CUSTOMER, Role.STAFF];
+
 @Injectable()
 export class UserService {
   constructor(
@@ -78,7 +80,7 @@ export class UserService {
     status?: string;
     page?: number;
     limit?: number;
-  }) {
+  }, requesterRole?: Role) {
     const { search, role, status, page = 1, limit = 10 } = query;
 
     const where: any = {};
@@ -91,14 +93,57 @@ export class UserService {
       ];
     }
 
+    const requestedRoles = role
+      ? (role
+          .split(',')
+          .map((r) => r.trim())
+          .filter((r) => Object.values(Role).includes(r as Role)) as Role[])
+      : [];
+
+    if (
+      requesterRole === Role.STAFF &&
+      requestedRoles.length > 0 &&
+      !requestedRoles.includes(Role.CUSTOMER)
+    ) {
+      return {
+        data: [],
+        meta: {
+          totalItems: 0,
+          totalPages: 0,
+          currentPage: page,
+        },
+      };
+    }
+
     // Filter theo role (hỗ trợ nhiều role cách nhau bằng dấu phẩy: role=STAFF,ADMIN)
     if (role) {
-      const roles = role.split(',').filter(r => Object.values(Role).includes(r.trim() as Role)) as Role[];
-      if (roles.length === 1) {
-        where.role = roles[0];
-      } else if (roles.length > 1) {
-        where.role = { in: roles };
+      if (requesterRole === Role.STAFF) {
+        where.role = Role.CUSTOMER;
+      } else if (requesterRole === Role.ADMIN) {
+        const allowedRoles = requestedRoles.filter((r) =>
+          ADMIN_VISIBLE_USER_ROLES.includes(r),
+        );
+        if (allowedRoles.length === 0) {
+          return {
+            data: [],
+            meta: {
+              totalItems: 0,
+              totalPages: 0,
+              currentPage: page,
+            },
+          };
+        }
+        where.role =
+          allowedRoles.length === 1 ? allowedRoles[0] : { in: allowedRoles };
+      } else if (requestedRoles.length === 1) {
+        where.role = requestedRoles[0];
+      } else if (requestedRoles.length > 1) {
+        where.role = { in: requestedRoles };
       }
+    } else if (requesterRole === Role.STAFF) {
+      where.role = Role.CUSTOMER;
+    } else if (requesterRole === Role.ADMIN) {
+      where.role = { in: ADMIN_VISIBLE_USER_ROLES };
     }
 
     // Filter theo status (active = deletedAt is null, deactivated = deletedAt is not null)
@@ -153,7 +198,7 @@ export class UserService {
   /**
    * Chi tiết 1 user
    */
-  async findOne(id: number) {
+  async findOne(id: number, requesterRole?: Role) {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
@@ -181,6 +226,17 @@ export class UserService {
     if (!user) throw new NotFoundException('User not found');
 
     // Lấy thêm thông tin booking gần nhất
+    if (requesterRole === Role.STAFF && user.role !== Role.CUSTOMER) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (
+      requesterRole === Role.ADMIN &&
+      !ADMIN_VISIBLE_USER_ROLES.includes(user.role)
+    ) {
+      throw new NotFoundException('User not found');
+    }
+
     const recentBookings = await this.prisma.booking.findMany({
       where: { userId: id },
       orderBy: { createdAt: 'desc' },
@@ -256,8 +312,11 @@ export class UserService {
       throw new ForbiddenException('Không thể chỉnh sửa tài khoản SUPER_ADMIN');
     }
 
-    if (requesterRole !== Role.SUPER_ADMIN && user.role !== Role.STAFF) {
-      throw new ForbiddenException('Admin chỉ được chỉnh sửa tài khoản Staff');
+    if (
+      requesterRole !== Role.SUPER_ADMIN &&
+      !ADMIN_VISIBLE_USER_ROLES.includes(user.role)
+    ) {
+      throw new ForbiddenException('Admin chi duoc chinh sua tai khoan Customer/Staff');
     }
 
     const updated = await this.prisma.user.update({
@@ -298,8 +357,11 @@ export class UserService {
       throw new ForbiddenException('Không thể vô hiệu hóa tài khoản SUPER_ADMIN');
     }
 
-    if (requesterRole !== Role.SUPER_ADMIN && user.role !== Role.STAFF) {
-      throw new ForbiddenException('Admin chỉ được thay đổi trạng thái tài khoản Staff');
+    if (
+      requesterRole !== Role.SUPER_ADMIN &&
+      !ADMIN_VISIBLE_USER_ROLES.includes(user.role)
+    ) {
+      throw new ForbiddenException('Admin chi duoc thay doi trang thai tai khoan Customer/Staff');
     }
 
     const updated = await this.prisma.user.update({
@@ -367,16 +429,38 @@ export class UserService {
   /**
    * Thống kê KPI
    */
-  async getStats() {
+  async getStats(requesterRole?: Role) {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Chỉ thống kê CUSTOMER — đồng bộ với bảng danh sách
     const customerWhere = { role: 'CUSTOMER' as any };
 
-    const staffWhere = { role: { in: [Role.ADMIN, Role.STAFF, Role.SUPER_ADMIN] } };
+    if (requesterRole === Role.STAFF) {
+      const [totalUsers, activeUsers, newThisMonth] = await Promise.all([
+        this.prisma.user.count({ where: customerWhere }),
+        this.prisma.user.count({ where: { ...customerWhere, deletedAt: null } }),
+        this.prisma.user.count({
+          where: { ...customerWhere, createdAt: { gte: firstDayOfMonth } },
+        }),
+      ]);
 
-    const [totalUsers, activeUsers, newThisMonth, roleBreakdown, staffActive, staffNewThisMonth] =
+      return {
+        totalUsers,
+        activeUsers,
+        newThisMonth,
+        staffAndAdmin: 0,
+        staffActive: 0,
+        staffNewThisMonth: 0,
+        roleBreakdown: [{ role: Role.CUSTOMER, count: totalUsers }],
+      };
+    }
+
+    const internalRoles =
+      requesterRole === Role.SUPER_ADMIN ? [Role.ADMIN, Role.STAFF] : [Role.STAFF];
+    const staffWhere = { role: { in: internalRoles } };
+
+    const [totalUsers, activeUsers, newThisMonth, roleBreakdown, staffAndAdmin, staffActive, staffNewThisMonth] =
       await Promise.all([
         this.prisma.user.count({ where: customerWhere }),
         this.prisma.user.count({ where: { ...customerWhere, deletedAt: null } }),
@@ -387,15 +471,12 @@ export class UserService {
           by: ['role'],
           _count: { role: true },
         }),
+        this.prisma.user.count({ where: staffWhere }),
         this.prisma.user.count({ where: { ...staffWhere, deletedAt: null } }),
         this.prisma.user.count({
           where: { ...staffWhere, createdAt: { gte: firstDayOfMonth } },
         }),
       ]);
-
-    const staffAndAdmin = roleBreakdown
-      .filter((r) => r.role !== 'CUSTOMER')
-      .reduce((sum, r) => sum + r._count.role, 0);
 
     return {
       totalUsers,

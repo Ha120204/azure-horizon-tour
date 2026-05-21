@@ -1,67 +1,137 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TourPermissionService } from '../tour/tour-permission.service';
+import { localizePackage, normalizeLocale } from '../tour/tour-localization';
 
 export interface CreatePackageDto {
   name: string;
+  nameEn?: string;
   description?: string;
+  descriptionEn?: string;
   price: number;
   badge?: string;
   includes: string[];
+  includesEn?: string[];
   excludes: string[];
+  excludesEn?: string[];
   sortOrder?: number;
 }
 
 @Injectable()
 export class TourPackageService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly tourPermission: TourPermissionService,
+  ) {}
 
-  /** Lấy tất cả packages của 1 tour (chỉ active, theo thứ tự) */
-  async findByTour(tourId: number) {
-    return this.prisma.tourPackage.findMany({
+  /** Public: active packages only. */
+  async findByTour(tourId: number, localeInput?: string) {
+    const locale = normalizeLocale(localeInput);
+    const packages = await this.prisma.tourPackage.findMany({
       where: { tourId, isActive: true },
       orderBy: { sortOrder: 'asc' },
     });
+    return packages.map((pkg) => localizePackage(pkg, locale));
   }
 
-  /** Lấy tất cả packages (kể cả inactive) — dùng cho admin */
-  async findByTourAdmin(tourId: number) {
+  /** Internal editor read: same access policy as mutating a tour. */
+  async findByTourAdmin(
+    tourId: number,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     return this.prisma.tourPackage.findMany({
       where: { tourId },
       orderBy: { sortOrder: 'asc' },
     });
   }
 
-  /** Tạo package mới cho 1 tour */
-  async create(tourId: number, dto: CreatePackageDto) {
-    // Verify tour exists
-    const tour = await this.prisma.tour.findUnique({ where: { id: tourId } });
-    if (!tour) throw new NotFoundException(`Tour #${tourId} không tồn tại`);
-
+  async create(
+    tourId: number,
+    dto: CreatePackageDto,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     return this.prisma.tourPackage.create({
-      data: { tourId, ...dto },
+      data: { tourId, ...dto, includesEn: dto.includesEn ?? [], excludesEn: dto.excludesEn ?? [] },
     });
   }
 
-  /** Cập nhật package */
-  async update(id: number, dto: Partial<CreatePackageDto>) {
-    const pkg = await this.prisma.tourPackage.findUnique({ where: { id } });
-    if (!pkg) throw new NotFoundException(`Package #${id} không tồn tại`);
-    return this.prisma.tourPackage.update({ where: { id }, data: dto });
+  async update(
+    tourId: number,
+    id: number,
+    dto: Partial<CreatePackageDto>,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
+    const pkg = await this.prisma.tourPackage.findFirst({
+      where: { id, tourId },
+    });
+    if (!pkg) throw new NotFoundException(`Package #${id} khong ton tai`);
+    return this.prisma.tourPackage.update({
+      where: { id },
+      data: {
+        ...dto,
+        ...(dto.includesEn !== undefined && { includesEn: dto.includesEn ?? [] }),
+        ...(dto.excludesEn !== undefined && { excludesEn: dto.excludesEn ?? [] }),
+      },
+    });
   }
 
-  /** Xóa package */
-  async remove(id: number) {
-    const pkg = await this.prisma.tourPackage.findUnique({ where: { id } });
-    if (!pkg) throw new NotFoundException(`Package #${id} không tồn tại`);
+  async remove(
+    tourId: number,
+    id: number,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
+    const pkg = await this.prisma.tourPackage.findFirst({
+      where: { id, tourId },
+    });
+    if (!pkg) throw new NotFoundException(`Package #${id} khong ton tai`);
     return this.prisma.tourPackage.delete({ where: { id } });
   }
 
-  /** Bulk replace: xóa hết packages cũ và tạo lại — dùng khi save tour form */
-  async bulkReplace(tourId: number, packages: CreatePackageDto[]) {
+  async bulkReplace(
+    tourId: number,
+    packages: CreatePackageDto[],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     await this.prisma.tourPackage.deleteMany({ where: { tourId } });
     if (packages.length === 0) return [];
     return this.prisma.tourPackage.createMany({
-      data: packages.map((p, i) => ({ ...p, tourId, sortOrder: i })),
+      data: packages.map((p, i) => ({
+        ...p,
+        tourId,
+        sortOrder: i,
+        includesEn: p.includesEn ?? [],
+        excludesEn: p.excludesEn ?? [],
+      })),
     });
   }
 }

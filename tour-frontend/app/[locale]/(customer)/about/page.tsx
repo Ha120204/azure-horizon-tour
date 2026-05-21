@@ -9,303 +9,310 @@ import { useLocale } from '@/app/context/LocaleContext';
 export default function AboutPage() {
     const { t } = useLocale();
 
+    const heroProofs = [
+        { icon: 'verified', value: '10k+', label: t('about.heroProofJourneys') },
+        { icon: 'public', value: '50+', label: t('about.heroProofDestinations') },
+        { icon: 'headset_mic', value: '8:00-22:00', label: t('about.heroProofSupport') },
+    ];
+
+    const journeySteps = [
+        {
+            step: '01',
+            icon: 'travel_explore',
+            title: t('about.philosophyPoint1Title'),
+            desc: t('about.philosophyPoint1Desc'),
+        },
+        {
+            step: '02',
+            icon: 'fact_check',
+            title: t('about.philosophyPoint2Title'),
+            desc: t('about.philosophyPoint2Desc'),
+        },
+        {
+            step: '03',
+            icon: 'support_agent',
+            title: t('about.philosophyPoint3Title'),
+            desc: t('about.philosophyPoint3Desc'),
+        },
+    ];
+
+    const bookingStandards = [
+        {
+            icon: 'payments',
+            title: t('about.wcu1Title'),
+            desc: t('about.wcu1Desc'),
+            meta: t('about.wcu1Meta'),
+        },
+        {
+            icon: 'reviews',
+            title: t('about.wcu2Title'),
+            desc: t('about.wcu2Desc'),
+            meta: t('about.wcu2Meta'),
+        },
+        {
+            icon: 'event_repeat',
+            title: t('about.wcu3Title'),
+            desc: t('about.wcu3Desc'),
+            meta: t('about.wcu3Meta'),
+        },
+        {
+            icon: 'support_agent',
+            title: t('about.wcu4Title'),
+            desc: t('about.wcu4Desc'),
+            meta: t('about.wcu4Meta'),
+        },
+    ];
+
+    const operationSteps = [
+        {
+            step: '01',
+            icon: 'route',
+            title: t('about.team1Title'),
+            desc: t('about.team1Role'),
+            meta: t('about.team1Meta'),
+        },
+        {
+            step: '02',
+            icon: 'event_available',
+            title: t('about.team2Title'),
+            desc: t('about.team2Role'),
+            meta: t('about.team2Meta'),
+        },
+        {
+            step: '03',
+            icon: 'contact_support',
+            title: t('about.team3Title'),
+            desc: t('about.team3Role'),
+            meta: t('about.team3Meta'),
+        },
+    ];
+
     return (
-        <div className="bg-surface text-on-surface font-body antialiased min-h-screen flex flex-col">
+        <div className="flex min-h-screen flex-col bg-surface font-body text-on-surface antialiased">
             <style dangerouslySetInnerHTML={{
                 __html: `
-                .hero-gradient { background: linear-gradient(180deg, rgba(0, 26, 64, 0.4) 0%, rgba(0, 26, 64, 0.7) 100%); }
-                .primary-gradient { background: linear-gradient(135deg, #003f87 0%, #0056b3 100%); }
-                @keyframes scroll {
-                    0% { transform: translateX(0); }
-                    100% { transform: translateX(-50%); }
+                .about-hero-overlay {
+                    background:
+                        linear-gradient(90deg, rgba(0, 22, 52, 0.92) 0%, rgba(0, 42, 90, 0.72) 46%, rgba(0, 42, 90, 0.16) 100%),
+                        linear-gradient(180deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 22, 52, 0.58) 100%);
                 }
-                .animate-scroll {
-                    animation: scroll 30s linear infinite;
-                    width: max-content;
+                .about-map-grid {
+                    background-image:
+                        linear-gradient(rgba(0, 63, 135, 0.07) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0, 63, 135, 0.07) 1px, transparent 1px);
+                    background-size: 42px 42px;
                 }
-                .partner-logo {
-                    filter: grayscale(100%) opacity(50%);
-                    transition: filter 0.3s ease;
-                    margin: 0 3rem;
-                    cursor: default;
-                }
-                .partner-logo:hover {
-                    filter: grayscale(0%) opacity(100%);
+                .about-symbol {
+                    display: block;
+                    font-size: inherit;
+                    line-height: 1;
                 }
             `}} />
 
-            {/* Gọi Component Header động */}
             <Header />
 
-            <main className="flex-grow pt-[88px]"> {/* pt-[88px] để đẩy nội dung xuống dưới cái Fixed Header */}
-
-                {/* 1. Hero Section */}
-                <section className="relative h-[80vh] w-full flex items-center justify-center overflow-hidden">
+            <main id="main-content" className="flex-grow overflow-x-hidden pt-[88px]">
+                <section className="relative overflow-hidden bg-primary px-6 py-20 md:px-10 md:py-24 lg:px-12">
                     <div className="absolute inset-0">
                         <Image
-                            alt="Luxury resort overlooking turquoise ocean"
-                            src="https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=2000"
+                            alt="Travelers overlooking a bright coastal destination"
+                            src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=2200"
                             fill
                             priority
-                            className="object-cover"
+                            className="object-cover object-center"
                             sizes="100vw"
                         />
-                        <div className="absolute inset-0 hero-gradient"></div>
+                        <div className="about-hero-overlay absolute inset-0" />
                     </div>
 
-                    <div className="relative z-10 text-center px-6 max-w-5xl mx-auto">
-                        <span className="inline-block text-white/90 text-sm font-bold tracking-[0.3em] uppercase mb-6 font-label">
-                            {t('about.badge')}
-                        </span>
-                        <h1 className="text-white text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tight font-headline leading-[1.1] mb-8">
-                            {t('about.heroTitle')}
-                        </h1>
-                        <p className="text-white/80 text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed">
-                            {t('about.heroSubtitle')}
-                        </p>
-                    </div>
-
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/50">
-                        <span className="material-symbols-outlined animate-bounce text-3xl">expand_more</span>
-                    </div>
-                </section>
-
-                {/* 2. The Philosophy Section */}
-                <section className="py-24 md:py-32 px-6 bg-surface overflow-hidden">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 md:gap-20 items-center">
-
-                            {/* Left: Artistic Image with Offset Frame */}
-                            <div className="relative group order-2 lg:order-1">
-                                <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 w-full h-full border-2 border-primary/10 rounded-xl -z-10 transition-transform duration-500 group-hover:translate-x-2 group-hover:translate-y-2"></div>
-                                <div className="relative rounded-xl overflow-hidden shadow-2xl w-full aspect-[3/4] md:aspect-[4/5] lg:aspect-[3/4]">
-                                    <Image
-                                        alt="Luxury travel detail"
-                                        src="https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&q=80&w=1000"
-                                        fill
-                                        className="object-cover"
-                                        sizes="(max-width: 768px) 100vw, 50vw"
-                                    />
-                                </div>
+                    <div className="relative z-10 mx-auto grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.42fr)] lg:items-end">
+                        <div className="max-w-4xl">
+                            <span className="inline-flex items-center gap-3 font-label text-xs font-extrabold uppercase tracking-[0.24em] text-white/80">
+                                <span className="h-px w-10 bg-white/50" aria-hidden="true" />
+                                {t('about.badge')}
+                            </span>
+                            <h1 className="mt-6 max-w-4xl text-balance font-headline text-4xl font-extrabold leading-[1.04] tracking-tight text-white md:text-6xl lg:text-7xl">
+                                {t('about.heroTitle')}
+                            </h1>
+                            <p className="mt-6 max-w-2xl text-pretty text-base leading-8 text-white/82 md:text-lg">
+                                {t('about.heroSubtitle')}
+                            </p>
+                            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+                                <Link
+                                    href="/destinations"
+                                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-extrabold text-primary shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-primary-fixed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:translate-y-0"
+                                >
+                                    {t('about.heroPrimaryCta')}
+                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+                                </Link>
+                                <Link
+                                    href="/contact"
+                                    className="inline-flex items-center justify-center gap-2 rounded-full border border-white/45 bg-white/10 px-7 py-3.5 text-sm font-extrabold text-white backdrop-blur-md transition-[background-color,transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-white/70 hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary active:translate-y-0"
+                                >
+                                    {t('about.heroSecondaryCta')}
+                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">support_agent</span>
+                                </Link>
                             </div>
+                        </div>
 
-                            {/* Right: Content */}
-                            <div className="space-y-10 order-1 lg:order-2">
-                                <div className="space-y-6">
-                                    <h2 className="text-4xl md:text-5xl font-bold font-headline text-on-surface tracking-tight">
-                                        {t('about.philosophyTitle')}
-                                    </h2>
-                                    <div className="h-1 w-20 primary-gradient rounded-full"></div>
-                                    <p className="text-on-surface-variant text-base md:text-lg leading-relaxed font-light">
-                                        {t('about.philosophyDesc1')}
-                                    </p>
-                                    <p className="text-on-surface-variant text-base md:text-lg leading-relaxed font-light">
-                                        {t('about.philosophyDesc2')}
-                                    </p>
-                                </div>
-
-                                {/* Stats Grid */}
-                                <div className="grid grid-cols-2 gap-8 pt-6 border-t border-outline-variant/20">
-                                    <div className="space-y-1">
-                                        <span className="text-4xl font-extrabold font-headline text-primary tracking-tighter">50+</span>
-                                        <p className="text-[10px] md:text-xs uppercase tracking-widest font-bold text-on-surface-variant font-label">{t('about.statDest')}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-4xl font-extrabold font-headline text-primary tracking-tighter">10k+</span>
-                                        <p className="text-[10px] md:text-xs uppercase tracking-widest font-bold text-on-surface-variant font-label">{t('about.statJourneys')}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-4xl font-extrabold font-headline text-primary tracking-tighter">150+</span>
-                                        <p className="text-[10px] md:text-xs uppercase tracking-widest font-bold text-on-surface-variant font-label">{t('about.statSpecialists')}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-4xl font-extrabold font-headline text-primary tracking-tighter">24/7</span>
-                                        <p className="text-[10px] md:text-xs uppercase tracking-widest font-bold text-on-surface-variant font-label">{t('about.statConcierge')}</p>
+                        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                            {heroProofs.map((item) => (
+                                <div key={item.label} className="grid grid-cols-[44px_1fr] items-center gap-4 rounded-lg border border-white/18 bg-white/[0.12] p-4 text-white shadow-[0_12px_42px_rgba(0,0,0,0.14)] backdrop-blur-md">
+                                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/14 text-[23px] text-white" aria-hidden="true">
+                                        <span className="material-symbols-outlined about-symbol">{item.icon}</span>
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="font-headline text-2xl font-extrabold leading-none tracking-tight">{item.value}</p>
+                                        <p className="mt-1 break-words text-xs font-bold uppercase tracking-[0.12em] text-white/68">{item.label}</p>
                                     </div>
                                 </div>
-                            </div>
+                            ))}
                         </div>
                     </div>
                 </section>
 
-                {/* 2.5 Why Choose Us Section */}
-                <section className="py-24 md:py-32 px-6 bg-surface">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-                            <h2 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{t('about.whyChooseUsTitle')}</h2>
-                            <p className="text-on-surface-variant text-base md:text-lg font-light leading-relaxed">
+                <section className="bg-surface px-6 py-20 md:px-10 md:py-28 lg:px-12">
+                    <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[minmax(320px,0.84fr)_minmax(0,1.16fr)] lg:items-center">
+                        <div className="relative min-h-[460px] overflow-hidden rounded-lg bg-surface-container md:min-h-[560px]">
+                            <Image
+                                alt="Curated resort and tour planning details"
+                                src="https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&q=80&w=1200"
+                                fill
+                                className="object-cover"
+                                sizes="(min-width: 1024px) 42vw, 100vw"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#001a40]/88 via-[#001a40]/44 to-transparent p-5 pt-24 text-white md:p-7">
+                                <p className="font-label text-xs font-extrabold uppercase tracking-[0.18em] text-white/68">{t('about.philosophyImageKicker')}</p>
+                                <p className="mt-2 max-w-md font-headline text-2xl font-extrabold leading-tight tracking-tight">{t('about.philosophyImageTitle')}</p>
+                                <p className="mt-3 max-w-md text-sm leading-6 text-white/76">{t('about.philosophyImageDesc')}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span className="font-label text-xs font-extrabold uppercase tracking-[0.22em] text-primary">{t('about.philosophyKicker')}</span>
+                            <h2 className="mt-4 max-w-3xl text-balance font-headline text-4xl font-extrabold tracking-tight text-on-surface md:text-5xl">
+                                {t('about.philosophyTitle')}
+                            </h2>
+                            <div className="mt-6 grid gap-5 text-base leading-8 text-on-surface-variant md:text-lg">
+                                <p>{t('about.philosophyDesc1')}</p>
+                                <p>{t('about.philosophyDesc2')}</p>
+                            </div>
+
+                            <ol className="mt-10 grid gap-3">
+                                {journeySteps.map((item) => (
+                                    <li key={item.title} className="grid gap-4 rounded-lg border border-outline-variant/35 bg-surface-container-lowest p-5 shadow-[0_10px_34px_rgba(17,36,64,0.05)] sm:grid-cols-[72px_1fr]">
+                                        <div className="flex items-center gap-3 sm:block">
+                                            <span className="font-headline text-2xl font-extrabold leading-none text-primary/35">{item.step}</span>
+                                            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-fixed text-[21px] text-primary sm:mt-4" aria-hidden="true">
+                                                <span className="material-symbols-outlined about-symbol">{item.icon}</span>
+                                            </span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="font-headline text-lg font-extrabold tracking-tight text-on-surface">{item.title}</h3>
+                                            <p className="mt-2 text-sm leading-6 text-on-surface-variant">{item.desc}</p>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ol>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="relative bg-surface-container-low px-6 py-20 md:px-10 md:py-28 lg:px-12">
+                    <div className="about-map-grid absolute inset-0 opacity-70" aria-hidden="true" />
+                    <div className="relative mx-auto max-w-7xl">
+                        <div className="grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
+                            <div className="max-w-xl">
+                                <span className="font-label text-xs font-extrabold uppercase tracking-[0.22em] text-primary">{t('about.whyChooseUsKicker')}</span>
+                                <h2 className="mt-4 text-balance font-headline text-4xl font-extrabold tracking-tight text-on-surface md:text-5xl">
+                                    {t('about.whyChooseUsTitle')}
+                                </h2>
+                            </div>
+                            <p className="max-w-2xl text-base leading-8 text-on-surface-variant md:text-lg lg:justify-self-end">
                                 {t('about.whyChooseUsSubtitle')}
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 lg:gap-14">
-                            {/* Card 1 */}
-                            <div className="bg-surface-container-low p-10 rounded-3xl hover:bg-surface-container hover:shadow-xl transition-all duration-300 md:translate-y-4">
-                                <div className="w-16 h-16 rounded-2xl primary-gradient flex items-center justify-center mb-6 shadow-lg">
-                                    <span className="material-symbols-outlined text-3xl text-white">verified</span>
-                                </div>
-                                <h3 className="text-2xl font-bold font-headline text-on-surface mb-4">{t('about.wcu1Title')}</h3>
-                                <p className="text-on-surface-variant leading-relaxed font-light">{t('about.wcu1Desc')}</p>
-                            </div>
-                            {/* Card 2 */}
-                            <div className="bg-surface-container-low p-10 rounded-3xl hover:bg-surface-container hover:shadow-xl transition-all duration-300">
-                                <div className="w-16 h-16 rounded-2xl primary-gradient flex items-center justify-center mb-6 shadow-lg">
-                                    <span className="material-symbols-outlined text-3xl text-white">support_agent</span>
-                                </div>
-                                <h3 className="text-2xl font-bold font-headline text-on-surface mb-4">{t('about.wcu2Title')}</h3>
-                                <p className="text-on-surface-variant leading-relaxed font-light">{t('about.wcu2Desc')}</p>
-                            </div>
-                            {/* Card 3 */}
-                            <div className="bg-surface-container-low p-10 rounded-3xl hover:bg-surface-container hover:shadow-xl transition-all duration-300 md:-translate-y-4">
-                                <div className="w-16 h-16 rounded-2xl primary-gradient flex items-center justify-center mb-6 shadow-lg">
-                                    <span className="material-symbols-outlined text-3xl text-white">explore</span>
-                                </div>
-                                <h3 className="text-2xl font-bold font-headline text-on-surface mb-4">{t('about.wcu3Title')}</h3>
-                                <p className="text-on-surface-variant leading-relaxed font-light">{t('about.wcu3Desc')}</p>
-                            </div>
+                        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                            {bookingStandards.map((item) => (
+                                <article key={item.title} className="rounded-lg border border-outline-variant/35 bg-surface-container-lowest p-5 shadow-[0_12px_36px_rgba(17,36,64,0.05)]">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-fixed text-[22px] text-primary" aria-hidden="true">
+                                            <span className="material-symbols-outlined about-symbol">{item.icon}</span>
+                                        </span>
+                                        <span className="rounded-full bg-surface-container px-3 py-1 text-right font-label text-[0.66rem] font-extrabold uppercase tracking-[0.12em] text-primary">
+                                            {item.meta}
+                                        </span>
+                                    </div>
+                                    <h3 className="mt-5 font-headline text-lg font-extrabold leading-snug tracking-tight text-on-surface">{item.title}</h3>
+                                    <p className="mt-3 text-sm leading-6 text-on-surface-variant">{item.desc}</p>
+                                </article>
+                            ))}
                         </div>
                     </div>
                 </section>
 
-                {/* 3. Meet the Experts Section */}
-                <section className="py-24 md:py-32 px-6 bg-surface-container-low">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="text-center max-w-3xl mx-auto mb-16 md:mb-20 space-y-4">
-                            <h2 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">{t('about.teamTitle')}</h2>
-                            <p className="text-on-surface-variant text-base md:text-lg font-light leading-relaxed">
-                                {t('about.teamSubtitle')}
-                            </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 md:gap-12">
-                            {/* Team Card 1 */}
-                            <div className="group">
-                                <div className="relative aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
-                                    <Image
-                                        alt="Julian Vance"
-                                        src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=800"
-                                        fill
-                                        className="object-cover transition-transform duration-700 group-hover:scale-110"
-                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                    />
-                                </div>
-                                <div className="space-y-1 md:space-y-2">
-                                    <h3 className="text-xl font-bold font-headline text-on-surface">Julian Vance</h3>
-                                    <p className="text-primary font-semibold text-sm tracking-tight mb-2">{t('about.julianRole')}</p>
-                                    <p className="text-on-surface-variant text-sm leading-relaxed font-light">
-                                        {t('about.julian')}
-                                    </p>
-                                </div>
+                <section className="bg-surface px-6 py-20 md:px-10 md:py-28 lg:px-12">
+                    <div className="mx-auto max-w-7xl">
+                        <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start">
+                            <div className="max-w-xl">
+                                <span className="font-label text-xs font-extrabold uppercase tracking-[0.22em] text-primary">{t('about.teamKicker')}</span>
+                                <h2 className="mt-4 text-balance font-headline text-4xl font-extrabold tracking-tight text-on-surface md:text-5xl">
+                                    {t('about.teamTitle')}
+                                </h2>
+                                <p className="mt-5 text-base leading-8 text-on-surface-variant md:text-lg">
+                                    {t('about.teamSubtitle')}
+                                </p>
                             </div>
 
-                            {/* Team Card 2 */}
-                            <div className="group">
-                                <div className="relative aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
-                                    <Image
-                                        alt="Elena Sterling"
-                                        src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=800"
-                                        fill
-                                        className="object-cover transition-transform duration-700 group-hover:scale-110"
-                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                    />
-                                </div>
-                                <div className="space-y-1 md:space-y-2">
-                                    <h3 className="text-xl font-bold font-headline text-on-surface">Elena Sterling</h3>
-                                    <p className="text-primary font-semibold text-sm tracking-tight mb-2">{t('about.elenaRole')}</p>
-                                    <p className="text-on-surface-variant text-sm leading-relaxed font-light">
-                                        {t('about.elena')}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Team Card 3 */}
-                            <div className="group">
-                                <div className="relative aspect-[4/5] rounded-xl overflow-hidden mb-6 bg-white shadow-sm transition-all duration-500 group-hover:shadow-[0_8px_32px_rgba(25,28,33,0.04)]">
-                                    <Image
-                                        alt="Marcus Thorne"
-                                        src="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=800"
-                                        fill
-                                        className="object-cover transition-transform duration-700 group-hover:scale-110"
-                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                    />
-                                </div>
-                                <div className="space-y-1 md:space-y-2">
-                                    <h3 className="text-xl font-bold font-headline text-on-surface">Marcus Thorne</h3>
-                                    <p className="text-primary font-semibold text-sm tracking-tight mb-2">{t('about.marcusRole')}</p>
-                                    <p className="text-on-surface-variant text-sm leading-relaxed font-light">
-                                        {t('about.marcus')}
-                                    </p>
-                                </div>
-                            </div>
+                            <ol className="grid gap-4">
+                                {operationSteps.map((item) => (
+                                    <li key={item.title} className="grid gap-5 rounded-lg border border-outline-variant/35 bg-surface-container-lowest p-5 shadow-[0_12px_36px_rgba(17,36,64,0.05)] md:grid-cols-[92px_1fr_auto] md:items-center">
+                                        <div className="flex items-center gap-3 md:block">
+                                            <span className="font-headline text-3xl font-extrabold leading-none text-primary/35">{item.step}</span>
+                                            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-fixed text-[22px] text-primary md:mt-4" aria-hidden="true">
+                                                <span className="material-symbols-outlined about-symbol">{item.icon}</span>
+                                            </span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="font-headline text-xl font-extrabold tracking-tight text-on-surface">{item.title}</h3>
+                                            <p className="mt-2 text-sm leading-6 text-on-surface-variant md:max-w-2xl">{item.desc}</p>
+                                        </div>
+                                        <span className="w-fit rounded-full bg-surface-container px-3 py-1 font-label text-xs font-extrabold uppercase tracking-[0.12em] text-primary md:justify-self-end">
+                                            {item.meta}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ol>
                         </div>
                     </div>
                 </section>
 
-                {/* 3.5 Partners Marquee */}
-                <section className="py-20 border-t border-b border-outline-variant/10 bg-surface overflow-hidden">
-                    <div className="max-w-7xl mx-auto px-6 mb-12 text-center">
-                        <p className="text-sm font-extrabold tracking-[0.2em] uppercase text-on-surface-variant font-label">{t('about.partnersTitle')}</p>
-                    </div>
-                    {/* Marquee Container */}
-                    <div className="relative w-full overflow-hidden flex items-center">
-                        {/* Gradient edges for smooth fade effect */}
-                        <div className="absolute left-0 top-0 w-32 h-full bg-gradient-to-r from-surface to-transparent z-10"></div>
-                        <div className="absolute right-0 top-0 w-32 h-full bg-gradient-to-l from-surface to-transparent z-10"></div>
-
-                        <div className="animate-scroll flex items-center">
-                            {/* Group 1 */}
-                            <div className="partner-logo text-2xl md:text-3xl font-bold font-headline flex items-center gap-2"><span className="material-symbols-outlined text-3xl">flight_takeoff</span> IATA</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-serif italic flex items-center gap-2"><span className="material-symbols-outlined text-3xl">star</span> Forbes Travel</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-extrabold tracking-widest uppercase flex items-center gap-2"><span className="material-symbols-outlined text-3xl">emoji_events</span> TripAdvisor</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2"><span className="material-symbols-outlined text-3xl">public</span> National Geo</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-serif flex items-center gap-2"><span className="material-symbols-outlined text-3xl">diamond</span> Virtuoso</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-light uppercase tracking-[0.2em] flex items-center gap-2"><span className="material-symbols-outlined text-3xl">auto_stories</span> Condé Nast</div>
-
-                            {/* Group 2 (Duplicate for seamless loop) */}
-                            <div className="partner-logo text-2xl md:text-3xl font-bold font-headline flex items-center gap-2"><span className="material-symbols-outlined text-3xl">flight_takeoff</span> IATA</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-serif italic flex items-center gap-2"><span className="material-symbols-outlined text-3xl">star</span> Forbes Travel</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-extrabold tracking-widest uppercase flex items-center gap-2"><span className="material-symbols-outlined text-3xl">emoji_events</span> TripAdvisor</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2"><span className="material-symbols-outlined text-3xl">public</span> National Geo</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-serif flex items-center gap-2"><span className="material-symbols-outlined text-3xl">diamond</span> Virtuoso</div>
-                            <div className="partner-logo text-2xl md:text-3xl font-light uppercase tracking-[0.2em] flex items-center gap-2"><span className="material-symbols-outlined text-3xl">auto_stories</span> Condé Nast</div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* 4. Call to Action Section */}
-                <section className="py-24 px-6 bg-surface">
-                    <div className="max-w-5xl mx-auto rounded-3xl primary-gradient py-16 md:py-20 px-6 md:px-10 text-center relative overflow-hidden shadow-2xl">
-
-                        {/* Background Texture/Glow effect */}
-                        <div className="absolute inset-0 opacity-10 pointer-events-none">
-                            <div className="absolute top-0 right-0 w-64 md:w-96 h-64 md:h-96 bg-white rounded-full blur-[80px] md:blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
-                            <div className="absolute bottom-0 left-0 w-64 md:w-96 h-64 md:h-96 bg-white rounded-full blur-[80px] md:blur-[100px] translate-y-1/2 -translate-x-1/2"></div>
-                        </div>
-
-                        <div className="relative z-10 space-y-8 md:space-y-10">
-                            <h2 className="text-white text-3xl md:text-4xl lg:text-5xl font-extrabold font-headline tracking-tight leading-tight">
+                <section className="bg-surface px-6 pb-20 md:px-10 md:pb-28 lg:px-12">
+                    <div className="relative mx-auto grid max-w-7xl overflow-hidden rounded-lg bg-[#001a40] lg:grid-cols-[1fr_0.82fr]">
+                        <div className="relative z-10 p-6 text-white md:p-10 lg:p-12">
+                            <span className="font-label text-xs font-extrabold uppercase tracking-[0.22em] text-white/62">{t('about.ctaKicker')}</span>
+                            <h2 className="mt-4 max-w-2xl text-balance font-headline text-3xl font-extrabold tracking-tight md:text-5xl">
                                 {t('about.ctaTitle')}
                             </h2>
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 md:gap-6">
-                                <Link
-                                    href="/destinations"
-                                    className="w-full sm:w-auto px-8 md:px-10 py-3.5 md:py-4 bg-white text-primary rounded-full font-headline font-bold text-sm tracking-tight hover:bg-surface-container-low transition-colors shadow-lg active:scale-95 text-center"
-                                >
-                                    {t('about.ctaExplore')}
-                                </Link>
-                                <Link
-                                    href="/contact"
-                                    className="w-full sm:w-auto px-8 md:px-10 py-3.5 md:py-4 border-2 border-white text-white rounded-full font-headline font-bold text-sm tracking-tight hover:bg-white/10 transition-colors active:scale-95 text-center"
-                                >
-                                    {t('about.ctaContact')}
-                                </Link>
-                            </div>
+                            <p className="mt-5 max-w-xl text-base leading-8 text-white/72 md:text-lg">
+                                {t('about.ctaSubtitle')}
+                            </p>
+                        </div>
+                        <div className="relative min-h-[280px] lg:min-h-full">
+                            <Image
+                                alt="Couple reviewing travel plans before a tour"
+                                src="https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&q=80&w=1200"
+                                fill
+                                className="object-cover"
+                                sizes="(min-width: 1024px) 40vw, 100vw"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#001a40]/70 via-[#001a40]/16 to-transparent lg:bg-gradient-to-r" />
                         </div>
                     </div>
                 </section>
             </main>
 
-            {/* Gọi Component Footer động */}
             <Footer />
         </div>
     );

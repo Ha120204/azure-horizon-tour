@@ -17,12 +17,16 @@ interface Destination {
 interface TourPackage {
     id?: number;
     name: string;
+    nameEn: string;
     nameMode: 'select' | 'custom';
     description: string;
+    descriptionEn: string;
     price: string;
     badge: string;
     includes: string[];  // array of items
+    includesEn: string[];
     excludes: string[];  // array of items
+    excludesEn: string[];
 }
 
 interface TourDeparture {
@@ -32,21 +36,26 @@ interface TourDeparture {
     availableSeats: string;
     maxSeats: string;
     note: string;
+    noteEn: string;
     category: SaleCategory;
     flashSaleEndsAt: string; // YYYY-MM-DDThh:mm
 }
 
 interface TourFormData {
     name: string;
+    nameEn: string;
     description: string;
+    descriptionEn: string;
     price: string;
     destinationId: string;
     startDate: string;
     duration: string;
+    durationEn: string;
     availableSeats: string;
     tourType: string;
     imageUrl: string;
     departurePoint: string; // Điểm khởi hành mặc định
+    departurePointEn: string;
 }
 
 type SaleCategory = 'all' | 'flash' | 'early' | 'lastminute';
@@ -56,11 +65,15 @@ interface ExistingTourImage { id: number; url: string; }
 interface ExistingTourPackage {
     id?: number;
     name?: string;
+    nameEn?: string | null;
     description?: string;
+    descriptionEn?: string | null;
     price?: number | string;
     badge?: string;
     includes?: string[] | string | null;
+    includesEn?: string[] | string | null;
     excludes?: string[] | string | null;
+    excludesEn?: string[] | string | null;
 }
 
 interface ExistingTourDeparture {
@@ -70,6 +83,7 @@ interface ExistingTourDeparture {
     availableSeats?: number | string | null;
     maxSeats?: number | string | null;
     note?: string | null;
+    noteEn?: string | null;
     category?: string | null;
     flashSaleEndsAt?: string | Date | null;
 }
@@ -77,16 +91,21 @@ interface ExistingTourDeparture {
 interface InitialTourData {
     id: number;
     name?: string;
+    nameEn?: string | null;
     description?: string;
+    descriptionEn?: string | null;
     price?: number | string;
     destination?: Destination | null;
     destinationId?: number | string | null;
     startDate?: string | Date | null;
     duration?: string;
+    durationEn?: string | null;
     availableSeats?: number | string;
     tourType?: string;
     imageUrl?: string;
     departurePoint?: string | null;
+    departurePointEn?: string | null;
+    status?: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED' | 'COMPLETED';
     images?: ExistingTourImage[];
     packages?: ExistingTourPackage[];
     departures?: ExistingTourDeparture[];
@@ -104,9 +123,9 @@ interface TourFormModalProps {
 
 // ── Constants ──────────────────────────────────────────────────────────
 const EMPTY_FORM: TourFormData = {
-    name: '', description: '', price: '', destinationId: '',
-    startDate: '', duration: '', availableSeats: '',
-    tourType: 'Tour Gia Đình', imageUrl: '', departurePoint: '',
+    name: '', nameEn: '', description: '', descriptionEn: '', price: '', destinationId: '',
+    startDate: '', duration: '', durationEn: '', availableSeats: '',
+    tourType: 'Tour Gia Đình', imageUrl: '', departurePoint: '', departurePointEn: '',
 };
 
 const DRAFT_DESTINATION_NAME = 'Chưa xác định';
@@ -342,6 +361,7 @@ export default function TourFormModal({
     userRole = '', onSuccess, onClose, onDestinationCreated,
 }: TourFormModalProps) {
     const isStaff = userRole === 'STAFF';
+    const isAdminLike = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const [form, setForm] = useState<TourFormData>(EMPTY_FORM);
     const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -360,11 +380,11 @@ export default function TourFormModal({
 
     // Package state
     const [packages, setPackages] = useState<TourPackage[]>([]);
-    const EMPTY_PKG: TourPackage = { name: '', nameMode: 'select', description: '', price: '', badge: '', includes: [], excludes: [] };
+    const EMPTY_PKG: TourPackage = { name: '', nameEn: '', nameMode: 'select', description: '', descriptionEn: '', price: '', badge: '', includes: [], includesEn: [], excludes: [], excludesEn: [] };
 
     // Departure state
     const [departures, setDepartures] = useState<TourDeparture[]>([]);
-    const EMPTY_DEP: TourDeparture = { departureDate: '', price: '', availableSeats: '', maxSeats: '', note: '', category: 'all', flashSaleEndsAt: '' };
+    const EMPTY_DEP: TourDeparture = { departureDate: '', price: '', availableSeats: '', maxSeats: '', note: '', noteEn: '', category: 'all', flashSaleEndsAt: '' };
 
     // Confirm-close dialog state
     const [showConfirmClose, setShowConfirmClose] = useState(false);
@@ -401,15 +421,19 @@ export default function TourFormModal({
                     : String(initialData.destination?.id || initialData.destinationId || '');
             setForm({
                 name: initialData.name || '',
+                nameEn: initialData.nameEn || '',
                 description: initialData.description || '',
+                descriptionEn: initialData.descriptionEn || '',
                 price: String(initialData.price || ''),
                 destinationId,
                 startDate,
                 duration: isPreset ? duration : (duration ? 'Khác (tùy chỉnh)' : ''),
+                durationEn: initialData.durationEn || '',
                 availableSeats: String(initialData.availableSeats || ''),
                 tourType: initialData.tourType || 'Tour Gia Đình',
                 imageUrl: initialData.imageUrl || '',
                 departurePoint: initialData.departurePoint || '',
+                departurePointEn: initialData.departurePointEn || '',
             });
             if (!isPreset && duration) {
                 setDurationMode('custom');
@@ -421,11 +445,13 @@ export default function TourFormModal({
             // Pre-fill packages
             if (initialData.packages?.length) {
                 setPackages(initialData.packages.map((p: ExistingTourPackage) => ({
-                    id: p.id, name: p.name || '', description: p.description || '',
+                    id: p.id, name: p.name || '', nameEn: p.nameEn || '', description: p.description || '', descriptionEn: p.descriptionEn || '',
                     nameMode: (PACKAGE_NAMES.includes(p.name || '') ? 'select' : 'custom') as 'select' | 'custom',
                     price: String(p.price || ''), badge: p.badge || '',
                     includes: Array.isArray(p.includes) ? p.includes : (p.includes || '').split('\n').map((s: string) => s.trim()).filter(Boolean),
+                    includesEn: Array.isArray(p.includesEn) ? p.includesEn : (p.includesEn || '').split('\n').map((s: string) => s.trim()).filter(Boolean),
                     excludes: Array.isArray(p.excludes) ? p.excludes : (p.excludes || '').split('\n').map((s: string) => s.trim()).filter(Boolean),
+                    excludesEn: Array.isArray(p.excludesEn) ? p.excludesEn : (p.excludesEn || '').split('\n').map((s: string) => s.trim()).filter(Boolean),
                 })));
             }
             if (initialData.departures?.length) {
@@ -437,6 +463,7 @@ export default function TourFormModal({
                         availableSeats: String(d.availableSeats ?? ''),
                         maxSeats: String(d.maxSeats ?? d.availableSeats ?? ''),
                         note: d.note || '',
+                        noteEn: d.noteEn || '',
                         category: toUiDepartureCategory(d.category),
                         flashSaleEndsAt: d.flashSaleEndsAt && !isNaN(new Date(d.flashSaleEndsAt).getTime()) ? new Date(d.flashSaleEndsAt).toISOString().slice(0, 16) : '',
                     }))
@@ -570,7 +597,15 @@ export default function TourFormModal({
             .filter(d => d.departureDate && isBookableDepartureDate(d.departureDate))
             .sort((a, b) => new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime());
         const primaryStartDate = validDepartures[0]?.departureDate || form.startDate || MIN_START_DATE;
-        const payload = { ...form, duration: finalDuration, startDate: primaryStartDate };
+        const shouldPublishAfterSave = isAdminLike && action === 'submit' && initialData?.status !== 'PUBLISHED';
+        const nextStatus = action === 'draft'
+            ? 'DRAFT'
+            : shouldPublishAfterSave
+                ? 'DRAFT'
+                : initialData?.status === 'PUBLISHED'
+                    ? 'PUBLISHED'
+                    : undefined;
+        const payload = { ...form, duration: finalDuration, startDate: primaryStartDate, status: nextStatus };
 
         setSaveAction(action);
         try {
@@ -584,7 +619,7 @@ export default function TourFormModal({
                 const formData = new FormData();
                 formData.append('image', imageFile);
                 Object.entries(payload).forEach(([key, val]) => {
-                    if (key === 'imageUrl' || val === '') return;
+                    if (key === 'imageUrl' || val === '' || val == null) return;
                     if (key === 'price' || key === 'availableSeats') {
                         formData.append(key, String(Number(val) || 0));
                         return;
@@ -619,11 +654,15 @@ export default function TourFormModal({
                     .filter(p => p.name.trim() && p.price)
                     .map((p, i) => ({
                         name: p.name.trim(),
+                        nameEn: p.nameEn.trim() || undefined,
                         description: p.description.trim(),
+                        descriptionEn: p.descriptionEn.trim() || undefined,
                         price: Number(p.price),
                         badge: p.badge.trim() || undefined,
                         includes: p.includes.filter(Boolean),
+                        includesEn: p.includesEn.filter(Boolean),
                         excludes: p.excludes.filter(Boolean),
+                        excludesEn: p.excludesEn.filter(Boolean),
                         sortOrder: i,
                     }));
                 await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}/packages/bulk`, {
@@ -642,6 +681,7 @@ export default function TourFormModal({
                         availableSeats: Number(d.availableSeats) || 0,
                         maxSeats: Number(d.maxSeats) || Number(d.availableSeats) || 0,
                         note: d.note.trim() || undefined,
+                        noteEn: d.noteEn.trim() || undefined,
                         category: UI_TO_API_DEPARTURE_CATEGORY[d.category],
                         flashSaleEndsAt: (d.category === 'flash' && d.flashSaleEndsAt) ? new Date(d.flashSaleEndsAt).toISOString() : null,
                         sortOrder: i,
@@ -671,11 +711,23 @@ export default function TourFormModal({
                 });
             }
 
+            if (shouldPublishAfterSave && tourId) {
+                const publishRes = await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}/publish`, { method: 'PATCH' });
+                if (!publishRes.ok) {
+                    const err = await publishRes.json().catch(() => ({}));
+                    throw new Error(err.message || 'Public tour that bai');
+                }
+            }
+
             const successMessage = isStaff
                 ? action === 'submit'
                     ? 'Đã lưu và gửi tour để Admin duyệt!'
                     : 'Đã lưu bản nháp tour!'
-                : mode === 'edit' ? 'Cập nhật tour thành công!' : 'Tạo tour mới thành công!';
+                : action === 'draft'
+                    ? 'Đã lưu bản nháp tour!'
+                    : shouldPublishAfterSave
+                        ? 'Đã public tour lên trang khách hàng!'
+                        : 'Cập nhật tour thành công!';
 
             onSuccess(successMessage, saved?.data ?? saved, action);
             onClose();
@@ -692,9 +744,14 @@ export default function TourFormModal({
     };
 
     const isSaving = saveAction !== null;
-    const requiredMark = isStaff
-        ? <span className="normal-case tracking-normal text-on-surface-variant/50">(khi gửi duyệt)</span>
-        : <span className="text-error">*</span>;
+    const isPublishedEdit = mode === 'edit' && initialData?.status === 'PUBLISHED';
+    const primaryIcon = isStaff ? 'send' : isPublishedEdit ? 'save' : 'publish';
+    const primaryLabel = isStaff ? 'Lưu & gửi duyệt' : isPublishedEdit ? 'Lưu thay đổi' : 'Xác nhận public';
+    const requiredMark = (
+        <span className="normal-case tracking-normal text-on-surface-variant/50">
+            {isStaff ? '(khi gửi duyệt)' : '(khi public)'}
+        </span>
+    );
 
     const handleCloseAttempt = () => {
         if (isDirty) {
@@ -781,9 +838,9 @@ export default function TourFormModal({
                                 <p className="text-white/60 text-xs mt-0.5">
                                     {mode === 'edit'
                                         ? `Đang sửa: ${initialData?.name || 'bản nháp tour'}`
-                                        : isStaff
-                                            ? 'Lưu nháp trước, hoàn thiện sau rồi gửi Admin duyệt'
-                                            : 'Điền đầy đủ thông tin để tạo tour'}
+                                            : isStaff
+                                                ? 'Lưu nháp trước, hoàn thiện sau rồi gửi Admin duyệt'
+                                                : 'Lưu nháp trước, kiểm tra rồi xác nhận public lên trang khách hàng'}
                                 </p>
                             </div>
                         </div>
@@ -836,6 +893,22 @@ export default function TourFormModal({
                                 )}
                             </div>
 
+                            <div>
+                                <label htmlFor="field-nameEn" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
+                                    Tên Tour (English)
+                                </label>
+                                <input
+                                    id="field-nameEn"
+                                    name="nameEn"
+                                    type="text"
+                                    autoComplete="off"
+                                    placeholder="Example: Ha Long Bay Luxury Cruise..."
+                                    value={form.nameEn}
+                                    onChange={e => handleChange('nameEn', e.target.value)}
+                                    className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+                                />
+                            </div>
+
                             {/* Tour Type */}
                             <div>
                                 <label htmlFor="field-tourType" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Loại Tour</label>
@@ -876,6 +949,22 @@ export default function TourFormModal({
                                     />
                                 </div>
                                 {errors.description && <p className="text-error text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">error</span>{errors.description}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="field-descriptionEn" className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
+                                    Mô Tả (English)
+                                </label>
+                                <textarea
+                                    id="field-descriptionEn"
+                                    name="descriptionEn"
+                                    autoComplete="off"
+                                    placeholder="Describe the tour experience in English..."
+                                    rows={3}
+                                    value={form.descriptionEn}
+                                    onChange={e => handleChange('descriptionEn', e.target.value)}
+                                    className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-3 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors resize-none"
+                                />
                             </div>
                         </div>
                     </div>
@@ -1070,6 +1159,13 @@ export default function TourFormModal({
                                     <span className="material-symbols-outlined text-[11px]">info</span>
                                     Hiển thị trên trang chi tiết tour cho khách hàng
                                 </p>
+                                <input
+                                    type="text"
+                                    value={form.departurePointEn}
+                                    onChange={e => handleChange('departurePointEn', e.target.value)}
+                                    placeholder="Departure point in English"
+                                    className="mt-3 w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+                                />
                             </div>
 
                             {/* Duration */}
@@ -1110,6 +1206,13 @@ export default function TourFormModal({
                                         )}
                                     </div>
                                     {errors.duration && <p className="text-error text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">error</span>{errors.duration}</p>}
+                                    <input
+                                        type="text"
+                                        value={form.durationEn}
+                                        onChange={e => handleChange('durationEn', e.target.value)}
+                                        placeholder="Duration in English, e.g. 3 Days 2 Nights"
+                                        className="mt-3 w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -1401,6 +1504,20 @@ export default function TourFormModal({
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
+                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Package name (English)</label>
+                                            <input type="text" placeholder="Standard Package" value={pkg.nameEn}
+                                                onChange={e => setPackages(p => p.map((x, i) => i === idx ? { ...x, nameEn: e.target.value } : x))}
+                                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Short description (English)</label>
+                                            <input type="text" placeholder="Best for families..." value={pkg.descriptionEn}
+                                                onChange={e => setPackages(p => p.map((x, i) => i === idx ? { ...x, descriptionEn: e.target.value } : x))}
+                                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
                                             <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Mô tả ngắn</label>
                                             <input type="text" placeholder="Phù hợp cho gia đình..." value={pkg.description}
                                                 onChange={e => setPackages(p => p.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))}
@@ -1431,6 +1548,18 @@ export default function TourFormModal({
                                                 onChange={val => setPackages(p => p.map((x, i) => i === idx ? { ...x, includes: val } : x))}
                                             />
                                         </div>
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-emerald-600 uppercase tracking-wider mb-2">
+                                                <span className="mr-1">EN</span>Included
+                                            </label>
+                                            <textarea
+                                                rows={3}
+                                                value={pkg.includesEn.join('\n')}
+                                                onChange={e => setPackages(p => p.map((x, i) => i === idx ? { ...x, includesEn: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } : x))}
+                                                placeholder={"Hotel\nMeals\nGuide"}
+                                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none"
+                                            />
+                                        </div>
                                         {/* Không bao gồm */}
                                         <div>
                                             <label className="block text-[11px] font-semibold text-error uppercase tracking-wider mb-2">
@@ -1441,6 +1570,18 @@ export default function TourFormModal({
                                                 presets={EXCLUDE_PRESETS}
                                                 color="red"
                                                 onChange={val => setPackages(p => p.map((x, i) => i === idx ? { ...x, excludes: val } : x))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-error uppercase tracking-wider mb-2">
+                                                <span className="mr-1">EN</span>Not included
+                                            </label>
+                                            <textarea
+                                                rows={3}
+                                                value={pkg.excludesEn.join('\n')}
+                                                onChange={e => setPackages(p => p.map((x, i) => i === idx ? { ...x, excludesEn: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } : x))}
+                                                placeholder={"Personal expenses\nTips"}
+                                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none"
                                             />
                                         </div>
                                     </div>
@@ -1525,6 +1666,12 @@ export default function TourFormModal({
                                                 onChange={e => setDepartures(d => d.map((x, i) => i === idx ? { ...x, note: e.target.value } : x))}
                                                 className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
                                         </div>
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Note (English)</label>
+                                            <input type="text" placeholder="Weekend deal..." value={dep.noteEn}
+                                                onChange={e => setDepartures(d => d.map((x, i) => i === idx ? { ...x, noteEn: e.target.value } : x))}
+                                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -1543,7 +1690,7 @@ export default function TourFormModal({
                     <p className="text-xs text-on-surface-variant">
                         {isStaff
                             ? 'Lưu nháp không bắt buộc đủ thông tin. Chỉ “Lưu & gửi duyệt” mới kiểm tra đủ trường.'
-                            : <><span className="text-error font-bold">*</span> Trường bắt buộc</>}
+                            : 'Lưu nháp không bắt buộc đủ thông tin. Chỉ “Xác nhận public” mới đưa tour lên trang khách hàng.'}
                     </p>
                     <div className="flex gap-3">
                         <button
@@ -1553,7 +1700,7 @@ export default function TourFormModal({
                         >
                             Hủy
                         </button>
-                        {isStaff && (
+                        {(isStaff || isAdminLike) && (
                             <button
                                 type="button"
                                 onClick={() => handleSave('draft')}
@@ -1587,9 +1734,9 @@ export default function TourFormModal({
                             ) : (
                                 <>
                                     <span className="material-symbols-outlined text-base">
-                                        {isStaff ? 'send' : mode === 'edit' ? 'save' : 'add_circle'}
+                                        {primaryIcon}
                                     </span>
-                                    {isStaff ? 'Lưu & gửi duyệt' : mode === 'edit' ? 'Lưu Thay Đổi' : 'Tạo Tour'}
+                                    {primaryLabel}
                                 </>
                             )}
                         </button>

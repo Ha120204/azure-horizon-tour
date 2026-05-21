@@ -1,30 +1,48 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Tour, TourPackage, TourDeparture } from '@/app/types';
 import DepartureCalendarModal from './DepartureCalendarModal';
 
+type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
+
 interface BookingSidebarProps {
     tour: Tour;
+    initialDepartureId?: number | null;
     selectedPackage: TourPackage | null;
     formatPrice: (n: number) => string;
-    t: any;
+    t: TranslationFn;
+    language: string;
 }
 
 export default function BookingSidebarNew({
     tour,
+    initialDepartureId,
     selectedPackage,
     formatPrice,
     t,
+    language,
 }: BookingSidebarProps) {
-    const [selectedDeparture, setSelectedDeparture] = useState<TourDeparture | null>(null);
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-    const departures: TourDeparture[] = tour?.departures ?? [];
+    const departures: TourDeparture[] = useMemo(() => tour?.departures ?? [], [tour?.departures]);
     const hasDepartures = departures.length > 0;
+    const initialSelectedDeparture = useMemo(() => {
+        if (!initialDepartureId || !Number.isFinite(initialDepartureId)) return null;
+        return departures.find((departure) => departure.id === initialDepartureId) ?? null;
+    }, [departures, initialDepartureId]);
+    const [selectedDeparture, setSelectedDeparture] = useState<TourDeparture | null>(initialSelectedDeparture);
+
+    useEffect(() => {
+        setSelectedDeparture(initialSelectedDeparture);
+    }, [initialSelectedDeparture]);
 
     // Calculate effective price: base_departure + package_addon
     const effectivePrice = (() => {
-        let base = selectedDeparture?.price ?? tour?.price ?? 0;
-        let addon = selectedPackage?.price ?? 0;
+        const base = selectedDeparture?.price ?? tour?.price ?? 0;
+        const addon = selectedPackage?.price ?? 0;
         return base + addon;
     })();
 
@@ -39,6 +57,14 @@ export default function BookingSidebarNew({
         if (selectedDeparture) params.set('departureId', String(selectedDeparture.id));
         if (selectedPackage) params.set('packageId', String(selectedPackage.id));
         return `/checkout?${params.toString()}`;
+    };
+
+    const handleSelectDeparture = (departure: TourDeparture) => {
+        setSelectedDeparture(departure);
+
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('departureId', String(departure.id));
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
     return (
@@ -100,16 +126,18 @@ export default function BookingSidebarNew({
                                         {selectedDeparture ? (
                                             <>
                                                 <p className="font-bold text-sm text-on-surface">
-                                                    {new Date(selectedDeparture.departureDate).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                    {new Date(selectedDeparture.departureDate).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                 </p>
                                                 <p className="text-[11px] text-primary font-medium mt-0.5">
-                                                    {selectedDeparture.availableSeats <= 5 ? `Chỉ còn ${selectedDeparture.availableSeats} chỗ` : 'Có sẵn chỗ'}
+                                                    {selectedDeparture.availableSeats <= 5
+                                                        ? t('tour_detail.onlySpotsLeft', { seats: selectedDeparture.availableSeats })
+                                                        : t('tour_detail.availableSeats')}
                                                 </p>
                                             </>
                                         ) : (
                                             <>
-                                                <p className="font-bold text-sm text-on-surface">Chọn ngày đi</p>
-                                                <p className="text-[11px] text-on-surface-variant mt-0.5">Xem giá và tình trạng chỗ</p>
+                                                <p className="font-bold text-sm text-on-surface">{t('tour_detail.chooseDepartureDate')}</p>
+                                                <p className="text-[11px] text-on-surface-variant mt-0.5">{t('tour_detail.viewPriceAvailability')}</p>
                                             </>
                                         )}
                                     </div>
@@ -173,10 +201,11 @@ export default function BookingSidebarNew({
                 onClose={() => setIsCalendarOpen(false)}
                 departures={departures}
                 selectedDeparture={selectedDeparture}
-                onSelectDeparture={setSelectedDeparture}
+                onSelectDeparture={handleSelectDeparture}
                 formatPrice={formatPrice}
                 tourPrice={tour?.price ?? 0}
                 t={t}
+                language={language}
             />
         </div>
     );

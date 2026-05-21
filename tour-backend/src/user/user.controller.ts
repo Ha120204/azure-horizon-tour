@@ -52,6 +52,7 @@ export class UserController {
   @Get()
   @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
   findAll(
+    @Request() req: AuthenticatedAdminRequest,
     @Query('search') search?: string,
     @Query('role') role?: string,
     @Query('status') status?: string,
@@ -64,7 +65,7 @@ export class UserController {
       status,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 10,
-    });
+    }, req.user.role);
   }
 
   /**
@@ -73,8 +74,8 @@ export class UserController {
    */
   @Get('stats')
   @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
-  getStats() {
-    return this.userService.getStats();
+  getStats(@Request() req: AuthenticatedAdminRequest) {
+    return this.userService.getStats(req.user.role);
   }
 
   /**
@@ -83,8 +84,11 @@ export class UserController {
    */
   @Get(':id')
   @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AuthenticatedAdminRequest,
+  ) {
+    return this.userService.findOne(id, req.user.role);
   }
 
   /**

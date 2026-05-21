@@ -100,7 +100,7 @@ export class ActivityLogService {
                 } as any,
             }) as any);
         } catch (err) {
-            console.warn('[ActivityLog] include {user} failed, fallback:', (err as any)?.message);
+            console.warn('[ActivityLog] include {user} failed, fallback:', (err)?.message);
             data = await (this.prisma.systemLog.findMany({
                 where,
                 skip,

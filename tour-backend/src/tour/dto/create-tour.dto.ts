@@ -10,7 +10,15 @@ export class CreateTourDto {
 
   @IsOptional()
   @IsString()
+  nameEn?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  descriptionEn?: string;
 
   @IsOptional()
   @Type(() => Number)
@@ -35,6 +43,10 @@ export class CreateTourDto {
   duration?: string;
 
   @IsOptional()
+  @IsString()
+  durationEn?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -51,6 +63,10 @@ export class CreateTourDto {
   @IsOptional()
   @IsString()
   departurePoint?: string;
+
+  @IsOptional()
+  @IsString()
+  departurePointEn?: string;
 
   @IsOptional()
   @IsEnum(TourStatus)

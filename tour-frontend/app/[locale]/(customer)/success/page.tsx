@@ -19,6 +19,7 @@ type TicketData = {
     paymentMethod?: string | null;
     numberOfPeople: number;
     totalPrice: number;
+    leadTravelerName?: string | null;
     user?: {
         fullName?: string | null;
     } | null;
@@ -54,7 +55,7 @@ function SuccessTicketContent() {
 
         const fetchTicket = async () => {
             try {
-                // Dùng fetch thông thường (không cần auth) — bookingCode là UUID đủ bảo mật
+                // E-ticket requires auth; bookingCode is not treated as a public secret.
                 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
                 const res = await fetchWithAuth(`${apiUrl}/booking/my/code/${bookingId}`, {
                     method: 'GET',
@@ -188,7 +189,7 @@ function SuccessTicketContent() {
                         <span className="material-symbols-outlined text-emerald-600 text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
                     </div>
                     <h1 className="font-headline text-4xl md:text-5xl font-extrabold tracking-tight text-on-surface mb-4">
-                        Your journey awaits, {ticketData.user?.fullName || 'bạn'}!
+                        Your journey awaits, {ticketData.leadTravelerName || ticketData.user?.fullName || 'bạn'}!
                     </h1>
                     <p className="text-on-surface-variant text-base md:text-lg max-w-xl mx-auto leading-relaxed">
                         Payment successful and your booking is confirmed. We&apos;ve sent the itinerary details to your email.
@@ -255,7 +256,7 @@ function SuccessTicketContent() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">Lead Traveler</p>
-                                        <p className="font-semibold text-sm md:text-base">{ticketData.user?.fullName || 'VIP Guest'}</p>
+                                        <p className="font-semibold text-sm md:text-base">{ticketData.leadTravelerName || ticketData.user?.fullName || 'VIP Guest'}</p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">Payment Method</p>

@@ -29,6 +29,8 @@ export default function ArticleDetailPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [emailInput, setEmailInput] = useState('');
     const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'loading' | 'success' | 'exists' | 'error'>('idle');
+    const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+    const [articleShareUrl, setArticleShareUrl] = useState('');
 
     useEffect(() => {
         if (!slug) return;
@@ -49,6 +51,10 @@ export default function ArticleDetailPage() {
         };
         fetchArticle();
     }, [slug]);
+
+    useEffect(() => {
+        setArticleShareUrl(`${window.location.origin}${window.location.pathname}`);
+    }, []);
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString(
@@ -81,6 +87,36 @@ export default function ArticleDetailPage() {
             setSubscribeStatus('error');
         } finally {
             setTimeout(() => setSubscribeStatus('idle'), 4000);
+        }
+    };
+
+    const copyToClipboard = async (text: string) => {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    };
+
+    const getShareUrl = () => articleShareUrl || `${window.location.origin}${window.location.pathname}`;
+
+    const handleCopyArticleLink = async () => {
+        try {
+            await copyToClipboard(getShareUrl());
+            setShareStatus('copied');
+        } catch {
+            setShareStatus('error');
+        } finally {
+            setTimeout(() => setShareStatus('idle'), 3000);
         }
     };
 
@@ -194,13 +230,29 @@ export default function ArticleDetailPage() {
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                             <div className="flex items-center gap-3">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('journal.shareArticle')}</span>
-                                <div className="flex gap-2">
-                                    <button className="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-100 text-slate-500 hover:text-blue-800 flex items-center justify-center transition-all">
-                                        <span className="material-symbols-outlined text-lg">link</span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleCopyArticleLink}
+                                        aria-label={language === 'vi' ? 'Sao chép liên kết bài viết' : 'Copy article link'}
+                                        className={`group/share relative w-10 h-10 rounded-full flex items-center justify-center shadow-sm shadow-slate-200/60 ring-1 ring-slate-900/5 transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 ${
+                                            shareStatus === 'copied'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-800'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-lg">{shareStatus === 'copied' ? 'check' : 'link'}</span>
+                                        <span
+                                            role="tooltip"
+                                            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[220px] -translate-x-1/2 translate-y-1 rounded-lg bg-slate-950 px-3 py-2 text-[11px] font-semibold normal-case tracking-normal text-white opacity-0 shadow-xl shadow-slate-900/20 transition-all duration-150 group-hover/share:translate-y-0 group-hover/share:opacity-100 group-focus-visible/share:translate-y-0 group-focus-visible/share:opacity-100"
+                                        >
+                                            {language === 'vi' ? 'Sao chép liên kết bài viết' : 'Copy article link'}
+                                        </span>
                                     </button>
-                                    <button className="w-10 h-10 rounded-full bg-slate-100 hover:bg-blue-100 text-slate-500 hover:text-blue-800 flex items-center justify-center transition-all">
-                                        <span className="material-symbols-outlined text-lg">mail</span>
-                                    </button>
+                                    <span className="min-w-[9rem] max-w-sm text-xs font-semibold leading-5 text-slate-500" aria-live="polite">
+                                        {shareStatus === 'copied' && (language === 'vi' ? 'Đã sao chép liên kết' : 'Link copied')}
+                                        {shareStatus === 'error' && (language === 'vi' ? 'Không thể sao chép' : 'Could not copy')}
+                                    </span>
                                 </div>
                             </div>
                             <Link

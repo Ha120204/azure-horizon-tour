@@ -1,12 +1,14 @@
 import React from 'react';
 import { TourPackage } from '@/app/types';
 
+type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
+
 interface PackageCardProps {
     pkg: TourPackage;
     selected: boolean;
     onSelect: () => void;
     formatPrice: (n: number) => string;
-    t: any;
+    t: TranslationFn;
 }
 
 export default function PackageCard({

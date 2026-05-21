@@ -25,6 +25,23 @@ import { CreateReviewDto } from './dto/create-review.dto';
 import { AdminQueryReviewDto, AdminReplyDto } from './dto/admin-query-review.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+
+type AuthUser = {
+  id?: number | string;
+  userId?: number | string;
+  sub?: number | string;
+};
+
+type AuthenticatedRequest = {
+  user?: AuthUser;
+};
+
+const getAuthUserId = (req: AuthenticatedRequest): number => {
+  const rawId = req.user?.userId ?? req.user?.id ?? req.user?.sub;
+  return Number(rawId);
+};
 
 // ─── Customer Routes: /tour/:tourId/reviews ───────────────────────────────────
 
@@ -51,7 +68,7 @@ export class ReviewController {
   @UseInterceptors(FilesInterceptor('images', 5))
   async createReview(
     @Param('tourId', ParseIntPipe) tourId: number,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Body() createReviewDto: CreateReviewDto,
     @UploadedFiles(
       new ParseFilePipe({
@@ -74,13 +91,18 @@ export class ReviewController {
         ...uploadedUrls,
       ];
     }
-    return this.reviewService.createReview(req.user.userId, tourId, createReviewDto);
+    return this.reviewService.createReview(
+      getAuthUserId(req),
+      tourId,
+      createReviewDto,
+    );
   }
 }
 
 // ─── Admin Routes: /review/admin ─────────────────────────────────────────────
 
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
 @Controller('review/admin')
 export class ReviewAdminController {
   constructor(private readonly reviewService: ReviewService) {}

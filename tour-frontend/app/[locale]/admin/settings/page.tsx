@@ -12,20 +12,10 @@ interface Setting {
 type GroupedSettings = Record<string, Setting[]>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const canEdit = (role: string) => role === 'ADMIN' || role === 'SUPER_ADMIN';
+const canEdit = (role: string) => role === 'SUPER_ADMIN';
 
-function StatusBadge({ status, label }: { status: 'online' | 'warning'; label: string }) {
-    const s = status === 'online'
-        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-        : 'bg-amber-50 border-amber-200 text-amber-700';
-    const dot = status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500';
-    return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${s}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-            {label}
-        </span>
-    );
-}
+const buildDraft = (settings: Setting[]): Record<string, string> =>
+    Object.fromEntries(settings.map(s => [s.key, s.value]));
 
 function ReadOnlyBadge({ hint }: { hint: string }) {
     const [show, setShow] = useState(false);
@@ -54,16 +44,9 @@ function EditableSection({
     settings: Setting[]; editable: boolean;
     onSave: (updates: Record<string, string>) => Promise<void>;
 }) {
-    const [draft, setDraft] = useState<Record<string, string>>({});
+    const [draft, setDraft] = useState<Record<string, string>>(() => buildDraft(settings));
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
-
-    // init draft from props
-    useEffect(() => {
-        const init: Record<string, string> = {};
-        settings.forEach(s => { init[s.key] = s.value; });
-        setDraft(init);
-    }, [settings]);
 
     const isDirty = settings.some(s => draft[s.key] !== s.value);
 
@@ -78,9 +61,7 @@ function EditableSection({
     };
 
     const handleReset = () => {
-        const init: Record<string, string> = {};
-        settings.forEach(s => { init[s.key] = s.value; });
-        setDraft(init);
+        setDraft(buildDraft(settings));
     };
 
     return (
@@ -162,7 +143,7 @@ function EditableSection({
                                     )
                                 )}
                             </div>
-                            {!editable && <ReadOnlyBadge hint="Liên hệ Admin để thay đổi cài đặt này" />}
+                            {!editable && <ReadOnlyBadge hint="Chỉ Super Admin được thay đổi cài đặt này" />}
                         </div>
                     );
                 })}
@@ -209,7 +190,6 @@ function InfoSection({ title, subtitle, icon, iconBg, iconColor, rows }: {
 export default function SystemSettingsPage() {
     const [grouped, setGrouped] = useState<GroupedSettings>({});
     const [userRole, setUserRole] = useState('');
-    const [backendStatus, setBackendStatus] = useState<'online' | 'warning'>('warning');
     const [pingMs, setPingMs] = useState<number | null>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [loading, setLoading] = useState(true);
@@ -249,9 +229,8 @@ export default function SystemSettingsPage() {
         try {
             const res = await fetch(`${API_BASE_URL}/auth/profile`, { signal: AbortSignal.timeout(3000) });
             setPingMs(Math.round(performance.now() - t0));
-            setBackendStatus(res.status < 500 ? 'online' : 'warning');
+            if (res.status >= 500) setPingMs(null);
         } catch {
-            setBackendStatus('warning');
             setPingMs(null);
         }
     }, []);
@@ -324,7 +303,7 @@ export default function SystemSettingsPage() {
                     <p className="text-slate-500 text-sm mt-1">
                         {editable
                             ? 'Cấu hình thông số vận hành — thay đổi có hiệu lực ngay lập tức.'
-                            : 'Xem thông tin cấu hình hệ thống. Liên hệ Admin để thay đổi.'}
+                            : 'Xem thông tin cấu hình hệ thống. Chỉ Super Admin được thay đổi.'}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -333,7 +312,7 @@ export default function SystemSettingsPage() {
                         <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                             {userRole === 'SUPER_ADMIN' ? 'admin_panel_settings' : userRole === 'ADMIN' ? 'manage_accounts' : 'badge'}
                         </span>
-                        {userRole === 'SUPER_ADMIN' ? 'Super Admin' : userRole === 'ADMIN' ? 'Admin' : 'Staff — Chỉ xem'}
+                        {userRole === 'SUPER_ADMIN' ? 'Super Admin' : userRole === 'ADMIN' ? 'Admin — Chỉ xem' : 'Staff — Chỉ xem'}
                     </span>
                     <button onClick={pingBackend}
                         className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all">
@@ -342,13 +321,13 @@ export default function SystemSettingsPage() {
                 </div>
             </div>
 
-            {/* Permission banner for Staff */}
-            {!editable && userRole === 'STAFF' && (
+            {/* Permission banner */}
+            {!editable && userRole && (
                 <div className="mb-6 flex items-start gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-200">
                     <span className="material-symbols-outlined text-blue-500 text-[20px] flex-shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
                     <div>
                         <p className="text-sm font-bold text-blue-800">Bạn đang ở chế độ chỉ xem</p>
-                        <p className="text-sm text-blue-700 mt-0.5">Tài khoản Staff không có quyền chỉnh sửa cài đặt hệ thống. Liên hệ Admin hoặc Super Admin để thực hiện thay đổi.</p>
+                        <p className="text-sm text-blue-700 mt-0.5">Tài khoản {userRole === 'ADMIN' ? 'Admin' : 'Staff'} không có quyền chỉnh sửa cài đặt hệ thống. Chỉ Super Admin được thực hiện thay đổi.</p>
                     </div>
                 </div>
             )}
@@ -360,7 +339,7 @@ export default function SystemSettingsPage() {
                     if (settings.length === 0) return null;
                     return (
                         <EditableSection
-                            key={group}
+                            key={`${group}:${settings.map(s => `${s.key}:${s.updatedAt}:${s.value}`).join('|')}`}
                             {...meta}
                             settings={settings}
                             editable={editable}

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, TourStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { AdminQueryReviewDto } from './dto/admin-query-review.dto';
@@ -18,13 +18,20 @@ export class ReviewService {
     return Number.isFinite(days) && days > 0 ? days : 1;
   }
 
+  private getTripCompletedAt(startDate: Date, duration?: string | null): Date {
+    const completedAt = new Date(startDate);
+    completedAt.setDate(completedAt.getDate() + this.getDurationDays(duration));
+    return completedAt;
+  }
+
   // ─── Customer APIs ────────────────────────────────────────────────────────
 
   async createReview(userId: number, tourId: number, dto: CreateReviewDto) {
-    const tour = await this.prisma.tour.findUnique({ where: { id: tourId } });
+    const tour = await this.prisma.tour.findFirst({
+      where: { id: tourId, deletedAt: null },
+    });
     if (!tour) throw new NotFoundException('Tour not found');
 
-    // [FIX] Kiểm tra user đã có booking CONFIRMED + PAID cho tour này chưa
     const confirmedBooking = await this.prisma.booking.findFirst({
       where: {
         userId,
@@ -33,13 +40,13 @@ export class ReviewService {
         paymentStatus: 'PAID',
       },
       include: {
-        tour: { select: { startDate: true, duration: true } },
+        tour: { select: { startDate: true, duration: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
     if (!confirmedBooking) {
       throw new BadRequestException(
-        'Bạn cần đặt và hoàn thành chuyến đi để có thể gửi đánh giá.',
+        'Bạn cần có booking đã xác nhận và thanh toán để gửi đánh giá.',
       );
     }
 
@@ -52,14 +59,17 @@ export class ReviewService {
       tripStartDate = departure?.departureDate ?? tripStartDate;
     }
 
-    const completedAt = new Date(tripStartDate);
-    completedAt.setDate(
-      completedAt.getDate() +
-        this.getDurationDays(confirmedBooking.tour.duration),
+    const completedAt = this.getTripCompletedAt(
+      tripStartDate,
+      confirmedBooking.tour.duration,
     );
-    if (new Date() < completedAt) {
+    const isCompletedByDate = new Date() >= completedAt;
+    const isTourMarkedCompleted =
+      confirmedBooking.tour.status === TourStatus.COMPLETED;
+
+    if (!isCompletedByDate && !isTourMarkedCompleted) {
       throw new BadRequestException(
-        'Chá»‰ cÃ³ thá»ƒ Ä‘Ã¡nh giÃ¡ sau khi chuyáº¿n Ä‘i Ä‘Ã£ hoÃ n táº¥t.',
+        'Chỉ có thể đánh giá sau khi chuyến đi đã hoàn tất.',
       );
     }
 

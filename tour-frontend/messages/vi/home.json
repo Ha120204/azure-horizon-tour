@@ -20,13 +20,18 @@
   },
   "philosophy": {
     "badge": "Triết Lý Của Chúng Tôi",
-    "title": "Nghệ Thuật Hành Trình.",
-    "desc": "Chúng tôi không chỉ đặt chuyến đi — chúng tôi kiến tạo trải nghiệm. Mỗi hành trình là một câu chuyện được dệt nên từ những bí mật địa phương, kỳ quan kiến trúc và những khoảnh khắc tĩnh lặng định hình cả một đời kỷ niệm.",
-    "accommodation": "Chỗ Ở Cao Cấp",
-    "accommodationDesc": "Nghỉ tại những nơi kể lên câu chuyện.",
+    "title": "Hành Trình Được Thiết Kế Có Chủ Đích.",
+    "desc": "Chúng tôi xây dựng từng lịch trình quanh tinh thần của điểm đến: nơi bạn ở, người đồng hành cùng bạn, điều bạn được thấy trước đám đông và những khoảng lặng đáng được giữ lại.",
+    "noteLabel": "Ghi Chú Từ Hành Trình",
+    "note": "Một chuyến đi tốt phải thật nhẹ nhàng với người trải nghiệm, nhưng được chuẩn bị kỹ lưỡng ở phía sau.",
+    "accommodation": "Lưu Trú Được Tuyển Chọn",
+    "accommodationDesc": "Boutique stay, villa và resort được chọn vì cá tính, tiện nghi và vị trí.",
     "concierge": "Hướng Dẫn Địa Phương",
-    "conciergeDesc": "Tiếp cận những điều không thể.",
-    "cta": "Khám Phá Câu Chuyện"
+    "conciergeDesc": "Những người dẫn đường am hiểu nhịp sống, bối cảnh và lối vào ít người biết.",
+    "tailored": "Nhịp Điệu Riêng",
+    "tailoredDesc": "Lịch trình cân bằng giữa trải nghiệm nổi bật và thời gian tự do để khám phá.",
+    "cta": "Khám Phá Câu Chuyện",
+    "secondaryCta": "Tìm Hành Trình Phù Hợp"
   },
   "conciergeApp": {
     "btn": "Trợ lý ảo Azure AI",

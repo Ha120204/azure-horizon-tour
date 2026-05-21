@@ -74,14 +74,24 @@ export class ArticleService {
 
   async findFeatured() {
     return this.prisma.article.findFirst({
-      where: { isFeatured: true, status: ArticleStatus.PUBLISHED },
+      where: {
+        isFeatured: true,
+        status: ArticleStatus.PUBLISHED,
+        deletedAt: null,
+      },
       orderBy: { publishedAt: 'desc' },
     });
   }
 
   async findBySlug(slug: string) {
     const article = await this.prisma.article.findUnique({ where: { slug } });
-    if (!article || article.status !== ArticleStatus.PUBLISHED) return null;
+    if (
+      !article ||
+      article.status !== ArticleStatus.PUBLISHED ||
+      article.deletedAt
+    ) {
+      return null;
+    }
     return article;
   }
 

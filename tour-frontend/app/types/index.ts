@@ -7,9 +7,12 @@
 export interface Tour {
     id: number;
     name: string;
+    nameEn?: string | null;
     description: string;
+    descriptionEn?: string | null;
     price: number;
     duration: string;
+    durationEn?: string | null;
     imageUrl: string;
     tourCode: string;
     startDate: string;
@@ -22,12 +25,15 @@ export interface Tour {
     itinerary?: any[];
     faqs?: any[];
     departurePoint?: string;
+    departurePointEn?: string | null;
 }
 
 export interface Destination {
     id: number;
     name: string;
+    nameEn?: string | null;
     region?: string;
+    regionEn?: string | null;
     imageUrl?: string;
     travelScope?: 'DOMESTIC' | 'INTERNATIONAL';
     countryCode?: string | null;
@@ -36,11 +42,15 @@ export interface Destination {
 export interface TourPackage {
     id: number;
     name: string;
+    nameEn?: string | null;
     description?: string;
+    descriptionEn?: string | null;
     price: number;
     badge?: string;
     includes: string[];
+    includesEn?: string[];
     excludes: string[];
+    excludesEn?: string[];
 }
 
 export interface TourDeparture {
@@ -49,6 +59,7 @@ export interface TourDeparture {
     price: number;
     availableSeats: number;
     note?: string;
+    noteEn?: string | null;
 }
 
 // ── User ──────────────────────────────────────────────────────────

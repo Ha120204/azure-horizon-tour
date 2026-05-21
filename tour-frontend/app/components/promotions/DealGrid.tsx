@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 type DealCategory = 'all' | 'flash' | 'early' | 'lastminute';
 
 interface DealCard {
     id: number;
+    departureId: number;
     tourId: number;
     name: string;
     image: string;
@@ -58,7 +60,6 @@ function useCountdown(endsAt: string | null) {
 
     useEffect(() => {
         if (!endsAt) return;
-        setLeft(getLeft());
         const id = setInterval(() => setLeft(getLeft()), 1000);
         return () => clearInterval(id);
     }, [endsAt, getLeft]);
@@ -140,7 +141,7 @@ function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (
 
     return (
         <Link
-            href={`/tour/${deal.tourId}`}
+            href={`/tour/${deal.tourId}?departureId=${deal.departureId}`}
             className={`group block bg-surface-container-lowest rounded-2xl overflow-hidden transition-all duration-500 border flex flex-col cursor-pointer
                 ${isExpired
                     ? 'opacity-60 grayscale border-outline-variant/10 pointer-events-none'
@@ -149,10 +150,12 @@ function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (
         >
             {/* Image */}
             <div className="relative h-56 overflow-hidden shrink-0">
-                <img
+                <Image
                     alt={deal.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     src={deal.image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800'}
+                    fill
+                    sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
                 />
 
                 {/* Badge */}
@@ -254,9 +257,17 @@ export default function DealGrid({
     t,
     formatPrice,
 }: DealGridProps) {
-    const [page, setPage] = useState(1);
-
-    useEffect(() => { setPage(1); }, [activeTab]);
+    const [pagination, setPagination] = useState({ tab: activeTab, page: 1 });
+    const page = pagination.tab === activeTab ? pagination.page : 1;
+    const setPageForActiveTab = (nextPage: number | ((currentPage: number) => number)) => {
+        setPagination((current) => {
+            const currentPage = current.tab === activeTab ? current.page : 1;
+            return {
+                tab: activeTab,
+                page: typeof nextPage === 'function' ? nextPage(currentPage) : nextPage,
+            };
+        });
+    };
 
     const totalPages     = Math.ceil(filteredDeals.length / PAGE_SIZE);
     const paginatedDeals = filteredDeals.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -316,7 +327,7 @@ export default function DealGrid({
                         {totalPages > 1 && (
                             <div className="flex items-center justify-center gap-2 mt-12">
                                 <button
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    onClick={() => setPageForActiveTab(p => Math.max(1, p - 1))}
                                     disabled={page === 1}
                                     className="w-10 h-10 rounded-full border border-outline-variant/20 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:border-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     aria-label="Trang trước"
@@ -334,7 +345,7 @@ export default function DealGrid({
                                     return (
                                         <button
                                             key={p}
-                                            onClick={() => setPage(p)}
+                                            onClick={() => setPageForActiveTab(p)}
                                             className={`w-10 h-10 rounded-full text-sm font-bold transition-all duration-200 ${
                                                 isActive
                                                     ? 'bg-primary text-on-primary shadow-md scale-105'
@@ -349,7 +360,7 @@ export default function DealGrid({
                                 })}
 
                                 <button
-                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    onClick={() => setPageForActiveTab(p => Math.min(totalPages, p + 1))}
                                     disabled={page === totalPages}
                                     className="w-10 h-10 rounded-full border border-outline-variant/20 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:border-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     aria-label="Trang sau"

@@ -43,5 +43,9 @@ export class FilterTourDto {
 
   @IsOptional()
   @IsString()
+  locale?: string;
+
+  @IsOptional()
+  @IsString()
   status?: string; // 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED'
 }

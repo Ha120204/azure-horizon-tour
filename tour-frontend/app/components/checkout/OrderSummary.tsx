@@ -1,5 +1,9 @@
 'use client';
 
+import Image from 'next/image';
+import { useLocale } from '@/app/context/LocaleContext';
+import { getTranslatedVoucher } from '@/app/lib/mockTranslations';
+
 interface AppliedVoucher {
     code: string;
     label: string;
@@ -8,14 +12,37 @@ interface AppliedVoucher {
     discountValue: number;
 }
 
+interface OrderTourData {
+    name: string;
+    imageUrl?: string | null;
+    startDate: string;
+    duration: string;
+}
+
+interface OrderPackage {
+    name: string;
+}
+
+interface WalletVoucher {
+    id: number | string;
+    status?: string;
+    voucher: {
+        code: string;
+        label?: string;
+        discountType: string;
+        discountValue: number;
+        minOrderValue?: number;
+        expiryDate?: string | null;
+    };
+}
+
 interface OrderSummaryProps {
-    tourData: any;
-    selectedPackage: any;
+    tourData: OrderTourData;
+    selectedPackage: OrderPackage | null;
     adultCount: number;
     childCount: number;
     infantCount: number;
     prices: { 'Adult (12+)': number; 'Child (4-11)': number; 'Infant (<4)': number };
-    taxes: number;
     subtotal: number;
     totalPrice: number;
     discountAmount: number;
@@ -28,18 +55,15 @@ interface OrderSummaryProps {
     isValidating: boolean;
     onApplyVoucher: (code?: string) => void;
     onRemoveVoucher: () => void;
-    myWalletVouchers: any[];
+    myWalletVouchers: WalletVoucher[];
     showWalletDropdown: boolean;
     setShowWalletDropdown: (show: boolean) => void;
     // Payment
     isPaymentLoading: boolean;
     onPayment: () => void;
-    t: (key: string, params?: Record<string, any>) => string;
+    t: (key: string, params?: Record<string, unknown>) => string;
     formatPrice: (price: number) => string;
 }
-
-import { useLocale } from '@/app/context/LocaleContext';
-import { getTranslatedVoucher } from '@/app/lib/mockTranslations';
 
 export default function OrderSummary({
     tourData,
@@ -48,7 +72,6 @@ export default function OrderSummary({
     childCount,
     infantCount,
     prices,
-    taxes,
     subtotal,
     totalPrice,
     discountAmount,
@@ -82,7 +105,15 @@ export default function OrderSummary({
                 <div className="p-6 space-y-6">
                     {/* Tour Info */}
                     <div className="flex gap-4 items-start">
-                        <img alt={tourData.name} className="w-20 h-20 md:w-24 md:h-24 object-cover rounded-xl shrink-0 shadow-sm" src={tourData.imageUrl || "https://images.unsplash.com/photo-1499681404123-6c7102ce0033?auto=format&fit=crop&q=80&w=400"} />
+                        <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-xl shrink-0 shadow-sm overflow-hidden">
+                            <Image
+                                alt={tourData.name}
+                                className="object-cover"
+                                src={tourData.imageUrl || 'https://images.unsplash.com/photo-1499681404123-6c7102ce0033?auto=format&fit=crop&q=80&w=400'}
+                                fill
+                                sizes="96px"
+                            />
+                        </div>
                         <div>
                             <h3 className="font-headline font-bold text-base leading-tight mb-2 text-on-surface line-clamp-2">{tourData.name}</h3>
                             <div className="flex items-center gap-1.5 text-on-surface-variant text-xs font-medium mt-2">
@@ -129,10 +160,6 @@ export default function OrderSummary({
                                 <span className="font-semibold text-on-surface">{formatPrice(infantCount * prices['Infant (<4)'])}</span>
                             </div>
                         )}
-                        <div className="flex justify-between items-center pt-2">
-                            <span className="text-outline font-medium">{t('checkout.taxFee')}</span>
-                            <span className="font-semibold text-outline">{formatPrice(taxes)}</span>
-                        </div>
                     </div>
 
                     {/* ═══ Voucher Section ═══ */}
@@ -222,11 +249,10 @@ export default function OrderSummary({
                                         </button>
 
                                         {showWalletDropdown && (() => {
-                                            const applicable: any[] = [];
-                                            const notApplicable: { uv: any; reason: string }[] = [];
+                                            const applicable: WalletVoucher[] = [];
+                                            const notApplicable: { uv: WalletVoucher; reason: string }[] = [];
 
-                                            myWalletVouchers.forEach((uv: any) => {
-                                                const v = getTranslatedVoucher(uv.voucher, language);
+                                            myWalletVouchers.forEach((uv) => {
                                                 const minOrder = uv.voucher?.minOrderValue ?? 0;
                                                 const expDate = uv.voucher?.expiryDate ? new Date(uv.voucher.expiryDate) : null;
                                                 const isExpired = expDate && expDate < new Date();
@@ -251,7 +277,7 @@ export default function OrderSummary({
                                                                 </span>
                                                             </div>
                                                             <div className="divide-y divide-outline-variant/10">
-                                                                {applicable.map((uv: any) => {
+                                                                {applicable.map((uv) => {
                                                                     const v = getTranslatedVoucher(uv.voucher, language);
                                                                     return (
                                                                         <button

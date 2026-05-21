@@ -1,14 +1,16 @@
 'use client';
 import { FAQAccordion } from './FAQAccordion';
 
+type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
+
 // ── Highlights Section ────────────────────────────────────────────────────────
-export function HighlightsSection({ highlights }: { highlights: { id: number; content: string; icon: string }[] }) {
+export function HighlightsSection({ highlights, t }: { highlights: { id: number; content: string; icon: string }[]; t: TranslationFn }) {
     if (!highlights || highlights.length === 0) return null;
     return (
         <section className="bg-gradient-to-br from-primary/5 to-secondary-container/5 rounded-3xl p-6 md:p-8 border border-primary/10">
             <div className="flex items-center gap-3 mb-5">
                 <span className="material-symbols-outlined text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-                <h2 className="text-xl font-bold font-headline text-on-surface">Điểm nổi bật</h2>
+                <h2 className="text-xl font-bold font-headline text-on-surface">{t('tour_detail.highlightsTitle')}</h2>
             </div>
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {highlights.map((h) => (
@@ -44,9 +46,10 @@ type ItineraryDay = {
     imageUrl?: string; timeline?: { time: string; activity: string }[];
 };
 
-export function ItinerarySection({ itinerary, fallback }: {
+export function ItinerarySection({ itinerary, fallback, t }: {
     itinerary: ItineraryDay[];
     fallback?: { day: number; title: string; desc: string }[];
+    t: TranslationFn;
 }) {
     const days = itinerary && itinerary.length > 0 ? itinerary : null;
     if (!days && (!fallback || fallback.length === 0)) return null;
@@ -55,7 +58,7 @@ export function ItinerarySection({ itinerary, fallback }: {
     if (!days && fallback) {
         return (
             <section>
-                <h2 className="text-2xl font-bold font-headline mb-8">Lịch trình chi tiết</h2>
+                <h2 className="text-2xl font-bold font-headline mb-8">{t('tour_detail.itineraryTitle')}</h2>
                 <div className="space-y-0">
                     {fallback.map((fb, i) => (
                         <div key={fb.day} className="flex gap-4 md:gap-6">
@@ -82,7 +85,7 @@ export function ItinerarySection({ itinerary, fallback }: {
 
     return (
         <section>
-            <h2 className="text-2xl font-bold font-headline mb-8">Lịch trình chi tiết</h2>
+            <h2 className="text-2xl font-bold font-headline mb-8">{t('tour_detail.itineraryTitle')}</h2>
             <div className="space-y-0">
                 {days!.map((day, i) => (
                     <div key={day.id} className="flex gap-4 md:gap-6">
@@ -101,11 +104,11 @@ export function ItinerarySection({ itinerary, fallback }: {
                                 <p className="text-sm text-on-surface-variant leading-relaxed mb-4">{day.description}</p>
 
                                 {/* Timeline giờ */}
-                                {day.timeline && (day.timeline as any[]).length > 0 && (
+                                {day.timeline && day.timeline.length > 0 && (
                                     <div className="mb-4 border-t border-outline-variant/10 pt-3">
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-2 flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[13px] text-primary">schedule</span>
-                                            Lịch trình trong ngày
+                                            {t('tour_detail.daySchedule')}
                                         </p>
                                         <div className="space-y-1.5">
                                             {(day.timeline as { time: string; activity: string }[]).map((t, ti) => (
@@ -123,7 +126,7 @@ export function ItinerarySection({ itinerary, fallback }: {
                                     <div className="mb-4">
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-2 flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[13px] text-primary">location_on</span>
-                                            Địa điểm tham quan
+                                            {t('tour_detail.visitPlaces')}
                                         </p>
                                         <div className="flex flex-wrap gap-1.5">
                                             {day.activities.map((act, ai) => (
@@ -140,10 +143,10 @@ export function ItinerarySection({ itinerary, fallback }: {
                                 {(hasMealsInfo || day.accommodation || day.transport) && (
                                     <div className="border-t border-outline-variant/10 pt-3 flex flex-wrap gap-x-5 gap-y-2 items-center">
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Bữa ăn:</span>
-                                            <MealBadge included={!!day.mealsBreakfast} label="Sáng" icon="breakfast_dining" />
-                                            <MealBadge included={!!day.mealsLunch} label="Trưa" icon="lunch_dining" />
-                                            <MealBadge included={!!day.mealsDinner} label="Tối" icon="dinner_dining" />
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-outline">{t('tour_detail.mealsLabel')}</span>
+                                            <MealBadge included={!!day.mealsBreakfast} label={t('tour_detail.breakfast')} icon="breakfast_dining" />
+                                            <MealBadge included={!!day.mealsLunch} label={t('tour_detail.lunch')} icon="lunch_dining" />
+                                            <MealBadge included={!!day.mealsDinner} label={t('tour_detail.dinner')} icon="dinner_dining" />
                                         </div>
                                         {day.accommodation && (
                                             <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
@@ -169,23 +172,24 @@ export function ItinerarySection({ itinerary, fallback }: {
 }
 
 // ── FAQ Section ───────────────────────────────────────────────────────────────
-export function FAQSection({ faqs }: { faqs: { id: number; question: string; answer: string }[] }) {
+export function FAQSection({ faqs, t }: { faqs: { id: number; question: string; answer: string }[]; t: TranslationFn }) {
     if (!faqs || faqs.length === 0) return null;
     return (
         <section className="pt-8 border-t border-outline-variant/20">
-            <h2 className="text-2xl font-bold font-headline mb-6">Câu hỏi thường gặp</h2>
+            <h2 className="text-2xl font-bold font-headline mb-6">{t('tour_detail.faqTitle')}</h2>
             <FAQAccordion faqs={faqs} />
         </section>
     );
 }
 
 // ── Rating Breakdown ──────────────────────────────────────────────────────────
-export function RatingBreakdown({ stats }: {
+export function RatingBreakdown({ stats, t }: {
     stats: {
         averageRating: number;
         totalReviews: number;
         breakdown: { star: number; count: number; percent: number }[];
     } | null;
+    t: TranslationFn;
 }) {
     if (!stats || stats.totalReviews === 0) return null;
     return (
@@ -198,7 +202,7 @@ export function RatingBreakdown({ stats }: {
                             <span key={s} className="material-symbols-outlined text-secondary-container text-lg" style={{ fontVariationSettings: s <= Math.round(stats.averageRating) ? "'FILL' 1" : "'FILL' 0" }}>star</span>
                         ))}
                     </div>
-                    <p className="text-xs text-outline">{stats.totalReviews} đánh giá</p>
+                    <p className="text-xs text-outline">{stats.totalReviews} {t('tour_detail.reviewsLabel')}</p>
                 </div>
                 <div className="flex-1 w-full space-y-2">
                     {stats.breakdown.map(b => (
@@ -218,8 +222,21 @@ export function RatingBreakdown({ stats }: {
 }
 
 // ── Important Info Section ────────────────────────────────────────────────────
+type ImportantInfoTour = {
+    suitableFor?: string | null;
+    ageRequirement?: string | null;
+    bestTime?: string | null;
+    bestSeason?: string | null;
+    departurePoint?: string | null;
+    meetingPoint?: string | null;
+    dressCode?: string | null;
+    thingsToBring?: string | null;
+    healthNotes?: string | null;
+    accessibility?: string | null;
+};
+
 // Props: tour object + t() translation function
-export function ImportantInfoSection({ tour, t }: { tour: any; t: (key: string) => string }) {
+export function ImportantInfoSection({ tour, t }: { tour: ImportantInfoTour | null; t: (key: string) => string }) {
     // ── Group 1: Basic trip info (from tour data when available) ──
     const basicItems = [
         {
@@ -267,6 +284,8 @@ export function ImportantInfoSection({ tour, t }: { tour: any; t: (key: string) 
             value: tour?.accessibility || t('tour_detail.defaultAccessibility'),
         },
     ];
+    const hotlineValue = t('tour_detail.hotlineValue');
+    const hotlineHref = `tel:${hotlineValue.replace(/[^\d+]/g, '')}`;
 
     return (
         <section className="pt-8 border-t border-outline-variant/20">
@@ -329,20 +348,33 @@ export function ImportantInfoSection({ tour, t }: { tour: any; t: (key: string) 
                         <span className="w-4 h-px bg-outline/40 inline-block" />
                         {t('tour_detail.groupContactSupport')}
                     </p>
-                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-primary/5 to-secondary-container/5 border border-primary/10">
-                        <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center shrink-0 shadow-sm shadow-primary/20">
-                            <span className="material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>headset_mic</span>
-                        </div>
-                        <div className="flex-1">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-0.5">{t('tour_detail.hotlineLabel')}</p>
-                            <p className="text-lg font-extrabold text-on-surface font-headline leading-none">{t('tour_detail.hotlineValue')}</p>
-                            <p className="text-xs text-on-surface-variant mt-0.5">{t('tour_detail.supportAvail')}</p>
+                    <div className="flex flex-col gap-4 rounded-2xl border border-primary/15 bg-white p-4 shadow-sm shadow-primary/5 sm:flex-row sm:items-center">
+                        <div className="flex min-w-0 flex-1 items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shrink-0 shadow-sm shadow-primary/20">
+                                <span className="material-symbols-outlined text-white text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>phone_in_talk</span>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1">{t('tour_detail.hotlineLabel')}</p>
+                                <a
+                                    href={hotlineHref}
+                                    className="inline-flex max-w-full items-baseline gap-2 rounded text-lg font-extrabold text-on-surface font-headline leading-none hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                    aria-label={`${t('tour_detail.supportInfo')} ${hotlineValue}`}
+                                >
+                                    <span className="truncate">{hotlineValue}</span>
+                                </a>
+                                <p className="text-xs text-on-surface-variant mt-1">{t('tour_detail.supportAvail')}</p>
+                                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/5 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                    <span className="material-symbols-outlined text-[13px]">schedule</span>
+                                    {t('tour_detail.hotlineHours')}
+                                </p>
+                            </div>
                         </div>
                         <a
-                            href={`tel:${t('tour_detail.hotlineValue').replace(/\s/g, '')}`}
-                            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 active:scale-95 transition-all shadow-sm shadow-primary/20"
+                            href={hotlineHref}
+                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                            aria-label={`${t('tour_detail.supportInfo')} ${hotlineValue}`}
                         >
-                            <span className="material-symbols-outlined text-[14px]">call</span>
+                            <span className="material-symbols-outlined text-[16px]">call</span>
                             {t('tour_detail.supportInfo')}
                         </a>
                     </div>

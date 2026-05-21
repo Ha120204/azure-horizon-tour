@@ -60,7 +60,7 @@ export class AuditLogInterceptor implements NestInterceptor {
                     }
 
                     // Nếu hành động là DELETE, lấy tên từ oldData (nếu controller trả về)
-                    let oldData: any = undefined;
+                    const oldData: any = undefined;
                     let newData: any = undefined;
 
                     if (metadata.action === 'UPDATE') {

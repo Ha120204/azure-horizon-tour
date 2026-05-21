@@ -23,9 +23,46 @@ interface Passenger {
     identityNo: string;
 }
 
+interface CheckoutPackage {
+    id: number;
+    name: string;
+    price?: number | null;
+}
+
+interface CheckoutDeparture {
+    id: number;
+    price?: number | null;
+    availableSeats?: number | null;
+}
+
+interface CheckoutTourData {
+    id: number;
+    name: string;
+    imageUrl?: string | null;
+    startDate: string;
+    duration: string;
+    price: number;
+    availableSeats?: number | null;
+    packages?: CheckoutPackage[];
+    departures?: CheckoutDeparture[];
+}
+
+interface WalletVoucher {
+    id: number | string;
+    status?: string;
+    voucher: {
+        code: string;
+        label?: string;
+        discountType: string;
+        discountValue: number;
+        minOrderValue?: number;
+        expiryDate?: string | null;
+    };
+}
+
 function CheckoutContent() {
     const searchParams = useSearchParams();
-    const { t, formatPrice } = useLocale();
+    const { t, formatPrice, language } = useLocale();
 
     // 1. LẤY ID TOUR, PACKAGE VÀ DEPARTURE TỪ URL
     const tourIdStr = searchParams.get('tourId');
@@ -33,9 +70,9 @@ function CheckoutContent() {
     const departureIdStr = searchParams.get('departureId');
 
     // STATE LƯU THÔNG TIN TOUR TỪ DATABASE
-    const [tourData, setTourData] = useState<any>(null);
-    const [selectedPackage, setSelectedPackage] = useState<any>(null);
-    const [selectedDeparture, setSelectedDeparture] = useState<any>(null);
+    const [tourData, setTourData] = useState<CheckoutTourData | null>(null);
+    const [selectedPackage, setSelectedPackage] = useState<CheckoutPackage | null>(null);
+    const [selectedDeparture, setSelectedDeparture] = useState<CheckoutDeparture | null>(null);
     const [isLoadingTour, setIsLoadingTour] = useState(true);
 
     const [contactInfo, setContactInfo] = useState({ fullName: '', email: '', phone: '', identityType: 'CCCD', identityNo: '', dob: '', gender: '' });
@@ -62,7 +99,7 @@ function CheckoutContent() {
     } | null>(null);
     const [voucherError, setVoucherError] = useState('');
     const [isValidating, setIsValidating] = useState(false);
-    const [myWalletVouchers, setMyWalletVouchers] = useState<any[]>([]);
+    const [myWalletVouchers, setMyWalletVouchers] = useState<WalletVoucher[]>([]);
     const [showWalletDropdown, setShowWalletDropdown] = useState(false);
 
     // 2. GỌI API LẤY DATA THẬT CỦA TOUR VÀ THÔNG TIN NGƯỜI DÙNG
@@ -70,17 +107,17 @@ function CheckoutContent() {
         const fetchInitialData = async () => {
             if (tourIdStr) {
                 try {
-                    const resTour = await fetch(`${API_BASE_URL}/tour/${tourIdStr}`);
+                    const resTour = await fetch(`${API_BASE_URL}/tour/${tourIdStr}?locale=${language}`);
                     if (resTour.ok) {
                         const payload = await resTour.json();
                         const tourInfo = payload.data || payload;
                         setTourData(tourInfo);
                         if (packageIdStr && tourInfo.packages) {
-                            const pkg = tourInfo.packages.find((p: any) => p.id.toString() === packageIdStr);
+                            const pkg = tourInfo.packages.find((p: CheckoutPackage) => p.id.toString() === packageIdStr);
                             if (pkg) setSelectedPackage(pkg);
                         }
                         if (departureIdStr && tourInfo.departures) {
-                            const dep = tourInfo.departures.find((d: any) => d.id.toString() === departureIdStr);
+                            const dep = tourInfo.departures.find((d: CheckoutDeparture) => d.id.toString() === departureIdStr);
                             if (dep) setSelectedDeparture(dep);
                         }
                     }
@@ -126,18 +163,18 @@ function CheckoutContent() {
                     if (resWallet.ok) {
                         const payload = await resWallet.json();
                         const walletData = payload.data || payload;
-                        setMyWalletVouchers(walletData.filter((uv: any) => uv.status === 'available') || []);
+                        setMyWalletVouchers(walletData.filter((uv: WalletVoucher) => uv.status === 'available') || []);
                     }
                 } catch (e) { console.error('Lỗi tải ví voucher:', e); }
             }
         };
         fetchInitialData();
-    }, [tourIdStr]);
+    }, [tourIdStr, packageIdStr, departureIdStr, language]);
 
     // 3. THIẾT LẬP BẢNG GIÁ ĐỘNG DỰA TRÊN GIÁ TOUR TRONG DATABASE
     const basePrice = (() => {
-        let base = selectedDeparture?.price ?? tourData?.price ?? 0;
-        let addon = selectedPackage?.price ?? 0;
+        const base = selectedDeparture?.price ?? tourData?.price ?? 0;
+        const addon = selectedPackage?.price ?? 0;
         return base + addon;
     })();
     const PRICES = {
@@ -145,15 +182,13 @@ function CheckoutContent() {
         'Child (4-11)': basePrice * 0.7,
         'Infant (<4)': basePrice * 0.1
     };
-    const TAXES = 0;
-
     const adultCount = 1 + passengers.filter(p => p.type === 'Adult (12+)').length;
     const childCount = passengers.filter(p => p.type === 'Child (4-11)').length;
     const infantCount = passengers.filter(p => p.type === 'Infant (<4)').length;
 
     const subtotal = (adultCount * PRICES['Adult (12+)']) +
         (childCount * PRICES['Child (4-11)']) +
-        (infantCount * PRICES['Infant (<4)']) + TAXES;
+        (infantCount * PRICES['Infant (<4)']);
 
     const discountAmount = appliedVoucher?.discountAmount || 0;
     const totalPrice = Math.max(0, subtotal - discountAmount);
@@ -417,7 +452,7 @@ function CheckoutContent() {
                         onSavePassenger={handleSavePassenger}
                         onRemovePassenger={handleRemovePassenger}
                         t={t}
-                        maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats}
+                        maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats ?? undefined}
                     />
                 </div>
 
@@ -428,7 +463,6 @@ function CheckoutContent() {
                     childCount={childCount}
                     infantCount={infantCount}
                     prices={PRICES}
-                    taxes={TAXES}
                     subtotal={subtotal}
                     totalPrice={totalPrice}
                     discountAmount={discountAmount}

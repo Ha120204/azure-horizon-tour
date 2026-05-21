@@ -22,6 +22,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TourService } from './tour.service';
+import { TourPermissionService } from './tour-permission.service';
 import { CreateTourDto } from './dto/create-tour.dto';
 import { UpdateTourDto } from './dto/update-tour.dto';
 import { FilterTourDto } from './dto/filter-tour.dto';
@@ -42,15 +43,21 @@ type AuthenticatedRequest = {
 
 type ItineraryDayUpdateBody = {
   title?: string;
+  titleEn?: string;
   description?: string;
+  descriptionEn?: string;
   mealsBreakfast?: boolean;
   mealsLunch?: boolean;
   mealsDinner?: boolean;
   accommodation?: string;
+  accommodationEn?: string;
   transport?: string;
+  transportEn?: string;
   activities?: string[];
+  activitiesEn?: string[];
   imageUrl?: string;
   timeline?: unknown[];
+  timelineEn?: unknown[];
 };
 
 const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
@@ -66,6 +73,7 @@ export class TourController {
   constructor(
     private readonly tourService: TourService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly tourPermission: TourPermissionService,
   ) {}
 
   /**
@@ -114,10 +122,10 @@ export class TourController {
    */
   @UseGuards(OptionalJwtGuard)
   @Get()
-  findAll(@Query() query: FilterTourDto, @Req() req: AuthenticatedRequest) {
+  findAll(@Query() query: FilterTourDto, @Req() req: AuthenticatedRequest, @Query('locale') locale?: string) {
     const requesterId = getAuthUserId(req);
     const requesterRole = getAuthRole(req);
-    return this.tourService.findAll(query, requesterId, requesterRole);
+    return this.tourService.findAll(query, requesterId, requesterRole, locale);
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -128,8 +136,8 @@ export class TourController {
   }
 
   @Get('sale-deals')
-  getSaleDeals() {
-    return this.tourService.getSaleDeals();
+  getSaleDeals(@Query('locale') locale?: string) {
+    return this.tourService.getSaleDeals(locale);
   }
 
   /**
@@ -150,17 +158,21 @@ export class TourController {
   getTrashedTours(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('deletable') deletable?: string,
   ) {
     return this.tourService.getTrashedTours(
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 10,
+      { search, status, deletable },
     );
   }
 
   @UseGuards(OptionalJwtGuard)
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
-    return this.tourService.findOne(+id, getAuthUserId(req), getAuthRole(req));
+  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest, @Query('locale') locale?: string) {
+    return this.tourService.findOne(+id, getAuthUserId(req), getAuthRole(req), locale);
   }
 
   @Get(':id/rating-stats')
@@ -220,6 +232,22 @@ export class TourController {
 
   // ── Trash Management ─────────────────────────────────────
 
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch('trash/bulk-restore')
+  @AuditLog('UPDATE', 'Tour')
+  bulkRestoreTours(@Body() body: { ids?: number[] }) {
+    return this.tourService.bulkRestoreTours((body.ids ?? []).map(Number));
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Delete('trash/bulk-permanent')
+  @AuditLog('DELETE', 'Tour')
+  bulkPermanentDelete(@Body() body: { ids?: number[] }) {
+    return this.tourService.bulkPermanentDelete((body.ids ?? []).map(Number));
+  }
+
   /** PATCH /tour/:id/restore — Khôi phục tour từ Trash về PENDING_REVIEW (Admin) */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
@@ -229,9 +257,9 @@ export class TourController {
     return this.tourService.restoreTour(+id);
   }
 
-  /** DELETE /tour/:id/permanent — Xóa vĩnh viễn khỏi DB (chỉ Super Admin) */
+  /** DELETE /tour/:id/permanent — Xóa vĩnh viễn tour chưa có booking */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN')
   @Delete(':id/permanent')
   @AuditLog('DELETE', 'Tour')
   permanentDelete(@Param('id') id: string) {
@@ -250,6 +278,18 @@ export class TourController {
   @AuditLog('UPDATE', 'Tour')
   submitForReview(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.tourService.submitForReview(+id, getAuthUserId(req)!);
+  }
+
+  /**
+   * PATCH /tour/:id/publish
+   * Admin/Super Admin xac nhan public tour da luu nhap len trang khach hang.
+   */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Patch(':id/publish')
+  @AuditLog('UPDATE', 'Tour')
+  publishTour(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.tourService.publishTour(+id, getAuthUserId(req)!);
   }
 
   /**
@@ -281,24 +321,41 @@ export class TourController {
   @Post(':id/images')
   @UseInterceptors(FilesInterceptor('images', 10))
   async uploadGallery(
+    @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
+    await this.tourPermission.assertCanMutateTour(
+      +id,
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
     const urls = await this.cloudinaryService.uploadFiles(
       files,
       'azure-horizon/tours/gallery',
     );
-    return this.tourService.addGalleryImages(+id, urls);
+    return this.tourService.addGalleryImages(
+      +id,
+      urls,
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Delete(':id/images/:imageId')
   removeGalleryImage(
+    @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Param('imageId') imageId: string,
   ) {
-    return this.tourService.removeGalleryImage(+id, +imageId);
+    return this.tourService.removeGalleryImage(
+      +id,
+      +imageId,
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
   }
 
   // ── Highlights ──────────────────────────────────────────────────────
@@ -307,13 +364,19 @@ export class TourController {
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Put(':id/highlights')
   upsertHighlights(
+    @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Body()
     body: {
-      highlights: { content: string; icon?: string; sortOrder?: number }[];
+      highlights: { content: string; contentEn?: string; icon?: string; sortOrder?: number }[];
     },
   ) {
-    return this.tourService.upsertHighlights(+id, body.highlights ?? []);
+    return this.tourService.upsertHighlights(
+      +id,
+      body.highlights ?? [],
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
   }
 
   // ── FAQs ────────────────────────────────────────────────────────────
@@ -322,11 +385,17 @@ export class TourController {
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Put(':id/faqs')
   upsertFaqs(
+    @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Body()
-    body: { faqs: { question: string; answer: string; sortOrder?: number }[] },
+    body: { faqs: { question: string; questionEn?: string; answer: string; answerEn?: string; sortOrder?: number }[] },
   ) {
-    return this.tourService.upsertFaqs(+id, body.faqs ?? []);
+    return this.tourService.upsertFaqs(
+      +id,
+      body.faqs ?? [],
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
   }
 
   // ── Itinerary ───────────────────────────────────────────────────────
@@ -335,10 +404,17 @@ export class TourController {
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Patch(':id/itinerary/:dayId')
   updateItineraryDay(
+    @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Param('dayId') dayId: string,
     @Body() data: ItineraryDayUpdateBody,
   ) {
-    return this.tourService.updateItineraryDay(+id, +dayId, data);
+    return this.tourService.updateItineraryDay(
+      +id,
+      +dayId,
+      data,
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
   }
 }

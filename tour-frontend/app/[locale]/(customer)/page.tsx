@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
 import HeroSearch from '@/app/components/features/search/HeroSearch';
 import { useLocale } from '@/app/context/LocaleContext';
-import { getTranslatedTour } from '@/app/lib/mockTranslations';
 import { API_BASE_URL } from '@/app/lib/constants';
 
 type TravelScope = 'DOMESTIC' | 'INTERNATIONAL';
@@ -27,6 +28,17 @@ interface TourSummary {
 }
 
 const VIDEO_TRANSITION_MS = 900;
+
+const PHILOSOPHY_IMAGES = {
+  primary: {
+    src: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80',
+    alt: 'Balinese temple reflected on a quiet lake',
+  },
+  secondary: {
+    src: 'https://images.unsplash.com/photo-1694980252071-5e1bd1f37448?w=600&auto=format&fit=crop&q=70',
+    alt: 'Alpine cabin in the Swiss mountains',
+  },
+};
 
 const HERO_VIDEOS: Record<TravelScope, { publicId: string; label: string }> = {
   DOMESTIC: {
@@ -123,12 +135,29 @@ export default function HomePage() {
   const [travelScope, setTravelScope] = useState<TravelScope>('DOMESTIC');
   const router = useRouter();
   const { t, formatPrice, language } = useLocale();
+  const philosophyHighlights = [
+    {
+      icon: 'hotel_class',
+      title: t('philosophy.accommodation'),
+      desc: t('philosophy.accommodationDesc'),
+    },
+    {
+      icon: 'explore',
+      title: t('philosophy.concierge'),
+      desc: t('philosophy.conciergeDesc'),
+    },
+    {
+      icon: 'route',
+      title: t('philosophy.tailored'),
+      desc: t('philosophy.tailoredDesc'),
+    },
+  ];
 
   // Gọi API lấy danh sách Tour
   useEffect(() => {
     const fetchTours = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/tour`);
+        const res = await fetch(`${API_BASE_URL}/tour?locale=${language}`);
         const data = await res.json();
         // The backend findAll returns { data: [...], meta: {...} }
         setTours(data.data || []);
@@ -139,7 +168,7 @@ export default function HomePage() {
       }
     };
     fetchTours();
-  }, []);
+  }, [language]);
 
   return (
     <div className="bg-background text-on-surface font-body antialiased min-h-screen flex flex-col">
@@ -147,7 +176,7 @@ export default function HomePage() {
       <Header />
 
       {/* ── CINEMATIC VIDEO HERO ── */}
-      <section className="relative h-screen min-h-[640px] flex flex-col items-center justify-center overflow-hidden">
+      <section className="relative z-20 h-screen min-h-[640px] flex flex-col items-center justify-center overflow-visible">
 
         {/* 1. Video Background */}
         <HeroVideoBackground travelScope={travelScope} />
@@ -207,7 +236,7 @@ export default function HomePage() {
       </section>
 
       {/* Main Content: Featured Tours */}
-      <main className="py-24 px-8 bg-surface">
+      <main className="relative z-0 py-24 px-8 bg-surface">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-end mb-16">
             <div>
@@ -237,9 +266,7 @@ export default function HomePage() {
                   </div>
                 </div>
               ))
-            ) : tours.length > 0 ? tours.slice(0, 6).map((originalTour) => {
-
-              const tour = getTranslatedTour(originalTour, language) as TourSummary;
+            ) : tours.length > 0 ? tours.slice(0, 6).map((tour) => {
               return (
                 <div
                   key={tour.id}
@@ -248,10 +275,12 @@ export default function HomePage() {
                 >
                   {/* ── Image ── */}
                   <div className="relative h-56 flex-shrink-0 overflow-hidden bg-slate-100">
-                    <img
+                    <Image
                       alt={tour.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       src={tour.imageUrl || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb'}
+                      fill
+                      sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     {/* Duration badge */}
                     <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-[0.65rem] font-label font-bold text-primary shadow-sm tracking-wide">
@@ -312,44 +341,76 @@ export default function HomePage() {
       </main>
 
       {/* Editorial Section (Our Philosophy) */}
-      <section className="py-24 px-8 bg-surface-container-low">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-12 gap-16 items-center">
-            <div className="lg:col-span-7">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="rounded-2xl overflow-hidden aspect-[3/4] translate-y-12 shadow-lg">
-                  <img alt="Swiss Alps Cabin" className="w-full h-full object-cover" src="https://images.unsplash.com/photo-1694980252071-5e1bd1f37448?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8U3dpc3MlMjBBbHBzJTIwQ2FiaW58ZW58MHx8MHx8fDA%3D" />
-                </div>
-                <div className="rounded-2xl overflow-hidden aspect-[3/4] shadow-lg">
-                  <img alt="Bali Infinity Pool" className="w-full h-full object-cover" src="https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80" />
-                </div>
+      <section className="overflow-hidden bg-surface-container-low px-6 py-20 md:px-8 md:py-28">
+        <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:gap-20">
+          <div className="relative min-h-[560px] sm:min-h-[520px]">
+            <div className="absolute left-0 top-0 h-[78%] w-[82%] overflow-hidden rounded-[2rem] bg-slate-200 shadow-2xl shadow-slate-900/10">
+              <Image
+                src={PHILOSOPHY_IMAGES.primary.src}
+                alt={PHILOSOPHY_IMAGES.primary.alt}
+                fill
+                sizes="(min-width: 1024px) 52vw, 92vw"
+                className="object-cover"
+              />
+            </div>
+
+            <div className="absolute bottom-0 right-0 w-[48%] overflow-hidden rounded-3xl border-[10px] border-surface-container-low bg-white shadow-2xl shadow-slate-900/15 sm:w-[54%]">
+              <div className="relative aspect-[4/5]">
+                <Image
+                  src={PHILOSOPHY_IMAGES.secondary.src}
+                  alt={PHILOSOPHY_IMAGES.secondary.alt}
+                  fill
+                  sizes="(min-width: 1024px) 28vw, 52vw"
+                  className="object-cover"
+                />
               </div>
             </div>
-            <div className="lg:col-span-5">
-              <span className="text-[0.6875rem] font-label font-bold text-primary uppercase tracking-widest mb-6 block">{t('philosophy.badge')}</span>
-              <h2 className="text-5xl font-headline font-extrabold text-on-surface mb-8 leading-tight">{t('philosophy.title')}</h2>
-              <p className="text-lg text-on-surface-variant leading-relaxed mb-8">
-                {t('philosophy.desc')}
-              </p>
-              <ul className="space-y-6 mb-12">
-                <li className="flex gap-4">
-                  <span className="material-symbols-outlined text-tertiary">check_circle</span>
-                  <div>
-                    <span className="block font-headline font-bold text-on-surface">{t('philosophy.accommodation')}</span>
-                    <p className="text-sm text-on-surface-variant">{t('philosophy.accommodationDesc')}</p>
+
+            <div className="absolute bottom-8 left-4 right-24 rounded-2xl bg-white/95 p-5 shadow-xl shadow-slate-900/10 backdrop-blur sm:bottom-10 sm:left-6 sm:right-auto sm:max-w-[18rem]">
+              <p className="text-[0.68rem] font-label font-bold uppercase tracking-[0.18em] text-primary">{t('philosophy.noteLabel')}</p>
+              <p className="mt-3 text-sm font-semibold leading-6 text-on-surface">{t('philosophy.note')}</p>
+            </div>
+          </div>
+
+          <div className="max-w-2xl">
+            <span className="mb-5 block text-[0.6875rem] font-label font-bold uppercase tracking-[0.18em] text-primary">
+              {t('philosophy.badge')}
+            </span>
+            <h2 className="max-w-xl text-4xl font-headline font-extrabold leading-[1.05] text-on-surface text-balance md:text-6xl">
+              {t('philosophy.title')}
+            </h2>
+            <p className="mt-7 max-w-xl text-base leading-8 text-on-surface-variant md:text-lg">
+              {t('philosophy.desc')}
+            </p>
+
+            <ul className="mt-10 grid gap-4">
+              {philosophyHighlights.map((item) => (
+                <li key={item.title} className="group flex gap-4 rounded-2xl bg-white/70 p-4 ring-1 ring-slate-900/5 transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-lg hover:shadow-slate-900/10">
+                  <span className="material-symbols-outlined mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-fixed text-[20px] text-primary" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <span className="block font-headline text-base font-bold text-on-surface">{item.title}</span>
+                    <p className="mt-1 text-sm leading-6 text-on-surface-variant">{item.desc}</p>
                   </div>
                 </li>
-                <li className="flex gap-4">
-                  <span className="material-symbols-outlined text-tertiary">check_circle</span>
-                  <div>
-                    <span className="block font-headline font-bold text-on-surface">{t('philosophy.concierge')}</span>
-                    <p className="text-sm text-on-surface-variant">{t('philosophy.conciergeDesc')}</p>
-                  </div>
-                </li>
-              </ul>
-              <button onClick={() => router.push('/about')} className="px-8 py-4 rounded-full border-2 border-primary text-primary font-headline font-bold hover:bg-primary hover:text-white transition-all">
+              ))}
+            </ul>
+
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/about"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-4 font-headline text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low"
+              >
                 {t('philosophy.cta')}
-              </button>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+              </Link>
+              <Link
+                href="/destinations"
+                className="inline-flex items-center justify-center rounded-full border border-primary/25 px-7 py-4 font-headline text-sm font-bold text-primary transition-[background-color,border-color,color] duration-200 hover:border-primary hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low"
+              >
+                {t('philosophy.secondaryCta')}
+              </Link>
             </div>
           </div>
         </div>

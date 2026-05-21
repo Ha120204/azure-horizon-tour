@@ -28,9 +28,38 @@ interface Voucher {
 }
 
 type DealCategory = 'all' | 'flash' | 'early' | 'lastminute';
+type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
+
+interface ApiResponse<T> {
+    data?: T;
+}
+
+interface SaleDealApi {
+    id: number;
+    tourId: number;
+    name: string;
+    image?: string | null;
+    badge: string;
+    rating?: number | null;
+    duration: string;
+    newPrice: number;
+    oldPrice: number;
+    discountPct?: number | null;
+    bookedPercent?: number | null;
+    maxSeats?: number | null;
+    availableSeats?: number | null;
+    flashSaleEndsAt?: string | null;
+    category: DealCategory;
+    destination?: string | null;
+}
+
+interface UserVoucher {
+    voucherId: number;
+}
 
 interface DealCard {
     id: number;
+    departureId: number;
     tourId: number;
     name: string;
     image: string;
@@ -54,14 +83,14 @@ interface DealCard {
 // getDeals removed — data now fetched from API (/tour/sale-deals)
 
 
-const getTabOptions = (t: any): { key: DealCategory; label: string }[] => [
+const getTabOptions = (t: TranslationFn): { key: DealCategory; label: string }[] => [
     { key: 'all', label: t('tabAll') },
     { key: 'flash', label: t('tabFlash') },
     { key: 'early', label: t('tabEarly') },
     { key: 'lastminute', label: t('tabLastMinute') },
 ];
 
-const getTAndC = (t: any) => [
+const getTAndC = (t: TranslationFn) => [
     { title: t('tc1Title'), body: t('tc1Body') },
     { title: t('tc2Title'), body: t('tc2Body') },
     { title: t('tc3Title'), body: t('tc3Body') },
@@ -100,12 +129,13 @@ export default function PromotionsPage() {
     const [deals, setDeals] = useState<DealCard[]>([]);
 
     useEffect(() => {
-        fetch(`${API_BASE_URL}/tour/sale-deals`)
+        fetch(`${API_BASE_URL}/tour/sale-deals?locale=${language}`)
             .then(r => r.json())
-            .then((res: any) => {
-                const arr: any[] = res.data ?? res ?? [];
-                const mapped: DealCard[] = arr.map((d: any) => ({
+            .then((res: ApiResponse<SaleDealApi[]> | SaleDealApi[]) => {
+                const arr = Array.isArray(res) ? res : res.data ?? [];
+                const mapped: DealCard[] = arr.map((d) => ({
                     id: d.id,
+                    departureId: d.id,
                     tourId: d.tourId,
                     name: d.name,
                     image: d.image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
@@ -123,8 +153,8 @@ export default function PromotionsPage() {
                     maxSeats: d.maxSeats ?? null,
                     availableSeats: d.availableSeats ?? 0,
                     flashSaleEndsAt: d.flashSaleEndsAt ?? null,
-                    urgencyText: d.availableSeats <= 3
-                        ? `Chỉ còn ${d.availableSeats} chỗ!`
+                    urgencyText: (d.availableSeats ?? 0) <= 3
+                        ? `Chỉ còn ${d.availableSeats ?? 0} chỗ!`
                         : d.category === 'flash' ? 'Flash Sale'
                         : d.category === 'lastminute' ? 'Sắp hết!'
                         : 'Ưu đãi có hạn',
@@ -137,7 +167,7 @@ export default function PromotionsPage() {
                 setDeals(mapped);
             })
             .catch(console.error);
-    }, []);
+    }, [language]);
 
 
 
@@ -148,8 +178,8 @@ export default function PromotionsPage() {
     useEffect(() => {
         fetch('http://localhost:3000/voucher')
             .then(res => res.json())
-            .then((resData: any) => {
-                const arr = resData.data || resData || [];
+            .then((resData: ApiResponse<Voucher[]> | Voucher[]) => {
+                const arr = Array.isArray(resData) ? resData : resData.data ?? [];
                 setVouchers(Array.isArray(arr) ? arr : []);
             })
             .catch(console.error);
@@ -159,10 +189,10 @@ export default function PromotionsPage() {
         if (token) {
             fetchWithAuth('http://localhost:3000/voucher/my-wallet')
                 .then(res => res.json())
-                .then((resData: any) => {
-                    const arr = resData.data || resData || [];
+                .then((resData: ApiResponse<UserVoucher[]> | UserVoucher[]) => {
+                    const arr = Array.isArray(resData) ? resData : resData.data ?? [];
                     const dataArray = Array.isArray(arr) ? arr : [];
-                    const ids = new Set(dataArray.map((uv: any) => uv.voucherId));
+                    const ids = new Set(dataArray.map((uv) => uv.voucherId));
                     setSavedIds(ids);
                 })
                 .catch(() => { });
@@ -274,7 +304,7 @@ export default function PromotionsPage() {
             } else {
                 setSubscribeStatus('error');
             }
-        } catch (error) {
+        } catch {
             setSubscribeStatus('error');
         } finally {
             setTimeout(() => setSubscribeStatus('idle'), 4000);

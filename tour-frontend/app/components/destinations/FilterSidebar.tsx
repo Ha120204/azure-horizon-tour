@@ -1,7 +1,9 @@
 'use client';
 
 import { useRef, useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
 import { API_BASE_URL } from '@/app/lib/constants';
+import { getDestinationDisplay, getDestinationDisplayName } from '@/app/lib/destinationDisplay';
 
 type TravelScope = '' | 'DOMESTIC' | 'INTERNATIONAL';
 
@@ -19,6 +21,8 @@ interface FilterSidebarProps {
     setTravelScope: (v: TravelScope) => void;
     dest: string;
     setDest: (v: string) => void;
+    isAllDestinationsSelected: boolean;
+    setIsAllDestinationsSelected: (v: boolean) => void;
     date: string;
     setDate: (v: string) => void;
     sidebarBudget: string;
@@ -40,6 +44,7 @@ interface FilterSidebarProps {
 export default function FilterSidebar({
     travelScope, setTravelScope,
     dest, setDest,
+    isAllDestinationsSelected, setIsAllDestinationsSelected,
     date, setDate,
     sidebarBudget, setSidebarBudget,
     selectedRatings, toggleRating,
@@ -55,6 +60,7 @@ export default function FilterSidebar({
     const sidebarDestRef = useRef<HTMLDivElement>(null);
 
     const handleSidebarDestChange = useCallback((value: string) => {
+        setIsAllDestinationsSelected(false);
         setDest(value);
         if (sidebarDebounceRef.current) clearTimeout(sidebarDebounceRef.current);
         if (value.length < 2) {
@@ -63,14 +69,18 @@ export default function FilterSidebar({
         }
         sidebarDebounceRef.current = setTimeout(async () => {
             try {
-                const scopeQuery = travelScope ? `&travelScope=${travelScope}` : '';
-                const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(value)}${scopeQuery}`);
+                const params = new URLSearchParams({
+                    q: value,
+                    locale: language,
+                });
+                if (travelScope) params.set('travelScope', travelScope);
+                const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`);
                 const json = await res.json();
                 const data = json.data || json;
                 setSidebarSuggestions(data.destinations || []);
             } catch { /* ignore */ }
         }, 300);
-    }, [setDest, travelScope]);
+    }, [setDest, setIsAllDestinationsSelected, travelScope, language]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -134,6 +144,7 @@ export default function FilterSidebar({
                                 onClick={() => {
                                     setTravelScope(option.value);
                                     setDest('');
+                                    setIsAllDestinationsSelected(false);
                                     setSidebarSuggestions([]);
                                 }}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 group active:scale-[0.98]
@@ -176,14 +187,15 @@ export default function FilterSidebar({
                         className="w-full bg-surface-container-low border border-outline-variant/15 rounded-xl pl-11 pr-10 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary/30 focus:bg-white transition-all placeholder:text-outline-variant outline-none"
                         placeholder={t('search.whereTo')}
                         type="text"
-                        value={dest}
+                        value={isAllDestinationsSelected ? t('search.allDestinations') : getDestinationDisplayName(dest, language)}
                         onChange={(e) => handleSidebarDestChange(e.target.value)}
                         onFocus={() => setIsSidebarDestFocused(true)}
                     />
-                    {dest && (
+                    {(dest || isAllDestinationsSelected) && (
                         <button
                             onClick={() => {
                                 setDest('');
+                                setIsAllDestinationsSelected(false);
                                 setSidebarSuggestions([]);
                             }}
                             className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-outline-variant/20 hover:bg-outline-variant/40 transition-colors text-on-surface-variant hover:text-on-surface"
@@ -194,28 +206,60 @@ export default function FilterSidebar({
 
                     {isSidebarDestFocused && (() => {
                         const suggestions = dest.length >= 2 ? sidebarSuggestions : allDestinations;
-                        if (suggestions.length === 0) return null;
                         return (
-                            <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-[100] max-h-[240px] overflow-y-auto">
-                                {suggestions.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        onClick={() => { setDest(item.name); setIsSidebarDestFocused(false); }}
-                                        className="px-4 py-2.5 hover:bg-slate-50 flex items-center gap-3 cursor-pointer transition-colors"
-                                    >
-                                        {item.imageUrl ? (
-                                            <img src={item.imageUrl} alt={item.name} className="w-8 h-8 rounded-md object-cover" />
-                                        ) : (
-                                            <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-slate-400 text-sm">location_city</span>
+                            <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white rounded-xl shadow-xl border border-slate-100 p-2 z-[100] max-h-[260px] overflow-y-auto">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setDest('');
+                                        setIsAllDestinationsSelected(true);
+                                        setSidebarSuggestions([]);
+                                        setIsSidebarDestFocused(false);
+                                    }}
+                                    className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                                        isAllDestinationsSelected ? 'bg-primary/5 text-primary' : 'hover:bg-slate-50 text-on-surface'
+                                    }`}
+                                >
+                                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isAllDestinationsSelected ? 'bg-primary/10' : 'bg-slate-100'}`}>
+                                        <span className={`material-symbols-outlined text-sm ${isAllDestinationsSelected ? 'text-primary' : 'text-slate-400'}`}>travel_explore</span>
+                                    </span>
+                                    <span className="flex-1 min-w-0">
+                                        <span className="text-sm font-bold block">{t('search.allDestinations')}</span>
+                                        <span className="text-[10px] text-slate-400">{t('search.allDestinationsDesc')}</span>
+                                    </span>
+                                    {isAllDestinationsSelected && <span className="material-symbols-outlined text-[16px] text-primary">check_circle</span>}
+                                </button>
+                                {suggestions.map((item) => {
+                                    const display = getDestinationDisplay(item, language);
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={item.id}
+                                            onClick={() => { setDest(display.name); setIsAllDestinationsSelected(false); setIsSidebarDestFocused(false); }}
+                                            className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 rounded-xl text-left cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                        >
+                                            {item.imageUrl ? (
+                                                <span className="relative w-8 h-8 rounded-md overflow-hidden bg-slate-100 shrink-0">
+                                                    <Image src={item.imageUrl} alt={display.name} fill sizes="32px" unoptimized className="object-cover" />
+                                                </span>
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-md bg-slate-100 flex items-center justify-center">
+                                                    <span className="material-symbols-outlined text-slate-400 text-sm">location_city</span>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <span className="text-sm font-bold text-primary block">{display.name}</span>
+                                                {display.region && <span className="text-[10px] text-slate-400">{display.region}</span>}
                                             </div>
-                                        )}
-                                        <div>
-                                            <span className="text-sm font-bold text-primary block">{item.name}</span>
-                                            {item.region && <span className="text-[10px] text-slate-400">{item.region}</span>}
-                                        </div>
+                                        </button>
+                                    );
+                                })}
+                                {suggestions.length === 0 && dest.length >= 2 && (
+                                    <div className="px-3 py-4 text-center">
+                                        <span className="material-symbols-outlined text-2xl text-slate-300">search_off</span>
+                                        <p className="mt-1 text-xs font-semibold text-slate-500">{t('search.noResults')}</p>
                                     </div>
-                                ))}
+                                )}
                             </div>
                         );
                     })()}
@@ -318,7 +362,7 @@ export default function FilterSidebar({
                                     ))}
                                 </div>
                                 <span className={`text-xs font-semibold ml-auto ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}>
-                                    {rating}.0+
+                                    {rating}.0
                                 </span>
                             </button>
                         );

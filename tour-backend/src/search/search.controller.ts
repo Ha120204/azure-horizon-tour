@@ -1,16 +1,31 @@
-import { Controller, Get, Post, Body, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { TravelScope } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { PrismaService } from '../prisma/prisma.service';
-import { TravelScope } from '@prisma/client';
+import {
+    localizeDestination,
+    normalizeLocale,
+    toEnglishNameFallback,
+} from '../tour/tour-localization';
 
 function parseTravelScope(input?: string): TravelScope | undefined {
     if (!input) return undefined;
     if (input === TravelScope.DOMESTIC || input === TravelScope.INTERNATIONAL) {
         return input;
     }
-    throw new BadRequestException('travelScope không hợp lệ');
+    throw new BadRequestException('travelScope khong hop le');
+}
+
+function normalizeSearchText(value: string) {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[đĐ]/g, 'd')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
 }
 
 @Controller('search')
@@ -18,60 +33,59 @@ export class SearchController {
     constructor(private prisma: PrismaService) { }
 
     /**
-     * Trả toàn bộ danh sách Destinations (dùng cho dropdown gợi ý khi focus input)
+     * Returns all destinations for suggestion dropdowns.
      */
     @Get('destinations')
-    async getAllDestinations(@Query('travelScope') travelScopeInput?: string) {
+    async getAllDestinations(
+        @Query('travelScope') travelScopeInput?: string,
+        @Query('locale') localeInput?: string,
+    ) {
         const travelScope = parseTravelScope(travelScopeInput);
+        const locale = normalizeLocale(localeInput);
         return this.prisma.destination.findMany({
             where: travelScope ? { travelScope } : undefined,
             select: {
                 id: true,
                 name: true,
+                nameEn: true,
                 imageUrl: true,
                 region: true,
+                regionEn: true,
                 travelScope: true,
                 countryCode: true,
             },
             orderBy: { name: 'asc' },
-        });
+        }).then((destinations) =>
+            destinations.map((destination) => localizeDestination(destination, locale)),
+        );
     }
 
     /**
-     * Tạo Destination mới (dùng trong TourFormModal khi không tìm thấy điểm đến)
+     * Create a destination from the admin tour form.
      */
     @UseGuards(AuthGuard('jwt'), RolesGuard)
     @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
     @Post('destinations')
     async createDestination(@Body() body: { name: string; travelScope?: string; countryCode?: string }) {
         const name = (body.name || '').trim();
-        if (!name) throw new BadRequestException('Tên điểm đến không được để trống');
+        if (!name) throw new BadRequestException('Ten diem den khong duoc de trong');
         const travelScope = parseTravelScope(body.travelScope) ?? TravelScope.DOMESTIC;
         const countryCode = (body.countryCode || '').trim().toUpperCase() || (travelScope === TravelScope.DOMESTIC ? 'VN' : null);
 
-        // Check if destination already exists (case insensitive)
         const existingDestination = await this.prisma.destination.findFirst({
             where: {
                 name: {
                     equals: name,
-                    mode: 'insensitive'
-                }
-            }
+                    mode: 'insensitive',
+                },
+            },
         });
 
         if (existingDestination) {
-            throw new BadRequestException(`Điểm đến "${name}" đã tồn tại.`);
+            throw new BadRequestException(`Diem den "${name}" da ton tai.`);
         }
 
-        // Auto-generate slug from name
-        const slug = name
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/đ/g, 'd').replace(/Đ/g, 'd')
-            .replace(/[^a-z0-9\s-]/g, '')
-            .trim()
-            .replace(/\s+/g, '-');
+        const slug = normalizeSearchText(name).replace(/\s+/g, '-');
         return this.prisma.destination.create({
             data: { name, slug: `${slug}-${Date.now()}`, travelScope, countryCode },
             select: { id: true, name: true, travelScope: true, countryCode: true },
@@ -79,7 +93,7 @@ export class SearchController {
     }
 
     /**
-     * Trả min/max giá tour từ DB (dùng để frontend tự tính khoảng giá)
+     * Returns min/max tour price.
      */
     @Get('price-range')
     async getPriceRange() {
@@ -95,47 +109,75 @@ export class SearchController {
     }
 
     /**
-     * Live search: tìm Destinations + Tours theo từ khóa
+     * Live search destinations and tours. Matches Vietnamese names with or without accents.
      */
     @Get()
-    async liveSearch(@Query('q') query: string, @Query('travelScope') travelScopeInput?: string) {
-        if (!query || query.length < 2) {
+    async liveSearch(
+        @Query('q') query: string,
+        @Query('travelScope') travelScopeInput?: string,
+        @Query('locale') localeInput?: string,
+    ) {
+        const normalizedQuery = normalizeSearchText(query || '');
+        if (normalizedQuery.length < 2) {
             return { destinations: [], tours: [] };
         }
         const travelScope = parseTravelScope(travelScopeInput);
+        const locale = normalizeLocale(localeInput);
 
-        // Dùng mode 'insensitive' để tìm không phân biệt chữ hoa/thường
-        const [destinations, tours] = await Promise.all([
-            // 1. Lấy trực tiếp từ bảng Destination (kèm imageUrl cho thumbnail)
+        const [destinationCandidates, tourCandidates] = await Promise.all([
             this.prisma.destination.findMany({
                 where: {
-                    name: { contains: query, mode: 'insensitive' },
                     ...(travelScope ? { travelScope } : {}),
                 },
-                take: 5,
                 select: {
                     id: true,
                     name: true,
+                    nameEn: true,
                     imageUrl: true,
                     region: true,
+                    regionEn: true,
                     travelScope: true,
                     countryCode: true,
                 },
+                orderBy: { name: 'asc' },
             }),
-
-            // 2. Lấy tối đa 4 tour khớp tên
             this.prisma.tour.findMany({
                 where: {
-                    name: { contains: query, mode: 'insensitive' },
                     deletedAt: null,
                     ...(travelScope ? { destination: { travelScope } } : {}),
                 },
-                take: 4,
-                select: { id: true, name: true, price: true }
-            })
+                select: {
+                    id: true,
+                    name: true,
+                    nameEn: true,
+                    price: true,
+                    destination: { select: { name: true, nameEn: true } },
+                },
+                orderBy: { name: 'asc' },
+            }),
         ]);
 
-        // Trả thẳng dữ liệu về
+        const destinations = destinationCandidates
+            .filter(destination =>
+                normalizeSearchText(`${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''}`).includes(normalizedQuery)
+            )
+            .slice(0, 5)
+            .map((destination) => localizeDestination(destination, locale));
+
+        const tours = tourCandidates
+            .filter(tour =>
+                normalizeSearchText(`${tour.name} ${tour.nameEn ?? ''} ${tour.destination?.name ?? ''} ${tour.destination?.nameEn ?? ''}`).includes(normalizedQuery)
+            )
+            .slice(0, 4)
+            .map(({ destination, ...tour }) => {
+                void destination;
+                if (locale !== 'en') return tour;
+                return {
+                    ...tour,
+                    name: tour.nameEn?.trim() || toEnglishNameFallback(tour.name, tour.name),
+                };
+            });
+
         return { destinations, tours };
     }
 }

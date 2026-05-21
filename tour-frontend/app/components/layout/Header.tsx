@@ -7,6 +7,7 @@ import { useLocale } from '@/app/context/LocaleContext';
 import LocaleSwitcher from './LocaleSwitcher';
 import { API_BASE_URL } from '@/app/lib/constants';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/app/lib/publicSettings';
+import { getDestinationDisplay } from '@/app/lib/destinationDisplay';
 
 interface SearchResult {
     destinations: { id: number; name: string; type?: string; region?: string }[];
@@ -116,7 +117,11 @@ export default function Header() {
             if (searchQuery.trim().length >= 2) {
                 setIsLoading(true);
                 try {
-                    const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(searchQuery)}`);
+                    const params = new URLSearchParams({
+                        q: searchQuery,
+                        locale: language,
+                    });
+                    const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`);
                     if (res.ok) {
                         const data = await res.json();
                         // Backend wraps all responses via TransformInterceptor:
@@ -140,7 +145,7 @@ export default function Header() {
         }, 300);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery]);
+    }, [searchQuery, language]);
 
     const handleQuickSearch = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -274,19 +279,22 @@ export default function Header() {
                                             {searchResults.destinations.length > 0 && (
                                                 <div className="py-2">
                                                     <h3 className="px-4 py-2 text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">{t('nav.destinations')}</h3>
-                                                    {searchResults.destinations.map(dest => (
-                                                        <div
-                                                            key={`dest-${dest.id}`}
-                                                            onClick={() => handleResultClick(`/destinations?dest=${encodeURIComponent(dest.name)}`)}
-                                                            className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
-                                                        >
-                                                            <span className="material-symbols-outlined text-slate-400 text-lg">location_on</span>
-                                                            <div>
-                                                                <p className="text-sm font-semibold text-slate-800">{dest.name}</p>
-                                                                {dest.region && <p className="text-xs text-slate-500">{dest.region}</p>}
+                                                    {searchResults.destinations.map(dest => {
+                                                        const display = getDestinationDisplay(dest, language);
+                                                        return (
+                                                            <div
+                                                                key={`dest-${dest.id}`}
+                                                                onClick={() => handleResultClick(`/destinations?dest=${encodeURIComponent(display.name)}`)}
+                                                                className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-outlined text-slate-400 text-lg">location_on</span>
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-slate-800">{display.name}</p>
+                                                                    {display.region && <p className="text-xs text-slate-500">{display.region}</p>}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
 
@@ -298,19 +306,21 @@ export default function Header() {
                                             {searchResults.tours.length > 0 && (
                                                 <div className="py-2">
                                                     <h3 className="px-4 py-2 text-[0.65rem] font-bold text-slate-400 uppercase tracking-widest">Tours</h3>
-                                                    {searchResults.tours.map((tour, index) => (
-                                                        <div
-                                                            key={`tour-${tour.id || index}`}
-                                                            onClick={() => handleResultClick(`/tour/${tour.id}`)}
-                                                            className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
-                                                        >
-                                                            <span className="material-symbols-outlined text-slate-400 text-lg">explore</span>
-                                                            <div>
-                                                                <p className="text-sm font-semibold text-slate-800 truncate w-56">{tour.name}</p>
-                                                                <p className="text-xs font-medium text-blue-800 mt-0.5">{formatPrice(tour.price)}</p>
+                                                    {searchResults.tours.map((tour, index) => {
+                                                        return (
+                                                            <div
+                                                                key={`tour-${tour.id || index}`}
+                                                                onClick={() => handleResultClick(`/tour/${tour.id}`)}
+                                                                className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-outlined text-slate-400 text-lg">explore</span>
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-slate-800 truncate w-56">{tour.name}</p>
+                                                                    <p className="text-xs font-medium text-blue-800 mt-0.5">{formatPrice(tour.price)}</p>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
 

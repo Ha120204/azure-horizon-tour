@@ -9,6 +9,8 @@ import { CreateTourDto } from './dto/create-tour.dto';
 import { FilterTourDto } from './dto/filter-tour.dto';
 import { UpdateTourDto } from './dto/update-tour.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { TourPermissionService } from './tour-permission.service';
+import { localizeTour, normalizeLocale, toEnglishNameFallback } from './tour-localization';
 
 const DRAFT_DESTINATION_NAME = 'Chưa xác định';
 
@@ -30,6 +32,44 @@ const parseTravelScope = (input?: string): TravelScope | undefined => {
     return input;
   }
   throw new BadRequestException('travelScope khong hop le');
+};
+
+const normalizeSearchText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const parseRatingBuckets = (input?: string): number[] => {
+  if (!input) return [];
+
+  const ratings = input
+    .split(',')
+    .map((rating) => Number(rating.trim()))
+    .filter((rating) => !Number.isNaN(rating));
+
+  if (
+    ratings.length === 0 ||
+    ratings.some((rating) => !Number.isInteger(rating) || rating < 1 || rating > 5)
+  ) {
+    throw new BadRequestException('ratings khong hop le');
+  }
+
+  return Array.from(new Set(ratings));
+};
+
+const appendAndFilter = (
+  where: Prisma.TourWhereInput,
+  filter: Prisma.TourWhereInput,
+) => {
+  where.AND = Array.isArray(where.AND)
+    ? [...where.AND, filter]
+    : where.AND
+      ? [where.AND, filter]
+      : [filter];
 };
 
 type PublishableTourFields = {
@@ -87,9 +127,36 @@ const requirePublishableTour = (
   }
 };
 
+const isAdminLikeRole = (role?: string) =>
+  role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'STAFF';
+
+const sanitizePublicTourDetail = <T extends Record<string, unknown>>(
+  tour: T,
+) => {
+  const {
+    createdBy,
+    reviewedBy,
+    createdById,
+    reviewedById,
+    reviewNote,
+    deletedAt,
+    ...publicTour
+  } = tour;
+  void createdBy;
+  void reviewedBy;
+  void createdById;
+  void reviewedById;
+  void reviewNote;
+  void deletedAt;
+  return publicTour;
+};
+
 @Injectable()
 export class TourService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tourPermission: TourPermissionService,
+  ) {}
 
   // ── Create ────────────────────────────────────────────────────────────
 
@@ -114,10 +181,13 @@ export class TourService {
     const isAdminRole =
       creatorRole === 'SUPER_ADMIN' || creatorRole === 'ADMIN';
     const finalStatus: TourStatus = isAdminRole
-      ? (dtoStatus ?? TourStatus.PUBLISHED)
+      ? (dtoStatus ?? TourStatus.DRAFT)
       : TourStatus.DRAFT;
 
-    if (isAdminRole || finalStatus === TourStatus.PENDING_REVIEW) {
+    if (
+      finalStatus === TourStatus.PUBLISHED ||
+      finalStatus === TourStatus.PENDING_REVIEW
+    ) {
       requirePublishableTour(createTourDto);
     }
 
@@ -127,15 +197,19 @@ export class TourService {
     return this.prisma.tour.create({
       data: {
         name: createTourDto.name?.trim() ?? '',
+        nameEn: createTourDto.nameEn?.trim() || null,
         description: createTourDto.description?.trim() ?? '',
+        descriptionEn: createTourDto.descriptionEn?.trim() || null,
         price: createTourDto.price ?? 0,
         destination: { connect: { id: resolvedDestinationId } },
         startDate: createTourDto.startDate ?? getTomorrow(),
         duration: createTourDto.duration?.trim() || 'Chua xac dinh',
+        durationEn: createTourDto.durationEn?.trim() || null,
         availableSeats: createTourDto.availableSeats ?? 0,
         imageUrl: createTourDto.imageUrl?.trim() || null,
         tourType: createTourDto.tourType?.trim() || 'Luxury Retreat',
         departurePoint: createTourDto.departurePoint?.trim() || null,
+        departurePointEn: createTourDto.departurePointEn?.trim() || null,
         status: finalStatus,
         publishedAt: finalStatus === TourStatus.PUBLISHED ? new Date() : null,
         ...(creatorId && { createdBy: { connect: { id: creatorId } } }),
@@ -149,6 +223,7 @@ export class TourService {
     query: FilterTourDto = {},
     requesterId?: number,
     requesterRole?: string,
+    localeInput?: string,
   ) {
     const {
       dest,
@@ -166,6 +241,7 @@ export class TourService {
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
     const skip = (pageNum - 1) * limitNum;
+    const locale = normalizeLocale(localeInput);
 
     const where: Prisma.TourWhereInput = { deletedAt: null };
     const travelScope = parseTravelScope(travelScopeInput);
@@ -197,10 +273,44 @@ export class TourService {
     // Admin/SuperAdmin không có status param: thấy tất cả
 
     if (dest) {
+      const normalizedDest = normalizeSearchText(dest);
+      const [matchingDestinations, matchingTours] =
+        normalizedDest.length > 0
+          ? await Promise.all([
+              this.prisma.destination.findMany({
+                select: { id: true, name: true, nameEn: true, region: true, regionEn: true },
+              }),
+              this.prisma.tour.findMany({
+                where: { deletedAt: null },
+                select: {
+                  id: true,
+                  name: true,
+                  nameEn: true,
+                  destination: { select: { name: true, nameEn: true, region: true, regionEn: true } },
+                },
+              }),
+            ])
+          : [[], []];
+      const matchingDestinationIds = matchingDestinations
+        .filter((destination) =>
+          normalizeSearchText(`${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''}`).includes(normalizedDest),
+        )
+        .map((destination) => destination.id);
+      const matchingTourIds = matchingTours
+        .filter((tour) =>
+          normalizeSearchText(`${tour.name} ${tour.nameEn ?? ''} ${tour.destination?.name ?? ''} ${tour.destination?.nameEn ?? ''} ${tour.destination?.region ?? ''} ${tour.destination?.regionEn ?? ''}`).includes(normalizedDest),
+        )
+        .map((tour) => tour.id);
       const searchFilter: Prisma.TourWhereInput = {
         OR: [
           { name: { contains: dest, mode: 'insensitive' } },
+          { nameEn: { contains: dest, mode: 'insensitive' } },
           { destination: { name: { contains: dest, mode: 'insensitive' } } },
+          { destination: { nameEn: { contains: dest, mode: 'insensitive' } } },
+          ...(matchingDestinationIds.length > 0
+            ? [{ destinationId: { in: matchingDestinationIds } }]
+            : []),
+          ...(matchingTourIds.length > 0 ? [{ id: { in: matchingTourIds } }] : []),
         ],
       };
       where.AND = Array.isArray(where.AND)
@@ -235,8 +345,21 @@ export class TourService {
     }
 
     if (ratings) {
-      const ratingArr = ratings.split(',').map((r) => parseFloat(r));
-      where.averageRating = { gte: Math.min(...ratingArr) };
+      const ratingBuckets = parseRatingBuckets(ratings);
+      const ratingFilters = ratingBuckets.map((rating) => ({
+        AND: [
+          { reviews: { some: { isHidden: false } } },
+          {
+            averageRating:
+              rating === 5 ? { gte: 5 } : { gte: rating, lt: rating + 1 },
+          },
+        ],
+      }));
+
+      appendAndFilter(
+        where,
+        ratingFilters.length === 1 ? ratingFilters[0] : { OR: ratingFilters },
+      );
     }
 
     if (types) {
@@ -256,22 +379,27 @@ export class TourService {
         skip,
         take: limitNum,
         include: {
-          destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
+          destination: { select: { id: true, name: true, nameEn: true, region: true, regionEn: true, travelScope: true, countryCode: true } },
           departures: {
-            select: { price: true },
+            select: { price: true, note: true, noteEn: true },
             where: {
               isActive: true,
               departureDate: { gte: getMinBookableDate() },
             },
           },
           createdBy: { select: { id: true, fullName: true } },
+          _count: {
+            select: {
+              reviews: { where: { isHidden: false } },
+            },
+          },
         },
       }),
       this.prisma.tour.count({ where }),
     ]);
 
     return {
-      data: tours,
+      data: tours.map((tour) => localizeTour(tour, locale)),
       meta: {
         totalItems,
         itemCount: tours.length,
@@ -359,7 +487,8 @@ export class TourService {
     };
   }
 
-  async findOne(id: number, requesterId?: number, requesterRole?: string) {
+  async findOne(id: number, requesterId?: number, requesterRole?: string, localeInput?: string) {
+    const locale = normalizeLocale(localeInput);
     const where: Prisma.TourWhereInput = { id, deletedAt: null };
 
     if (requesterRole === 'STAFF' && requesterId) {
@@ -402,6 +531,7 @@ export class TourService {
         highlights: { orderBy: { sortOrder: 'asc' } },
         faqs: { orderBy: { sortOrder: 'asc' } },
         reviews: {
+          where: { isHidden: false },
           take: 5,
           orderBy: { createdAt: 'desc' },
           include: {
@@ -415,7 +545,10 @@ export class TourService {
     if (!tour) {
       throw new NotFoundException(`Tour with ID ${id} not found`);
     }
-    return tour;
+    const localizedTour = localizeTour(tour, locale);
+    return isAdminLikeRole(requesterRole)
+      ? localizedTour
+      : sanitizePublicTourDetail(localizedTour);
   }
 
   // ── Update ────────────────────────────────────────────────────────────
@@ -458,11 +591,18 @@ export class TourService {
       data: {
         ...rest,
         ...(rest.name !== undefined && { name: rest.name?.trim() ?? '' }),
+        ...(rest.nameEn !== undefined && { nameEn: rest.nameEn?.trim() || null }),
         ...(rest.description !== undefined && {
           description: rest.description?.trim() ?? '',
         }),
+        ...(rest.descriptionEn !== undefined && {
+          descriptionEn: rest.descriptionEn?.trim() || null,
+        }),
         ...(rest.duration !== undefined && {
           duration: rest.duration?.trim() || 'Chua xac dinh',
+        }),
+        ...(rest.durationEn !== undefined && {
+          durationEn: rest.durationEn?.trim() || null,
         }),
         ...(rest.imageUrl !== undefined && {
           imageUrl: rest.imageUrl?.trim() || null,
@@ -473,7 +613,17 @@ export class TourService {
         ...(rest.departurePoint !== undefined && {
           departurePoint: rest.departurePoint?.trim() || null,
         }),
-        ...(isAdminRole && status !== undefined && { status }),
+        ...(rest.departurePointEn !== undefined && {
+          departurePointEn: rest.departurePointEn?.trim() || null,
+        }),
+        ...(isAdminRole &&
+          status !== undefined && {
+            status,
+            publishedAt:
+              status === TourStatus.PUBLISHED
+                ? (tour.publishedAt ?? new Date())
+                : null,
+          }),
         ...(destinationId !== undefined && {
           destination: { connect: { id: destinationId } },
         }),
@@ -513,23 +663,57 @@ export class TourService {
 
   // ── Trash: Get / Restore / Permanent Delete ────────────────────────────────
 
-  async getTrashedTours(page = 1, limit = 10) {
+  async getTrashedTours(
+    page = 1,
+    limit = 10,
+    query: { search?: string; status?: string; deletable?: string } = {},
+  ) {
     const skip = (page - 1) * limit;
+    const where: Prisma.TourWhereInput = { deletedAt: { not: null } };
+
+    if (query.search?.trim()) {
+      const search = query.search.trim();
+      const id = Number(search.replace(/^#/, ''));
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { destination: { name: { contains: search, mode: 'insensitive' } } },
+        ...(Number.isInteger(id) && id > 0 ? [{ id }] : []),
+      ];
+    }
+
+    if (
+      query.status &&
+      Object.values(TourStatus).includes(query.status as TourStatus)
+    ) {
+      where.status = query.status as TourStatus;
+    }
+
+    if (query.deletable === 'true') {
+      where.bookings = { none: {} };
+    } else if (query.deletable === 'false') {
+      where.bookings = { some: {} };
+    }
+
     const [tours, totalItems] = await Promise.all([
       this.prisma.tour.findMany({
-        where: { deletedAt: { not: null } },
+        where,
         orderBy: { deletedAt: 'desc' },
         skip,
         take: limit,
         include: {
           destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
           createdBy: { select: { id: true, fullName: true } },
+          _count: { select: { bookings: true } },
         },
       }),
-      this.prisma.tour.count({ where: { deletedAt: { not: null } } }),
+      this.prisma.tour.count({ where }),
     ]);
     return {
-      data: tours,
+      data: tours.map(({ _count, ...tour }) => ({
+        ...tour,
+        bookingCount: _count.bookings,
+        canPermanentDelete: _count.bookings === 0,
+      })),
       meta: {
         totalItems,
         totalPages: Math.ceil(totalItems / limit),
@@ -548,20 +732,82 @@ export class TourService {
       where: { id },
       data: {
         deletedAt: null,
-        // Khôi phục vào hàng chờ duyệt để Admin kiểm tra lại
-        status: TourStatus.PENDING_REVIEW,
       },
     });
   }
 
-  async permanentDelete(id: number) {
+  private async assertCanPermanentDeleteTour(id: number) {
     const tour = await this.prisma.tour.findFirst({
       where: { id, deletedAt: { not: null } },
+      include: { _count: { select: { bookings: true } } },
     });
     if (!tour) throw new NotFoundException(`Tour ${id} not found in trash`);
-    // Xóa cứng — cascade sẽ xóa luôn images, packages, departures, reviews liên quan
+    if (tour._count.bookings > 0) {
+      throw new BadRequestException(
+        'Tour da phat sinh booking, chi duoc luu tru va khoi phuc',
+      );
+    }
+    return tour;
+  }
+
+  async permanentDelete(id: number) {
+    const tour = await this.assertCanPermanentDeleteTour(id);
+    // Xóa cứng — cascade sẽ xóa luôn images, packages, departures liên quan
     await this.prisma.tour.delete({ where: { id } });
     return { message: `Tour "${tour.name}" đã bị xóa vĩnh viễn.` };
+  }
+
+  async bulkRestoreTours(ids: number[]) {
+    const uniqueIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('Danh sach tour khong hop le');
+    }
+
+    const result = await this.prisma.tour.updateMany({
+      where: { id: { in: uniqueIds }, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+
+    return {
+      requested: uniqueIds.length,
+      restored: result.count,
+      skipped: uniqueIds.length - result.count,
+    };
+  }
+
+  async bulkPermanentDelete(ids: number[]) {
+    const uniqueIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('Danh sach tour khong hop le');
+    }
+
+    const tours = await this.prisma.tour.findMany({
+      where: { id: { in: uniqueIds }, deletedAt: { not: null } },
+      include: { _count: { select: { bookings: true } } },
+    });
+
+    const foundIds = new Set(tours.map((tour) => tour.id));
+    const blocked = tours
+      .filter((tour) => tour._count.bookings > 0)
+      .map((tour) => ({
+        id: tour.id,
+        name: tour.name,
+        bookingCount: tour._count.bookings,
+      }));
+    const deletableIds = tours
+      .filter((tour) => tour._count.bookings === 0)
+      .map((tour) => tour.id);
+
+    if (deletableIds.length > 0) {
+      await this.prisma.tour.deleteMany({ where: { id: { in: deletableIds } } });
+    }
+
+    return {
+      requested: uniqueIds.length,
+      deleted: deletableIds.length,
+      blocked,
+      notFound: uniqueIds.filter((id) => !foundIds.has(id)),
+    };
   }
 
   // ── Submit for Review (Staff) ─────────────────────────────────────────
@@ -644,6 +890,41 @@ export class TourService {
 
   // ── Get Pending Tours (Admin) ─────────────────────────────────────────
 
+  async publishTour(id: number, publisherId: number) {
+    const tour = await this.prisma.tour.findUnique({
+      where: { id, deletedAt: null },
+      include: {
+        destination: {
+          select: { id: true, name: true, travelScope: true, countryCode: true },
+        },
+        departures: {
+          where: {
+            isActive: true,
+            departureDate: { gte: getMinBookableDate() },
+          },
+          select: { departureDate: true, availableSeats: true, isActive: true },
+        },
+      },
+    });
+    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+
+    if (tour.status === TourStatus.COMPLETED) {
+      throw new BadRequestException('Tour da ket thuc, khong the public lai');
+    }
+
+    requirePublishableTour(tour, { requireDepartures: true });
+
+    return this.prisma.tour.update({
+      where: { id },
+      data: {
+        status: TourStatus.PUBLISHED,
+        reviewedById: publisherId,
+        reviewNote: null,
+        publishedAt: new Date(),
+      },
+    });
+  }
+
   async getPendingTours() {
     const [tours, count] = await Promise.all([
       this.prisma.tour.findMany({
@@ -663,7 +944,17 @@ export class TourService {
 
   // ── Gallery ──────────────────────────────────────────────────────────
 
-  async addGalleryImages(tourId: number, urls: string[]) {
+  async addGalleryImages(
+    tourId: number,
+    urls: string[],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     const existing = await this.prisma.tourImage.findMany({
       where: { tourId },
       orderBy: { sortOrder: 'desc' },
@@ -679,7 +970,17 @@ export class TourService {
     return this.findOne(tourId, undefined, 'SUPER_ADMIN');
   }
 
-  async removeGalleryImage(tourId: number, imageId: number) {
+  async removeGalleryImage(
+    tourId: number,
+    imageId: number,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     await this.prisma.tourImage.delete({ where: { id: imageId, tourId } });
     return { message: 'Image removed' };
   }
@@ -688,14 +989,22 @@ export class TourService {
 
   async upsertHighlights(
     tourId: number,
-    highlights: { content: string; icon?: string; sortOrder?: number }[],
+    highlights: { content: string; contentEn?: string; icon?: string; sortOrder?: number }[],
+    requesterId?: number,
+    requesterRole?: string,
   ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     await this.prisma.tourHighlight.deleteMany({ where: { tourId } });
     if (highlights.length > 0) {
       await this.prisma.tourHighlight.createMany({
         data: highlights.map((h, i) => ({
           tourId,
           content: h.content,
+          contentEn: h.contentEn?.trim() || null,
           icon: h.icon ?? 'auto_awesome',
           sortOrder: h.sortOrder ?? i,
         })),
@@ -711,15 +1020,24 @@ export class TourService {
 
   async upsertFaqs(
     tourId: number,
-    faqs: { question: string; answer: string; sortOrder?: number }[],
+    faqs: { question: string; questionEn?: string; answer: string; answerEn?: string; sortOrder?: number }[],
+    requesterId?: number,
+    requesterRole?: string,
   ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     await this.prisma.tourFAQ.deleteMany({ where: { tourId } });
     if (faqs.length > 0) {
       await this.prisma.tourFAQ.createMany({
         data: faqs.map((f, i) => ({
           tourId,
           question: f.question,
+          questionEn: f.questionEn?.trim() || null,
           answer: f.answer,
+          answerEn: f.answerEn?.trim() || null,
           sortOrder: f.sortOrder ?? i,
         })),
       });
@@ -737,17 +1055,30 @@ export class TourService {
     dayId: number,
     data: {
       title?: string;
+      titleEn?: string;
       description?: string;
+      descriptionEn?: string;
       mealsBreakfast?: boolean;
       mealsLunch?: boolean;
       mealsDinner?: boolean;
       accommodation?: string;
+      accommodationEn?: string;
       transport?: string;
+      transportEn?: string;
       activities?: string[];
+      activitiesEn?: string[];
       imageUrl?: string;
       timeline?: any[];
+      timelineEn?: any[];
     },
+    requesterId?: number,
+    requesterRole?: string,
   ) {
+    await this.tourPermission.assertCanMutateTour(
+      tourId,
+      requesterId,
+      requesterRole,
+    );
     const day = await this.prisma.tourItinerary.findFirst({
       where: { id: dayId, tourId },
     });
@@ -787,7 +1118,8 @@ export class TourService {
 
   // ── Sale Deals ────────────────────────────────────────────────────────────
 
-  async getSaleDeals() {
+  async getSaleDeals(localeInput?: string) {
+    const locale = normalizeLocale(localeInput);
     const now = new Date();
     const saleCategories = ['FLASH_SALE', 'EARLY_BIRD', 'LAST_MINUTE'];
 
@@ -811,7 +1143,17 @@ export class TourService {
       },
       include: {
         tour: {
-          include: { destination: { select: { id: true, name: true, travelScope: true, countryCode: true } } },
+          include: {
+            destination: {
+              select: {
+                id: true,
+                name: true,
+                nameEn: true,
+                travelScope: true,
+                countryCode: true,
+              },
+            },
+          },
         },
       },
       orderBy: [
@@ -821,11 +1163,17 @@ export class TourService {
       ],
     });
 
-    const badgeMap: Record<string, string> = {
+    const badgeMapVi: Record<string, string> = {
       FLASH_SALE: 'FLASH SALE',
       EARLY_BIRD: 'ĐẶT SỚM',
       LAST_MINUTE: 'GIỜ CHÓT',
     };
+    const badgeMapEn: Record<string, string> = {
+      FLASH_SALE: 'FLASH SALE',
+      EARLY_BIRD: 'EARLY BIRD',
+      LAST_MINUTE: 'LAST MINUTE',
+    };
+    const badgeMap = locale === 'en' ? badgeMapEn : badgeMapVi;
     const categoryMap: Record<string, string> = {
       FLASH_SALE: 'flash',
       EARLY_BIRD: 'early',
@@ -859,7 +1207,10 @@ export class TourService {
       return {
         id: dep.id,
         tourId: tour.id,
-        name: tour.name,
+        name:
+          locale === 'en'
+            ? tour.nameEn?.trim() || toEnglishNameFallback(tour.name, tour.name)
+            : tour.name,
         image: tour.imageUrl,
         badge:
           discountPct > 0
@@ -867,7 +1218,10 @@ export class TourService {
             : (badgeMap[cat] ?? cat),
         category: categoryMap[cat] ?? 'flash',
         rating: tour.averageRating,
-        duration: tour.duration,
+        duration:
+          locale === 'en'
+            ? tour.durationEn?.trim() || toEnglishNameFallback(tour.duration, tour.duration)
+            : tour.duration,
         newPrice: salePrice,
         oldPrice: originalPrice,
         discountPct,
@@ -876,7 +1230,11 @@ export class TourService {
         bookedPercent, // ✅ Thực tế từ DB
         flashSaleEndsAt: dep.flashSaleEndsAt?.toISOString() ?? null, // ✅ Cho frontend countdown
         departureDate: dep.departureDate,
-        destination: tour.destination?.name ?? '',
+        destination:
+          locale === 'en'
+            ? tour.destination?.nameEn?.trim() ||
+              toEnglishNameFallback(tour.destination?.name, tour.destination?.name ?? '')
+            : tour.destination?.name ?? '',
       };
     });
   }

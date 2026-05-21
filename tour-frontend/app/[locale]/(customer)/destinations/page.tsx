@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
@@ -8,7 +9,6 @@ import { useLocale } from '@/app/context/LocaleContext';
 import FilterSidebar from '@/app/components/destinations/FilterSidebar';
 import TourCard from '@/app/components/destinations/TourCard';
 import Pagination from '@/app/components/destinations/Pagination';
-import { getTranslatedTour } from '@/app/lib/mockTranslations';
 import { API_BASE_URL } from '@/app/lib/constants';
 
 type TravelScope = '' | 'DOMESTIC' | 'INTERNATIONAL';
@@ -24,7 +24,26 @@ interface DestinationOption {
 
 interface TourListItem {
     id: number;
+    name: string;
+    price: number;
+    imageUrl?: string | null;
+    duration?: string | null;
+    averageRating?: number | null;
+    reviewCount?: number | null;
+    _count?: {
+        reviews?: number;
+    };
+    departures?: { price?: number | null }[];
     [key: string]: unknown;
+}
+
+interface AppliedFilters {
+    travelScope: TravelScope;
+    dest: string;
+    date: string;
+    sidebarBudget: string;
+    selectedRatings: number[];
+    selectedTypes: string[];
 }
 
 const normalizeTravelScope = (value: string | null): TravelScope =>
@@ -39,20 +58,31 @@ function DestinationsContent() {
     const initialDate = searchParams.get('date') || '';
     const initialBudget = searchParams.get('budget') || '';
     const initialTravelScope = normalizeTravelScope(searchParams.get('travelScope'));
+    const initialAllDestinations = searchParams.get('allDestinations') === '1' && !initialDest;
 
     // 2. State cho thanh tìm kiếm
     const [dest, setDest] = useState(initialDest);
+    const [isAllDestinationsSelected, setIsAllDestinationsSelected] = useState(initialAllDestinations);
     const [date, setDate] = useState(initialDate);
     const [travelScope, setTravelScope] = useState<TravelScope>(initialTravelScope);
 
     // 3. State lưu dữ liệu API
     const [filteredTours, setFilteredTours] = useState<TourListItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasLoadedTours, setHasLoadedTours] = useState(false);
 
     // 4. State cho bộ lọc sidebar
     const [sidebarBudget, setSidebarBudget] = useState(initialBudget);
     const [selectedRatings, setSelectedRatings] = useState<number[]>([]);
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+    const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
+        travelScope: initialTravelScope,
+        dest: initialDest,
+        date: initialDate,
+        sidebarBudget: initialBudget,
+        selectedRatings: [],
+        selectedTypes: [],
+    });
     const [showMobileFilter, setShowMobileFilter] = useState(false);
     const [sortBy, setSortBy] = useState('recommended');
 
@@ -68,36 +98,39 @@ function DestinationsContent() {
 
     const buildQueryString = () => {
         const query = new URLSearchParams();
-        if (travelScope) query.append('travelScope', travelScope);
-        if (dest) query.append('dest', dest);
-        if (date) query.append('date', date);
-        if (sidebarBudget && sidebarBudget !== 'unlimited') {
-            const parts = sidebarBudget.split('-');
+        if (appliedFilters.travelScope) query.append('travelScope', appliedFilters.travelScope);
+        if (appliedFilters.dest) query.append('dest', appliedFilters.dest);
+        if (appliedFilters.date) query.append('date', appliedFilters.date);
+        if (appliedFilters.sidebarBudget && appliedFilters.sidebarBudget !== 'unlimited') {
+            const parts = appliedFilters.sidebarBudget.split('-');
             if (parts.length === 2) {
                 query.append('minPrice', parts[0]);
                 query.append('maxPrice', parts[1]);
             } else {
-                query.append('minPrice', sidebarBudget);
+                query.append('minPrice', appliedFilters.sidebarBudget);
             }
         }
-        if (selectedRatings.length > 0) {
-            query.append('ratings', selectedRatings.join(','));
+        if (appliedFilters.selectedRatings.length > 0) {
+            query.append('ratings', appliedFilters.selectedRatings.join(','));
         }
-        if (selectedTypes.length > 0) {
-            query.append('types', selectedTypes.join(','));
+        if (appliedFilters.selectedTypes.length > 0) {
+            query.append('types', appliedFilters.selectedTypes.join(','));
         }
         query.append('sortBy', sortBy);
         query.append('page', page.toString());
         query.append('limit', limit.toString());
+        query.append('locale', language);
         return query.toString();
     };
+    const queryString = buildQueryString();
 
     // 6. Gọi API lấy Tour
-    const fetchTours = async () => {
+    useEffect(() => {
+        const controller = new AbortController();
+        const fetchTours = async () => {
         setIsLoading(true);
         try {
-            const qs = buildQueryString();
-            const res = await fetch(`${API_BASE_URL}/tour?${qs}`);
+            const res = await fetch(`${API_BASE_URL}/tour?${queryString}`, { signal: controller.signal });
             const json = await res.json();
             if (json.data) {
                 setFilteredTours(json.data);
@@ -107,25 +140,28 @@ function DestinationsContent() {
                 setFilteredTours(Array.isArray(json) ? json : []);
                 setTotalItems(Array.isArray(json) ? json.length : 0);
             }
+            setHasLoadedTours(true);
         } catch (error) {
-            console.error('Lỗi lấy danh sách tour:', error);
+            if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                console.error('Lỗi lấy danh sách tour:', error);
+            }
         } finally {
-            setIsLoading(false);
+            if (!controller.signal.aborted) {
+                setIsLoading(false);
+            }
         }
-    };
-
-    useEffect(() => {
+        };
         fetchTours();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, sortBy, limit]);
+        return () => controller.abort();
+    }, [queryString]);
 
     // 6b. Fetch destinations & price range on mount
     useEffect(() => {
         const fetchFilterData = async () => {
             try {
-                const destUrl = travelScope
-                    ? `${API_BASE_URL}/search/destinations?travelScope=${travelScope}`
-                    : `${API_BASE_URL}/search/destinations`;
+                const destinationParams = new URLSearchParams({ locale: language });
+                if (travelScope) destinationParams.set('travelScope', travelScope);
+                const destUrl = `${API_BASE_URL}/search/destinations?${destinationParams.toString()}`;
                 const [destRes, priceRes] = await Promise.all([
                     fetch(destUrl),
                     fetch(`${API_BASE_URL}/search/price-range`),
@@ -139,13 +175,11 @@ function DestinationsContent() {
             }
         };
         fetchFilterData();
-    }, [travelScope]);
+    }, [travelScope, language]);
 
     // 7. Toggle star rating
     const toggleRating = (rating: number) => {
-        setSelectedRatings(prev =>
-            prev.includes(rating) ? prev.filter(r => r !== rating) : [...prev, rating]
-        );
+        setSelectedRatings(prev => prev.includes(rating) ? [] : [rating]);
     };
 
     // 8. Toggle tour type
@@ -159,18 +193,28 @@ function DestinationsContent() {
     const handleClearAll = () => {
         setTravelScope('');
         setDest('');
+        setIsAllDestinationsSelected(false);
         setDate('');
         setSidebarBudget('');
         setSelectedRatings([]);
         setSelectedTypes([]);
-        setPage(1);
     };
 
     // 10. Apply sidebar filters
     const handleApplyFilters = () => {
+        setAppliedFilters({
+            travelScope,
+            dest,
+            date,
+            sidebarBudget,
+            selectedRatings,
+            selectedTypes,
+        });
         setPage(1);
-        fetchTours();
         setShowMobileFilter(false);
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
     };
 
     // Đếm tổng bộ lọc đang active
@@ -184,6 +228,8 @@ function DestinationsContent() {
         language === 'vi'
             ? `Đang hiển thị ${filteredTours.length} tour trên trang này`
             : `Showing ${filteredTours.length} tours on this page`;
+    const showInitialLoading = isLoading && !hasLoadedTours;
+    const showRefetchOverlay = isLoading && hasLoadedTours;
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
@@ -201,7 +247,15 @@ function DestinationsContent() {
                 <section className="px-4 md:px-8 max-w-screen-2xl mx-auto mb-16">
                     <div className="relative overflow-hidden rounded-3xl min-h-[320px] flex flex-col items-center justify-center text-center p-6 md:p-12 hero-gradient">
                         <div className="absolute inset-0 opacity-20 mix-blend-overlay">
-                            <img alt="Travel background" className="w-full h-full object-cover" src="https://images.unsplash.com/photo-1499681404123-6c7102ce0033?auto=format&fit=crop&q=80&w=2000" />
+                            <Image
+                                alt="Travel background"
+                                className="object-cover"
+                                src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=2000"
+                                fill
+                                sizes="100vw"
+                                preload
+                                loading="eager"
+                            />
                         </div>
                         <div className="relative z-10 max-w-4xl w-full">
                             <h1 className="font-headline text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-6 tracking-tight">{t('dest.heroTitle')}</h1>
@@ -231,6 +285,8 @@ function DestinationsContent() {
                                 <FilterSidebar
                                     travelScope={travelScope} setTravelScope={setTravelScope}
                                     dest={dest} setDest={setDest}
+                                    isAllDestinationsSelected={isAllDestinationsSelected}
+                                    setIsAllDestinationsSelected={setIsAllDestinationsSelected}
                                     date={date} setDate={setDate}
                                     sidebarBudget={sidebarBudget} setSidebarBudget={setSidebarBudget}
                                     selectedRatings={selectedRatings} toggleRating={toggleRating}
@@ -251,6 +307,8 @@ function DestinationsContent() {
                                 <FilterSidebar
                                     travelScope={travelScope} setTravelScope={setTravelScope}
                                     dest={dest} setDest={setDest}
+                                    isAllDestinationsSelected={isAllDestinationsSelected}
+                                    setIsAllDestinationsSelected={setIsAllDestinationsSelected}
                                     date={date} setDate={setDate}
                                     sidebarBudget={sidebarBudget} setSidebarBudget={setSidebarBudget}
                                     selectedRatings={selectedRatings} toggleRating={toggleRating}
@@ -293,20 +351,30 @@ function DestinationsContent() {
                             </div>
 
                             {/* Tour Grid */}
-                            {isLoading ? (
+                            <div className="relative min-h-[420px]">
+                            {showInitialLoading ? (
                                 <div className="text-center text-xl text-primary font-bold py-10">{t('dest.loadingData')}</div>
                             ) : filteredTours.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                                <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 transition-opacity duration-200 ${showRefetchOverlay ? 'opacity-55 pointer-events-none' : 'opacity-100'}`}>
                                     {filteredTours.map((tour) => (
-                                        <TourCard key={tour.id} tour={getTranslatedTour(tour, language)} t={t} formatPrice={formatPrice} />
+                                        <TourCard key={tour.id} tour={tour} t={t} formatPrice={formatPrice} />
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-20 bg-surface-container-lowest rounded-2xl">
+                                <div className={`text-center py-20 bg-surface-container-lowest rounded-2xl transition-opacity duration-200 ${showRefetchOverlay ? 'opacity-55' : 'opacity-100'}`}>
                                     <span className="material-symbols-outlined text-4xl text-outline mb-2">search_off</span>
                                     <p className="font-bold text-on-surface">{t('dest.noMatch')}</p>
                                 </div>
                             )}
+                            {showRefetchOverlay && (
+                                <div className="absolute inset-x-0 top-0 z-10 flex justify-center pt-2 pointer-events-none">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-xs font-bold text-primary shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/5">
+                                        <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                                        {language === 'vi' ? 'Đang cập nhật kết quả' : 'Updating results'}
+                                    </div>
+                                </div>
+                            )}
+                            </div>
 
                             <Pagination 
                                 page={page} 

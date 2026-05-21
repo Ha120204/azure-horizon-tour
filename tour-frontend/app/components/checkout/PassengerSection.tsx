@@ -129,14 +129,14 @@ export default function PassengerSection({
 
     // Identity document validation
     function getIdentityDocTypes(type: PassengerType) {
-        if (type === 'Infant (<4)') return [{ value: 'BIRTH_CERT', label: 'Giấy khai sinh' }, { value: 'PASSPORT', label: 'Hộ chiếu' }];
-        return [{ value: 'CCCD', label: 'CCCD' }, { value: 'PASSPORT', label: 'Hộ chiếu' }];
+        if (type === 'Infant (<4)') return [{ value: 'BIRTH_CERT', label: t('checkout.birthCertificate') }, { value: 'PASSPORT', label: t('checkout.passport') }];
+        return [{ value: 'CCCD', label: t('checkout.citizenId') }, { value: 'PASSPORT', label: t('checkout.passport') }];
     }
 
     function validateIdentityNo(idType: string, idNo: string): string | null {
         if (!idNo) return null;
-        if (idType === 'CCCD' && !/^\d{12}$/.test(idNo)) return 'CCCD phải đúng 12 chữ số.';
-        if (idType === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(idNo)) return 'Hộ chiếu phải từ 6–15 ký tự, chỉ gồm chữ và số.';
+        if (idType === 'CCCD' && !/^\d{12}$/.test(idNo)) return t('checkout.citizenIdError');
+        if (idType === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(idNo)) return t('checkout.passportError');
         return null;
     }
 
@@ -167,7 +167,7 @@ export default function PassengerSection({
 
     const ageLabel = (p: Passenger) => {
         const age = calcAge(p.dob);
-        return age !== null ? `${age} tuổi` : p.dob;
+        return age !== null ? `${age} ${t('checkout.yearsOld')}` : p.dob;
     };
 
     return (
@@ -221,7 +221,7 @@ export default function PassengerSection({
                         {/* Identity Document (Lead Traveler — Required) */}
                         <div className="md:col-span-2">
                             <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">
-                                Giấy tờ tuỳ thân <span className="text-error">*</span>
+                                {t('checkout.identityDocument')} <span className="text-error">*</span>
                             </label>
                             <div className="flex gap-2">
                                 <select
@@ -229,13 +229,13 @@ export default function PassengerSection({
                                     value={leadTraveler.identityType || 'CCCD'}
                                     onChange={(e) => setLeadTraveler({ ...leadTraveler, identityType: e.target.value, identityNo: '' })}
                                 >
-                                    <option value="CCCD">CCCD</option>
-                                    <option value="PASSPORT">Hộ chiếu</option>
+                                    <option value="CCCD">{t('checkout.citizenId')}</option>
+                                    <option value="PASSPORT">{t('checkout.passport')}</option>
                                 </select>
                                 <input
                                     className="flex-1 bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm"
                                     type="text"
-                                    placeholder={(leadTraveler.identityType || 'CCCD') === 'CCCD' ? 'Nhập 12 số CCCD' : 'Nhập số hộ chiếu'}
+                                    placeholder={(leadTraveler.identityType || 'CCCD') === 'CCCD' ? t('checkout.enterCitizenId') : t('checkout.enterPassport')}
                                     value={leadTraveler.identityNo || ''}
                                     maxLength={(leadTraveler.identityType || 'CCCD') === 'CCCD' ? 12 : 15}
                                     onChange={(e) => {
@@ -248,7 +248,7 @@ export default function PassengerSection({
                             </div>
                             {leadTraveler.identityNo && !validateIdentityNo(leadTraveler.identityType || 'CCCD', leadTraveler.identityNo) && (
                                 <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[13px]">check_circle</span>Hợp lệ
+                                    <span className="material-symbols-outlined text-[13px]">check_circle</span>{t('checkout.valid')}
                                 </p>
                             )}
                         </div>
@@ -384,7 +384,7 @@ export default function PassengerSection({
                                         }`}>{translatedType}</span>
                                         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${
                                             isDisabled && !isActive ? 'bg-slate-100 text-slate-400' : isActive ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500'
-                                        }`}>{ageRange} tuổi</span>
+                                        }`}>{ageRange} {t('checkout.yearsOld')}</span>
                                     </button>
                                     {/* Tooltip giải thích khi disabled */}
                                     {isDisabled && !isActive && disabledReason && (
@@ -406,7 +406,7 @@ export default function PassengerSection({
                                 <h4 className="font-headline font-bold text-lg text-primary">
                                     {t('checkout.enterInfoFor')} {activeFormType === 'Adult (12+)' ? t('checkout.adult') : activeFormType === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant')}
                                     <span className="ml-2 text-sm font-normal text-on-surface-variant">
-                                        ({activeFormType === 'Adult (12+)' ? '≥12' : activeFormType === 'Child (4-11)' ? '4–11' : '<4'} tuổi)
+                                        ({activeFormType === 'Adult (12+)' ? '>=12' : activeFormType === 'Child (4-11)' ? '4-11' : '<4'} {t('checkout.yearsOld')})
                                     </span>
                                 </h4>
                             </div>
@@ -456,7 +456,7 @@ export default function PassengerSection({
                                         return age !== null ? (
                                             <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-[13px]">check_circle</span>
-                                                {age} tuổi — hợp lệ
+                                                {age} {t('checkout.yearsOld')} - {t('checkout.valid').toLowerCase()}
                                             </p>
                                         ) : null;
                                     })()}
@@ -491,9 +491,9 @@ export default function PassengerSection({
                                 {/* Identity Document (Passenger — Optional) */}
                                 <div className="md:col-span-2">
                                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">
-                                        Giấy tờ tuỳ thân
+                                        {t('checkout.identityDocumentOptional')}
                                         <span className="ml-2 normal-case text-[10px] font-normal text-on-surface-variant/60 bg-surface-container px-1.5 py-0.5 rounded">
-                                            Không bắt buộc — có thể bổ sung sau
+                                            {t('checkout.identityOptionalNote')}
                                         </span>
                                     </label>
                                     <div className="flex gap-2">
@@ -512,9 +512,9 @@ export default function PassengerSection({
                                             }`}
                                             type="text"
                                             placeholder={
-                                                (tempFormData.identityType || 'CCCD') === 'CCCD' ? 'Nhập 12 số CCCD'
-                                                : (tempFormData.identityType || 'CCCD') === 'PASSPORT' ? 'Nhập số hộ chiếu'
-                                                : 'Nhập số giấy khai sinh'
+                                                (tempFormData.identityType || 'CCCD') === 'CCCD' ? t('checkout.enterCitizenId')
+                                                : (tempFormData.identityType || 'CCCD') === 'PASSPORT' ? t('checkout.enterPassport')
+                                                : t('checkout.enterBirthCertificate')
                                             }
                                             value={tempFormData.identityNo || ''}
                                             maxLength={(tempFormData.identityType || 'CCCD') === 'CCCD' ? 12 : 20}
@@ -542,7 +542,7 @@ export default function PassengerSection({
                                     )}
                                     {tempFormData.identityNo && !fieldErrors.identityNo && (
                                         <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[13px]">check_circle</span>Hợp lệ
+                                            <span className="material-symbols-outlined text-[13px]">check_circle</span>{t('checkout.valid')}
                                         </p>
                                     )}
                                 </div>

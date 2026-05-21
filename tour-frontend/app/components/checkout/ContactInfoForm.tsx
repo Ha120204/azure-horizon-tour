@@ -22,10 +22,10 @@ interface ContactInfoFormProps {
     t: (key: string) => string;
 }
 
-function validateIdentity(type: string, no: string): string | null {
+function validateIdentity(type: string, no: string, t: (key: string) => string): string | null {
     if (!no) return null;
-    if (type === 'CCCD' && !/^\d{12}$/.test(no)) return 'CCCD phải đúng 12 chữ số.';
-    if (type === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(no)) return 'Hộ chiếu phải từ 6–15 ký tự, chỉ gồm chữ và số.';
+    if (type === 'CCCD' && !/^\d{12}$/.test(no)) return t('checkout.citizenIdError');
+    if (type === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(no)) return t('checkout.passportError');
     return null;
 }
 
@@ -37,7 +37,7 @@ export default function ContactInfoForm({
     setLeadTraveler,
     t,
 }: ContactInfoFormProps) {
-    const identityError = validateIdentity(contactInfo.identityType, contactInfo.identityNo);
+    const identityError = validateIdentity(contactInfo.identityType, contactInfo.identityNo, t);
 
     return (
         <>
@@ -94,7 +94,7 @@ export default function ContactInfoForm({
                     {/* Identity Document — type dropdown + number input */}
                     <div>
                         <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">
-                            Giấy tờ tuỳ thân <span className="text-error">*</span>
+                            {t('checkout.identityDocument')} <span className="text-error">*</span>
                         </label>
                         <div className="flex gap-2">
                             <select
@@ -106,14 +106,14 @@ export default function ContactInfoForm({
                                     if (isBookForMyself) setLeadTraveler(prev => ({ ...prev, identityType: newType, identityNo: '' }));
                                 }}
                             >
-                                <option value="CCCD">CCCD</option>
-                                <option value="PASSPORT">Hộ chiếu</option>
+                                <option value="CCCD">{t('checkout.citizenId')}</option>
+                                <option value="PASSPORT">{t('checkout.passport')}</option>
                             </select>
                             <div className="flex-1">
                                 <input
                                     className={`w-full bg-surface-container-low border-none rounded-lg p-3 md:p-4 focus:ring-1 outline-none ${identityError ? 'ring-1 ring-error/60 bg-error/5 focus:ring-error' : 'focus:ring-primary'}`}
                                     type="text"
-                                    placeholder={contactInfo.identityType === 'CCCD' ? 'Nhập 12 số CCCD' : 'Nhập số hộ chiếu'}
+                                    placeholder={contactInfo.identityType === 'CCCD' ? t('checkout.enterCitizenId') : t('checkout.enterPassport')}
                                     value={contactInfo.identityNo}
                                     maxLength={contactInfo.identityType === 'CCCD' ? 12 : 15}
                                     onChange={(e) => {
@@ -136,12 +136,12 @@ export default function ContactInfoForm({
                         {contactInfo.identityNo && !identityError && (
                             <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[13px]">check_circle</span>
-                                Hợp lệ
+                                {t('checkout.valid')}
                             </p>
                         )}
                         {!contactInfo.identityNo && (
                             <p className="mt-1.5 text-[11px] text-on-surface-variant/60 italic">
-                                {contactInfo.identityType === 'CCCD' ? 'Căn cước công dân 12 số.' : 'Số hộ chiếu có thể chứa chữ và số.'}
+                                {contactInfo.identityType === 'CCCD' ? t('checkout.citizenIdHint') : t('checkout.passportHint')}
                             </p>
                         )}
                     </div>

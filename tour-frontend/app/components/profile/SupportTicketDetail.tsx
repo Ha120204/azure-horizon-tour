@@ -2,22 +2,23 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { enUS, vi } from 'date-fns/locale';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
+import { useLocale } from '@/app/context/LocaleContext';
 import type { SupportTicket, TicketReply } from './SupportTicketList';
 
 const STATUS_CONFIG = {
-  NEW: { label: 'Dang cho xu ly', color: 'text-blue-600 bg-blue-50 border-blue-200', icon: 'fiber_new', step: 0 },
-  IN_PROGRESS: { label: 'Dang xu ly', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: 'pending', step: 1 },
-  RESOLVED: { label: 'Da giai quyet', color: 'text-emerald-600 bg-emerald-50 border-emerald-200', icon: 'check_circle', step: 2 },
+  NEW: { labelKey: 'profile.supportStatusNew', color: 'text-blue-600 bg-blue-50 border-blue-200', icon: 'fiber_new', step: 0 },
+  IN_PROGRESS: { labelKey: 'profile.supportStatusInProgress', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: 'pending', step: 1 },
+  RESOLVED: { labelKey: 'profile.supportStatusResolved', color: 'text-emerald-600 bg-emerald-50 border-emerald-200', icon: 'check_circle', step: 2 },
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  booking: 'Dat tour',
-  payment: 'Thanh toan',
-  reschedule: 'Doi lich',
-  complaint: 'Khieu nai',
-  general: 'Chung',
+const CATEGORY_LABEL_KEYS: Record<string, string> = {
+  booking: 'profile.supportCategoryBooking',
+  payment: 'profile.supportCategoryPayment',
+  reschedule: 'profile.supportCategoryReschedule',
+  complaint: 'profile.supportCategoryComplaint',
+  general: 'profile.supportCategoryGeneral',
 };
 
 const POLL_INTERVAL_MS = 10000;
@@ -59,8 +60,8 @@ function resolveMessage(payload: unknown): string | undefined {
   return typeof message === 'string' ? message : undefined;
 }
 
-function formatSyncedAt(date: Date) {
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+function formatSyncedAt(date: Date, language: 'en' | 'vi') {
+  return date.toLocaleTimeString(language === 'vi' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function SupportTicketDetail({
@@ -69,6 +70,8 @@ export default function SupportTicketDetail({
   onClose,
   onTicketUpdate,
 }: Props) {
+  const { t, language } = useLocale();
+  const dateLocale = language === 'vi' ? vi : enUS;
   const [ticket, setTicket] = useState<SupportTicket>(initialTicket);
   const [replyContent, setReplyContent] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -80,6 +83,7 @@ export default function SupportTicketDetail({
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
   const cfg = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.NEW;
+  const categoryKey = CATEGORY_LABEL_KEYS[ticket.category];
   const isGuestLookup = Boolean(lookupAccessCode);
 
   const callCustomerEndpoint = useCallback((path: string, init?: RequestInit) => {
@@ -146,10 +150,10 @@ export default function SupportTicketDetail({
         setReplyContent('');
         await refreshTicket();
       } else {
-        setError(resolveMessage(await res.json()) ?? 'Khong the gui phan hoi.');
+        setError(resolveMessage(await res.json()) ?? t('profile.supportSendFail'));
       }
     } catch {
-      setError('Loi ket noi, vui long thu lai.');
+      setError(t('profile.supportConnectionError'));
     } finally {
       setIsReplying(false);
     }
@@ -200,7 +204,7 @@ export default function SupportTicketDetail({
               <span className="font-mono text-sm text-outline">#{ticket.id}</span>
               <span className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
                 <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
-                {cfg.label}
+                {t(cfg.labelKey)}
               </span>
             </div>
             <h2 className="mt-0.5 line-clamp-1 font-headline text-base font-bold text-on-surface">{ticket.subject}</h2>
@@ -214,22 +218,22 @@ export default function SupportTicketDetail({
           <div className="flex flex-wrap gap-4 text-xs text-outline">
             <span className="flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm">category</span>
-              {CATEGORY_LABELS[ticket.category] ?? ticket.category}
+              {categoryKey ? t(categoryKey) : ticket.category}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm">calendar_today</span>
-              {format(new Date(ticket.createdAt), 'dd/MM/yyyy HH:mm', { locale: vi })}
+              {format(new Date(ticket.createdAt), 'dd/MM/yyyy HH:mm', { locale: dateLocale })}
             </span>
             {ticket.bookingRef && (
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm">confirmation_number</span>
-                Ref: <span className="font-mono font-semibold text-on-surface">{ticket.bookingRef}</span>
+                {t('profile.supportRef')} <span className="font-mono font-semibold text-on-surface">{ticket.bookingRef}</span>
               </span>
             )}
             {lastSyncedAt && (
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm">sync</span>
-                Cap nhat {formatSyncedAt(lastSyncedAt)}
+                {t('profile.supportSyncedAt', { time: formatSyncedAt(lastSyncedAt, language) })}
               </span>
             )}
           </div>
@@ -239,7 +243,7 @@ export default function SupportTicketDetail({
           <MessageBubble
             content={ticket.message}
             createdAt={ticket.createdAt}
-            senderName="Ban"
+            senderName={t('profile.supportYou')}
             senderType="customer"
           />
 
@@ -248,7 +252,7 @@ export default function SupportTicketDetail({
               key={reply.id}
               content={reply.content}
               createdAt={reply.createdAt}
-              senderName={reply.senderName}
+              senderName={reply.senderType === 'customer' ? t('profile.supportYou') : reply.senderName}
               senderType={reply.senderType}
             />
           ))}
@@ -259,7 +263,7 @@ export default function SupportTicketDetail({
                 <span className="material-symbols-outlined text-sm text-white">support_agent</span>
               </div>
               <div className="rounded-2xl rounded-tl-sm bg-surface-container px-4 py-3 text-xs text-outline">
-                Nhan vien se phan hoi trong thoi gian som nhat.
+                {t('profile.supportAwaitingReply')}
               </div>
             </div>
           )}
@@ -270,9 +274,9 @@ export default function SupportTicketDetail({
             <div className="border-b border-emerald-100 bg-emerald-50 px-6 py-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-emerald-800">Yeu cau da duoc giai quyet</p>
+                  <p className="text-sm font-bold text-emerald-800">{t('profile.supportResolvedTitle')}</p>
                   <p className="mt-0.5 text-xs text-emerald-600">
-                    {hasRated ? 'Cam on ban da danh gia.' : 'Danh gia muc do hai long cua ban.'}
+                    {hasRated ? t('profile.supportRatedThanks') : t('profile.supportRatePrompt')}
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -295,7 +299,7 @@ export default function SupportTicketDetail({
                 className="mt-3 flex items-center gap-1 text-xs text-emerald-700 underline underline-offset-4 transition-colors hover:text-emerald-900 disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-sm">refresh</span>
-                {isReopening ? 'Dang mo lai...' : 'Van de chua duoc giai quyet? Mo lai yeu cau'}
+                {isReopening ? t('profile.supportReopening') : t('profile.supportReopen')}
               </button>
             </div>
           )}
@@ -307,7 +311,7 @@ export default function SupportTicketDetail({
                 <textarea
                   value={replyContent}
                   onChange={(event) => setReplyContent(event.target.value)}
-                  placeholder="Bo sung thong tin cho nhan vien ho tro..."
+                  placeholder={t('profile.supportReplyPlaceholder')}
                   maxLength={1000}
                   rows={2}
                   className="flex-1 resize-none rounded-2xl bg-surface-container-low px-4 py-3 text-sm text-on-surface outline-none transition-all placeholder:text-outline/50 focus:ring-2 focus:ring-primary/20"
@@ -322,13 +326,13 @@ export default function SupportTicketDetail({
                   </span>
                 </button>
               </div>
-              <p className="mt-1.5 text-xs text-outline">{replyContent.length}/1000 ky tu</p>
+              <p className="mt-1.5 text-xs text-outline">{t('profile.supportReplyCount', { count: replyContent.length })}</p>
             </div>
           )}
 
           {ticket.status === 'NEW' && (
             <div className="px-6 py-4 text-center text-xs text-outline">
-              Ban co the bo sung thong tin sau khi nhan vien phan hoi.
+              {t('profile.supportCanReplyLater')}
             </div>
           )}
         </div>
@@ -348,6 +352,8 @@ function MessageBubble({
   senderName: string;
   senderType: 'staff' | 'customer';
 }) {
+  const { language } = useLocale();
+  const dateLocale = language === 'vi' ? vi : enUS;
   const isStaff = senderType === 'staff';
 
   return (
@@ -360,7 +366,7 @@ function MessageBubble({
       <div className={`max-w-[85%] ${isStaff ? '' : 'order-first'}`}>
         <div className={`mb-1 flex items-center gap-2 ${isStaff ? '' : 'justify-end'}`}>
           <span className={`text-xs ${isStaff ? 'font-semibold text-primary' : 'text-outline'}`}>{senderName}</span>
-          <span className="text-xs text-outline">{format(new Date(createdAt), 'HH:mm dd/MM', { locale: vi })}</span>
+          <span className="text-xs text-outline">{format(new Date(createdAt), 'HH:mm dd/MM', { locale: dateLocale })}</span>
         </div>
         <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${isStaff ? 'rounded-tl-sm bg-surface-container text-on-surface' : 'rounded-tr-sm bg-primary/10 text-on-surface'}`}>
           {content}

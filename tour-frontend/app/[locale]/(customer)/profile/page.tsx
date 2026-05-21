@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from '@/i18n/routing';
 import Link from 'next/link';
+import Image from 'next/image';
 import Header from '@/app/components/layout/Header';
 import Footer from '@/app/components/layout/Footer';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
@@ -14,13 +15,36 @@ import VoucherWallet from '@/app/components/profile/VoucherWallet';
 import SupportTicketList, { type SupportTicket } from '@/app/components/profile/SupportTicketList';
 import SupportTicketDetail from '@/app/components/profile/SupportTicketDetail';
 
+type ProfileUser = {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+    dob?: string;
+    gender?: string;
+    identityType?: string;
+    identityNo?: string;
+    avatarUrl?: string;
+    mock?: boolean;
+};
+
+type RecentBooking = {
+    id: number | string;
+    paymentStatus?: string;
+    totalPrice: number;
+    createdAt: string;
+    tour?: {
+        name?: string;
+        imageUrl?: string;
+    };
+};
+
 export default function ProfilePage() {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { t, formatPrice } = useLocale();
 
     // --- 1. STATE QUẢN LÝ DỮ LIỆU ĐỘNG ---
-    const [userData, setUserData] = useState<any>(null);
+    const [userData, setUserData] = useState<ProfileUser | null>(null);
     const [loading, setLoading] = useState(true);
 
     // State cho Form Thông tin cá nhân
@@ -35,10 +59,9 @@ export default function ProfilePage() {
 
     const [isAvatarUploading, setIsAvatarUploading] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-    const [logoutMsg, setLogoutMsg] = useState('');
 
-    const [recentBookings, setRecentBookings] = useState<any[]>([]);
-    const [myVouchers, setMyVouchers] = useState<any[]>([]);
+    const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
+    const [myVouchers, setMyVouchers] = useState<unknown[]>([]);
     const [showAllVouchers, setShowAllVouchers] = useState(false);
     const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
     const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
@@ -83,7 +106,7 @@ export default function ProfilePage() {
 
                 if (resBookings.ok) {
                     const bookingResult = await resBookings.json();
-                    setRecentBookings(bookingResult.data || []);
+                    setRecentBookings(Array.isArray(bookingResult.data) ? bookingResult.data as RecentBooking[] : []);
                 }
 
                 // Fetch voucher wallet
@@ -103,7 +126,7 @@ export default function ProfilePage() {
                     setMyTickets(Array.isArray(tickets) ? tickets : []);
                 }
 
-            } catch (err) {
+            } catch {
                 console.warn('API lỗi, đang sử dụng dữ liệu mẫu (Mock Data).');
                 setUserData({ mock: true });
                 setName('Đào Thanh Hà (Bản Demo)');
@@ -119,7 +142,7 @@ export default function ProfilePage() {
         };
 
         fetchData();
-    }, []);
+    }, [router, t]);
 
     const handleUpdateInfo = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -178,7 +201,7 @@ export default function ProfilePage() {
                 const result = await res.json();
                 setToast({ msg: result.message || t('profile.passwordFail') || 'Đổi mật khẩu thất bại', type: 'error' });
             }
-        } catch (err) {
+        } catch {
             setToast({ msg: t('profile.serverError') || 'Lỗi kết nối', type: 'error' });
         } finally {
             setIsChangingPassword(false);
@@ -327,7 +350,7 @@ export default function ProfilePage() {
                             >
                                 <span className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-sm">support_agent</span>
-                                    Yêu cầu hỗ trợ
+                                    {t('profile.supportRequests')}
                                     {myTickets.filter(t => t.status !== 'RESOLVED').length > 0 && (
                                         <span className="bg-primary text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
                                             {myTickets.filter(t => t.status !== 'RESOLVED').length}
@@ -358,7 +381,13 @@ export default function ProfilePage() {
                                         return (
                                             <div key={booking.id} className="group bg-surface-container-lowest rounded-xl overflow-hidden ambient-shadow transition-all duration-300 hover:-translate-y-1">
                                                 <div className="relative h-48 overflow-hidden">
-                                                    <img alt={booking.tour?.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src={booking.tour?.imageUrl || "https://images.unsplash.com/photo-1610574138412-7bf28ade0222?w=600&auto=format&fit=crop&q=60"} />
+                                                    <Image
+                                                        alt={booking.tour?.name || 'Tour image'}
+                                                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                                                        fill
+                                                        sizes="(min-width: 768px) 50vw, 100vw"
+                                                        src={booking.tour?.imageUrl || "https://images.unsplash.com/photo-1610574138412-7bf28ade0222?w=600&auto=format&fit=crop&q=60"}
+                                                    />
                                                     <div className="absolute top-4 left-4">
                                                         <span className={`px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-full shadow-lg ${isPaid ? 'bg-tertiary-container text-white' : 'bg-secondary-container text-on-secondary-container'}`}>
                                                             {isPaid ? t('profile.confirmedBadge') : t('profile.unpaidBadge')}
@@ -409,8 +438,6 @@ export default function ProfilePage() {
                             localStorage.removeItem('accessToken');
                             localStorage.removeItem('refreshToken');
                             localStorage.removeItem('userName');
-                            setLogoutMsg(t('profile.logoutSuccess'));
-                            
                             window.dispatchEvent(new Event('auth-change'));
                             router.push('/login');
                         }}

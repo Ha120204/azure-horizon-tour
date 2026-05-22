@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type React from 'react';
+import { useSearchParams } from 'next/navigation';
 import TourFormModal from '@/app/components/admin/TourFormModal';
 import TourContentDrawer from '@/app/components/admin/TourContentDrawer';
 import ReviewTourModal from '@/app/components/admin/ReviewTourModal';
@@ -177,6 +178,9 @@ function SubmitTourReviewDialog({ tour, onConfirm, onCancel, isSubmitting }: {
 }
 
 export default function AdminToursPage() {
+    const searchParams = useSearchParams();
+    const initialStatus = searchParams.get('status') ?? '';
+
     // State: data
     const [tours, setTours] = useState<Tour[]>([]);
     const [destinations, setDestinations] = useState<Destination[]>([]);
@@ -187,7 +191,7 @@ export default function AdminToursPage() {
     const [searchInput, setSearchInput] = useState('')   // giá trị hiển thị ngay
     const [search, setSearch] = useState('')             // giá trị gửi API (debounced)
     const [filterDest, setFilterDest] = useState('');
-    const [filterStatus, setFilterStatus] = useState('');
+    const [filterStatus, setFilterStatus] = useState(initialStatus);
     const [sortBy, setSortBy] = useState('recommended');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);

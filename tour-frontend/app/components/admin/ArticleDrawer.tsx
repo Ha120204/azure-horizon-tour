@@ -55,6 +55,8 @@ type ArticleForm = {
   isFeatured: boolean;
 };
 
+type SaveAction = 'draft' | 'submit' | 'publish';
+
 const EMPTY_FORM: ArticleForm = {
   title: '',
   category: 'GUIDES',
@@ -107,10 +109,11 @@ const articleToForm = (article?: Partial<Article> | null): ArticleForm => ({
 export default function ArticleDrawer({ mode, article, userRole = '', onClose, onSuccess }: ArticleDrawerProps) {
   const isEdit = mode === 'edit';
   const isStaff = userRole === 'STAFF';
+  const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
   const [form, setForm] = useState<ArticleForm>(EMPTY_FORM);
   const [errors, setErrors]         = useState<Record<string, string>>({});
-  const [submitAction, setSubmitAction] = useState<'draft' | 'submit' | null>(null);
+  const [submitAction, setSubmitAction] = useState<SaveAction | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imgError, setImgError]     = useState(false);
@@ -210,7 +213,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
     }
   };
 
-  const validateForReview = () => {
+  const validateForPublish = () => {
     const e: Record<string, string> = {};
     if (!form.title.trim())    e.title   = 'Tiêu đề không được để trống';
     if (!form.excerpt.trim())  e.excerpt  = 'Tóm tắt không được để trống';
@@ -221,17 +224,20 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = async (action: 'draft' | 'submit') => {
-    if (action === 'submit' && !validateForReview()) return;
+  const handleSave = async (action: SaveAction) => {
+    if ((action === 'submit' || action === 'publish') && !validateForPublish()) return;
 
     setSubmitAction(action);
     try {
       const url    = isEdit ? `${API_BASE_URL}/article/admin/${article!.id}` : `${API_BASE_URL}/article/admin`;
       const method = isEdit ? 'PATCH' : 'POST';
+      const payload = isAdmin
+        ? { ...form, saveMode: action === 'draft' ? 'draft' : 'publish' }
+        : form;
       const res    = await fetchWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -254,7 +260,11 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
           ? `Đã lưu và gửi duyệt "${form.title.trim() || 'bản nháp'}"`
           : `Đã lưu bản nháp "${form.title.trim() || 'chưa có tiêu đề'}"`);
       } else {
-        onSuccess(isEdit ? `Đã cập nhật "${form.title}"` : `Đã xuất bản "${form.title}"`);
+        onSuccess(action === 'draft'
+          ? `Đã lưu bản nháp "${form.title.trim() || 'chưa có tiêu đề'}"`
+          : isEdit
+            ? `Đã cập nhật và xuất bản "${form.title.trim()}"`
+            : `Đã xuất bản "${form.title.trim()}"`);
       }
       onClose();
     } catch (err: unknown) {
@@ -293,7 +303,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                 ? article?.slug
                 : isStaff
                   ? 'Lưu nháp trước, hoàn thiện sau rồi gửi Admin duyệt'
-                  : 'Điền thông tin để xuất bản bài viết mới'}
+                  : 'Có thể lưu nháp nội bộ hoặc xuất bản ngay lên trang khách'}
             </p>
           </div>
           {/* Status pill */}
@@ -401,7 +411,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                 {/* Author */}
                 <div className="space-y-1.5">
                   <label htmlFor="am-author" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Tác giả {isStaff ? <span className="text-on-surface-variant/40 normal-case">(khi gửi duyệt)</span> : <span className="text-error">*</span>}
+                    Tác giả <span className="text-on-surface-variant/40 normal-case">({isStaff ? 'khi gửi duyệt' : 'khi xuất bản'})</span>
                   </label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[16px] pointer-events-none">person</span>
@@ -470,7 +480,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                 {/* Title */}
                 <div>
                   <label htmlFor="am-title" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1.5">
-                    Tiêu đề bài viết {isStaff ? <span className="text-on-surface-variant/40 normal-case">(khi gửi duyệt)</span> : <span className="text-error">*</span>}
+                    Tiêu đề bài viết <span className="text-on-surface-variant/40 normal-case">({isStaff ? 'khi gửi duyệt' : 'khi xuất bản'})</span>
                   </label>
                   <input
                     id="am-title"
@@ -487,7 +497,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                 {/* Excerpt */}
                 <div>
                   <label htmlFor="am-excerpt" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1.5">
-                    Tóm tắt {isStaff ? <span className="text-on-surface-variant/40 normal-case">(khi gửi duyệt)</span> : <span className="text-error">*</span>}
+                    Tóm tắt <span className="text-on-surface-variant/40 normal-case">({isStaff ? 'khi gửi duyệt' : 'khi xuất bản'})</span>
                     <span className="normal-case font-normal ml-1 text-on-surface-variant/50">(hiển thị dưới card bài)</span>
                   </label>
                   <div className="relative">
@@ -581,14 +591,14 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
             <span className="material-symbols-outlined text-[14px]">info</span>
             {isStaff
               ? 'Lưu nháp không bắt buộc đủ thông tin. Chỉ “Lưu & gửi duyệt” mới kiểm tra đủ trường.'
-              : isEdit ? 'Thay đổi sẽ ghi đè nội dung hiện tại' : 'Bài viết sẽ được xuất bản ngay khi bấm lưu'}
+              : 'Lưu nháp không public. Chỉ “Xuất bản ngay” mới kiểm tra đủ trường và hiển thị với khách.'}
           </div>
           <div className="flex items-center gap-3">
             <button type="button" onClick={onClose}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary">
               Hủy
             </button>
-            {isStaff && (
+            {(isStaff || isAdmin) && (
               <button
                 type="button"
                 onClick={() => handleSave('draft')}
@@ -603,13 +613,13 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
             )}
             <button
               type="button"
-              onClick={() => handleSave('submit')}
+              onClick={() => handleSave(isStaff ? 'submit' : 'publish')}
               disabled={isSubmitting || isLoadingContent}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-primary text-on-primary hover:bg-primary/90 disabled:opacity-60 transition-all active:scale-[0.98] shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              {submitAction === 'submit'
+              {(submitAction === 'submit' || submitAction === 'publish')
                 ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang lưu…</>
-                : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{isStaff ? 'send' : isEdit ? 'save' : 'publish'}</span>{isStaff ? 'Lưu & gửi duyệt' : isEdit ? 'Lưu thay đổi' : 'Xuất bản ngay'}</>
+                : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{isStaff ? 'send' : 'publish'}</span>{isStaff ? 'Lưu & gửi duyệt' : 'Xuất bản ngay'}</>
               }
             </button>
           </div>

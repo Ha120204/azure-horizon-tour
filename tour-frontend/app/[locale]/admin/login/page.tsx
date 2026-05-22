@@ -80,6 +80,9 @@ export default function AdminLoginPage() {
             localStorage.setItem('accessToken', data.access_token);
             localStorage.setItem('userName', data.user?.fullName || '');
             localStorage.setItem('userRole', data.user?.role || '');
+            if (data.user?.email) localStorage.setItem('userEmail', data.user.email);
+            if (data.user?.avatarUrl) localStorage.setItem('userAvatarUrl', data.user.avatarUrl);
+            else localStorage.removeItem('userAvatarUrl');
 
             // Kiểm tra role — chặn CUSTOMER
             const role = data.user?.role;
@@ -87,6 +90,9 @@ export default function AdminLoginPage() {
                 // Xóa token vừa lưu — không cho phép truy cập
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('userName');
+                localStorage.removeItem('userEmail');
+                localStorage.removeItem('userRole');
+                localStorage.removeItem('userAvatarUrl');
                 // Logout phiên vừa tạo
                 await fetch(`${API_BASE_URL}/auth/logout`, {
                     method: 'POST',
@@ -145,10 +151,10 @@ export default function AdminLoginPage() {
                         </div>
                         <div className="admin-login-logo-text">
                             <span className="admin-login-logo-title">Azure Horizon</span>
-                            <span className="admin-login-logo-subtitle">ADMIN PORTAL</span>
+                            <span className="admin-login-logo-subtitle">INTERNAL PORTAL</span>
                         </div>
                     </div>
-                    <p className="admin-login-tagline">Cổng quản trị nội bộ dành cho nhân viên</p>
+                    <p className="admin-login-tagline">Đăng nhập vào hệ thống quản trị</p>
                 </div>
 
                 {/* Login form */}

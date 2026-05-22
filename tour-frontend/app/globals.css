@@ -141,6 +141,26 @@
     animation: fadeSlideUp 0.35s ease-out forwards;
   }
 
+  @keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-slide-down {
+    animation: fadeSlideDown 0.35s ease-out forwards;
+  }
+
+  @keyframes toastProgress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
+
+  .animate-toast-progress {
+    animation-name: toastProgress;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
   @keyframes slideInRight {
     from { transform: translateX(100%); }
     to   { transform: translateX(0); }

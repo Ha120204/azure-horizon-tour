@@ -82,6 +82,7 @@ export class SupportController {
     @Query('status')   status?:   string,
     @Query('category') category?: string,
     @Query('search')   search?:   string,
+    @Query('view')     view?:     string,
     @Query('page')     page?:     string,
     @Query('limit')    limit?:    string,
   ) {
@@ -89,6 +90,7 @@ export class SupportController {
       status,
       category,
       search,
+      view,
       page:  page  ? parseInt(page)  : 1,
       limit: limit ? parseInt(limit) : 20,
     });

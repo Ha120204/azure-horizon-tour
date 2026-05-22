@@ -38,6 +38,16 @@ export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
   /**
+   * GET /settings/health - Runtime health checks for the admin settings page
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Get('health')
+  async getHealth() {
+    const data = await this.settingsService.getHealth();
+    return { message: 'Success', data };
+  }
+
+  /**
    * GET /settings — Grouped settings (tất cả roles đều đọc được sau khi đăng nhập)
    */
   @UseGuards(AuthGuard('jwt'))

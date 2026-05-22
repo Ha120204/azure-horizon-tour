@@ -7,8 +7,7 @@ import {
 } from 'recharts';
 import { API_BASE_URL } from '@/app/lib/constants';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
-import Link from 'next/link';
-import { useRouter } from '@/i18n/routing';
+import { Link, useRouter } from '@/i18n/routing';
 import StaffDashboard from '@/app/components/admin/StaffDashboard';
 
 // ─── Preset Config ────────────────────────────────────────────────────────────
@@ -78,10 +77,42 @@ const EMPTY_OPERATIONAL_STATS: OperationalStats = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatVND = (n: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 })
+        .format(Math.round(n))
+        .replace('₫', 'đ');
 
 const formatShortVND = (n: number) => {
-    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Math.round(n));
+    return formatVND(n);
+};
+
+const formatAxisVND = (n: number) => {
+    if (n >= 1_000_000_000) return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(n / 1_000_000_000)} tỷ`;
+    if (n >= 1_000_000) return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(n / 1_000_000)} tr`;
+    if (n >= 1_000) return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(n / 1_000)}k`;
+    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(n);
+};
+
+const formatDate = (value: string) => new Date(value).toLocaleDateString('vi-VN');
+
+const getPeriodComparisonLabel = (isCustom: boolean, activeDays: number, from: string, to: string) => {
+    if (!isCustom) return `So sánh với ${activeDays} ngày trước đó`;
+    const diffDays = Math.max(1, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24)));
+    return `So sánh với ${diffDays} ngày trước kỳ tùy chỉnh`;
+};
+
+type TrendMeta = {
+    label: string;
+    direction: 'up' | 'down' | 'flat' | 'new';
+};
+
+const getTrendMeta = (current: number, previous: number, changePercent: number): TrendMeta => {
+    if (previous === 0 && current > 0) return { label: 'Mới phát sinh', direction: 'new' };
+    if (previous === 0 && current === 0) return { label: 'Chưa có kỳ trước', direction: 'flat' };
+    if (changePercent === 0) return { label: 'Không đổi', direction: 'flat' };
+    return {
+        label: `${changePercent > 0 ? '+' : ''}${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(changePercent)}%`,
+        direction: changePercent > 0 ? 'up' : 'down',
+    };
 };
 
 const statusConfig: Record<string, { label: string; bg: string; text: string; dot: string }> = {
@@ -108,15 +139,24 @@ function Skeleton({ className = '' }: { className?: string }) {
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 interface KpiCardProps {
-    icon: string; title: string; value: string; change: number;
-    sub?: string; gradient?: boolean;
+    icon: string; title: string; value: string; trend: TrendMeta;
+    sub?: string; gradient?: boolean; href?: string;
 }
 
-function KpiCard({ icon, title, value, change, sub, gradient }: KpiCardProps) {
-    const isUp = change >= 0;
-    const isZero = change === 0;
-    return (
-        <div className={`relative rounded-2xl p-6 overflow-hidden group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-default ${gradient
+function KpiCard({ icon, title, value, trend, sub, gradient, href }: KpiCardProps) {
+    const tone = trend.direction === 'down'
+        ? 'bg-red-50 text-red-600 border border-red-100'
+        : trend.direction === 'flat'
+            ? 'bg-slate-100 text-slate-500 border border-slate-100'
+            : 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+    const iconName = trend.direction === 'down'
+        ? 'trending_down'
+        : trend.direction === 'flat'
+            ? 'horizontal_rule'
+            : 'trending_up';
+
+    const content = (
+        <div className={`relative h-full rounded-2xl p-6 overflow-hidden group transition-[transform,box-shadow,border-color] duration-200 ${href ? 'hover:-translate-y-0.5 focus-within:ring-2 focus-within:ring-blue-500' : ''} ${gradient
             ? 'bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25'
             : 'bg-white shadow-sm border border-slate-100 hover:shadow-slate-200/80 hover:border-slate-200'}`}>
             <div className={`absolute -right-6 -top-6 w-28 h-28 rounded-full blur-2xl ${gradient ? 'bg-white/10' : 'bg-blue-50/60'}`} />
@@ -128,27 +168,25 @@ function KpiCard({ icon, title, value, change, sub, gradient }: KpiCardProps) {
                             {icon}
                         </span>
                     </div>
-                    {!isZero && (
-                        <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${gradient
-                            ? 'bg-white/20 text-white'
-                            : isUp ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
-                            <span className="material-symbols-outlined text-[11px]">
-                                {isUp ? 'trending_up' : 'trending_down'}
-                            </span>
-                            {isUp ? '+' : ''}{change}%
-                        </span>
-                    )}
-                    {isZero && (
-                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-400 border border-slate-100">
-                            So với kỳ trước
-                        </span>
-                    )}
+                    <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${gradient ? 'bg-white/20 text-white' : tone}`}>
+                        <span className="material-symbols-outlined text-[11px]">{iconName}</span>
+                        {trend.label}
+                    </span>
                 </div>
                 <p className={`text-sm font-medium mb-1.5 ${gradient ? 'text-white/80' : 'text-slate-500'}`}>{title}</p>
                 <h3 className={`text-3xl font-bold tracking-tight font-headline ${gradient ? 'text-white' : 'text-slate-800'}`}>{value}</h3>
                 {sub && <p className={`text-xs mt-1.5 ${gradient ? 'text-white/60' : 'text-slate-400'}`}>{sub}</p>}
+                {href && <span className={`mt-4 inline-flex items-center gap-1 text-xs font-bold ${gradient ? 'text-white/80' : 'text-blue-600'}`}>Xem chi tiết <span className="material-symbols-outlined text-[13px]">arrow_forward</span></span>}
             </div>
         </div>
+    );
+
+    if (!href) return content;
+
+    return (
+        <Link href={href} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            {content}
+        </Link>
     );
 }
 
@@ -203,9 +241,12 @@ export default function AdminDashboardPage() {
     const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
     const [operationalStats, setOperationalStats] = useState<OperationalStats>(EMPTY_OPERATIONAL_STATS);
     const [loading, setLoading] = useState(true);
+    const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+    const [dashboardError, setDashboardError] = useState('');
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
+        setDashboardError('');
         const { from, to } = dateRange;
         const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
         const gran = getGranularity(diffDays);
@@ -245,8 +286,10 @@ export default function AdminDashboardPage() {
                 articlePending: articleStats.pending ?? 0,
                 supportOpen: supportStats.open ?? 0,
             });
+            setLastUpdatedAt(new Date());
         } catch (e) {
             console.error('Dashboard error:', e);
+            setDashboardError('Không tải được dữ liệu tổng quan. Vui lòng thử làm mới lại.');
         } finally {
             setLoading(false);
         }
@@ -288,6 +331,10 @@ export default function AdminDashboardPage() {
     const { from, to } = dateRange;
     const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
     const gran = getGranularity(diffDays);
+    const periodComparisonLabel = getPeriodComparisonLabel(isCustom, activeDays || diffDays, from, to);
+    const periodTitle = isCustom ? `${formatDate(from)} - ${formatDate(to)}` : `${activeDays} ngày gần nhất`;
+    const nonZeroRevenuePoints = revenueData.filter(point => point.revenue > 0).length;
+    const hasRevenueData = revenueData.some(point => point.revenue > 0);
 
     return (
         <main className="flex-1 pt-8 px-8 pb-16 max-w-[1600px] mx-auto w-full bg-slate-50 min-h-screen">
@@ -296,23 +343,29 @@ export default function AdminDashboardPage() {
             <div className="mb-6 flex flex-wrap justify-between items-end gap-4">
                 <div>
                     <h1 className="font-headline text-[2rem] font-bold text-slate-800 leading-tight tracking-tight">
-                        Tổng Quan Hệ Thống
+                        Tổng quan hệ thống
                     </h1>
                     <p className="text-slate-500 text-sm mt-1.5">
-                        Chào mừng trở lại. Đây là những gì đang diễn ra.
+                        Theo dõi doanh thu đã thanh toán, booking và các việc cần xử lý trong kỳ.
+                    </p>
+                    <p className="mt-2 text-xs font-medium text-slate-400">
+                        {lastUpdatedAt
+                            ? `Cập nhật lần cuối: ${lastUpdatedAt.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                            : 'Dữ liệu đang được đồng bộ'}
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5">
                     <Link
                         href="/admin/statistics"
-                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm shadow-blue-500/20"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                         <span className="material-symbols-outlined text-[17px]">bar_chart</span>
-                        Thống kê Chi tiết
+                        Thống kê chi tiết
                     </Link>
                     <button
                         onClick={fetchAll}
                         disabled={loading}
+                        aria-label="Làm mới dữ liệu tổng quan"
                         className="flex items-center gap-1.5 px-3 py-2.5 bg-white text-slate-500 border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
                     >
                         <span className={`material-symbols-outlined text-[17px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
@@ -321,22 +374,31 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* ── Preset Filter Bar ── */}
-            <div className="flex flex-wrap items-center gap-2 mb-6 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
-                <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider mr-2">Xem dữ liệu:</span>
-                {PRESETS.map(p => (
-                    <button
-                        key={p.days}
-                        onClick={() => handlePreset(p.days)}
-                        className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${!isCustom && activeDays === p.days
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-700'
-                            }`}
-                    >
-                        {p.label}
-                    </button>
-                ))}
+            {dashboardError && (
+                <div className="mb-4 flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    <span className="material-symbols-outlined text-[18px]">error</span>
+                    {dashboardError}
+                </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Xem dữ liệu</span>
+                <div className="flex rounded-2xl bg-slate-100 p-1">
+                    {PRESETS.map(p => (
+                        <button
+                            key={p.days}
+                            onClick={() => handlePreset(p.days)}
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${!isCustom && activeDays === p.days
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-slate-500 hover:bg-white hover:text-slate-700'
+                                }`}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
                 {/* ── Custom date range picker ── */}
-                <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
+                <div className="flex items-center gap-2 pl-0 lg:pl-3 lg:border-l lg:border-slate-200">
                     <span className="text-xs text-slate-400 font-medium hidden lg:block">Tùy chỉnh:</span>
                     <input
                         type="date"
@@ -370,13 +432,13 @@ export default function AdminDashboardPage() {
                 <div className="ml-auto flex items-center gap-3 text-xs text-slate-400">
                     <span className="flex items-center gap-1">
                         <span className="material-symbols-outlined text-[14px]">date_range</span>
-                        {new Date(from).toLocaleDateString('vi-VN')} — {new Date(to).toLocaleDateString('vi-VN')}
+                        {formatDate(from)} - {formatDate(to)}
                     </span>
                     <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg font-medium">
                         {GRAN_LABEL[gran]}
                     </span>
                     <span className="text-slate-300">|</span>
-                    <span>So sánh với <strong className="text-slate-500">{activeDays} ngày</strong> trước đó</span>
+                    <span>{periodComparisonLabel}</span>
                 </div>
             </div>
 
@@ -389,27 +451,31 @@ export default function AdminDashboardPage() {
                         <KpiCard
                             icon="payments" title="Doanh thu"
                             value={formatShortVND(overview.revenue.current)}
-                            change={overview.revenue.changePercent}
+                            trend={getTrendMeta(overview.revenue.current, overview.revenue.previous, overview.revenue.changePercent)}
                             sub={`Kỳ trước: ${formatShortVND(overview.revenue.previous)}`}
                             gradient
+                            href="/admin/statistics"
                         />
                         <KpiCard
-                            icon="book_online" title="Tổng Booking"
+                            icon="book_online" title="Tổng booking"
                             value={overview.bookings.total.toLocaleString('vi-VN')}
-                            change={overview.bookings.changePercent}
-                            sub={`Hủy: ${overview.bookings.cancellationRate}% • Kỳ trước: ${overview.bookings.previous}`}
+                            trend={getTrendMeta(overview.bookings.total, overview.bookings.previous, overview.bookings.changePercent)}
+                            sub={`Tỷ lệ hủy: ${overview.bookings.cancellationRate}% • Kỳ trước: ${overview.bookings.previous.toLocaleString('vi-VN')}`}
+                            href="/admin/bookings"
                         />
                         <KpiCard
-                            icon="analytics" title="Giá trị TB/Đơn (AOV)"
+                            icon="analytics" title="Giá trị TB/đơn (AOV)"
                             value={formatShortVND(overview.aov.current)}
-                            change={overview.aov.changePercent}
+                            trend={getTrendMeta(overview.aov.current, overview.aov.previous, overview.aov.changePercent)}
                             sub={`Kỳ trước: ${formatShortVND(overview.aov.previous)}`}
+                            href="/admin/statistics"
                         />
                         <KpiCard
-                            icon="group_add" title="Khách hàng Mới"
+                            icon="group_add" title="Khách hàng mới"
                             value={overview.customers.newInPeriod.toLocaleString('vi-VN')}
-                            change={overview.customers.changePercent}
+                            trend={getTrendMeta(overview.customers.newInPeriod, overview.customers.previousNewInPeriod, overview.customers.changePercent)}
                             sub={`${overview.tours.active} tours đang hoạt động`}
+                            href="/admin/customers"
                         />
                     </>
                 ) : null}
@@ -418,11 +484,11 @@ export default function AdminDashboardPage() {
             {/* ── Charts Row ── */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 {[
-                    { href: '/admin/bookings', icon: 'pending_actions', label: 'Booking chờ xử lý', value: operationalStats.bookingPending, tone: 'bg-amber-50 text-amber-700' },
-                    { href: '/admin/bookings', icon: 'assignment_late', label: 'Yêu cầu hủy', value: operationalStats.cancelRequested, tone: 'bg-orange-50 text-orange-700' },
-                    { href: '/admin/tours', icon: 'approval', label: 'Tour chờ duyệt', value: operationalStats.tourPending, tone: 'bg-blue-50 text-blue-700' },
-                    { href: '/admin/articles', icon: 'article', label: 'Bài chờ duyệt', value: operationalStats.articlePending, tone: 'bg-violet-50 text-violet-700' },
-                    { href: '/admin/support', icon: 'support_agent', label: 'Ticket đang mở', value: operationalStats.supportOpen, tone: 'bg-teal-50 text-teal-700' },
+                    { href: '/admin/bookings?status=PENDING', icon: 'pending_actions', label: 'Booking chờ xử lý', value: operationalStats.bookingPending, tone: 'bg-amber-50 text-amber-700' },
+                    { href: '/admin/bookings?status=CANCEL_REQUESTED', icon: 'assignment_late', label: 'Yêu cầu hủy', value: operationalStats.cancelRequested, tone: 'bg-orange-50 text-orange-700' },
+                    { href: '/admin/tours?status=PENDING', icon: 'approval', label: 'Tour chờ duyệt', value: operationalStats.tourPending, tone: 'bg-blue-50 text-blue-700' },
+                    { href: '/admin/articles?status=PENDING_REVIEW', icon: 'article', label: 'Bài chờ duyệt', value: operationalStats.articlePending, tone: 'bg-violet-50 text-violet-700' },
+                    { href: '/admin/support?view=open', icon: 'support_agent', label: 'Ticket đang mở', value: operationalStats.supportOpen, tone: 'bg-teal-50 text-teal-700' },
                 ].map((item) => (
                     <Link
                         key={item.label}
@@ -449,10 +515,11 @@ export default function AdminDashboardPage() {
                     <div className="flex justify-between items-start mb-5">
                         <div>
                             <h3 className="font-headline text-base font-bold text-slate-800">
-                                Doanh thu — {activeDays} ngày gần nhất
+                                Doanh thu - {periodTitle}
                             </h3>
                             <p className="text-slate-400 text-xs mt-0.5">
                                 Hiển thị {GRAN_LABEL[gran].toLowerCase()} · {revenueData.length} điểm dữ liệu
+                                {hasRevenueData && nonZeroRevenuePoints <= 1 ? ' · Dữ liệu còn ít trong kỳ này' : ''}
                             </p>
                         </div>
                         <Link href="/admin/statistics" className="text-blue-500 text-xs font-semibold hover:text-blue-600 flex items-center gap-1">
@@ -461,17 +528,18 @@ export default function AdminDashboardPage() {
                     </div>
                     {loading ? (
                         <Skeleton className="h-56 w-full" />
-                    ) : revenueData.length === 0 ? (
+                    ) : !hasRevenueData ? (
                         <div className="h-56 flex flex-col items-center justify-center text-slate-300">
                             <span className="material-symbols-outlined text-5xl mb-2">bar_chart</span>
-                            <p className="text-sm">Chưa có doanh thu trong kỳ này</p>
+                            <p className="text-sm font-semibold text-slate-400">Chưa có doanh thu đã thanh toán trong kỳ này</p>
+                            <p className="mt-1 text-xs text-slate-300">Thử đổi khoảng thời gian hoặc kiểm tra các đơn chưa thanh toán.</p>
                         </div>
                     ) : (
                         <ResponsiveContainer width="100%" height={224}>
-                            <BarChart data={revenueData} barSize={Math.max(8, Math.min(32, 200 / revenueData.length))} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                            <BarChart data={revenueData} barSize={Math.max(10, Math.min(38, 240 / Math.max(1, revenueData.length)))} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                                 <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                                <YAxis tickFormatter={formatShortVND} tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false} width={52} />
+                                <YAxis tickFormatter={formatAxisVND} tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={false} tickLine={false} width={66} />
                                 <Tooltip content={<RevenueTooltip />} cursor={{ fill: 'rgba(59,130,246,0.04)' }} />
                                 <Bar dataKey="revenue" fill="url(#grad)" radius={[5, 5, 0, 0]} />
                                 <defs>
@@ -488,12 +556,12 @@ export default function AdminDashboardPage() {
                 {/* Booking Status Donut */}
                 <div className="lg:col-span-5 xl:col-span-4 bg-white border border-slate-100 rounded-2xl p-6 shadow-sm">
                     <div className="mb-4">
-                        <h3 className="font-headline text-base font-bold text-slate-800">Trạng thái Booking</h3>
+                        <h3 className="font-headline text-base font-bold text-slate-800">Trạng thái booking</h3>
                         <p className="text-slate-400 text-xs mt-0.5">Phân bổ trong kỳ đã chọn</p>
                     </div>
                     {loading ? (
                         <Skeleton className="h-52 w-full" />
-                    ) : bookingStatus ? (
+                    ) : bookingStatus && bookingStatus.total > 0 ? (
                         <>
                             <ResponsiveContainer width="100%" height={160}>
                                 <PieChart>
@@ -527,7 +595,13 @@ export default function AdminDashboardPage() {
                                 </div>
                             </div>
                         </>
-                    ) : null}
+                    ) : (
+                        <div className="flex h-52 flex-col items-center justify-center text-center text-slate-300">
+                            <span className="material-symbols-outlined mb-2 text-5xl">donut_large</span>
+                            <p className="text-sm font-semibold text-slate-400">Chưa có booking trong kỳ này</p>
+                            <p className="mt-1 text-xs">Biểu đồ sẽ xuất hiện khi có đơn phù hợp bộ lọc.</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -535,7 +609,7 @@ export default function AdminDashboardPage() {
             <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
                     <div>
-                        <h3 className="font-headline text-base font-bold text-slate-800">Booking Gần đây</h3>
+                        <h3 className="font-headline text-base font-bold text-slate-800">Booking gần đây</h3>
                         <p className="text-slate-400 text-xs mt-0.5">5 giao dịch mới nhất trong hệ thống</p>
                     </div>
                     <Link href="/admin/bookings" className="text-blue-600 text-sm font-semibold hover:text-blue-500 flex items-center gap-1">
@@ -546,7 +620,7 @@ export default function AdminDashboardPage() {
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 text-xs uppercase tracking-wider">
-                                <th className="px-6 py-3.5 font-semibold">Mã Booking</th>
+                                <th className="px-6 py-3.5 font-semibold">Mã booking</th>
                                 <th className="px-6 py-3.5 font-semibold">Khách hàng</th>
                                 <th className="px-6 py-3.5 font-semibold">Tên Tour</th>
                                 <th className="px-6 py-3.5 font-semibold text-right">Tổng tiền</th>
@@ -577,7 +651,7 @@ export default function AdminDashboardPage() {
                                     const sc = statusConfig[b.status] ?? { label: b.status, bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
                                     const initials = b.user?.fullName ? b.user.fullName.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase() : '??';
                                     return (
-                                        <tr key={b.id} className="hover:bg-slate-50/70 transition-colors cursor-pointer group" onClick={() => router.push('/admin/bookings')}>
+                                        <tr key={b.id} className="hover:bg-slate-50/70 transition-colors cursor-pointer group" onClick={() => router.push(`/admin/bookings?search=${encodeURIComponent(b.bookingCode)}`)}>
                                             <td className="px-6 py-4 font-mono text-blue-600 font-semibold text-xs">{b.bookingCode}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2.5">

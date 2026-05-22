@@ -99,7 +99,12 @@ export default function ProfilePage() {
                     setGender(data.gender || '');
                     setIdentityType(data.identityType || 'CCCD');
                     setIdentityNo(data.identityNo || '');
-                    setAvatarUrl(data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200");
+                    const nextAvatarUrl = data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
+                    setAvatarUrl(nextAvatarUrl);
+                    localStorage.setItem('userName', data.fullName || '');
+                    if (data.avatarUrl) localStorage.setItem('userAvatarUrl', data.avatarUrl);
+                    else localStorage.removeItem('userAvatarUrl');
+                    window.dispatchEvent(new Event('auth-change'));
                 }
 
                 const resBookings = await fetchWithAuth('http://localhost:3000/booking/history/my-bookings');
@@ -231,7 +236,12 @@ export default function ProfilePage() {
             const result = await res.json();
 
             if (res.ok && result.data?.avatarUrl) {
-                setAvatarUrl(result.data.avatarUrl);
+                const nextAvatarUrl = result.data.avatarUrl;
+                setAvatarUrl(nextAvatarUrl);
+                setUserData(prev => prev ? { ...prev, avatarUrl: nextAvatarUrl } : prev);
+                localStorage.setItem('userAvatarUrl', nextAvatarUrl);
+                localStorage.removeItem('userAvatar');
+                window.dispatchEvent(new Event('auth-change'));
                 setToast({ msg: t('profile.avatarSuccess'), type: 'success' });
             } else {
                 setToast({ msg: result.message || t('profile.avatarFail'), type: 'error' });
@@ -432,21 +442,6 @@ export default function ProfilePage() {
                     </div>
                 </div>
 
-                <section className="flex justify-center md:justify-end pt-8 border-t border-outline-variant/20">
-                    <button
-                        onClick={() => {
-                            localStorage.removeItem('accessToken');
-                            localStorage.removeItem('refreshToken');
-                            localStorage.removeItem('userName');
-                            window.dispatchEvent(new Event('auth-change'));
-                            router.push('/login');
-                        }}
-                        className="px-8 py-3 rounded-full text-error font-bold font-headline hover:bg-error/10 transition-colors flex items-center gap-2"
-                    >
-                        <span className="material-symbols-outlined">logout</span>
-                        {t('profile.logoutBtn')}
-                    </button>
-                </section>
             </main>
 
             <Footer />

@@ -75,6 +75,18 @@ export class ArticleController {
     );
   }
 
+  /** GET /article/admin/trash — Danh sách thùng rác */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Get('admin/trash')
+  async getTrash(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.articleService.getTrash({ page: Number(page), limit: Number(limit), search });
+  }
+
   /** GET /article/admin/:id — Chi tiết bài viết (kèm content) */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
@@ -94,7 +106,7 @@ export class ArticleController {
     return { url: result.secure_url };
   }
 
-  /** POST /article/admin — Admin tạo PUBLISHED; Staff tạo DRAFT */
+  /** POST /article/admin — Admin/Super Admin lưu nháp hoặc xuất bản ngay; Staff tạo DRAFT */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Post('admin')
@@ -105,6 +117,7 @@ export class ArticleController {
       title?: string; category?: string; excerpt?: string;
       content?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
+      saveMode?: 'draft' | 'publish';
     },
   ) {
     return this.articleService.adminCreate(dto, getAuthUserId(req), req.user?.role);
@@ -147,6 +160,7 @@ export class ArticleController {
       title?: string; category?: string; excerpt?: string;
       content?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
+      saveMode?: 'draft' | 'publish';
     },
   ) {
     return this.articleService.adminUpdate(id, dto, getAuthUserId(req), req.user?.role);
@@ -174,18 +188,6 @@ export class ArticleController {
   }
 
   // ─── Trash endpoints ──────────────────────────────────────────────────────
-
-  /** GET /article/admin/trash — Danh sách thùng rác */
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
-  @Get('admin/trash')
-  async getTrash(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('search') search?: string,
-  ) {
-    return this.articleService.getTrash({ page: Number(page), limit: Number(limit), search });
-  }
 
   /** PATCH /article/admin/:id/restore — Khôi phục từ thùng rác */
   @UseGuards(AuthGuard('jwt'), RolesGuard)

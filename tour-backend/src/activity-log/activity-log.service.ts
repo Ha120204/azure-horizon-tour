@@ -63,11 +63,23 @@ export class ActivityLogService {
         if (query.resource) where.resource = query.resource;
         if (query.userId)   where.userId   = Number(query.userId);
 
-        if (query.search) {
+        const search = query.search?.trim();
+        if (search) {
+            const numericSearch = Number(search.replace(/^#/, '').replace(/^log\s*#/i, '').trim());
             where.OR = [
-                { description: { contains: query.search, mode: 'insensitive' } },
-                { targetName:  { contains: query.search, mode: 'insensitive' } },
+                { description: { contains: search, mode: 'insensitive' } },
+                { targetName:  { contains: search, mode: 'insensitive' } },
+                { action:      { contains: search, mode: 'insensitive' } },
+                { resource:    { contains: search, mode: 'insensitive' } },
+                { resourceId:  { contains: search, mode: 'insensitive' } },
+                { ipAddress:   { contains: search, mode: 'insensitive' } },
+                { user: { is: { fullName: { contains: search, mode: 'insensitive' } } } },
+                { user: { is: { email:    { contains: search, mode: 'insensitive' } } } },
             ];
+
+            if (Number.isInteger(numericSearch) && numericSearch > 0) {
+                where.OR.push({ id: numericSearch });
+            }
         }
 
         if (query.dateFrom || query.dateTo) {

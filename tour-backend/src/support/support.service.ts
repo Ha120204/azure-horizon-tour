@@ -186,14 +186,22 @@ export class SupportService {
     status?:   string;
     category?: string;
     search?:   string;
+    view?:     string;
     page?:     number;
     limit?:    number;
   }) {
     const page  = Math.max(1, query.page  ?? 1);
     const limit = Math.min(50, query.limit ?? 20);
     const skip  = (page - 1) * limit;
+    const overdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const where: Prisma.SupportTicketWhereInput = {};
+    if (query.view === 'open') {
+      where.status = { in: ['NEW', 'IN_PROGRESS'] };
+    } else if (query.view === 'overdue') {
+      where.status = { in: ['NEW', 'IN_PROGRESS'] };
+      where.createdAt = { lt: overdueSince };
+    }
     if (query.status && query.status !== 'ALL') {
       where.status = query.status as TicketStatus;
     }

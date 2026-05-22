@@ -26,7 +26,7 @@ export interface UpdateVoucherDto extends Partial<CreateVoucherDto> {}
 export interface AdminVoucherQuery {
   search?: string;
   discountType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
-  status?: 'active' | 'expired' | 'depleted' | 'inactive';
+  status?: 'active' | 'expired' | 'depleted' | 'inactive' | 'expiringSoon' | 'expiredThisMonth' | 'redeemed';
   page?: number;
   limit?: number;
   sortBy?: 'createdAt' | 'expiresAt' | 'usedCount';
@@ -36,12 +36,33 @@ export interface AdminVoucherQuery {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 const FAR_FUTURE = new Date('2099-12-31T23:59:59Z');
+const NEVER_YEAR = 2099;
 
 function resolveExpiresAt(input?: string | null): Date {
   if (!input) return FAR_FUTURE;
   const d = new Date(input);
   if (isNaN(d.getTime())) throw new BadRequestException('Ngày hết hạn không hợp lệ');
   return d;
+}
+
+type VoucherComputedStatus = 'active' | 'expired' | 'depleted' | 'inactive';
+
+function isNeverExpires(date: Date) {
+  return date.getFullYear() >= NEVER_YEAR;
+}
+
+function computeVoucherStatus(
+  voucher: { isActive: boolean; expiresAt: Date; usedCount: number; maxUses: number },
+  now: Date,
+): VoucherComputedStatus {
+  if (!voucher.isActive) return 'inactive';
+  if (voucher.expiresAt < now && !isNeverExpires(voucher.expiresAt)) return 'expired';
+  if (voucher.usedCount >= voucher.maxUses) return 'depleted';
+  return 'active';
+}
+
+function isInCurrentMonth(date: Date, now: Date) {
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 }
 
 @Injectable()
@@ -165,27 +186,10 @@ export class VoucherService {
     const now = new Date();
     const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    const [totalActive, totalExpiredThisMonth, expiringSoon, totalRedemptions, totalDiscountGiven] =
+    const [allVouchersForStats, totalRedemptions, totalDiscountGiven] =
       await Promise.all([
-        // Tổng voucher đang active và chưa hết hạn
-        this.prisma.voucher.count({
-          where: { isActive: true, expiresAt: { gt: now } },
-        }),
-        // Voucher hết hạn trong tháng này
-        this.prisma.voucher.count({
-          where: {
-            expiresAt: {
-              gte: new Date(now.getFullYear(), now.getMonth(), 1),
-              lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
-            },
-          },
-        }),
-        // Voucher sắp hết hạn trong 7 ngày tới (còn active)
-        this.prisma.voucher.count({
-          where: {
-            isActive: true,
-            expiresAt: { gt: now, lte: sevenDaysLater },
-          },
+        this.prisma.voucher.findMany({
+          select: { isActive: true, expiresAt: true, usedCount: true, maxUses: true },
         }),
         // Tổng lượt đổi voucher (tổng usedCount)
         this.prisma.voucher.aggregate({ _sum: { usedCount: true } }),
@@ -193,10 +197,20 @@ export class VoucherService {
         this.prisma.booking.aggregate({ _sum: { discountAmount: true } }),
       ]);
 
+    const computedStats = allVouchersForStats.map((voucher) => ({
+      ...voucher,
+      computedStatus: computeVoucherStatus(voucher, now),
+    }));
+
     return {
-      totalActive,
-      totalExpiredThisMonth,
-      expiringSoon,
+      totalActive: computedStats.filter((v) => v.computedStatus === 'active').length,
+      totalExpiredThisMonth: computedStats.filter((v) => v.computedStatus === 'expired' && isInCurrentMonth(v.expiresAt, now)).length,
+      expiringSoon: computedStats.filter((v) =>
+        v.computedStatus === 'active' &&
+        !isNeverExpires(v.expiresAt) &&
+        v.expiresAt > now &&
+        v.expiresAt <= sevenDaysLater
+      ).length,
       totalRedemptions: totalRedemptions._sum.usedCount ?? 0,
       totalDiscountGiven: totalDiscountGiven._sum.discountAmount ?? 0,
     };
@@ -215,6 +229,9 @@ export class VoucherService {
     } = query;
 
     const now = new Date();
+    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const currentPage = Math.max(1, Number(page) || 1);
+    const pageSize = Math.max(1, Math.min(100, Number(limit) || 10));
 
     const where: any = {};
 
@@ -233,32 +250,23 @@ export class VoucherService {
     if (status === 'active') {
       where.isActive = true;
       where.expiresAt = { gt: now };
-      // usedCount < maxUses — sẽ filter sau nếu cần (Prisma không hỗ trợ column comparison trực tiếp)
+      // usedCount < maxUses — filter sau để computedStatus khớp KPI.
     } else if (status === 'expired') {
       where.expiresAt = { lte: now };
     } else if (status === 'inactive') {
       where.isActive = false;
     }
-    // 'depleted' — filter sau khi lấy data
+    // Các trạng thái động còn lại được filter sau khi tính computedStatus.
 
-    const [vouchers, total] = await Promise.all([
-      this.prisma.voucher.findMany({
-        where,
-        orderBy: { [sortBy]: sortOrder },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: { _count: { select: { userVouchers: true } } },
-      }),
-      this.prisma.voucher.count({ where }),
-    ]);
+    const vouchers = await this.prisma.voucher.findMany({
+      where,
+      orderBy: { [sortBy]: sortOrder },
+      include: { _count: { select: { userVouchers: true } } },
+    });
 
     // Tính trạng thái cho từng voucher + ép kiểu Decimal → number
     const data = vouchers.map((v) => {
-      let computedStatus: 'active' | 'expired' | 'depleted' | 'inactive';
-      if (!v.isActive) computedStatus = 'inactive';
-      else if (v.expiresAt < now && v.expiresAt.getFullYear() < 2099) computedStatus = 'expired';
-      else if (v.usedCount >= v.maxUses) computedStatus = 'depleted';
-      else computedStatus = 'active';
+      const computedStatus = computeVoucherStatus(v, now);
 
       return {
         ...v,
@@ -270,16 +278,36 @@ export class VoucherService {
       };
     });
 
-    // Filter depleted sau (nếu cần)
-    const filteredData = status === 'depleted' ? data.filter((v) => v.computedStatus === 'depleted') : data;
+    // Filter theo trạng thái động trước rồi mới phân trang để tổng số không bị lệch.
+    const filteredData = status
+      ? data.filter((v) => {
+          if (status === 'expiringSoon') {
+            return (
+              v.computedStatus === 'active' &&
+              !isNeverExpires(v.expiresAt) &&
+              v.expiresAt > now &&
+              v.expiresAt <= sevenDaysLater
+            );
+          }
+          if (status === 'expiredThisMonth') {
+            return v.computedStatus === 'expired' && isInCurrentMonth(v.expiresAt, now);
+          }
+          if (status === 'redeemed') {
+            return v.usedCount > 0;
+          }
+          return v.computedStatus === status;
+        })
+      : data;
+    const total = filteredData.length;
+    const pagedData = filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     return {
-      data: filteredData,
+      data: pagedData,
       meta: {
-        totalItems: status === 'depleted' ? filteredData.length : total,
-        totalPages: Math.ceil((status === 'depleted' ? filteredData.length : total) / limit),
-        currentPage: page,
-        itemsPerPage: limit,
+        totalItems: total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        currentPage,
+        itemsPerPage: pageSize,
       },
     };
   }

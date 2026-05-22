@@ -8,6 +8,8 @@ import LocaleSwitcher from './LocaleSwitcher';
 import { API_BASE_URL } from '@/app/lib/constants';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/app/lib/publicSettings';
 import { getDestinationDisplay } from '@/app/lib/destinationDisplay';
+import FeedbackToast from '@/app/components/ui/FeedbackToast';
+import { consumeLogoutSuccessToast, queueLogoutSuccessToast } from '@/app/lib/authFeedback';
 
 interface SearchResult {
     destinations: { id: number; name: string; type?: string; region?: string }[];
@@ -21,7 +23,7 @@ export default function Header() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [userName, setUserName] = useState('');
     const [userAvatar, setUserAvatar] = useState('');
-    const [logoutMsg, setLogoutMsg] = useState('');
+    const [showLogoutToast, setShowLogoutToast] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
@@ -50,6 +52,12 @@ export default function Header() {
     }, [pathname]);
 
     useEffect(() => {
+        if (consumeLogoutSuccessToast()) {
+            setShowLogoutToast(true);
+        }
+    }, [pathname]);
+
+    useEffect(() => {
         const controller = new AbortController();
         fetchPublicSettings(controller.signal)
             .then(setPublicSettings)
@@ -69,7 +77,7 @@ export default function Header() {
             if (token) {
                 setIsLoggedIn(true);
                 setUserName(localStorage.getItem('userName') || '');
-                setUserAvatar(localStorage.getItem('userAvatar') || '');
+                setUserAvatar(localStorage.getItem('userAvatarUrl') || localStorage.getItem('userAvatar') || '');
             } else {
                 setIsLoggedIn(false);
                 setUserName('');
@@ -170,10 +178,16 @@ export default function Header() {
 
         localStorage.removeItem('accessToken');
         localStorage.removeItem('userName');
+        localStorage.removeItem('userAvatarUrl');
         localStorage.removeItem('userAvatar');
 
         // Bắn event báo hiệu để Header cập nhật lại state lặp tức
         window.dispatchEvent(new Event('auth-change'));
+        queueLogoutSuccessToast();
+        setShowLogoutToast(true);
+        if (pathname === '/') {
+            consumeLogoutSuccessToast();
+        }
 
         // Chuyển về trang chủ
         router.push('/');
@@ -191,19 +205,13 @@ export default function Header() {
 
     return (
         <>
-            {logoutMsg && (
-                <div className="fixed top-24 right-8 z-[100] animate-bounce">
-                    <div className="bg-white border-l-4 border-emerald-500 shadow-2xl rounded-xl px-6 py-4 flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                            <span className="material-symbols-outlined text-2xl">check_circle</span>
-                        </div>
-                        <div>
-                            <h4 className="text-sm font-bold text-slate-800 font-headline">{t('nav.goodbye')}</h4>
-                            <p className="text-xs text-slate-500 mt-0.5">{logoutMsg}</p>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {showLogoutToast ? (
+                <FeedbackToast
+                    title={t('nav.logoutSuccessTitle')}
+                    message={t('profile.logoutSuccess')}
+                    onClose={() => setShowLogoutToast(false)}
+                />
+            ) : null}
 
             <nav className={`fixed top-0 w-full z-50 font-body transition-all duration-500 ${(isScrolled || !isHomepage) ? 'bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-200/15' : 'bg-transparent border-transparent shadow-none'}`}
                 style={{ animation: 'headerSlideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}>

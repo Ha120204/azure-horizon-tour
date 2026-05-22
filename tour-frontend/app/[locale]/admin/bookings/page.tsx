@@ -366,6 +366,9 @@ function BookingDetailModal({
   const pc = PAY_CFG[booking.paymentStatus] ?? PAY_CFG.UNPAID;
   const colorIdx = booking.user.id % AVATAR_COLORS.length;
   const latestPaymentRequest = booking.paymentStatus === 'PAID' ? undefined : booking.notifications?.[0];
+  const discountAmount = Math.max(0, Number(booking.discountAmount) || 0);
+  const subtotalBeforeDiscount = booking.totalPrice + discountAmount;
+  const hasDiscount = discountAmount > 0;
 
   // Confirm dialog state
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -410,7 +413,7 @@ function BookingDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="bk-modal-title">
       <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={showConfirmDialog ? undefined : onClose} />
 
-      <div className="relative bg-surface rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-slide-up">
+      <div className="relative bg-surface rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden overscroll-contain animate-fade-slide-up">
 
         {/* ── Header gradient ── */}
         <div className="relative bg-gradient-to-br from-primary to-secondary p-6 pb-8 shrink-0 overflow-hidden">
@@ -419,20 +422,20 @@ function BookingDetailModal({
             backgroundSize: '45px 45px, 35px 35px',
           }} />
           <button onClick={onClose} aria-label="Đóng"
-            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors">
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors focus-visible:ring-2 focus-visible:ring-white/80">
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
 
-          <div className="flex items-start gap-4 pr-12">
+          <div className="flex flex-col gap-4 pr-12 sm:flex-row sm:items-start">
             <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-white text-2xl">receipt_long</span>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-1">Chi tiết đơn đặt tour</p>
-              <h2 id="bk-modal-title" className="text-xl font-bold text-white font-mono tracking-widest">{booking.bookingCode}</h2>
+              <h2 id="bk-modal-title" className="text-xl font-bold text-white font-mono tracking-widest break-words">{booking.bookingCode}</h2>
               <p className="text-white/60 text-xs mt-1.5">{fmtDateTime(booking.createdAt)}</p>
             </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex flex-wrap gap-2 shrink-0 sm:flex-col sm:items-end">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${sc.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                 {sc.label}
@@ -471,8 +474,8 @@ function BookingDetailModal({
                 )}
                 <div className="min-w-0">
                   <p className="font-bold text-on-surface">{booking.user.fullName}</p>
-                  <p className="text-sm text-on-surface-variant mt-0.5">{booking.user.email}</p>
-                  <p className="text-xs text-on-surface-variant/50 font-mono mt-0.5">ID #{booking.user.id}</p>
+                  <p className="text-sm text-on-surface-variant mt-0.5 break-words">{booking.user.email}</p>
+                  <p className="text-xs text-on-surface-variant/50 font-mono mt-0.5">Mã khách hàng #{booking.user.id}</p>
                 </div>
               </div>
             </section>
@@ -528,13 +531,23 @@ function BookingDetailModal({
                     <span className="text-sm text-on-surface-variant">Đơn giá tại thời điểm đặt</span>
                     <span className="font-semibold text-on-surface">{fmt(booking.unitPriceAtBooking)}/người</span>
                   </div>
-                  {booking.voucherCode && (
+                  {hasDiscount && (
                     <div className="flex justify-between items-center px-5 py-3.5">
-                      <div className="flex items-center gap-2">
+                      <span className="text-sm text-on-surface-variant">Tạm tính trước ưu đãi</span>
+                      <span className="font-semibold text-on-surface">{fmt(subtotalBeforeDiscount)}</span>
+                    </div>
+                  )}
+                  {(booking.voucherCode || hasDiscount) && (
+                    <div className="flex justify-between items-center px-5 py-3.5">
+                      <div className="flex min-w-0 items-center gap-2">
                         <span className="text-sm text-on-surface-variant">Voucher áp dụng</span>
-                        <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{booking.voucherCode}</span>
+                        {booking.voucherCode && (
+                          <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold truncate">{booking.voucherCode}</span>
+                        )}
                       </div>
-                      <span className="font-semibold text-emerald-600">- {fmt(booking.discountAmount)}</span>
+                      <span className="font-semibold text-emerald-600 shrink-0">
+                        {hasDiscount ? `- ${fmt(discountAmount)}` : 'Không giảm'}
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between items-center px-5 py-4 bg-primary/5">
@@ -591,22 +604,22 @@ function BookingDetailModal({
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-outline-variant/10 bg-surface-container-lowest/50 flex items-center justify-between shrink-0 gap-3">
-          <button onClick={onClose}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary">
-            Đóng
-          </button>
-
+        <div className="px-6 py-4 border-t border-outline-variant/10 bg-surface-container-lowest/50 flex flex-col-reverse items-stretch justify-end shrink-0 gap-3 sm:flex-row sm:items-center">
           {/* Nút xác nhận thủ công — chỉ hiển thị khi đơn PENDING */}
           {booking.status === 'PENDING' && (
             <button
               onClick={() => setShowConfirmDialog(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] transition-all shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] transition-[background-color,box-shadow,transform] shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             >
               <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
               Xác nhận & Thu tiền thủ công
             </button>
           )}
+
+          <button onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            Đóng
+          </button>
         </div>
       </div>
 
@@ -2174,6 +2187,7 @@ function AssistedBookingWorkspace({
 export default function BookingManagementPage() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get('search') ?? '';
+  const initialStatus = searchParams.get('status') ?? '';
 
   // Data state
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -2194,7 +2208,7 @@ export default function BookingManagementPage() {
 
   // Filter state
   const [search, setSearch] = useState(initialSearch);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [paymentFilter, setPaymentFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -2378,44 +2392,44 @@ export default function BookingManagementPage() {
   // KPI config
   const kpis = [
     {
-      icon: 'payments', label: 'Tổng Doanh Thu',
+      icon: 'payments', label: 'Tổng doanh thu',
       value: fmtCompact(stats.totalRevenue),
       sub: `${stats.paidCount} đơn đã thanh toán`,
       gradient: 'from-blue-600 to-indigo-600', bg: 'bg-blue-50', ic: 'text-blue-600',
       onClick: () => filterByPayment('PAID'), active: paymentFilter === 'PAID',
     },
     {
-      icon: 'check_circle', label: 'Đã Xác Nhận',
+      icon: 'check_circle', label: 'Đã xác nhận',
       value: stats.confirmed.toLocaleString('vi-VN'),
       sub: 'đơn thành công',
       gradient: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-50', ic: 'text-emerald-600',
       onClick: () => filterByStatus('CONFIRMED'), active: statusFilter === 'CONFIRMED',
     },
     {
-      icon: 'schedule', label: 'Chờ Xử Lý',
+      icon: 'schedule', label: 'Chờ xử lý',
       value: stats.pending.toLocaleString('vi-VN'),
       sub: 'đơn cần xử lý',
       gradient: 'from-amber-400 to-orange-500', bg: 'bg-amber-50', ic: 'text-amber-600',
       onClick: () => filterByStatus('PENDING'), active: statusFilter === 'PENDING',
     },
     {
-      icon: 'cancel', label: 'Đã Hủy',
+      icon: 'cancel', label: 'Đã hủy',
       value: stats.cancelled.toLocaleString('vi-VN'),
       sub: 'đã hủy / quá hạn',
       gradient: 'from-red-400 to-rose-500', bg: 'bg-red-50', ic: 'text-red-500',
       onClick: () => filterByStatus('CANCELLED'), active: statusFilter === 'CANCELLED',
     },
     {
-      icon: 'assignment_late', label: 'Chá» Duyá»‡t Há»§y',
+      icon: 'assignment_late', label: 'Chờ duyệt hủy',
       value: stats.cancelRequested.toLocaleString('vi-VN'),
-      sub: 'cáº§n admin xá»­ lÃ½',
+      sub: 'cần admin xử lý',
       gradient: 'from-orange-400 to-amber-500', bg: 'bg-orange-50', ic: 'text-orange-600',
       onClick: () => filterByStatus('CANCEL_REQUESTED'), active: statusFilter === 'CANCEL_REQUESTED',
     },
     {
-      icon: 'account_balance_wallet', label: 'ChÆ°a Thanh ToÃ¡n',
+      icon: 'account_balance_wallet', label: 'Chưa thanh toán',
       value: stats.unpaidCount.toLocaleString('vi-VN'),
-      sub: 'Ä‘ang chá» thanh toÃ¡n',
+      sub: 'đang chờ thanh toán',
       gradient: 'from-violet-400 to-purple-500', bg: 'bg-violet-50', ic: 'text-violet-600',
       onClick: () => filterByPayment('UNPAID'), active: paymentFilter === 'UNPAID',
     },

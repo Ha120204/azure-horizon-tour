@@ -13,13 +13,17 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
-    const [successMsg, setSuccessMsg] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const router = useRouter();
     const { t } = useLocale();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
+
         setError('');
+        setIsSubmitting(true);
+        let keepLoading = false;
 
         try {
             const res = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -45,33 +49,25 @@ export default function LoginPage() {
                 window.dispatchEvent(new Event('auth-change'));
 
                 // Chuyển trang mượt mà qua Next Router (0ms delay)
+                keepLoading = true;
                 router.push('/');
 
             } else {
                 const errData = await res.json();
                 setError(errData.message || t('auth.invalidCred'));
             }
-        } catch (err) {
+        } catch {
             setError(t('auth.serverError'));
+        } finally {
+            if (!keepLoading) {
+                setIsSubmitting(false);
+            }
         }
     };
 
     return (
         <>
             <div className="bg-surface text-on-surface min-h-screen flex flex-col font-body relative">
-                {successMsg && (
-                    <div className="fixed top-24 right-8 z-[100] animate-bounce">
-                        <div className="bg-white border-l-4 border-emerald-500 shadow-2xl rounded-xl px-6 py-4 flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                                <span className="material-symbols-outlined text-2xl">check_circle</span>
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-bold text-slate-800 font-headline">{t('auth.success')}</h4>
-                                <p className="text-xs text-slate-500 mt-0.5">{successMsg}</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
                 <Header />
 
                 <main className="flex-grow flex items-center justify-center p-6 mt-16 relative overflow-hidden">
@@ -99,11 +95,12 @@ export default function LoginPage() {
                                         <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">mail</span>
                                         <input
                                             required
-                                            className="w-full pl-12 pr-4 py-3 bg-surface-container-low border-transparent rounded-lg focus:ring-0 focus:border-primary/20 focus:bg-surface-container-lowest transition-all text-on-surface placeholder:text-outline/50 border border-transparent"
+                                            className="w-full pl-12 pr-4 py-3 bg-surface-container-low border-transparent rounded-lg focus:ring-0 focus:border-primary/20 focus:bg-surface-container-lowest transition-all text-on-surface placeholder:text-outline/50 border border-transparent disabled:cursor-wait disabled:opacity-70"
                                             placeholder={t('auth.emailPlace')}
                                             type="email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
+                                            disabled={isSubmitting}
                                         />
                                     </div>
                                 </div>
@@ -114,13 +111,14 @@ export default function LoginPage() {
                                         <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">lock</span>
                                         <input
                                             required
-                                            className="w-full pl-12 pr-12 py-3 bg-surface-container-low border-transparent rounded-lg focus:ring-0 focus:border-primary/20 focus:bg-surface-container-lowest transition-all text-on-surface placeholder:text-outline/50 border border-transparent"
+                                            className="w-full pl-12 pr-12 py-3 bg-surface-container-low border-transparent rounded-lg focus:ring-0 focus:border-primary/20 focus:bg-surface-container-lowest transition-all text-on-surface placeholder:text-outline/50 border border-transparent disabled:cursor-wait disabled:opacity-70"
                                             placeholder={t('auth.passwordPlace')}
                                             type={showPassword ? 'text' : 'password'}
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
+                                            disabled={isSubmitting}
                                         />
-                                        <button className="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors" type="button" onClick={() => setShowPassword(!showPassword)}>
+                                        <button className="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors disabled:cursor-not-allowed disabled:opacity-50" type="button" onClick={() => setShowPassword(!showPassword)} disabled={isSubmitting}>
                                             <span className="material-symbols-outlined">{showPassword ? 'visibility_off' : 'visibility'}</span>
                                         </button>
                                     </div>
@@ -129,8 +127,15 @@ export default function LoginPage() {
                                     </div>
                                 </div>
 
-                                <button className="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-headline font-bold text-base tracking-wide editorial-shadow active:scale-[0.98] transition-all" type="submit">
-                                    {t('auth.signInBtn')}
+                                <button className="w-full min-h-14 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-headline font-bold text-base tracking-wide editorial-shadow active:scale-[0.98] transition-all disabled:cursor-wait disabled:opacity-75 flex items-center justify-center gap-2.5" type="submit" disabled={isSubmitting}>
+                                    {isSubmitting ? (
+                                        <>
+                                            <span className="material-symbols-outlined text-[20px] animate-spin" aria-hidden="true">progress_activity</span>
+                                            {t('auth.loggingIn')}
+                                        </>
+                                    ) : (
+                                        t('auth.signInBtn')
+                                    )}
                                 </button>
                             </form>
 

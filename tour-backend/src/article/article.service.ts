@@ -28,6 +28,7 @@ type ArticleDraftInput = {
   author?: string;
   readTime?: number;
   isFeatured?: boolean;
+  saveMode?: 'draft' | 'publish';
 };
 
 function stripHtml(value?: string | null): string {
@@ -46,7 +47,7 @@ function requirePublishableArticle(article: ArticleDraftInput) {
   if (!stripHtml(article.content) || article.content === '<p><br></p>') missing.push('nội dung');
 
   if (missing.length) {
-    throw new BadRequestException(`Bài viết chưa đủ thông tin để gửi duyệt: ${missing.join(', ')}`);
+    throw new BadRequestException(`Bài viết chưa đủ thông tin để xuất bản: ${missing.join(', ')}`);
   }
 }
 
@@ -272,14 +273,16 @@ export class ArticleService {
     return article;
   }
 
-  /** Admin/Staff tạo bài — Admin: PUBLISHED; Staff: DRAFT */
+  /** Admin/Super Admin tạo nháp hoặc xuất bản ngay; Staff tạo DRAFT */
   async adminCreate(
     dto: ArticleDraftInput,
     creatorId?: number,
     creatorRole?: string,
   ) {
     const isAdmin = creatorRole === 'ADMIN' || creatorRole === 'SUPER_ADMIN';
-    if (isAdmin) requirePublishableArticle(dto);
+    const saveMode = dto.saveMode === 'draft' ? 'draft' : 'publish';
+    const shouldPublish = isAdmin && saveMode === 'publish';
+    if (shouldPublish) requirePublishableArticle(dto);
 
     const title = dto.title?.trim() ?? '';
     const slugSeed = title || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -290,7 +293,7 @@ export class ArticleService {
       slug = `${baseSlug}-${suffix++}`;
     }
 
-    const status: ArticleStatus = isAdmin ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
+    const status: ArticleStatus = shouldPublish ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
 
     return this.prisma.article.create({
       data: {
@@ -304,7 +307,7 @@ export class ArticleService {
         readTime: dto.readTime ?? 1,
         isFeatured: dto.isFeatured ?? false,
         status,
-        publishedAt: isAdmin ? new Date() : null,
+        publishedAt: shouldPublish ? new Date() : null,
         ...(creatorId && { createdBy: { connect: { id: creatorId } } }),
       },
     });
@@ -386,8 +389,14 @@ export class ArticleService {
       }
     }
 
+    const { saveMode, ...articleData } = dto;
+    const wantsDraft = isAdmin && saveMode === 'draft';
+    const wantsPublish = isAdmin && saveMode === 'publish';
+    const publishCandidate: ArticleDraftInput = { ...existing, ...articleData };
+    if (wantsPublish) requirePublishableArticle(publishCandidate);
+
     const updateData: any = {
-      ...dto,
+      ...articleData,
       ...(dto.title !== undefined && { title: dto.title.trim() }),
       ...(dto.excerpt !== undefined && { excerpt: dto.excerpt.trim() }),
       ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl.trim() }),
@@ -406,6 +415,16 @@ export class ArticleService {
         slug = `${baseSlug}-${suffix++}`;
       }
       updateData.slug = slug;
+    }
+
+    if (wantsDraft) {
+      updateData.status = ArticleStatus.DRAFT;
+      updateData.publishedAt = null;
+      updateData.reviewNote = null;
+    } else if (wantsPublish) {
+      updateData.status = ArticleStatus.PUBLISHED;
+      updateData.publishedAt = existing.publishedAt ?? new Date();
+      updateData.reviewNote = null;
     }
 
     return this.prisma.article.update({ where: { id }, data: updateData });

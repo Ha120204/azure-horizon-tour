@@ -170,9 +170,20 @@ export class ReviewService {
   // ─── Admin APIs ───────────────────────────────────────────────────────────
 
   async getAdminStats() {
-    const [total, hidden, aggregations, groupByRatings] = await Promise.all([
+    const [total, hidden, replied, unreplied, aggregations, groupByRatings] = await Promise.all([
       this.prisma.review.count(),
       this.prisma.review.count({ where: { isHidden: true } }),
+      this.prisma.review.count({
+        where: {
+          adminReply: { not: null },
+          NOT: { adminReply: '' },
+        },
+      }),
+      this.prisma.review.count({
+        where: {
+          OR: [{ adminReply: null }, { adminReply: '' }],
+        },
+      }),
       this.prisma.review.aggregate({ _avg: { rating: true } }),
       this.prisma.review.groupBy({
         by: ['rating'],
@@ -194,6 +205,8 @@ export class ReviewService {
     return {
       total,
       hidden,
+      replied,
+      unreplied,
       averageRating: Number((aggregations._avg.rating || 0).toFixed(1)),
       fiveStarRate,
       breakdown,
@@ -206,7 +219,9 @@ export class ReviewService {
       limit = 10,
       search,
       rating,
+      ratings,
       status,
+      replyStatus,
       tourId,
       sortBy,
     } = query;
@@ -215,7 +230,22 @@ export class ReviewService {
     const where: Prisma.ReviewWhereInput = {};
     if (status === 'hidden') where.isHidden = true;
     else if (status === 'visible') where.isHidden = false;
-    if (rating) where.rating = Number(rating);
+    if (ratings) {
+      const parsedRatings = ratings
+        .split(',')
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isInteger(value) && value >= 1 && value <= 5);
+      if (parsedRatings.length === 1) where.rating = parsedRatings[0];
+      else if (parsedRatings.length > 1) where.rating = { in: [...new Set(parsedRatings)] };
+    } else if (rating) {
+      where.rating = Number(rating);
+    }
+    if (replyStatus === 'replied') {
+      where.adminReply = { not: null };
+      where.NOT = { adminReply: '' };
+    } else if (replyStatus === 'unreplied') {
+      where.AND = [{ OR: [{ adminReply: null }, { adminReply: '' }] }];
+    }
     if (tourId) where.tourId = Number(tourId);
     if (search) {
       where.OR = [

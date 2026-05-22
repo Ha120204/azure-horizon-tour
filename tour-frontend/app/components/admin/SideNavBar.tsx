@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useRouter } from '@/i18n/routing';
 import { API_BASE_URL } from '@/app/lib/constants';
 import React, { useState } from 'react';
 
@@ -17,7 +16,7 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-    { href: '/admin/super',      icon: 'admin_panel_settings', label: 'Super Overview', roles: ['SUPER_ADMIN'], section: 'super' },
+    { href: '/admin/super',      icon: 'admin_panel_settings', label: 'Tổng quan cấp cao', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Phân quyền', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/logs',       icon: 'history',              label: 'Audit hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/settings',   icon: 'settings',             label: 'Cấu hình hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
@@ -39,73 +38,44 @@ const navItems: NavItem[] = [
 ];
 
 const SECTION_LABEL: Record<NavItem['section'], string> = {
-    super: 'Super Admin',
+    super: 'Siêu quản trị',
     operations: 'Vận hành',
     governance: 'Quản trị',
 };
 
-const ROLE_LABEL: Record<string, { label: string; color: string }> = {
-    SUPER_ADMIN: { label: 'Siêu Quản Trị', color: 'text-amber-600' },
-    ADMIN:       { label: 'Quản Trị Viên', color: 'text-blue-600' },
-    STAFF:       { label: 'Nhân Viên',     color: 'text-teal-600' },
-};
-
 export default function SideNavBar() {
     const pathname = usePathname();
-    const router = useRouter();
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
-    const [adminName, setAdminName] = useState<string>('Admin');
-    const [adminInitials, setAdminInitials] = useState<string>('A');
 
     React.useEffect(() => {
-        // Đọc từ localStorage trước để hiển thị ngay (không chờ API)
-        const savedName = localStorage.getItem('userName') || '';
-        if (savedName) {
-            setAdminName(savedName);
-            const parts = savedName.trim().split(' ');
-            setAdminInitials(
-                parts.length >= 2
-                    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-                    : savedName.slice(0, 2).toUpperCase()
-            );
-        }
-        // Lấy role từ API (chỉ gọi 1 lần khi mount sidebar)
-        fetch(`${API_BASE_URL}/auth/profile`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-        })
-        .then(res => res.json())
-        .then(data => {
-            const profile = data.data ?? data;
-            const role = profile.role || '';
-            const fullName = profile.fullName || savedName || 'Admin';
-            setCurrentUserRole(role);
-            setAdminName(fullName);
-            const parts = fullName.trim().split(' ');
-            setAdminInitials(
-                parts.length >= 2
-                    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-                    : fullName.slice(0, 2).toUpperCase()
-            );
-        })
-        .catch(err => console.error('Error fetching profile:', err));
-    }, []);
+        const applyLocalRole = () => {
+            const savedRole = localStorage.getItem('userRole') || '';
+            if (savedRole) setCurrentUserRole(savedRole);
+        };
 
-    const handleLogout = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        try {
-            await fetch(`${API_BASE_URL}/auth/logout`, {
-                method: 'POST',
-                credentials: 'include',
-            });
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('userName');
-            window.dispatchEvent(new Event('auth-change'));
-            router.replace('/admin/login');
-        }
-    };
+        const loadProfile = () => {
+            applyLocalRole();
+            fetch(`${API_BASE_URL}/auth/profile`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                const profile = data.data ?? data;
+                const role = profile.role || '';
+                setCurrentUserRole(role);
+                if (profile.fullName) localStorage.setItem('userName', profile.fullName);
+                if (role) localStorage.setItem('userRole', role);
+                if (profile.email) localStorage.setItem('userEmail', profile.email);
+                if (profile.avatarUrl) localStorage.setItem('userAvatarUrl', profile.avatarUrl);
+                else localStorage.removeItem('userAvatarUrl');
+            })
+            .catch(err => console.error('Error fetching profile:', err));
+        };
+
+        loadProfile();
+        window.addEventListener('auth-change', loadProfile);
+        return () => window.removeEventListener('auth-change', loadProfile);
+    }, []);
 
     const isActive = (href: string) => {
         const cleanPath = pathname?.replace(/^\/(en|vi)/, '') || '';
@@ -178,37 +148,6 @@ export default function SideNavBar() {
                 ))}
             </nav>
 
-            {/* Divider */}
-            <div className="mx-4 h-px bg-slate-200/80" />
-
-            {/* User Profile Footer */}
-            <div className="p-4 flex-shrink-0">
-                <div
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer group outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    tabIndex={0}
-                    role="button"
-                    aria-haspopup="menu"
-                    aria-label="Cài đặt hồ sơ người dùng"
-                    onClick={() => router.push('/admin/profile')}
-                >
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-teal-400 to-blue-500 flex items-center justify-center text-white shadow-md ring-2 ring-white/80 transition-all overflow-hidden flex-shrink-0">
-                        <span className="text-xs font-bold tracking-wider">{adminInitials}</span>
-                    </div>
-                    <div className="flex-1 flex flex-col min-w-0">
-                        <span className="text-sm font-bold text-slate-900 truncate">{adminName}</span>
-                        <span className={`text-[10px] font-bold tracking-wider uppercase mt-0.5 truncate ${ROLE_LABEL[currentUserRole]?.color ?? 'text-slate-500'}`}>
-                            {ROLE_LABEL[currentUserRole]?.label ?? currentUserRole}
-                        </span>
-                    </div>
-                    <button
-                        aria-label="Đăng xuất"
-                        className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                        onClick={(e) => { e.stopPropagation(); handleLogout(e); }}
-                    >
-                        <span className="material-symbols-outlined text-[18px] translate-x-0.5" aria-hidden="true">logout</span>
-                    </button>
-                </div>
-            </div>
         </aside>
     );
 }

@@ -49,6 +49,9 @@ const formatDateToInputValue = (d: string | null | undefined) => {
     catch { return ''; }
 };
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error && error.message ? error.message : fallback;
+
 // ── Password Strength ─────────────────────────────────────────────────────────
 
 function getPasswordStrength(password: string): { score: number; label: string; color: string } {
@@ -189,6 +192,11 @@ export default function AdminProfilePage() {
             const json = await res.json();
             const data: AdminProfile = json.data ?? json;
             setProfile(data);
+            if (data.fullName) localStorage.setItem('userName', data.fullName);
+            if (data.email) localStorage.setItem('userEmail', data.email);
+            if (data.role) localStorage.setItem('userRole', data.role);
+            if (data.avatarUrl) localStorage.setItem('userAvatarUrl', data.avatarUrl);
+            else localStorage.removeItem('userAvatarUrl');
             setInfoForm({
                 fullName: data.fullName || '',
                 phone: data.phone || '',
@@ -247,8 +255,9 @@ export default function AdminProfilePage() {
             window.dispatchEvent(new Event('auth-change'));
             showToast('Cập nhật thông tin thành công!');
             fetchProfile();
-        } catch (e: any) {
-            showToast(e.message || 'Lỗi lưu thông tin.', 'error');
+        } catch (e: unknown) {
+            const message = getErrorMessage(e, '');
+            showToast(message || 'Lỗi lưu thông tin.', 'error');
         } finally {
             setIsSavingInfo(false);
         }
@@ -284,14 +293,19 @@ export default function AdminProfilePage() {
                 throw new Error(err.message || 'Upload thất bại');
             }
             const result = await res.json();
-            if (result.data?.avatarUrl) {
-                setAvatarPreview(result.data.avatarUrl);
+            const avatarUrl = result.data?.avatarUrl ?? result.avatarUrl;
+            if (avatarUrl) {
+                setAvatarPreview(avatarUrl);
+                setProfile(prev => prev ? { ...prev, avatarUrl } : prev);
+                localStorage.setItem('userAvatarUrl', avatarUrl);
+                window.dispatchEvent(new Event('auth-change'));
             }
             showToast('Cập nhật ảnh đại diện thành công!');
             fetchProfile();
-        } catch (e: any) {
+        } catch (e: unknown) {
             setAvatarPreview(null);
-            showToast(e.message || 'Upload ảnh thất bại.', 'error');
+            const message = getErrorMessage(e, '');
+            showToast(message || 'Upload ảnh thất bại.', 'error');
         } finally {
             setIsUploadingAvatar(false);
         }
@@ -330,8 +344,8 @@ export default function AdminProfilePage() {
             showToast('Đổi mật khẩu thành công!');
             setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
             setPwErrors({});
-        } catch (e: any) {
-            const msg = e.message || '';
+        } catch (e: unknown) {
+            const msg = getErrorMessage(e, '');
             if (msg.toLowerCase().includes('incorrect') || msg.toLowerCase().includes('wrong') || msg.toLowerCase().includes('invalid'))
                 setPwErrors({ currentPassword: 'Mật khẩu hiện tại không đúng' });
             else

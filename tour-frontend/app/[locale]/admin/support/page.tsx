@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import { API_BASE_URL } from '@/app/lib/constants';
 
 type TicketStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
+type TicketView = 'ALL' | 'OPEN' | 'OVERDUE';
 
 interface Reply {
     id: number;
@@ -76,8 +78,13 @@ type ReplyResponse = Reply | { data: Reply };
 
 type StatsResponse = Partial<Kpi> | { data?: Partial<Kpi> };
 
+type ApiErrorPayload = {
+    message?: string | string[];
+};
+
 const POLL_INTERVAL_MS = 10000;
 const OPEN_TICKET_STATUSES = new Set<TicketStatus>(['NEW', 'IN_PROGRESS']);
+const CATEGORY_KEYS: TicketCategory[] = ['booking', 'payment', 'reschedule', 'complaint', 'general'];
 
 const EMPTY_KPI: Kpi = {
     total: 0,
@@ -150,8 +157,31 @@ function resolveStats(payload: StatsResponse): Partial<Kpi> {
     return payload as Partial<Kpi>;
 }
 
+async function readApiError(res: Response, fallback: string) {
+    try {
+        const payload = (await res.json()) as ApiErrorPayload;
+        if (Array.isArray(payload.message)) return payload.message.join(', ');
+        if (typeof payload.message === 'string' && payload.message.trim()) return payload.message;
+    } catch {
+        // Keep the actionable fallback if the server response is not JSON.
+    }
+    return fallback;
+}
+
 function isOpenTicket(status?: TicketStatus) {
     return Boolean(status && OPEN_TICKET_STATUSES.has(status));
+}
+
+function resolveInitialStatus(value: string | null): TicketStatus | 'ALL' {
+    return value === 'NEW' || value === 'IN_PROGRESS' || value === 'RESOLVED' ? value : 'ALL';
+}
+
+function resolveInitialCategory(value: string | null): TicketCategory | 'ALL' {
+    return value && CATEGORY_KEYS.includes(value as TicketCategory) ? value as TicketCategory : 'ALL';
+}
+
+function resolveInitialView(value: string | null): TicketView {
+    return value === 'open' ? 'OPEN' : value === 'overdue' ? 'OVERDUE' : 'ALL';
 }
 
 function getInitials(name: string) {
@@ -208,19 +238,43 @@ function resolvePaymentStatus(status: string) {
 }
 
 export default function SupportPage() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [kpi, setKpi] = useState<Kpi>(EMPTY_KPI);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<Ticket | null>(null);
     const [reply, setReply] = useState('');
     const [sending, setSending] = useState(false);
-    const [search, setSearch] = useState('');
-    const [activeStatus, setActiveStatus] = useState<TicketStatus | 'ALL'>('ALL');
-    const [activeCategory, setActiveCategory] = useState<TicketCategory | 'ALL'>('ALL');
+    const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
+    const [actionError, setActionError] = useState('');
+    const [actionNotice, setActionNotice] = useState('');
+    const [search, setSearch] = useState(searchParams.get('search') ?? '');
+    const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '');
+    const [activeStatus, setActiveStatus] = useState<TicketStatus | 'ALL'>(() => resolveInitialStatus(searchParams.get('status')));
+    const [activeCategory, setActiveCategory] = useState<TicketCategory | 'ALL'>(() => resolveInitialCategory(searchParams.get('category')));
+    const [activeView, setActiveView] = useState<TicketView>(() => resolveInitialView(searchParams.get('view')));
     const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
     const threadRef = useRef<HTMLDivElement>(null);
     const selectedTicketId = selected?.id;
     const selectedTicketStatus = selected?.status;
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => window.clearTimeout(timer);
+    }, [search]);
+
+    useEffect(() => {
+        const params = new URLSearchParams();
+        if (activeStatus !== 'ALL') params.set('status', activeStatus);
+        if (activeCategory !== 'ALL') params.set('category', activeCategory);
+        if (activeView !== 'ALL') params.set('view', activeView === 'OPEN' ? 'open' : 'overdue');
+        if (debouncedSearch) params.set('search', debouncedSearch);
+        const nextUrl = params.toString() ? `${pathname}?${params}` : pathname;
+        router.replace(nextUrl, { scroll: false });
+    }, [activeCategory, activeStatus, activeView, debouncedSearch, pathname, router]);
 
     const fetchTickets = useCallback(async (options: FetchTicketsOptions = {}) => {
         if (!options.silent) setLoading(true);
@@ -228,12 +282,15 @@ export default function SupportPage() {
             const qs = new URLSearchParams();
             if (activeStatus !== 'ALL') qs.set('status', activeStatus);
             if (activeCategory !== 'ALL') qs.set('category', activeCategory);
-            if (search.trim()) qs.set('search', search.trim());
+            if (activeView !== 'ALL') qs.set('view', activeView === 'OPEN' ? 'open' : 'overdue');
+            if (debouncedSearch) qs.set('search', debouncedSearch);
 
             const [ticketsRes, statsRes] = await Promise.all([
                 fetchWithAuth(`${API_BASE_URL}/support/tickets?${qs}`),
                 fetchWithAuth(`${API_BASE_URL}/support/stats`),
             ]);
+            if (!ticketsRes.ok) throw new Error(await readApiError(ticketsRes, 'Không thể tải danh sách ticket'));
+            if (!statsRes.ok) throw new Error(await readApiError(statsRes, 'Không thể tải thống kê hỗ trợ'));
             const json = (await ticketsRes.json()) as TicketListResponse;
             const statsJson = (await statsRes.json()) as StatsResponse;
             const data = json?.data ?? json;
@@ -250,15 +307,17 @@ export default function SupportPage() {
                 }
                 return nextTickets[0];
             });
-        } catch {
+            if (!options.silent) setActionError('');
+        } catch (error) {
             if (!options.silent) {
                 setTickets([]);
                 setSelected(null);
+                setActionError(error instanceof Error ? error.message : 'Không thể tải dữ liệu hỗ trợ');
             }
         } finally {
             if (!options.silent) setLoading(false);
         }
-    }, [activeStatus, activeCategory, search]);
+    }, [activeStatus, activeCategory, activeView, debouncedSearch]);
 
     const fetchSelectedDetail = useCallback(async (ticketId: number) => {
         try {
@@ -308,36 +367,59 @@ export default function SupportPage() {
     }, [selected]);
 
     const handleSelect = async (ticket: Ticket) => {
+        setActionError('');
+        setActionNotice('');
         setSelected(ticket);
         await fetchSelectedDetail(ticket.id);
     };
 
     const handleStatusChange = async (id: number, status: TicketStatus) => {
-        await fetchWithAuth(`${API_BASE_URL}/support/tickets/${id}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status }),
-        });
-        setSelected((prev) => prev ? { ...prev, status } : prev);
-        setTickets((prev) => prev.map((ticket) => ticket.id === id ? { ...ticket, status } : ticket));
-        void fetchTickets({ silent: true });
+        if (statusUpdatingId !== null || selected?.status === status) return;
+        setStatusUpdatingId(id);
+        setActionError('');
+        setActionNotice('');
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status }),
+            });
+            if (!res.ok) throw new Error(await readApiError(res, 'Không thể cập nhật trạng thái ticket'));
+            const json = (await res.json()) as TicketResponse;
+            const updatedTicket = resolveTicket(json);
+            const nextStatus = updatedTicket?.status ?? status;
+            setSelected((prev) => prev ? { ...prev, ...updatedTicket, status: nextStatus } : prev);
+            setTickets((prev) => prev.map((ticket) => ticket.id === id ? { ...ticket, ...updatedTicket, status: nextStatus } : ticket));
+            setActionNotice('Đã cập nhật trạng thái ticket.');
+            void fetchTickets({ silent: true });
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : 'Không thể cập nhật trạng thái ticket');
+        } finally {
+            setStatusUpdatingId(null);
+        }
     };
 
     const handleSendReply = async () => {
         if (!reply.trim() || !selected) return;
         setSending(true);
+        setActionError('');
+        setActionNotice('');
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${selected.id}/reply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: reply.trim() }),
             });
+            if (!res.ok) throw new Error(await readApiError(res, 'Không thể gửi phản hồi'));
             const json = (await res.json()) as ReplyResponse;
             const newReply = resolveReply(json);
             setSelected((prev) => prev ? { ...prev, status: 'IN_PROGRESS', replies: [...(prev.replies ?? []), newReply] } : prev);
             setTickets((prev) => prev.map((ticket) => ticket.id === selected.id ? { ...ticket, status: 'IN_PROGRESS' } : ticket));
             setReply('');
+            setActionNotice('Đã gửi phản hồi cho khách hàng.');
             void fetchTickets({ silent: true });
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : 'Không thể gửi phản hồi');
         } finally {
             setSending(false);
         }
@@ -357,6 +439,38 @@ export default function SupportPage() {
         }, {} as Partial<Record<TicketCategory, number>>);
     }, [tickets]);
 
+    const supportKpis = [
+        {
+            label: 'Ticket đang mở',
+            value: kpi.open.toLocaleString('vi-VN'),
+            icon: 'confirmation_number',
+            tone: 'text-primary bg-primary/10',
+            active: activeView === 'OPEN',
+            onClick: () => {
+                setActiveStatus('ALL');
+                setActiveView((current) => current === 'OPEN' ? 'ALL' : 'OPEN');
+            },
+        },
+        {
+            label: 'Phản hồi trung bình',
+            value: fmtResponse(kpi.avgFirstResponseMinutes),
+            icon: 'timer',
+            tone: 'text-emerald-700 bg-emerald-50',
+            active: false,
+        },
+        {
+            label: 'Quá hạn SLA',
+            value: kpi.overdue.toLocaleString('vi-VN'),
+            icon: 'warning',
+            tone: 'text-red-700 bg-red-50',
+            active: activeView === 'OVERDUE',
+            onClick: () => {
+                setActiveStatus('ALL');
+                setActiveView((current) => current === 'OVERDUE' ? 'ALL' : 'OVERDUE');
+            },
+        },
+    ];
+
     const selectedCategory = selected ? CAT[selected.category] ?? CAT.general : CAT.general;
     const selectedStatus = selected ? STS[selected.status] : null;
     const linkedBooking = selected?.linkedBooking ?? null;
@@ -374,12 +488,17 @@ export default function SupportPage() {
 
                 <div className="flex-1 space-y-6 overflow-y-auto p-5">
                     <div className="relative">
-                        <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">search</span>
+                        <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline" aria-hidden="true">search</span>
+                        <label htmlFor="support-ticket-search" className="sr-only">Tìm ticket hỗ trợ</label>
                         <input
+                            id="support-ticket-search"
+                            name="supportTicketSearch"
+                            type="search"
+                            autoComplete="off"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Tìm ticket..."
-                            className="h-11 w-full rounded-xl border border-outline-variant/40 bg-surface px-10 text-sm font-semibold text-on-surface outline-none transition focus:border-primary/40 focus:ring-4 focus:ring-primary/10 placeholder:text-outline"
+                            placeholder="Tìm ticket…"
+                            className="h-11 w-full rounded-xl border border-outline-variant/40 bg-surface px-10 text-sm font-semibold text-on-surface outline-none transition focus-visible:border-primary/40 focus-visible:ring-4 focus-visible:ring-primary/10 placeholder:text-outline"
                         />
                     </div>
 
@@ -387,19 +506,23 @@ export default function SupportPage() {
                         <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-outline">Trạng thái</p>
                         <div className="space-y-1.5">
                             {statusOptions.map((option) => {
-                                const active = activeStatus === option.key;
+                                const active = activeView === 'ALL' && activeStatus === option.key;
                                 return (
                                     <button
                                         key={option.key}
                                         type="button"
-                                        onClick={() => setActiveStatus(option.key)}
-                                        className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
+                                        onClick={() => {
+                                            setActiveView('ALL');
+                                            setActiveStatus(option.key);
+                                        }}
+                                        aria-pressed={active}
+                                        className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 ${
                                             active
                                                 ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
                                                 : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
                                         }`}
                                     >
-                                        <span className="material-symbols-outlined text-[19px]">{option.icon}</span>
+                                        <span className="material-symbols-outlined text-[19px]" aria-hidden="true">{option.icon}</span>
                                         <span className="flex-1 text-left">{option.label}</span>
                                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${active ? 'bg-primary text-on-primary' : 'bg-surface-container text-outline'}`}>
                                             {counts[option.key].toLocaleString('vi-VN')}
@@ -411,16 +534,17 @@ export default function SupportPage() {
                     </section>
 
                     <section>
-                        <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-outline">Danh mục</p>
+                        <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.16em] text-outline">Danh mục trong kết quả</p>
                         <div className="space-y-1">
                             <button
                                 type="button"
                                 onClick={() => setActiveCategory('ALL')}
-                                className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
+                                aria-pressed={activeCategory === 'ALL'}
+                                className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 ${
                                     activeCategory === 'ALL' ? 'bg-surface-container text-on-surface ring-1 ring-outline-variant/40' : 'text-on-surface-variant hover:bg-surface-container-low'
                                 }`}
                             >
-                                <span className="h-2 w-2 rounded-full bg-outline" />
+                                <span className="h-2 w-2 rounded-full bg-outline" aria-hidden="true" />
                                 <span className="flex-1 text-left">Tất cả danh mục</span>
                             </button>
                             {(Object.entries(CAT) as [TicketCategory, typeof CAT[TicketCategory]][]).map(([key, category]) => (
@@ -428,11 +552,12 @@ export default function SupportPage() {
                                     key={key}
                                     type="button"
                                     onClick={() => setActiveCategory(key)}
-                                    className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
+                                    aria-pressed={activeCategory === key}
+                                    className={`flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 ${
                                         activeCategory === key ? 'bg-surface-container text-on-surface ring-1 ring-outline-variant/40' : 'text-on-surface-variant hover:bg-surface-container-low'
                                     }`}
                                 >
-                                    <span className={`h-2 w-2 rounded-full ${category.dot}`} />
+                                    <span className={`h-2 w-2 rounded-full ${category.dot}`} aria-hidden="true" />
                                     <span className="flex-1 text-left">{category.label}</span>
                                     <span className="text-[11px] font-black text-outline">{categoryCounts[key] ?? 0}</span>
                                 </button>
@@ -444,7 +569,7 @@ export default function SupportPage() {
                 <div className="shrink-0 border-t border-outline-variant/30 p-5">
                     <div className="rounded-2xl border border-primary/10 bg-primary/5 p-4">
                         <div className="flex items-center gap-2 text-sm font-black text-primary">
-                            <span className="material-symbols-outlined text-[18px]">support_agent</span>
+                            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">support_agent</span>
                             Quy trình phản hồi
                         </div>
                         <p className="mt-2 text-xs leading-5 text-on-surface-variant">
@@ -457,29 +582,58 @@ export default function SupportPage() {
             <section className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-outline-variant/40 bg-surface">
                 <div className="shrink-0 border-b border-outline-variant/30 bg-surface-container-lowest p-4">
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                        {[
-                            { label: 'Ticket đang mở', value: kpi.open.toLocaleString('vi-VN'), icon: 'confirmation_number', tone: 'text-primary bg-primary/10' },
-                            { label: 'Phản hồi trung bình', value: fmtResponse(kpi.avgFirstResponseMinutes), icon: 'timer', tone: 'text-emerald-700 bg-emerald-50' },
-                            { label: 'Quá hạn SLA', value: kpi.overdue.toLocaleString('vi-VN'), icon: 'warning', tone: 'text-red-700 bg-red-50' },
-                        ].map((item) => (
-                            <div key={item.label} className="rounded-2xl border border-outline-variant/30 bg-surface px-4 py-3 shadow-sm">
+                        {supportKpis.map((item) => {
+                            const content = (
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
                                         <p className="text-xs font-bold text-on-surface-variant">{item.label}</p>
                                         <p className="mt-1 text-2xl font-black tracking-tight text-slate-950">{item.value}</p>
                                     </div>
-                                    <span className={`material-symbols-outlined grid h-10 w-10 place-items-center rounded-2xl text-[20px] ${item.tone}`}>
+                                    <span className={`material-symbols-outlined grid h-10 w-10 place-items-center rounded-2xl text-[20px] ${item.tone}`} aria-hidden="true">
                                         {item.icon}
                                     </span>
                                 </div>
-                            </div>
-                        ))}
+                            );
+
+                            return item.onClick ? (
+                                <button
+                                    key={item.label}
+                                    type="button"
+                                    onClick={item.onClick}
+                                    aria-pressed={item.active}
+                                    className={`rounded-2xl border bg-surface px-4 py-3 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 ${
+                                        item.active
+                                            ? 'border-primary/40 ring-2 ring-primary/10'
+                                            : 'border-outline-variant/30 hover:border-primary/30 hover:bg-primary/5'
+                                    }`}
+                                >
+                                    {content}
+                                </button>
+                            ) : (
+                                <div key={item.label} className="rounded-2xl border border-outline-variant/30 bg-surface px-4 py-3 text-left shadow-sm">
+                                    {content}
+                                </div>
+                            );
+                        })}
                     </div>
                     {lastSyncedAt && (
                         <p className="mt-3 flex items-center justify-end gap-1.5 text-[11px] font-semibold text-outline">
-                            <span className="material-symbols-outlined text-[14px]">sync</span>
-                            Cap nhat {fmtSyncTime(lastSyncedAt)}
+                            <span className="material-symbols-outlined text-[14px]" aria-hidden="true">sync</span>
+                            Cập nhật {fmtSyncTime(lastSyncedAt)}
                         </p>
+                    )}
+                    {(actionError || actionNotice) && (
+                        <div
+                            role={actionError ? 'alert' : 'status'}
+                            aria-live="polite"
+                            className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                                actionError
+                                    ? 'border-red-200 bg-red-50 text-red-700'
+                                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            }`}
+                        >
+                            {actionError || actionNotice}
+                        </div>
                     )}
                 </div>
 
@@ -520,7 +674,8 @@ export default function SupportPage() {
                                     key={ticket.id}
                                     type="button"
                                     onClick={() => void handleSelect(ticket)}
-                                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                                    aria-pressed={active}
+                                    className={`w-full rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 ${
                                         active
                                             ? 'border-primary/30 bg-primary/5 shadow-sm ring-2 ring-primary/10'
                                             : 'border-outline-variant/30 bg-surface-container-lowest hover:border-primary/20 hover:bg-surface'
@@ -580,9 +735,11 @@ export default function SupportPage() {
                                     </div>
                                 </div>
                                 <select
+                                    aria-label={`Cập nhật trạng thái ticket #${selected.id}`}
                                     value={selected.status}
                                     onChange={(event) => void handleStatusChange(selected.id, event.target.value as TicketStatus)}
-                                    className="h-9 rounded-xl border border-outline-variant/40 bg-surface px-3 text-xs font-black text-on-surface outline-none transition focus:border-primary/40 focus:ring-4 focus:ring-primary/10"
+                                    disabled={statusUpdatingId === selected.id}
+                                    className="h-9 rounded-xl border border-outline-variant/40 bg-surface px-3 text-xs font-black text-on-surface outline-none transition focus-visible:border-primary/40 focus-visible:ring-4 focus-visible:ring-primary/10 disabled:cursor-wait disabled:opacity-60"
                                 >
                                     <option value="NEW">Mới</option>
                                     <option value="IN_PROGRESS">Đang xử lý</option>
@@ -716,33 +873,30 @@ export default function SupportPage() {
 
                         <div className="shrink-0 border-t border-outline-variant/30 bg-surface px-5 py-4">
                             <div className="overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-sm transition focus-within:border-primary/40 focus-within:ring-4 focus-within:ring-primary/10">
+                                <label htmlFor="support-reply-content" className="sr-only">Nội dung phản hồi</label>
                                 <textarea
+                                    id="support-reply-content"
+                                    name="supportReplyContent"
                                     value={reply}
                                     onChange={(event) => setReply(event.target.value)}
                                     onKeyDown={(event) => {
                                         if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) void handleSendReply();
                                     }}
-                                    placeholder="Soạn phản hồi..."
+                                    placeholder="Soạn phản hồi…"
                                     rows={3}
                                     className="block w-full resize-none border-none bg-transparent p-4 text-sm font-medium leading-6 text-on-surface outline-none placeholder:text-outline focus:ring-0"
                                 />
                                 <div className="flex items-center justify-between border-t border-outline-variant/30 bg-surface-container-low px-3 py-2">
-                                    <div className="flex items-center gap-1 text-outline">
-                                        {['format_bold', 'attach_file', 'mood'].map((icon) => (
-                                            <button key={icon} type="button" className="grid h-8 w-8 place-items-center rounded-lg transition hover:bg-surface-container hover:text-on-surface">
-                                                <span className="material-symbols-outlined text-[18px]">{icon}</span>
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <p className="text-[11px] font-semibold text-outline">Ctrl + Enter để gửi</p>
                                     <button
                                         type="button"
                                         onClick={() => void handleSendReply()}
                                         disabled={!reply.trim() || sending}
-                                        className="inline-flex min-h-9 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-black text-on-primary transition hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="inline-flex min-h-9 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-black text-on-primary transition hover:bg-primary-container focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                        {sending ? <span className="material-symbols-outlined text-[17px] animate-spin">progress_activity</span> : null}
+                                        {sending ? <span className="material-symbols-outlined text-[17px] animate-spin" aria-hidden="true">progress_activity</span> : null}
                                         Gửi phản hồi
-                                        <span className="material-symbols-outlined text-[16px]">send</span>
+                                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">send</span>
                                     </button>
                                 </div>
                             </div>

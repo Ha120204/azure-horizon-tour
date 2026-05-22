@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '@/app/lib/constants';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import VoucherFormModal from '@/app/components/admin/VoucherFormModal';
@@ -42,6 +42,7 @@ interface Meta {
 interface ToastState { message: string; type: 'success' | 'error' }
 
 type ModalMode = 'create' | 'edit' | null;
+type VoucherStatusFilter = Voucher['computedStatus'] | 'expiringSoon' | 'expiredThisMonth' | 'redeemed';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -96,11 +97,11 @@ export default function VoucherManagementPage() {
 
   // ── State: filters ───────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterType, setFilterType] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus] = useState<VoucherStatusFilter | ''>('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── State: UI ────────────────────────────────────────────────────────────
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -110,7 +111,7 @@ export default function VoucherManagementPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [toggleLoadingId, setToggleLoadingId] = useState<number | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   // Fetch current user role
   useEffect(() => {
@@ -134,6 +135,11 @@ export default function VoucherManagementPage() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   // ── Fetch Stats ──────────────────────────────────────────────────────────
   const fetchStats = useCallback(async () => {
     setIsLoadingStats(true);
@@ -155,7 +161,7 @@ export default function VoucherManagementPage() {
     setIsLoadingList(true);
     try {
       const qs = new URLSearchParams();
-      if (search) qs.append('search', search);
+      if (debouncedSearch) qs.append('search', debouncedSearch);
       if (filterType) qs.append('discountType', filterType);
       if (filterStatus) qs.append('status', filterStatus);
       qs.append('page', String(page));
@@ -173,7 +179,7 @@ export default function VoucherManagementPage() {
     } finally {
       setIsLoadingList(false);
     }
-  }, [search, filterType, filterStatus, page, limit, showToast]);
+  }, [debouncedSearch, filterType, filterStatus, page, limit, showToast]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => { fetchVouchers(); }, [fetchVouchers]);
@@ -182,8 +188,6 @@ export default function VoucherManagementPage() {
   const handleSearchChange = (val: string) => {
     setSearch(val);
     setPage(1);
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => {}, 300); // debounce effect via useCallback dep
   };
 
   // ── Toggle Active ────────────────────────────────────────────────────────
@@ -233,16 +237,18 @@ export default function VoucherManagementPage() {
   };
 
   // ── KPI cards data ───────────────────────────────────────────────────────
-  const filterByStatus = (status: Voucher['computedStatus']) => {
+  const filterByStatus = (status: VoucherStatusFilter) => {
     setFilterStatus((current) => current === status ? '' : status);
     setPage(1);
   };
   const clearVoucherFilters = () => {
     setSearch('');
+    setDebouncedSearch('');
     setFilterType('');
     setFilterStatus('');
     setPage(1);
   };
+  const hasFilter = Boolean(search || debouncedSearch || filterType || filterStatus);
 
   const kpis = [
     {
@@ -258,31 +264,30 @@ export default function VoucherManagementPage() {
       label: 'Hết Hạn Tháng Này',
       value: isLoadingStats ? '…' : (stats?.totalExpiredThisMonth ?? 0).toLocaleString('vi-VN'),
       color: 'bg-slate-500/10 text-slate-600',
-      onClick: () => filterByStatus('expired'),
-      active: filterStatus === 'expired',
+      onClick: () => filterByStatus('expiredThisMonth'),
+      active: filterStatus === 'expiredThisMonth',
     },
     {
       icon: 'sell',
       label: 'Tổng Lượt Đổi',
       value: isLoadingStats ? '…' : (stats?.totalRedemptions ?? 0).toLocaleString('vi-VN'),
       color: 'bg-primary/10 text-primary',
-      onClick: clearVoucherFilters,
-      active: !search && !filterType && !filterStatus,
+      onClick: () => filterByStatus('redeemed'),
+      active: filterStatus === 'redeemed',
     },
     {
       icon: 'schedule',
       label: 'Sắp Hết Hạn (7 ngày)',
       value: isLoadingStats ? '…' : (stats?.expiringSoon ?? 0).toLocaleString('vi-VN'),
       color: 'bg-amber-500/10 text-amber-600',
-      onClick: () => filterByStatus('active'),
-      active: false,
+      onClick: () => filterByStatus('expiringSoon'),
+      active: filterStatus === 'expiringSoon',
     },
     {
       icon: 'payments',
       label: 'Tổng Giảm Giá Đã Cấp',
       value: isLoadingStats ? '…' : formatCurrencyCompact(stats?.totalDiscountGiven ?? 0),
       color: 'bg-secondary/10 text-secondary',
-      onClick: clearVoucherFilters,
       active: false,
     },
   ];
@@ -306,7 +311,7 @@ export default function VoucherManagementPage() {
             Tạo và quản lý mã khuyến mãi, xem lịch sử đổi thưởng và kiểm soát chiến dịch.
           </p>
         </div>
-        {currentUserRole !== 'STAFF' && (
+        {currentUserRole !== null && currentUserRole !== 'STAFF' && (
         <button
           id="btn-create-voucher"
           onClick={() => { setSelectedVoucher(null); setModalMode('create'); }}
@@ -321,13 +326,8 @@ export default function VoucherManagementPage() {
 
       {/* ── KPI Cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
-        {kpis.map((kpi) => (
-          <button
-            key={kpi.label}
-            type="button"
-            onClick={kpi.onClick}
-            className={`bg-surface-container-lowest rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all active:scale-[0.99] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary ${kpi.active ? 'border-primary/50 ring-2 ring-primary/15' : 'border-outline-variant/10'}`}
-          >
+        {kpis.map((kpi) => {
+          const content = (
             <div className="flex items-center gap-4">
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${kpi.color}`}>
                 <span className="material-symbols-outlined text-xl" aria-hidden="true">{kpi.icon}</span>
@@ -336,10 +336,31 @@ export default function VoucherManagementPage() {
                 <p className="text-xs text-on-surface-variant font-medium truncate">{kpi.label}</p>
                 <p className="text-xl font-bold text-on-surface leading-tight mt-0.5 truncate">{kpi.value}</p>
               </div>
-              <span className={`material-symbols-outlined text-[18px] ${kpi.active ? 'text-primary' : 'text-on-surface-variant/35'}`}>filter_alt</span>
+              <span className={`material-symbols-outlined text-[18px] ${kpi.active ? 'text-primary' : 'text-on-surface-variant/35'}`}>
+                {kpi.onClick ? (kpi.active ? 'filter_alt_off' : 'filter_alt') : 'monitoring'}
+              </span>
             </div>
-          </button>
-        ))}
+          );
+
+          return kpi.onClick ? (
+            <button
+              key={kpi.label}
+              type="button"
+              onClick={kpi.onClick}
+              aria-pressed={kpi.active}
+              className={`bg-surface-container-lowest rounded-2xl p-5 border shadow-sm hover:shadow-md transition-all active:scale-[0.99] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary ${kpi.active ? 'border-primary/50 ring-2 ring-primary/15' : 'border-outline-variant/10'}`}
+            >
+              {content}
+            </button>
+          ) : (
+            <div
+              key={kpi.label}
+              className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/10 shadow-sm text-left"
+            >
+              {content}
+            </div>
+          );
+        })}
       </div>
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
@@ -378,11 +399,14 @@ export default function VoucherManagementPage() {
           <select
             id="filter-status"
             value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+            onChange={(e) => { setFilterStatus(e.target.value as VoucherStatusFilter | ''); setPage(1); }}
             className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
           >
             <option value="">Tất cả trạng thái</option>
             <option value="active">Đang hoạt động</option>
+            <option value="expiringSoon">Sắp hết hạn 7 ngày</option>
+            <option value="expiredThisMonth">Hết hạn tháng này</option>
+            <option value="redeemed">Đã từng được dùng</option>
             <option value="expired">Đã hết hạn</option>
             <option value="depleted">Hết lượt dùng</option>
             <option value="inactive">Đã vô hiệu hóa</option>
@@ -390,6 +414,16 @@ export default function VoucherManagementPage() {
         </div>
 
         {/* Summary */}
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={clearVoucherFilters}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+          >
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">filter_alt_off</span>
+            Xóa bộ lọc
+          </button>
+        )}
         {!isLoadingList && (
           <span className="text-xs text-on-surface-variant ml-auto">
             {meta.totalItems} voucher
@@ -527,7 +561,7 @@ export default function VoucherManagementPage() {
                           </div>
 
                           {/* Edit — chỉ ADMIN trở lên */}
-                          {currentUserRole !== 'STAFF' && (
+                          {currentUserRole !== null && currentUserRole !== 'STAFF' && (
                           <div className="relative group/tip">
                             <button
                               onClick={() => { setSelectedVoucher(v); setModalMode('edit'); }}
@@ -544,7 +578,7 @@ export default function VoucherManagementPage() {
                           )}
 
                           {/* Toggle active — chỉ ADMIN trở lên */}
-                          {currentUserRole !== 'STAFF' && (
+                          {currentUserRole !== null && currentUserRole !== 'STAFF' && (
                           <div className="relative group/tip">
                             <button
                               onClick={() => handleToggle(v)}

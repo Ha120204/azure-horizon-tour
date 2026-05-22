@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { API_BASE_URL } from '@/app/lib/constants';
 
 interface UserInfo {
@@ -67,6 +68,21 @@ interface AuditFieldRow {
     after?: string;
 }
 
+interface AuditRowsResult {
+    visibleRows: AuditFieldRow[];
+    hiddenEmptyCount: number;
+    totalRows: number;
+}
+
+interface AuditSeverity {
+    label: string;
+    className: string;
+    icon: string;
+}
+
+const AUDIT_LOCALE = 'vi-VN';
+const AUDIT_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
 const RESOURCE_LABELS: Record<string, string> = {
     Article: 'Bài viết',
     Booking: 'Đơn đặt tour',
@@ -81,49 +97,68 @@ const RESOURCE_LABELS: Record<string, string> = {
 
 const FIELD_LABELS: Record<string, string> = {
     accessCode: 'Mã truy cập',
+    amount: 'Số tiền',
     assignedStaffId: 'Nhân viên phụ trách',
+    availableSeats: 'Số chỗ còn lại',
+    averageRating: 'Điểm trung bình',
     audience: 'Nhóm người nhận',
     body: 'Nội dung',
     bookingRef: 'Mã đặt chỗ',
     category: 'Danh mục',
     code: 'Mã',
     content: 'Nội dung',
+    createdById: 'Người tạo (ID)',
     customerEmail: 'Email khách hàng',
     customerName: 'Tên khách hàng',
     customerPhone: 'Số điện thoại',
     departureDate: 'Ngày khởi hành',
+    departurePoint: 'Điểm khởi hành',
+    departurePointEn: 'Điểm khởi hành EN',
     description: 'Mô tả',
+    descriptionEn: 'Mô tả EN',
+    destinationId: 'Điểm đến (ID)',
     discountType: 'Loại giảm giá',
     discountValue: 'Giá trị giảm',
     duration: 'Thời lượng',
+    durationEn: 'Thời lượng EN',
     email: 'Email',
+    endDate: 'Ngày kết thúc',
     expiresAt: 'Ngày hết hạn',
     failedCount: 'Số lượt lỗi',
     featured: 'Nổi bật',
     fullName: 'Họ tên',
+    imageUrl: 'Ảnh đại diện',
     isActive: 'Trạng thái',
     label: 'Tên hiển thị',
     maxUses: 'Số lượt dùng tối đa',
     message: 'Tin nhắn',
     minOrderValue: 'Giá trị đơn tối thiểu',
     name: 'Tên',
+    nameEn: 'Tên EN',
     phone: 'Số điện thoại',
     previewText: 'Đoạn xem trước',
     price: 'Giá',
     published: 'Đã xuất bản',
+    publishedAt: 'Thời điểm xuất bản',
     rating: 'Điểm đánh giá',
     recipientEstimate: 'Số người nhận dự kiến',
+    refundAmount: 'Số tiền hoàn',
     resourceId: 'Mã đối tượng',
+    reviewedById: 'Người duyệt (ID)',
+    reviewNote: 'Ghi chú duyệt',
     role: 'Vai trò',
     scheduledAt: 'Thời gian gửi',
     sentCount: 'Số lượt gửi',
     slug: 'Đường dẫn',
+    startDate: 'Ngày bắt đầu',
     status: 'Trạng thái',
     subject: 'Tiêu đề',
     title: 'Tiêu đề',
+    tourCode: 'Mã tour',
     totalPrice: 'Tổng tiền',
     type: 'Loại',
     usedCount: 'Số lượt đã dùng',
+    userId: 'Người dùng (ID)',
 };
 
 const HIDDEN_AUDIT_FIELDS = new Set([
@@ -137,9 +172,11 @@ const HIDDEN_AUDIT_FIELDS = new Set([
 ]);
 
 const DETAIL_FIELD_PRIORITY = [
+    'tourCode',
     'code',
     'label',
     'name',
+    'nameEn',
     'title',
     'subject',
     'customerName',
@@ -149,6 +186,13 @@ const DETAIL_FIELD_PRIORITY = [
     'role',
     'category',
     'isActive',
+    'startDate',
+    'endDate',
+    'departureDate',
+    'departurePoint',
+    'destinationId',
+    'duration',
+    'availableSeats',
     'discountType',
     'discountValue',
     'minOrderValue',
@@ -197,11 +241,52 @@ const getFieldLabel = (field: string) => FIELD_LABELS[field] ?? field.replace(/(
 
 const formatDateTimeValue = (value: string) => {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString('vi-VN');
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat(AUDIT_LOCALE, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: AUDIT_TIME_ZONE,
+        timeZoneName: 'short',
+    }).format(date);
+};
+
+const formatAuditDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat(AUDIT_LOCALE, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: AUDIT_TIME_ZONE,
+    }).format(date);
+};
+
+const formatAuditTime = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat(AUDIT_LOCALE, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: AUDIT_TIME_ZONE,
+        timeZoneName: 'short',
+    }).format(date);
 };
 
 const formatMoney = (value: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
+    new Intl.NumberFormat(AUDIT_LOCALE, { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
+
+const isEmptyAuditValue = (value: unknown) =>
+    value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
 
 const formatAuditValue = (field: string, value: unknown, context?: AuditRecord) => {
     if (value === null || value === undefined || value === '') return 'Chưa có';
@@ -209,13 +294,13 @@ const formatAuditValue = (field: string, value: unknown, context?: AuditRecord) 
     if (typeof value === 'number') {
         if (field === 'discountValue' && context?.discountType === 'PERCENT') return `${value}%`;
         if (['discountValue', 'minOrderValue', 'price', 'totalPrice', 'amount', 'refundAmount'].includes(field)) return formatMoney(value);
-        return value.toLocaleString('vi-VN');
+        return value.toLocaleString(AUDIT_LOCALE);
     }
     if (typeof value === 'string') {
         if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTimeValue(value);
         return STATUS_VALUE_LABELS[value] ?? value;
     }
-    if (Array.isArray(value)) return `${value.length.toLocaleString('vi-VN')} mục`;
+    if (Array.isArray(value)) return `${value.length.toLocaleString(AUDIT_LOCALE)} mục`;
     if (isAuditRecord(value)) return 'Có dữ liệu chi tiết';
     return String(value);
 };
@@ -227,13 +312,30 @@ const getRecordTitle = (log: ActivityLog) => {
     return typeof candidate === 'string' && candidate.trim() ? candidate : `ID #${log.resourceId ?? log.id}`;
 };
 
-const getAuditSeverity = (log: ActivityLog) => {
-    if (['DELETE', 'ROLE_CHANGE', 'CANCEL_BOOKING'].includes(log.action)) {
-        return { label: 'Cần chú ý', className: 'bg-red-50 text-red-700 border-red-200', icon: 'priority_high' };
+const getRecordStatus = (log: ActivityLog) => {
+    const record = isAuditRecord(log.newData) ? log.newData : isAuditRecord(log.oldData) ? log.oldData : null;
+    return typeof record?.status === 'string' ? record.status : null;
+};
+
+const getAuditSeverity = (log: ActivityLog): AuditSeverity => {
+    const status = getRecordStatus(log);
+
+    if (['ROLE_CHANGE', 'EXPORT'].includes(log.action)) {
+        return { label: 'Nghiêm trọng', className: 'bg-red-50 text-red-700 border-red-200', icon: 'gpp_maybe' };
     }
-    if (['Voucher', 'Booking', 'User', 'Tour'].includes(log.resource) || ['EXPORT'].includes(log.action)) {
+
+    if (['DELETE', 'CANCEL_BOOKING'].includes(log.action)) {
+        return { label: 'Cần chú ý', className: 'bg-orange-50 text-orange-700 border-orange-200', icon: 'priority_high' };
+    }
+
+    if (['Booking', 'User', 'Voucher'].includes(log.resource) && log.action === 'UPDATE') {
         return { label: 'Quan trọng', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'warning' };
     }
+
+    if (log.resource === 'Tour' && ['PUBLISHED', 'PENDING_REVIEW'].includes(status ?? '')) {
+        return { label: 'Quan trọng', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'warning' };
+    }
+
     return { label: 'Bình thường', className: 'bg-slate-100 text-slate-600 border-slate-200', icon: 'info' };
 };
 
@@ -292,17 +394,29 @@ const getSortedFields = (record: AuditRecord) => {
     });
 };
 
-const buildCreatedRows = (record: unknown): AuditFieldRow[] => {
-    if (!isAuditRecord(record)) return [];
-    return getSortedFields(record).map(key => ({
+const buildCreatedRows = (record: unknown): AuditRowsResult => {
+    if (!isAuditRecord(record)) return { visibleRows: [], hiddenEmptyCount: 0, totalRows: 0 };
+
+    const rows = getSortedFields(record).map(key => ({
         key,
         label: getFieldLabel(key),
         after: formatAuditValue(key, record[key], record),
     }));
+
+    const visibleRows = rows.filter(row => !isEmptyAuditValue(record[row.key]));
+
+    return {
+        visibleRows,
+        hiddenEmptyCount: rows.length - visibleRows.length,
+        totalRows: rows.length,
+    };
 };
 
-const buildChangedRows = (oldData: unknown, newData: unknown): AuditFieldRow[] => {
-    if (!isAuditRecord(oldData) && !isAuditRecord(newData)) return [];
+const buildChangedRows = (oldData: unknown, newData: unknown): AuditRowsResult => {
+    if (!isAuditRecord(oldData) && !isAuditRecord(newData)) {
+        return { visibleRows: [], hiddenEmptyCount: 0, totalRows: 0 };
+    }
+
     const before = isAuditRecord(oldData) ? oldData : {};
     const after = isAuditRecord(newData) ? newData : {};
     const hasBefore = isAuditRecord(oldData);
@@ -310,7 +424,7 @@ const buildChangedRows = (oldData: unknown, newData: unknown): AuditFieldRow[] =
         .filter(key => !HIDDEN_AUDIT_FIELDS.has(key))
         .filter(key => stringifyComparable(before[key]) !== stringifyComparable(after[key]));
 
-    return keys.sort((a, b) => {
+    const visibleRows = keys.sort((a, b) => {
         const ia = DETAIL_FIELD_PRIORITY.indexOf(a);
         const ib = DETAIL_FIELD_PRIORITY.indexOf(b);
         if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
@@ -321,19 +435,83 @@ const buildChangedRows = (oldData: unknown, newData: unknown): AuditFieldRow[] =
         before: hasBefore ? formatAuditValue(key, before[key], before) : undefined,
         after: formatAuditValue(key, after[key], after),
     }));
+
+    return {
+        visibleRows,
+        hiddenEmptyCount: 0,
+        totalRows: visibleRows.length,
+    };
 };
 
-const buildAuditRows = (log: ActivityLog): AuditFieldRow[] => {
+const buildAuditRows = (log: ActivityLog): AuditRowsResult => {
     if (log.action === 'CREATE') return buildCreatedRows(log.newData);
     if (log.action === 'DELETE') return buildCreatedRows(log.oldData || log.newData);
     return buildChangedRows(log.oldData, log.newData);
 };
 
+const getResourceHref = (log: ActivityLog) => {
+    const resourcePath: Record<string, string> = {
+        Article: '/admin/articles',
+        Booking: '/admin/bookings',
+        Review: '/admin/reviews',
+        SupportTicket: '/admin/support',
+        Tour: '/admin/tours',
+        TourDeparture: '/admin/tours',
+        User: '/admin/customers',
+        Voucher: '/admin/vouchers',
+    };
+
+    return resourcePath[log.resource] ?? null;
+};
+
+const writeClipboardText = async (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            // Fallback below handles localhost/HTTP and browser policy edge cases.
+        }
+    }
+
+    if (typeof document === 'undefined') return false;
+
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    textArea.style.opacity = '0';
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, text.length);
+
+    try {
+        return document.execCommand('copy');
+    } catch {
+        return false;
+    } finally {
+        document.body.removeChild(textArea);
+    }
+};
+
 export default function SystemLogsPage() {
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const linkedLogIdParam = searchParams.get('logId');
+
     const [logs, setLogs] = useState<ActivityLog[]>([]);
     const [stats, setStats] = useState<LogStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
+    const [copiedLogId, setCopiedLogId] = useState<number | null>(null);
+    const [copyErrorLogId, setCopyErrorLogId] = useState<number | null>(null);
+    const [linkedLog, setLinkedLog] = useState<ActivityLog | null>(null);
+    const [linkedLogError, setLinkedLogError] = useState<string | null>(null);
+    const copyFeedbackTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     
     // Pagination & Filters
     const [page, setPage] = useState(1);
@@ -345,6 +523,11 @@ export default function SystemLogsPage() {
     const [dateTo, setDateTo] = useState('');
     const [activeShortcut, setActiveShortcut] = useState<string>('');
     const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
+    const displayLogs = React.useMemo(() => {
+        if (!linkedLog) return logs;
+        return logs.some(log => log.id === linkedLog.id) ? logs : [linkedLog, ...logs];
+    }, [linkedLog, logs]);
 
     // ── Quick date shortcuts ────────────────────────────────────────────────
     const applyShortcut = (key: string) => {
@@ -461,6 +644,73 @@ export default function SystemLogsPage() {
         return () => clearTimeout(timer);
     }, [page, search, actionFilter, dateFrom, dateTo]);
 
+    useEffect(() => {
+        if (!linkedLogIdParam) {
+            setLinkedLog(null);
+            setLinkedLogError(null);
+            return;
+        }
+
+        const linkedLogId = Number(linkedLogIdParam);
+        if (!Number.isInteger(linkedLogId) || linkedLogId <= 0) {
+            setLinkedLog(null);
+            setLinkedLogError(`Không tìm thấy log #${linkedLogIdParam} hoặc bạn không có quyền xem.`);
+            return;
+        }
+
+        const controller = new AbortController();
+
+        const fetchLinkedLog = async () => {
+            setLinkedLog(null);
+            setLinkedLogError(null);
+
+            try {
+                const token = localStorage.getItem('accessToken');
+                const res = await fetch(`${API_BASE_URL}/admin/logs/${linkedLogId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    signal: controller.signal,
+                });
+
+                if (!res.ok) throw new Error('Linked log not found');
+
+                const json = await res.json();
+                const log = json?.data;
+                if (!log || typeof log.id !== 'number') throw new Error('Invalid linked log payload');
+
+                setLinkedLog(log);
+                setExpandedRow(log.id);
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                console.error('Error fetching linked log:', error);
+                setLinkedLog(null);
+                setLinkedLogError(`Không tìm thấy log #${linkedLogId} hoặc bạn không có quyền xem.`);
+            }
+        };
+
+        fetchLinkedLog();
+
+        return () => controller.abort();
+    }, [linkedLogIdParam]);
+
+    useEffect(() => {
+        if (!linkedLog || expandedRow !== linkedLog.id || isLoading) return;
+
+        const frame = window.requestAnimationFrame(() => {
+            document.getElementById(`audit-row-${linkedLog.id}`)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            });
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [linkedLog, expandedRow, isLoading]);
+
+    useEffect(() => {
+        return () => {
+            if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+        };
+    }, []);
+
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearch(e.target.value);
         setPage(1); // Reset page on new search
@@ -507,6 +757,24 @@ export default function SystemLogsPage() {
             : name.slice(0, 2).toUpperCase();
     };
 
+    const scheduleCopyFeedbackReset = () => {
+        if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+        copyFeedbackTimer.current = setTimeout(() => {
+            setCopiedLogId(null);
+            setCopyErrorLogId(null);
+            copyFeedbackTimer.current = null;
+        }, 1800);
+    };
+
+    const copyAuditReference = async (log: ActivityLog) => {
+        const reference = `${window.location.origin}${pathname}?logId=${log.id}`;
+        const success = await writeClipboardText(reference);
+
+        setCopiedLogId(success ? log.id : null);
+        setCopyErrorLogId(success ? null : log.id);
+        scheduleCopyFeedbackReset();
+    };
+
     return (
         <main className="flex-1 p-6 md:p-8 lg:p-10 w-full max-w-[1600px] mx-auto overflow-y-auto font-body bg-surface min-h-screen text-on-surface">
             {/* Header Section */}
@@ -521,7 +789,7 @@ export default function SystemLogsPage() {
                     className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all disabled:opacity-50"
                 >
                     <span className="material-symbols-outlined text-[18px]">download</span>
-                    {isExporting ? 'Đang xuất...' : 'Xuất CSV'}
+                    {isExporting ? 'Đang xuất…' : 'Xuất CSV'}
                 </button>
             </div>
 
@@ -620,25 +888,33 @@ export default function SystemLogsPage() {
             </div>
 
             {/* Filter Bar */}
-            <div className="bg-surface-container-lowest rounded-xl p-3 mb-3 flex flex-col md:flex-row gap-3 border border-outline-variant/20 shadow-sm">
+            <div className="bg-surface-container-lowest rounded-xl p-3 mb-3 flex flex-col md:flex-row gap-3 border border-outline-variant/20 shadow-sm" role="search" aria-label="Tìm kiếm và lọc nhật ký hệ thống">
                 {/* Search */}
                 <div className="relative flex-1">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span>
+                    <label htmlFor="audit-search" className="sr-only">Tìm nhật ký hệ thống</label>
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]" aria-hidden="true">search</span>
                     <input
+                        id="audit-search"
+                        name="audit-search"
                         type="text"
                         value={search}
                         onChange={handleSearchChange}
-                        className="w-full bg-surface border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none placeholder:text-outline"
-                        placeholder="Tìm theo nội dung, tên đối tượng..."
+                        autoComplete="off"
+                        className="w-full bg-surface border border-outline-variant/25 rounded-lg pl-10 pr-4 py-2 text-sm focus:border-primary/40 focus:ring-2 focus:ring-primary/20 outline-none placeholder:text-outline"
+                        placeholder="Tìm mã log, người thực hiện, email, IP, đối tượng…"
                     />
                 </div>
                 <div className="w-px bg-outline-variant/20 hidden md:block" />
                 {/* Action filter */}
                 <div className="relative min-w-[190px]">
+                    <label htmlFor="audit-action-filter" className="sr-only">Lọc theo hành động</label>
                     <select
+                        id="audit-action-filter"
+                        name="audit-action-filter"
+                        aria-label="Lọc nhật ký theo hành động"
                         value={actionFilter}
                         onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
-                        className="w-full bg-surface border-none rounded-lg pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none appearance-none cursor-pointer"
+                        className="w-full bg-surface border border-outline-variant/25 rounded-lg pl-4 pr-10 py-2 text-sm focus:border-primary/40 focus:ring-2 focus:ring-primary/20 outline-none appearance-none cursor-pointer"
                     >
                         <option value="">Tất cả hành động</option>
                         <option value="CREATE">Tạo mới (CREATE)</option>
@@ -649,7 +925,7 @@ export default function SystemLogsPage() {
                         <option value="ROLE_CHANGE">Đổi quyền (ROLE_CHANGE)</option>
                         <option value="CANCEL_BOOKING">Hủy đơn (CANCEL_BOOKING)</option>
                     </select>
-                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-[18px] pointer-events-none">expand_more</span>
+                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-[18px] pointer-events-none" aria-hidden="true">expand_more</span>
                 </div>
             </div>
 
@@ -714,6 +990,7 @@ export default function SystemLogsPage() {
                             <button
                                 onClick={clearDateFilter}
                                 title="Xóa lọc thời gian"
+                                aria-label="Xóa lọc thời gian"
                                 className="w-6 h-6 rounded-full bg-outline-variant/20 hover:bg-error/10 hover:text-error text-outline flex items-center justify-center transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[14px]">close</span>
@@ -722,6 +999,13 @@ export default function SystemLogsPage() {
                     )}
                 </div>
             </div>
+
+            {linkedLogError && (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800" role="alert">
+                    <span className="material-symbols-outlined mt-0.5 text-[18px]">warning</span>
+                    <span>{linkedLogError}</span>
+                </div>
+            )}
 
             {/* Main Table */}
             <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-sm overflow-hidden flex flex-col">
@@ -749,7 +1033,7 @@ export default function SystemLogsPage() {
                                         <td className="py-4 px-4 hidden lg:table-cell"><div className="w-24 h-4 bg-outline-variant/20 rounded"></div></td>
                                     </tr>
                                 ))
-                            ) : logs.length === 0 ? (
+                            ) : displayLogs.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="py-12 text-center text-outline">
                                         <span className="material-symbols-outlined text-[48px] mb-3 opacity-50">search_off</span>
@@ -757,28 +1041,39 @@ export default function SystemLogsPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                logs.map((log) => {
+                                displayLogs.map((log) => {
                                     const summary = getAuditSummary(log);
                                     const severity = getAuditSeverity(log);
-                                    const changedRows = buildAuditRows(log);
+                                    const auditRows = buildAuditRows(log);
+                                    const changedRows = auditRows.visibleRows;
                                     const resourceLabel = getResourceLabel(log.resource);
                                     const targetTitle = getRecordTitle(log);
                                     const hasBeforeData = log.action === 'UPDATE' && isAuditRecord(log.oldData);
+                                    const isExpanded = expandedRow === log.id;
+                                    const resourceHref = getResourceHref(log);
+                                    const isCopied = copiedLogId === log.id;
+                                    const isCopyError = copyErrorLogId === log.id;
 
                                     return (
                                     <React.Fragment key={log.id}>
-                                        <tr 
-                                            onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
-                                            className="hover:bg-surface-container-low/50 transition-colors cursor-pointer group"
-                                        >
+                                        <tr id={`audit-row-${log.id}`} className="hover:bg-surface-container-low/50 transition-colors group">
                                             <td className="py-3 px-4 text-outline group-hover:text-primary transition-colors">
-                                                <span className="material-symbols-outlined text-[18px] transition-transform duration-200" style={{ transform: expandedRow === log.id ? 'rotate(90deg)' : 'rotate(0)' }}>
-                                                    chevron_right
-                                                </span>
+                                                <button
+                                                    type="button"
+                                                    aria-expanded={isExpanded}
+                                                    aria-controls={`audit-detail-${log.id}`}
+                                                    aria-label={isExpanded ? 'Thu gọn chi tiết nhật ký' : 'Mở chi tiết nhật ký'}
+                                                    onClick={() => setExpandedRow(isExpanded ? null : log.id)}
+                                                    className="grid h-8 w-8 place-items-center rounded-lg text-outline transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                >
+                                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0)' }}>
+                                                        chevron_right
+                                                    </span>
+                                                </button>
                                             </td>
                                             <td className="py-3 px-4">
-                                                <div className="text-xs font-semibold text-on-surface whitespace-nowrap">{new Date(log.createdAt).toLocaleDateString('vi-VN')}</div>
-                                                <div className="text-[11px] text-outline mt-0.5 whitespace-nowrap">{new Date(log.createdAt).toLocaleTimeString('vi-VN')}</div>
+                                                <div className="text-xs font-semibold text-on-surface whitespace-nowrap">{formatAuditDate(log.createdAt)}</div>
+                                                <div className="mt-0.5 whitespace-nowrap text-[11px] text-outline">{formatAuditTime(log.createdAt)}</div>
                                             </td>
                                             <td className="py-3 px-4">
                                                 <div className="flex items-center gap-2.5">
@@ -809,7 +1104,14 @@ export default function SystemLogsPage() {
                                             <td className="py-3 px-4">
                                                 <div className="max-w-xl" title={summary}>
                                                     <p className="line-clamp-1 text-sm font-semibold text-on-surface">{summary}</p>
-                                                    <p className="mt-0.5 line-clamp-1 text-[11px] font-medium text-outline">{resourceLabel} · {targetTitle}</p>
+                                                    <p className="mt-0.5 line-clamp-1 text-[11px] font-medium text-outline">
+                                                        {resourceLabel} · {targetTitle}
+                                                        {auditRows.hiddenEmptyCount > 0 && (
+                                                            <span className="ml-2 rounded-full bg-surface-container px-1.5 py-0.5 text-[10px] font-bold text-on-surface-variant">
+                                                                Ẩn {auditRows.hiddenEmptyCount} trường trống
+                                                            </span>
+                                                        )}
+                                                    </p>
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4 hidden lg:table-cell">
@@ -821,21 +1123,49 @@ export default function SystemLogsPage() {
                                         </tr>
                                         
                                         {/* Expanded Row Content */}
-                                        {expandedRow === log.id && (
+                                        {isExpanded && (
                                             <tr className="bg-surface-container-low/30 border-b border-outline-variant/20">
                                                 <td colSpan={6} className="p-0">
-                                                    <div className="px-8 py-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <div id={`audit-detail-${log.id}`} className="px-4 py-5 animate-in fade-in slide-in-from-top-2 duration-200 sm:px-8 sm:py-6">
                                                         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                                                             <section className="rounded-2xl border border-outline-variant/25 bg-surface p-5 shadow-sm">
-                                                                <div className="flex items-start gap-3">
+                                                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                                                                     <span className={`material-symbols-outlined grid h-10 w-10 shrink-0 place-items-center rounded-2xl border text-[20px] ${severity.className}`}>
                                                                         {severity.icon}
                                                                     </span>
-                                                                    <div>
+                                                                    <div className="min-w-0 flex-1">
                                                                         <p className="text-[11px] font-black uppercase tracking-[0.16em] text-outline">Tóm tắt nghiệp vụ</p>
                                                                         <h4 className="mt-1 text-lg font-black leading-7 text-on-surface">{summary}</h4>
                                                                         <p className="mt-2 text-sm leading-6 text-on-surface-variant">{getAuditImpactText(log)}</p>
                                                                     </div>
+                                                                </div>
+
+                                                                <div className="mt-4 flex flex-wrap items-center gap-2" aria-live="polite">
+                                                                    {resourceHref && (
+                                                                        <a
+                                                                            href={resourceHref}
+                                                                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-outline-variant/25 bg-surface-container-lowest px-3 py-1.5 text-xs font-bold text-on-surface-variant transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                                        >
+                                                                            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                                                                            Mở module
+                                                                        </a>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => copyAuditReference(log)}
+                                                                        className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                                                                            isCopied
+                                                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                                                : isCopyError
+                                                                                    ? 'border-red-200 bg-red-50 text-red-700'
+                                                                                    : 'border-outline-variant/25 bg-surface-container-lowest text-on-surface-variant hover:border-primary/30 hover:text-primary'
+                                                                        }`}
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[16px]">
+                                                                            {isCopied ? 'check' : isCopyError ? 'error' : 'content_copy'}
+                                                                        </span>
+                                                                        {isCopied ? 'Đã sao chép liên kết' : isCopyError ? 'Không sao chép được' : 'Sao chép liên kết log'}
+                                                                    </button>
                                                                 </div>
 
                                                                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -843,7 +1173,7 @@ export default function SystemLogsPage() {
                                                                         ['Đối tượng', `${resourceLabel} · ${targetTitle}`],
                                                                         ['Người thực hiện', log.user?.fullName || 'Hệ thống'],
                                                                         ['Email', log.user?.email || '—'],
-                                                                        ['Thời gian', new Date(log.createdAt).toLocaleString('vi-VN')],
+                                                                        ['Thời gian', formatDateTimeValue(log.createdAt)],
                                                                         ['IP', log.ipAddress || '—'],
                                                                         ['Mã bản ghi', log.resourceId || `Log #${log.id}`],
                                                                     ].map(([label, value]) => (
@@ -861,11 +1191,18 @@ export default function SystemLogsPage() {
                                                                         <span className="material-symbols-outlined text-[17px]">difference</span>
                                                                         {log.action === 'UPDATE' ? 'Thông tin được cập nhật' : log.action === 'DELETE' ? 'Thông tin trước khi xóa' : 'Thông tin được ghi nhận'}
                                                                     </h4>
-                                                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${severity.className}`}>{severity.label}</span>
+                                                                    <div className="flex flex-wrap justify-end gap-2">
+                                                                        {auditRows.hiddenEmptyCount > 0 && (
+                                                                            <span className="rounded-full border border-outline-variant/20 bg-surface-container-lowest px-2 py-0.5 text-[10px] font-black text-on-surface-variant">
+                                                                                Đã ẩn {auditRows.hiddenEmptyCount} trường chưa nhập
+                                                                            </span>
+                                                                        )}
+                                                                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${severity.className}`}>{severity.label}</span>
+                                                                    </div>
                                                                 </div>
 
                                                                 {changedRows.length > 0 ? (
-                                                                    <div className="mt-4 overflow-hidden rounded-xl border border-outline-variant/20">
+                                                                    <div className="mt-4 overflow-x-auto rounded-xl border border-outline-variant/20">
                                                                         <table className="w-full text-sm">
                                                                             <thead className="bg-surface-container-low text-[10px] uppercase tracking-[0.12em] text-outline">
                                                                                 <tr>
@@ -878,8 +1215,8 @@ export default function SystemLogsPage() {
                                                                                 {changedRows.map(row => (
                                                                                     <tr key={row.key} className="align-top">
                                                                                         <td className="w-44 px-3 py-3 font-bold text-on-surface">{row.label}</td>
-                                                                                        {hasBeforeData && <td className="px-3 py-3 text-on-surface-variant">{row.before}</td>}
-                                                                                        <td className="px-3 py-3 font-semibold text-on-surface">{row.after}</td>
+                                                                                        {hasBeforeData && <td className="min-w-[11rem] break-words px-3 py-3 text-on-surface-variant">{row.before}</td>}
+                                                                                        <td className="min-w-[11rem] break-words px-3 py-3 font-semibold text-on-surface">{row.after}</td>
                                                                                     </tr>
                                                                                 ))}
                                                                             </tbody>
@@ -902,12 +1239,12 @@ export default function SystemLogsPage() {
                                                                         </div>
                                                                         <div className="grid gap-3 lg:grid-cols-2">
                                                                             <div className="overflow-x-auto rounded-lg bg-[#fff1f2] p-3">
-                                                                                <p className="mb-2 text-[10px] font-black uppercase text-red-700">Old Data</p>
-                                                                                <pre className="m-0 text-[11px] text-red-950">{log.oldData ? JSON.stringify(log.oldData, null, 2) : 'Không có'}</pre>
+                                                                                <p className="mb-2 text-[10px] font-black uppercase text-red-700">Dữ liệu cũ</p>
+                                                                                <pre className="m-0 whitespace-pre-wrap break-words text-[11px] text-red-950">{log.oldData ? JSON.stringify(log.oldData, null, 2) : 'Không có'}</pre>
                                                                             </div>
                                                                             <div className="overflow-x-auto rounded-lg bg-[#ecfdf5] p-3">
-                                                                                <p className="mb-2 text-[10px] font-black uppercase text-emerald-700">New Data</p>
-                                                                                <pre className="m-0 text-[11px] text-emerald-950">{log.newData ? JSON.stringify(log.newData, null, 2) : 'Không có'}</pre>
+                                                                                <p className="mb-2 text-[10px] font-black uppercase text-emerald-700">Dữ liệu mới</p>
+                                                                                <pre className="m-0 whitespace-pre-wrap break-words text-[11px] text-emerald-950">{log.newData ? JSON.stringify(log.newData, null, 2) : 'Không có'}</pre>
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -929,20 +1266,24 @@ export default function SystemLogsPage() {
                 {/* Pagination Footer */}
                 <div className="bg-surface-container-lowest border-t border-outline-variant/20 px-4 py-3 flex items-center justify-between text-sm">
                     <span className="text-on-surface-variant">
-                        Hiển thị <span className="font-semibold text-on-surface">{logs.length}</span> / <span className="font-semibold text-on-surface">{totalRecords}</span> bản ghi
+                        Hiển thị <span className="font-semibold text-on-surface">{displayLogs.length}</span> / <span className="font-semibold text-on-surface">{totalRecords}</span> bản ghi
                     </span>
                     <div className="flex items-center gap-1">
                         <button 
+                            type="button"
                             disabled={page === 1}
                             onClick={() => setPage(p => p - 1)}
+                            aria-label="Trang trước"
                             className="w-8 h-8 rounded flex items-center justify-center hover:bg-surface-container text-on-surface disabled:opacity-30 disabled:hover:bg-transparent"
                         >
                             <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                         </button>
                         <span className="px-3 font-semibold text-primary">Trang {page} / {totalPages || 1}</span>
                         <button 
+                            type="button"
                             disabled={page >= totalPages}
                             onClick={() => setPage(p => p + 1)}
+                            aria-label="Trang sau"
                             className="w-8 h-8 rounded flex items-center justify-center hover:bg-surface-container text-on-surface disabled:opacity-30 disabled:hover:bg-transparent"
                         >
                             <span className="material-symbols-outlined text-[18px]">chevron_right</span>

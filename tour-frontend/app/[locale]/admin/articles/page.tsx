@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import ArticleDrawer, { type Article } from '@/app/components/admin/ArticleDrawer';
 import AdminPagination from '@/app/components/admin/AdminPagination';
@@ -183,6 +184,9 @@ function SubmitReviewDialog({ article, onConfirm, onCancel, isSubmitting }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ArticleManagementPage() {
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get('status') ?? '';
+
   // Data
   const [articles, setArticles] = useState<Article[]>([]);
   const [meta, setMeta] = useState({ totalItems: 0, totalPages: 1, currentPage: 1, itemsPerPage: 10 });
@@ -193,7 +197,7 @@ export default function ArticleManagementPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [featuredFilter, setFeaturedFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -337,11 +341,21 @@ export default function ArticleManagementPage() {
       if (trashSearch) qs.set('search', trashSearch);
       const res = await fetchWithAuth(`${API_BASE_URL}/article/admin/trash?${qs}`);
       const json = await res.json();
+      if (!res.ok) {
+        const message = json?.message;
+        throw new Error(Array.isArray(message) ? message.join(', ') : String(message ?? 'Không tải được thùng rác'));
+      }
       const payload = json?.data ?? json;
       setTrashArticles(payload.articles ?? []);
       setTrashMeta(payload.meta ?? { totalItems: 0, totalPages: 1, currentPage: 1 });
       setTrashCount(payload.meta?.totalItems ?? 0);
-    } catch { /* silent */ } finally {
+    } catch (error) {
+      console.error('[ArticlePage] fetchTrash error:', error);
+      showToast('Không tải được thùng rác bài viết', false);
+      setTrashArticles([]);
+      setTrashMeta({ totalItems: 0, totalPages: 1, currentPage: 1 });
+      setTrashCount(0);
+    } finally {
       setTrashLoading(false);
     }
   }, [isAdmin, trashPage, trashSearch]);
@@ -684,6 +698,7 @@ export default function ArticleManagementPage() {
                     const cc = getCatCfg(a.category);
                     const articleStatus = a.status ?? 'PUBLISHED';
                     const staffCanManage = !isAdmin && (a.createdById == null || a.createdById === userId) && (articleStatus === 'DRAFT' || articleStatus === 'REJECTED');
+                    const canEditArticle = isAdmin || staffCanManage;
                     return (
                       <tr key={a.id} className="hover:bg-primary/[0.025] transition-colors group cursor-pointer" onClick={() => openEdit(a)}>
                         <td className="py-3.5 px-5" onClick={e => e.stopPropagation()}>
@@ -776,8 +791,8 @@ export default function ArticleManagementPage() {
                                 <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-error px-2 py-1 text-[10px] font-medium text-on-error opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Từ chối<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-error" /></span>
                               </div>
                             </>)}
-                            {/* Sửa — Admin (PENDING) | Staff owner (DRAFT/REJECTED) */}
-                            {(isAdmin && articleStatus === 'PENDING_REVIEW') || staffCanManage ? (
+                            {/* Sửa — Admin/Super Admin mọi trạng thái | Staff owner (DRAFT/REJECTED) */}
+                            {canEditArticle ? (
                               <div className="relative group/tip">
                                 <button onClick={() => openEdit(a)} aria-label="Chỉnh sửa"
                                   className={`${staffCanManage ? 'w-auto px-2.5 gap-1 text-xs font-bold' : 'w-8'} h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors outline-none`}>

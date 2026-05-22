@@ -14,6 +14,7 @@
     "viewAllResults": "View all results",
     "noResults": "No results found for",
     "goodbye": "Goodbye!",
+    "logoutSuccessTitle": "Signed out",
     "memberLabel": "Azure Horizon Member"
   },
   "footer": {

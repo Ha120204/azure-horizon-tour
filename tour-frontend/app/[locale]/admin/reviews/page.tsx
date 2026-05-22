@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Image from 'next/image';
+import { useParams } from 'next/navigation';
 import { fetchWithAuth } from '@/app/lib/fetchWithAuth';
 import AdminPagination from '@/app/components/admin/AdminPagination';
 import { API_BASE_URL } from '@/app/lib/constants';
@@ -37,6 +39,8 @@ interface Review {
 interface AdminStats {
     total: number;
     hidden: number;
+    replied: number;
+    unreplied: number;
     averageRating: number;
     fiveStarRate: number;
     breakdown: Record<number, number>;
@@ -174,12 +178,19 @@ function Lightbox({ images, initial, onClose }: { images: string[]; initial: num
                     </button>
                 </>
             )}
-            <img
-                src={images[idx]}
-                alt={`Ảnh ${idx + 1}`}
-                className="relative z-10 max-h-[85vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+            <div
+                className="relative z-10 h-[85vh] w-[90vw] rounded-xl"
                 onClick={(e) => e.stopPropagation()}
-            />
+            >
+                <Image
+                    src={images[idx]}
+                    alt={`Ảnh ${idx + 1}`}
+                    fill
+                    unoptimized
+                    sizes="90vw"
+                    className="object-contain drop-shadow-2xl"
+                />
+            </div>
             {images.length > 1 && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                     {images.map((_, i) => (
@@ -343,6 +354,7 @@ function ReplyModal({
 
 function ReviewCard({
     review,
+    locale,
     isSelected,
     onToggleSelect,
     onToggleVisibility,
@@ -352,6 +364,7 @@ function ReviewCard({
     loadingId,
 }: {
     review: Review;
+    locale: string;
     isSelected: boolean;
     onToggleSelect: () => void;
     onToggleVisibility: () => void;
@@ -387,9 +400,16 @@ function ReviewCard({
                         <div className="flex items-center gap-3 min-w-0">
                             {/* Avatar */}
                             {review.user.avatarUrl ? (
-                                <img src={review.user.avatarUrl} alt={review.user.fullName}
-                                    className={`w-10 h-10 rounded-full object-cover ring-2 ring-outline-variant/10 shrink-0 ${review.isHidden ? 'grayscale' : ''}`}
-                                />
+                                <div className={`relative w-10 h-10 rounded-full ring-2 ring-outline-variant/10 shrink-0 overflow-hidden ${review.isHidden ? 'grayscale' : ''}`}>
+                                    <Image
+                                        src={review.user.avatarUrl}
+                                        alt={review.user.fullName}
+                                        fill
+                                        unoptimized
+                                        sizes="40px"
+                                        className="object-cover"
+                                    />
+                                </div>
                             ) : (
                                 <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${AVATAR_COLORS[colorIdx]} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                                     {getInitials(review.user.fullName)}
@@ -435,11 +455,18 @@ function ReviewCard({
                     {review.imageUrls.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                             {review.imageUrls.map((img, i) => (
-                                <button key={i} onClick={() => onImageClick(i)} className="relative group/img">
-                                    <img
+                                <button
+                                    key={i}
+                                    onClick={() => onImageClick(i)}
+                                    className="relative group/img w-20 h-20 overflow-hidden rounded-lg border border-outline-variant/15"
+                                >
+                                    <Image
                                         src={img}
                                         alt={`Ảnh ${i + 1}`}
-                                        className="w-20 h-20 object-cover rounded-lg border border-outline-variant/15 hover:opacity-90 transition-opacity"
+                                        fill
+                                        unoptimized
+                                        sizes="80px"
+                                        className="object-cover transition-opacity hover:opacity-90"
                                     />
                                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 bg-black/30 rounded-lg transition-opacity">
                                         <span className="material-symbols-outlined text-white text-xl">zoom_in</span>
@@ -498,7 +525,7 @@ function ReviewCard({
                         </button>
 
                         <a
-                            href={`/vi/tour/${review.tour.id}`}
+                            href={`/${locale}/tour/${review.tour.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors"
@@ -547,9 +574,11 @@ function KpiCard({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ReviewManagementPage() {
+    const params = useParams<{ locale?: string }>();
+    const locale = params?.locale ?? 'vi';
     const [reviews, setReviews] = useState<Review[]>([]);
     const [stats, setStats] = useState<AdminStats>({
-        total: 0, hidden: 0, averageRating: 0, fiveStarRate: 0,
+        total: 0, hidden: 0, replied: 0, unreplied: 0, averageRating: 0, fiveStarRate: 0,
         breakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
     });
     const [meta, setMeta] = useState<Meta>({ totalItems: 0, totalPages: 1, currentPage: 1, itemsPerPage: 10 });
@@ -560,6 +589,7 @@ export default function ReviewManagementPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [ratingFilter, setRatingFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [replyFilter, setReplyFilter] = useState('');
     const [sortBy, setSortBy] = useState('newest');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -593,7 +623,14 @@ export default function ReviewManagementPage() {
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/stats`);
             const json = await res.json();
-            setStats(json?.data ?? json);
+            const nextStats = json?.data ?? json;
+            setStats((prev) => ({
+                ...prev,
+                ...nextStats,
+                replied: nextStats?.replied ?? 0,
+                unreplied: nextStats?.unreplied ?? 0,
+                breakdown: nextStats?.breakdown ?? prev.breakdown,
+            }));
         } catch { /* silent */ }
     }, []);
 
@@ -606,8 +643,10 @@ export default function ReviewManagementPage() {
             qs.set('limit', String(pageSize));
 
             if (debouncedSearch) qs.set('search', debouncedSearch);
-            if (ratingFilter) qs.set('rating', ratingFilter);
+            if (ratingFilter.includes(',')) qs.set('ratings', ratingFilter);
+            else if (ratingFilter) qs.set('rating', ratingFilter);
             if (statusFilter) qs.set('status', statusFilter);
+            if (replyFilter) qs.set('replyStatus', replyFilter);
             if (sortBy) qs.set('sortBy', sortBy);
 
             const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/all?${qs}`);
@@ -629,11 +668,14 @@ export default function ReviewManagementPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [page, pageSize, debouncedSearch, ratingFilter, statusFilter, sortBy, showToast]);
+    }, [page, pageSize, debouncedSearch, ratingFilter, statusFilter, replyFilter, sortBy, showToast]);
 
 
     useEffect(() => { fetchReviews(); }, [fetchReviews]);
     useEffect(() => { fetchStats(); }, [fetchStats]);
+    useEffect(() => {
+        setSelected([]);
+    }, [debouncedSearch, ratingFilter, statusFilter, replyFilter, sortBy, pageSize]);
 
     // Selection helpers
     const toggleSelect = (id: number) =>
@@ -657,6 +699,8 @@ export default function ReviewManagementPage() {
                 hidden: updated.isHidden ? prev.hidden + 1 : Math.max(0, prev.hidden - 1),
             }));
             showToast(updated.isHidden ? 'Đã ẩn đánh giá' : 'Đã hiện đánh giá');
+            fetchReviews();
+            fetchStats();
         } catch {
             showToast('Không thể thay đổi trạng thái', false);
         } finally {
@@ -682,6 +726,7 @@ export default function ReviewManagementPage() {
             setReviews((prev) => prev.filter((r) => !deleteTarget.includes(r.id)));
             setSelected((prev) => prev.filter((id) => !deleteTarget.includes(id)));
             showToast(`Đã xóa ${deleteTarget.length} đánh giá`);
+            fetchReviews();
             fetchStats();
         } catch {
             showToast('Xóa thất bại. Vui lòng thử lại.', false);
@@ -705,22 +750,25 @@ export default function ReviewManagementPage() {
             setReviews((prev) => prev.map((r) => r.id === replyTarget.id ? updated : r));
             showToast('Đã lưu phản hồi');
             setReplyTarget(null);
+            fetchReviews();
+            fetchStats();
         } catch {
             showToast('Không thể lưu phản hồi', false);
         }
     };
 
-    const handleBulkHide = async () => {
+    const handleBulkVisibility = async (isHidden: boolean) => {
         setBulkLoading(true);
         try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/bulk/hide`, {
+            const res = await fetchWithAuth(`${API_BASE_URL}/review/admin/bulk/${isHidden ? 'hide' : 'show'}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ids: selected }),
             });
             if (!res.ok) throw new Error();
-            setReviews((prev) => prev.map((r) => selected.includes(r.id) ? { ...r, isHidden: true } : r));
-            showToast(`Đã ẩn ${selected.length} đánh giá`);
+            setReviews((prev) => prev.map((r) => selected.includes(r.id) ? { ...r, isHidden } : r));
+            showToast(`${isHidden ? 'Đã ẩn' : 'Đã hiện'} ${selected.length} đánh giá`);
+            fetchReviews();
             fetchStats();
             clearSelection();
         } catch {
@@ -731,10 +779,11 @@ export default function ReviewManagementPage() {
     };
 
     const resetFilters = () => {
-        setSearch(''); setRatingFilter(''); setStatusFilter(''); setSortBy('newest'); setPage(1);
+        setSearch(''); setRatingFilter(''); setStatusFilter(''); setReplyFilter(''); setSortBy('newest'); setPage(1);
     };
-    const hasFilter = !!(search || ratingFilter || statusFilter || sortBy !== 'newest');
+    const hasFilter = !!(search || ratingFilter || statusFilter || replyFilter || sortBy !== 'newest');
     const lowRatingCount = (stats.breakdown[1] ?? 0) + (stats.breakdown[2] ?? 0);
+    const selectedRatings = ratingFilter.split(',').filter(Boolean);
     const filterByRating = (rating: string) => {
         setRatingFilter((current) => current === rating ? '' : rating);
         setPage(1);
@@ -744,7 +793,12 @@ export default function ReviewManagementPage() {
         setPage(1);
     };
     const filterLowRatings = () => {
-        setRatingFilter((current) => current === '1' ? '2' : current === '2' ? '' : '1');
+        setRatingFilter((current) => current === '1,2' ? '' : '1,2');
+        setStatusFilter('');
+        setPage(1);
+    };
+    const filterByReply = (status: string) => {
+        setReplyFilter((current) => current === status ? '' : status);
         setPage(1);
     };
 
@@ -762,6 +816,13 @@ export default function ReviewManagementPage() {
             gradient: 'from-amber-400 to-orange-500', iconBg: 'bg-amber-50', iconColor: 'text-amber-500',
         },
         {
+            icon: 'forum', label: 'Chưa phản hồi', value: stats.unreplied.toLocaleString('vi-VN'),
+            sub: `${stats.replied.toLocaleString('vi-VN')} đã phản hồi`,
+            gradient: 'from-cyan-500 to-blue-600', iconBg: 'bg-cyan-50', iconColor: 'text-cyan-600',
+            onClick: () => filterByReply('unreplied'),
+            active: replyFilter === 'unreplied',
+        },
+        {
             icon: 'workspace_premium', label: 'Tỷ lệ 5 sao', value: `${stats.fiveStarRate}%`,
             sub: `${stats.breakdown[5] ?? 0} đánh giá xuất sắc`,
             gradient: 'from-emerald-500 to-teal-600', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600',
@@ -773,7 +834,7 @@ export default function ReviewManagementPage() {
             sub: 'đánh giá 1-2 sao',
             gradient: 'from-orange-400 to-red-500', iconBg: 'bg-orange-50', iconColor: 'text-orange-600',
             onClick: filterLowRatings,
-            active: ratingFilter === '1' || ratingFilter === '2',
+            active: ratingFilter === '1,2',
         },
         {
             icon: 'visibility_off', label: 'Đang ẩn', value: stats.hidden.toLocaleString('vi-VN'),
@@ -791,10 +852,10 @@ export default function ReviewManagementPage() {
             <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
                 <div>
                     <h1 className="font-headline text-[1.75rem] font-semibold text-on-surface">
-                        Quản Lý Đánh Giá
+                        Quản lý đánh giá
                     </h1>
                     <p className="text-on-surface-variant text-sm mt-1">
-                        Kiểm duyệt, phản hồi và quản lý feedback từ khách hàng.
+                        Kiểm duyệt, phản hồi và quản lý nhận xét từ khách hàng.
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -809,7 +870,7 @@ export default function ReviewManagementPage() {
             </div>
 
             {/* ── KPI Cards ─────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
                 {kpis.map((k) => <KpiCard key={k.label} {...k} />)}
             </div>
 
@@ -828,7 +889,7 @@ export default function ReviewManagementPage() {
                                 key={star}
                                 type="button"
                                 onClick={() => filterByRating(String(star))}
-                                className={`w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary ${ratingFilter === String(star) ? 'bg-primary/5' : 'hover:bg-surface-container'}`}
+                                className={`w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary ${selectedRatings.includes(String(star)) ? 'bg-primary/5' : 'hover:bg-surface-container'}`}
                             >
                                 <div className="flex items-center gap-1 w-14 shrink-0">
                                     <span className="text-xs font-semibold text-on-surface-variant">{star}</span>
@@ -856,6 +917,7 @@ export default function ReviewManagementPage() {
                         <input
                             id="rv-search"
                             type="search"
+                            aria-label="Tìm kiếm đánh giá"
                             placeholder="Tìm theo khách hàng, tour, nội dung…"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -866,11 +928,13 @@ export default function ReviewManagementPage() {
                     {/* Rating filter */}
                     <select
                         id="rv-rating"
+                        aria-label="Lọc theo số sao"
                         value={ratingFilter}
                         onChange={(e) => { setRatingFilter(e.target.value); setPage(1); }}
                         className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm text-on-surface appearance-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                         <option value="">Tất cả sao</option>
+                        <option value="1,2">⭐-⭐⭐ Cần kiểm tra</option>
                         <option value="5">⭐⭐⭐⭐⭐ 5 sao</option>
                         <option value="4">⭐⭐⭐⭐ 4 sao</option>
                         <option value="3">⭐⭐⭐ 3 sao</option>
@@ -881,6 +945,7 @@ export default function ReviewManagementPage() {
                     {/* Status filter */}
                     <select
                         id="rv-status"
+                        aria-label="Lọc theo trạng thái hiển thị"
                         value={statusFilter}
                         onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                         className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm text-on-surface appearance-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -890,9 +955,23 @@ export default function ReviewManagementPage() {
                         <option value="hidden">Đang ẩn</option>
                     </select>
 
+                    {/* Reply filter */}
+                    <select
+                        id="rv-reply-status"
+                        aria-label="Lọc theo trạng thái phản hồi"
+                        value={replyFilter}
+                        onChange={(e) => { setReplyFilter(e.target.value); setPage(1); }}
+                        className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm text-on-surface appearance-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                        <option value="">Tất cả phản hồi</option>
+                        <option value="unreplied">Chưa phản hồi</option>
+                        <option value="replied">Đã phản hồi</option>
+                    </select>
+
                     {/* Sort */}
                     <select
                         id="rv-sort"
+                        aria-label="Sắp xếp đánh giá"
                         value={sortBy}
                         onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
                         className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm text-on-surface appearance-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -958,6 +1037,7 @@ export default function ReviewManagementPage() {
                         <ReviewCard
                             key={review.id}
                             review={review}
+                            locale={locale}
                             isSelected={selected.includes(review.id)}
                             onToggleSelect={() => toggleSelect(review.id)}
                             onToggleVisibility={() => handleToggleVisibility(review)}
@@ -991,12 +1071,12 @@ export default function ReviewManagementPage() {
                     </span>
                     <div className="h-5 w-px bg-outline-variant/30" />
                     <button
-                        onClick={handleBulkHide}
+                        onClick={() => handleBulkVisibility(statusFilter === 'hidden' ? false : true)}
                         disabled={bulkLoading}
                         className="flex items-center gap-1.5 text-sm font-semibold text-on-surface-variant hover:bg-surface-container px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
                     >
-                        <span className="material-symbols-outlined text-[16px]">visibility_off</span>
-                        Ẩn
+                        <span className="material-symbols-outlined text-[16px]">{statusFilter === 'hidden' ? 'visibility' : 'visibility_off'}</span>
+                        {statusFilter === 'hidden' ? 'Hiện lại' : 'Ẩn'}
                     </button>
                     <button
                         onClick={() => setDeleteTarget(selected)}

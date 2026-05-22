@@ -26,10 +26,20 @@ export class AdminQueryReviewDto {
   @IsInt()
   rating?: number;
 
+  /** Lọc nhiều rating, ví dụ: 1,2 */
+  @IsOptional()
+  @IsString()
+  ratings?: string;
+
   /** Lọc theo trạng thái: 'hidden' | 'visible' */
   @IsOptional()
   @IsString()
   status?: string;
+
+  /** Lọc theo phản hồi: 'replied' | 'unreplied' */
+  @IsOptional()
+  @IsString()
+  replyStatus?: string;
 
   /** Lọc theo tourId cụ thể */
   @IsOptional()
@@ -45,5 +55,5 @@ export class AdminQueryReviewDto {
 
 export class AdminReplyDto {
   @IsString()
-  content: string;
+  content!: string;
 }

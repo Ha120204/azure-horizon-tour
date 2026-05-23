@@ -25,6 +25,10 @@ import {
 } from '../payment/payment.service';
 import { VoucherService } from '../voucher/voucher.service';
 import { MailService } from '../mail/mail.service';
+import {
+  isSaleDeparture,
+  SALE_TOUR_NO_VOUCHER_MESSAGE,
+} from '../tour/promotion-rules';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import type { Response } from 'express';
@@ -177,6 +181,15 @@ function isPayosDuplicateError(error: unknown): error is PayosError {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function assertVoucherAllowedForDeparture(
+  departure: TourDeparture | null,
+  voucherCode?: string | null,
+  regularPrice?: number | null,
+) {
+  if (!voucherCode?.trim() || !isSaleDeparture(departure, { regularPrice })) return;
+  throw new BadRequestException(SALE_TOUR_NO_VOUCHER_MESSAGE);
 }
 
 @Injectable()
@@ -570,9 +583,11 @@ export class BookingService {
     let voucherCode: string | null = null;
 
     if (dto.voucherCode) {
+      assertVoucherAllowedForDeparture(selectedDeparture, dto.voucherCode, tour.price);
       const voucherResult = await this.voucherService.validateVoucher(
         dto.voucherCode,
         totalPrice,
+        { tourId: tour.id, departureId: selectedDeparture?.id ?? null },
       );
       discountAmount = voucherResult.discountAmount;
       totalPrice = voucherResult.finalPrice;
@@ -1188,12 +1203,49 @@ export class BookingService {
     );
   }
 
-  async create(userId: number, dto: CreateBookingDto, ip: string) {
+  async create(userId: number | null, dto: CreateBookingDto, ip: string) {
     void ip;
     // ============== INTERACTIVE TRANSACTION ==============
     // Bọc toàn bộ logic trong 1 transaction để đảm bảo tính nguyên tử:
     // Nếu BẤT KỲ bước nào bên trong lỗi → rollback TẤT CẢ, không mất ghế.
     const booking = await this.prisma.$transaction(async (tx) => {
+      let finalUserId = userId;
+      if (!finalUserId || isNaN(finalUserId)) {
+        const contactEmail = dto.contactInfo?.email ? String(dto.contactInfo.email) : null;
+        if (!contactEmail) {
+          throw new BadRequestException('Email liên hệ là bắt buộc khi đặt tour vãng lai');
+        }
+
+        let guestUser = await tx.user.findUnique({
+          where: { email: contactEmail },
+        });
+        if (!guestUser) {
+          const contactName = dto.contactInfo?.fullName ? String(dto.contactInfo.fullName) : 'Guest';
+          const contactPhone = dto.contactInfo?.phone ? String(dto.contactInfo.phone) : null;
+          const contactGender = dto.contactInfo?.gender ? String(dto.contactInfo.gender) : null;
+          const contactDob = dto.contactInfo?.dob ? String(dto.contactInfo.dob) : null;
+          const contactIdentityType = dto.contactInfo?.identityType ? String(dto.contactInfo.identityType) : null;
+          const contactIdentityNo = dto.contactInfo?.identityNo ? String(dto.contactInfo.identityNo) : null;
+
+          const randomPassword = Math.random().toString(36).slice(-8) + Date.now().toString().slice(-4);
+          const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+          guestUser = await tx.user.create({
+            data: {
+              email: contactEmail,
+              password: hashedPassword,
+              fullName: contactName,
+              phone: contactPhone,
+              gender: contactGender,
+              dob: contactDob,
+              identityType: contactIdentityType,
+              identityNo: contactIdentityNo,
+              role: 'CUSTOMER',
+            },
+          });
+        }
+        finalUserId = guestUser.id;
+      }
       // 1. Tìm tour và khóa dòng dữ liệu
       const tour = await tx.tour.findUnique({
         where: { id: dto.tourId, deletedAt: null }, // [PHASE 1] Không cho đặt tour đã xóa
@@ -1252,9 +1304,11 @@ export class BookingService {
 
       // 2. Xác thực Voucher (nếu có)
       if (dto.voucherCode) {
+        assertVoucherAllowedForDeparture(selectedDeparture, dto.voucherCode, tour.price);
         const voucherResult = await this.voucherService.validateVoucher(
           dto.voucherCode,
           totalPrice,
+          { tourId: tour.id, departureId: selectedDeparture?.id ?? null },
         );
         discountAmount = voucherResult.discountAmount;
         totalPrice = voucherResult.finalPrice;
@@ -1282,7 +1336,7 @@ export class BookingService {
       const newBooking = await tx.booking.create({
         data: {
           bookingCode: newBookingCode,
-          userId,
+          userId: finalUserId,
           tourId: dto.tourId,
           numberOfPeople: dto.numberOfPeople,
           totalPrice,
@@ -1293,11 +1347,30 @@ export class BookingService {
           packageId: dto.packageId,
           contactInfo: dto.contactInfo ?? Prisma.JsonNull,
           passengers: dto.passengers ?? Prisma.JsonNull,
+          paymentMethod: dto.paymentMethod === 'IN_STORE' ? 'IN_STORE' : 'PAYOS',
         },
       });
 
       return newBooking;
     }); // ← Nếu có exception → toàn bộ rollback tự động
+
+    // NẾU LÀ THANH TOÁN TẠI CỬA HÀNG
+    if (booking.paymentMethod === 'IN_STORE') {
+      await this.prisma.paymentTransaction.create({
+        data: {
+          bookingId: booking.id,
+          gateway: 'MANUAL',
+          amount: Math.round(booking.totalPrice),
+          status: 'PENDING',
+        },
+      });
+
+      return {
+        message: 'Booking successful, please pay at the store',
+        booking,
+        paymentUrl: null,
+      };
+    }
 
     // ============== PAYOS INTEGRATION ==============
     // totalPrice đã là VNĐ (frontend gửi VNĐ, DB lưu VNĐ)
@@ -1525,16 +1598,29 @@ export class BookingService {
     batchSize: number;
     processedCount: number;
   }> {
-    const EXPIRY_MINUTES = 15;
-    const expiryTime = new Date(Date.now() - EXPIRY_MINUTES * 60 * 1000);
+    const EXPIRY_PAYOS_MINUTES = 15;
+    const EXPIRY_INSTORE_HOURS = 24;
 
-    // Tìm tất cả đơn PENDING đã tạo quá 15 phút
+    const now = new Date();
+    const payosExpiryTime = new Date(now.getTime() - EXPIRY_PAYOS_MINUTES * 60 * 1000);
+    const instoreExpiryTime = new Date(now.getTime() - EXPIRY_INSTORE_HOURS * 60 * 60 * 1000);
+
+    // Tìm tất cả đơn PENDING đã tạo quá hạn
     const expiredBookings = await this.prisma.booking.findMany({
       where: {
         status: 'PENDING',
         paymentStatus: 'UNPAID',
         deletedAt: null, // [PHASE 1] Bỏ qua booking đã xóa mềm
-        createdAt: { lt: expiryTime },
+        OR: [
+          {
+            paymentMethod: 'PAYOS',
+            createdAt: { lt: payosExpiryTime },
+          },
+          {
+            paymentMethod: 'IN_STORE',
+            createdAt: { lt: instoreExpiryTime },
+          },
+        ],
       },
     });
 
@@ -1571,7 +1657,7 @@ export class BookingService {
    * Admin: Xác nhận thủ công booking PENDING
    * Dùng khi khách đã thanh toán ngoài hệ thống (chuyển khoản sai nội dung, tiền mặt, v.v.)
    */
-  async confirmManual(bookingId: number) {
+  async confirmManual(bookingId: number, adminId?: number) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
       include: {
@@ -1589,7 +1675,11 @@ export class BookingService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const confirmed = await tx.booking.update({
         where: { id: bookingId },
-        data: { status: 'CONFIRMED', paymentStatus: 'PAID' },
+        data: { 
+          status: 'CONFIRMED', 
+          paymentStatus: 'PAID',
+          confirmedById: adminId || null,
+        },
         include: {
           user: {
             select: { id: true, fullName: true, email: true, avatarUrl: true },
@@ -1605,7 +1695,7 @@ export class BookingService {
     });
 
     this.logger.log(
-      `[ADMIN MANUAL] Đã xác nhận thủ công booking #${bookingId} (${booking.bookingCode})`,
+      `[ADMIN MANUAL] Đã xác nhận thủ công booking #${bookingId} (${booking.bookingCode}) bởi Admin ID #${adminId}`,
     );
 
     return {
@@ -1613,6 +1703,44 @@ export class BookingService {
       totalPrice: Number(updated.totalPrice),
       unitPriceAtBooking: Number(updated.unitPriceAtBooking),
       discountAmount: Number(updated.discountAmount),
+    };
+  }
+
+  async updatePaymentMethod(bookingId: number, paymentMethod: 'PAYOS' | 'IN_STORE', userId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+    });
+
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.userId !== userId) throw new ForbiddenException('Bạn không có quyền chỉnh sửa booking này');
+    if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
+      throw new BadRequestException('Chỉ có thể thay đổi phương thức thanh toán cho đơn hàng chưa thanh toán');
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { paymentMethod },
+    });
+
+    if (paymentMethod === 'IN_STORE') {
+      const existingTx = await this.prisma.paymentTransaction.findFirst({
+        where: { bookingId, gateway: 'MANUAL' },
+      });
+      if (!existingTx) {
+        await this.prisma.paymentTransaction.create({
+          data: {
+            bookingId,
+            gateway: 'MANUAL',
+            amount: Math.round(Number(booking.totalPrice)),
+            status: 'PENDING',
+          },
+        });
+      }
+    }
+
+    return {
+      message: 'Cập nhật phương thức thanh toán thành công',
+      booking: updated,
     };
   }
 
@@ -1655,6 +1783,7 @@ export class BookingService {
       bookingCode: string;
       status: BookingStatus;
       paymentStatus: PaymentStatus;
+      paymentMethod: string;
       createdAt: Date;
       numberOfPeople: number;
       totalPrice: number | Prisma.Decimal;
@@ -1680,6 +1809,7 @@ export class BookingService {
       bookingCode: booking.bookingCode,
       status: booking.status,
       paymentStatus: booking.paymentStatus,
+      paymentMethod: booking.paymentMethod,
       createdAt: booking.createdAt,
       numberOfPeople: booking.numberOfPeople,
       totalPrice: Number(booking.totalPrice),
@@ -1702,9 +1832,12 @@ export class BookingService {
   }
 
   private async toETicketDto(booking: {
+    id: number;
     bookingCode: string;
     status: BookingStatus;
     paymentStatus: PaymentStatus;
+    paymentMethod: string;
+    createdAt: Date;
     numberOfPeople: number;
     totalPrice: number | Prisma.Decimal;
     departureId?: number | null;
@@ -1720,9 +1853,12 @@ export class BookingService {
     const departureDate = await this.resolveBookingDepartureDate(booking);
 
     return {
+      id: booking.id,
       bookingCode: booking.bookingCode,
       status: booking.status,
       paymentStatus: booking.paymentStatus,
+      paymentMethod: booking.paymentMethod,
+      createdAt: booking.createdAt,
       numberOfPeople: booking.numberOfPeople,
       totalPrice: Number(booking.totalPrice),
       leadTravelerName: booking.user.fullName,
@@ -1745,6 +1881,7 @@ export class BookingService {
         bookingCode: true,
         status: true,
         paymentStatus: true,
+        paymentMethod: true,
         createdAt: true,
         numberOfPeople: true,
         totalPrice: true,
@@ -1780,9 +1917,12 @@ export class BookingService {
     const booking = await this.prisma.booking.findFirst({
       where: { bookingCode, userId, deletedAt: null },
       select: {
+        id: true,
         bookingCode: true,
         status: true,
         paymentStatus: true,
+        paymentMethod: true,
+        createdAt: true,
         numberOfPeople: true,
         totalPrice: true,
         departureId: true,
@@ -2031,6 +2171,131 @@ export class BookingService {
 
     this.logger.log(
       `[RETRY] Tạo lại link thanh toán cho booking #${booking.id} (${booking.bookingCode})`,
+    );
+
+    return { checkoutUrl, expiresAt: expiryTime.toISOString() };
+  }
+
+  async findPublicByBookingCode(bookingCode: string, email: string) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { bookingCode, deletedAt: null },
+      select: {
+        id: true,
+        bookingCode: true,
+        status: true,
+        paymentStatus: true,
+        numberOfPeople: true,
+        totalPrice: true,
+        departureId: true,
+        contactInfo: true,
+        passengers: true,
+        discountAmount: true,
+        voucherCode: true,
+        createdAt: true,
+        user: {
+          select: { fullName: true, email: true },
+        },
+        tour: {
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            startDate: true,
+            duration: true,
+            tourCode: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Không tìm thấy đơn đặt tour');
+    }
+
+    const contactInfo = booking.contactInfo as any;
+    const contactEmail = contactInfo?.email ? String(contactInfo.email) : null;
+    const userEmail = booking.user?.email;
+
+    if (
+      (!contactEmail || contactEmail.toLowerCase() !== email.toLowerCase()) &&
+      (!userEmail || userEmail.toLowerCase() !== email.toLowerCase())
+    ) {
+      throw new ForbiddenException('Thông tin xác thực không chính xác');
+    }
+
+    return booking;
+  }
+
+  async publicRetryPayment(bookingCode: string, email: string) {
+    const EXPIRY_MINUTES = 15;
+
+    const booking = await this.prisma.booking.findFirst({
+      where: { bookingCode, deletedAt: null },
+      include: { user: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Không tìm thấy đơn đặt tour');
+    }
+
+    const contactInfo = booking.contactInfo as any;
+    const contactEmail = contactInfo?.email ? String(contactInfo.email) : null;
+    const userEmail = booking.user?.email;
+
+    if (
+      (!contactEmail || contactEmail.toLowerCase() !== email.toLowerCase()) &&
+      (!userEmail || userEmail.toLowerCase() !== email.toLowerCase())
+    ) {
+      throw new ForbiddenException('Thông tin xác thực không chính xác');
+    }
+
+    if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
+      throw new BadRequestException(
+        'Booking này không ở trạng thái chờ thanh toán',
+      );
+    }
+
+    const expiryTime = new Date(
+      booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000,
+    );
+    if (new Date() > expiryTime) {
+      throw new BadRequestException(
+        'Booking đã hết hạn thanh toán (quá 15 phút). Vui lòng đặt tour mới.',
+      );
+    }
+
+    const amountVND = Math.round(booking.totalPrice);
+    const description = `AH ${booking.bookingCode}`;
+
+    const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
+    const orderCode = Number(booking.id.toString() + timeSuffix);
+
+    let checkoutUrl: string;
+    try {
+      checkoutUrl = await this.paymentService.createPaymentLink(
+        orderCode,
+        amountVND,
+        description,
+      );
+    } catch (payosError: unknown) {
+      if (isPayosDuplicateError(payosError)) {
+        this.logger.warn(
+          `[PUBLIC-RETRY] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`,
+        );
+        const existing = await this.paymentService.getPaymentInfo(orderCode);
+        if (!existing?.id) {
+          throw new BadRequestException(
+            'Không thể lấy liên kết thanh toán. Link có thể đã hết hạn. Vui lòng đặt tour mới.',
+          );
+        }
+        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
+      } else {
+        throw payosError;
+      }
+    }
+
+    this.logger.log(
+      `[PUBLIC-RETRY] Tạo lại link thanh toán cho booking #${booking.id} (${booking.bookingCode})`,
     );
 
     return { checkoutUrl, expiresAt: expiryTime.toISOString() };

@@ -39,4 +39,8 @@ export class CreateBookingDto {
     @IsOptional()
     @IsArray()
     passengers?: PassengerDto[];
+
+    @IsOptional()
+    @IsString()
+    paymentMethod?: string;
 }

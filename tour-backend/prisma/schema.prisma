@@ -60,6 +60,7 @@ model User {
   authRevokedAt DateTime?
 
   bookings        Booking[]
+  bookingsConfirmed Booking[]    @relation("BookingConfirmedBy")
   bookingNotifications BookingNotification[]
   userVouchers    UserVoucher[]
   chatSessions    ChatSession[]
@@ -300,6 +301,11 @@ enum PaymentStatus {
   FAILED      // Thanh toán thất bại
 }
 
+enum PaymentMethod {
+  PAYOS
+  IN_STORE
+}
+
 enum AssistedDraftStatus {
   DRAFT
   PENDING_APPROVAL
@@ -327,6 +333,9 @@ model Booking {
   
   status           BookingStatus @default(PENDING)
   paymentStatus    PaymentStatus @default(UNPAID)
+  paymentMethod    PaymentMethod @default(PAYOS)
+  confirmedById    Int?
+  confirmedBy      User?         @relation("BookingConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
   vnpayTxnRef      String?       // Mã giao dịch từ cổng thanh toán để đối soát
   isAssistedBooking Boolean      @default(false)
   assistedDraftId  Int?          @unique

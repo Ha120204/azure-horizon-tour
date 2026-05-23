@@ -79,6 +79,14 @@ class AdminOnlyGuard implements CanActivate {
   }
 }
 
+/** Guard JWT tùy chọn — không chặn khách vãng lai (không ném lỗi 401) */
+@Injectable()
+class OptionalJwtAuthGuard extends AuthGuard('jwt') {
+  handleRequest(err, user, info, context) {
+    return user || null;
+  }
+}
+
 @Controller('booking')
 export class BookingController {
   constructor(
@@ -106,16 +114,9 @@ export class BookingController {
       const isCancelled = query.cancel === 'true';
       const status = query.status;
 
-      // Nếu khách bấm "Hủy" trên trang PayOS → Hoàn trả ghế rồi redirect
+      // Nếu khách bấm "Hủy" trên trang PayOS → redirect về trang chủ và giữ trạng thái PENDING
       if (isCancelled || status === 'CANCELLED') {
-        if (orderCode) {
-          try {
-            await this.bookingService.handlePayosReturn(orderCode);
-          } catch (e) {
-            console.error('Lỗi hoàn trả ghế khi hủy thanh toán:', e);
-          }
-        }
-        return res.redirect(`${frontendUrl}/checkout?error=payment_cancelled`);
+        return res.redirect(`${frontendUrl}/?error=payment_cancelled`);
       }
 
       // Gọi PayOS API xác nhận trạng thái thanh toán thực tế
@@ -131,10 +132,10 @@ export class BookingController {
       }
 
       // Thanh toán thất bại hoặc chưa hoàn tất
-      return res.redirect(`${frontendUrl}/checkout?error=payment_failed`);
+      return res.redirect(`${frontendUrl}/?error=payment_failed`);
     } catch (error) {
       console.error('PayOS Return Error:', error);
-      return res.redirect(`${frontendUrl}/checkout?error=payment_failed`);
+      return res.redirect(`${frontendUrl}/?error=payment_failed`);
     }
   }
 
@@ -164,7 +165,7 @@ export class BookingController {
 
   // ============== BOOKING CRUD ==============
 
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(OptionalJwtAuthGuard)
   @Post()
   create(
     @Request() req: AuthenticatedRequest,
@@ -403,6 +404,23 @@ export class BookingController {
     return this.bookingService.retryPayment(Number(id), getAuthUserId(req));
   }
 
+  @UseGuards(AuthGuard('jwt'))
+  @Patch(':id/payment-method')
+  async updatePaymentMethod(
+    @Param('id') id: string,
+    @Body('paymentMethod') paymentMethod: 'PAYOS' | 'IN_STORE',
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (paymentMethod !== 'PAYOS' && paymentMethod !== 'IN_STORE') {
+      throw new BadRequestException('Phương thức thanh toán không hợp lệ');
+    }
+    return this.bookingService.updatePaymentMethod(
+      Number(id),
+      paymentMethod,
+      getAuthUserId(req),
+    );
+  }
+
   /**
    * Khách hàng gửi yêu cầu hủy booking
    * POST /booking/:id/cancel-request
@@ -521,8 +539,11 @@ export class BookingController {
   @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
   @Patch('admin/:id/confirm-manual')
   @AuditLog('UPDATE', 'Booking')
-  async confirmManual(@Param('id') id: string) {
-    return this.bookingService.confirmManual(Number(id));
+  async confirmManual(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.bookingService.confirmManual(Number(id), getAuthUserId(req));
   }
 
   // NOTE: Generic PATCH/DELETE được bảo vệ bởi AdminOnlyGuard.

@@ -1,5 +1,21 @@
 {
   "checkout": {
+    "continue": "Continue",
+    "edit": "Edit",
+    "backToEdit": "Go back to edit information",
+    "leadRepresentative": "Representative",
+    "passengerN": "Passenger {number}",
+    "adultLabel": "Adult",
+    "childLabel": "Child",
+    "infantLabel": "Infant",
+    "specialRequestsTitle": "Special Requests",
+    "confirmTitle": "Confirm Booking Information",
+    "confirmDesc": "Please double-check the information below before proceeding to payment:",
+    "warningTitle": "Important Note",
+    "warningDesc": "Booking information cannot be changed after payment has been processed. Please ensure that all passenger details match their official identity documents.",
+    "confirmAndPay": "Confirm Booking",
+    "loginPromoText": "Log in to receive offers and manage your bookings more easily.",
+    "loginNow": "Log in now",
     "step1": "Step 1: Passenger Info",
     "step2": "Step 2: Payment",
     "contactInfoTitle": "1. Contact Information",
@@ -56,7 +72,7 @@
     "infantX": "Infant",
     "taxFee": "Tax & Service Fee",
     "totalPayment": "Total Payment",
-    "secureCheckout": "Secure Checkout",
+    "secureCheckout": "Continue",
     "redirecting": "Redirecting...",
     "loadingData": "Loading cart...",
     "notFound": "Tour information not found",
@@ -71,7 +87,8 @@
       "loginRequired": "Please log in to continue payment!",
       "paymentInit": "Payment initialization error",
       "tryAgain": "Please try again.",
-      "serverFail": "Failed to connect to the server."
+      "serverFail": "Failed to connect to the server.",
+      "paymentCancelledHome": "Payment was unsuccessful. Your booking has been saved in 'Pending Payment' status. You can go to 'My Bookings' to complete the payment."
     },
     "voucherTitle": "Voucher Code",
     "enterVoucher": "Enter voucher code",
@@ -79,10 +96,18 @@
     "serverError": "Server connection error",
     "minOrder": "Minimum order must be {amount} to use this voucher",
     "invalidVoucher": "Invalid voucher code",
+    "saleTourNoVoucher": "This departure already has a sale price, so vouchers cannot be combined.",
+    "salePriceApplied": "Sale price applied",
     "chooseFromWallet": "Choose from wallet",
     "subtotal": "Subtotal",
     "discount": "Discount",
     "voucherDiscount": "Voucher Discount",
-    "infoError": "Information Error"
+    "infoError": "Information Error",
+    "paymentStatus": "Payment Status",
+    "paymentMethodTitle": "Payment Method",
+    "payosTitle": "Bank Transfer (PayOS)",
+    "payosDesc": "Quick QR-code scan with instant confirmation.",
+    "inStoreTitle": "Pay at Store (In-Store)",
+    "inStoreDesc": "Hold seats for up to 24 hours. Please visit our office to pay."
   }
 }

@@ -11,6 +11,7 @@ import { UpdateTourDto } from './dto/update-tour.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TourPermissionService } from './tour-permission.service';
 import { localizeTour, normalizeLocale, toEnglishNameFallback } from './tour-localization';
+import { SALE_DEPARTURE_CATEGORIES } from './promotion-rules';
 
 const DRAFT_DESTINATION_NAME = 'Chưa xác định';
 
@@ -1121,7 +1122,7 @@ export class TourService {
   async getSaleDeals(localeInput?: string) {
     const locale = normalizeLocale(localeInput);
     const now = new Date();
-    const saleCategories = ['FLASH_SALE', 'EARLY_BIRD', 'LAST_MINUTE'];
+    const saleCategories: string[] = [...SALE_DEPARTURE_CATEGORIES];
 
     const departures = await this.prisma.tourDeparture.findMany({
       where: {

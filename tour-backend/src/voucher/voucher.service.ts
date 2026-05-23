@@ -5,7 +5,12 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  isSaleDeparture,
+  SALE_TOUR_NO_VOUCHER_MESSAGE,
+} from '../tour/promotion-rules';
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -21,7 +26,7 @@ export interface CreateVoucherDto {
   isActive?: boolean;
 }
 
-export interface UpdateVoucherDto extends Partial<CreateVoucherDto> {}
+export type UpdateVoucherDto = Partial<CreateVoucherDto>;
 
 export interface AdminVoucherQuery {
   search?: string;
@@ -31,6 +36,11 @@ export interface AdminVoucherQuery {
   limit?: number;
   sortBy?: 'createdAt' | 'expiresAt' | 'usedCount';
   sortOrder?: 'asc' | 'desc';
+}
+
+export interface VoucherValidationContext {
+  tourId?: number | null;
+  departureId?: number | null;
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -125,8 +135,15 @@ export class VoucherService {
   }
 
   /** Validate voucher code + tính tiền giảm */
-  async validateVoucher(code: string, totalPrice: number) {
-    const voucher = await this.prisma.voucher.findUnique({ where: { code } });
+  async validateVoucher(
+    code: string,
+    totalPrice: number,
+    context: VoucherValidationContext = {},
+  ) {
+    const normalizedCode = code.trim().toUpperCase();
+    const voucher = await this.prisma.voucher.findUnique({
+      where: { code: normalizedCode },
+    });
 
     if (!voucher || !voucher.isActive)
       throw new BadRequestException('Mã này hiện không còn khả dụng');
@@ -134,6 +151,33 @@ export class VoucherService {
       throw new BadRequestException('Mã đã hết hạn sử dụng');
     if (voucher.usedCount >= voucher.maxUses)
       throw new BadRequestException('Mã đã được dùng hết — bạn đến hơi muộn rồi 😊');
+    if (context.departureId) {
+      const departure = await this.prisma.tourDeparture.findUnique({
+        where: { id: context.departureId },
+        select: {
+          tourId: true,
+          category: true,
+          note: true,
+          flashSaleEndsAt: true,
+          price: true,
+          tour: { select: { price: true } },
+          isActive: true,
+        },
+      });
+
+      if (
+        !departure ||
+        !departure.isActive ||
+        (context.tourId && departure.tourId !== context.tourId)
+      ) {
+        throw new BadRequestException('Invalid departure');
+      }
+
+      if (isSaleDeparture(departure)) {
+        throw new BadRequestException(SALE_TOUR_NO_VOUCHER_MESSAGE);
+      }
+    }
+
     if (totalPrice < voucher.minOrderValue)
       throw new BadRequestException(`MIN_ORDER:${voucher.minOrderValue}`);
 
@@ -233,7 +277,7 @@ export class VoucherService {
     const currentPage = Math.max(1, Number(page) || 1);
     const pageSize = Math.max(1, Math.min(100, Number(limit) || 10));
 
-    const where: any = {};
+    const where: Prisma.VoucherWhereInput = {};
 
     if (search) {
       where.OR = [
@@ -363,7 +407,7 @@ export class VoucherService {
       if (dup) throw new ConflictException(`Mã "${code}" đã tồn tại`);
     }
 
-    const updateData: any = {};
+    const updateData: Prisma.VoucherUpdateInput = {};
     if (code) updateData.code = code;
     if (dto.label !== undefined) updateData.label = dto.label.trim();
     if (dto.description !== undefined) updateData.description = dto.description.trim();

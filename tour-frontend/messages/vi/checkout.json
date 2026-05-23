@@ -1,5 +1,21 @@
 {
   "checkout": {
+    "continue": "Tiếp tục",
+    "edit": "Chỉnh sửa",
+    "backToEdit": "Quay lại chỉnh sửa thông tin",
+    "leadRepresentative": "Đại diện",
+    "passengerN": "Hành khách {number}",
+    "adultLabel": "Người lớn",
+    "childLabel": "Trẻ em",
+    "infantLabel": "Trẻ nhỏ",
+    "specialRequestsTitle": "Yêu cầu đặc biệt",
+    "confirmTitle": "Xác nhận thông tin đặt chỗ",
+    "confirmDesc": "Vui lòng kiểm tra kỹ các thông tin dưới đây trước khi tiến hành thanh toán:",
+    "warningTitle": "Lưu ý quan trọng",
+    "warningDesc": "Thông tin đặt chỗ sẽ không thể thay đổi sau khi tiến hành thanh toán. Vui lòng đảm bảo các thông tin của hành khách khớp đúng với giấy tờ tuỳ thân thực tế.",
+    "confirmAndPay": "Xác nhận đặt tour",
+    "loginPromoText": "Đăng nhập để nhận các ưu đãi và quản lý đơn hàng dễ dàng hơn.",
+    "loginNow": "Đăng nhập ngay",
     "step1": "Bước 1: Thông tin hành khách",
     "step2": "Bước 2: Thanh toán",
     "contactInfoTitle": "1. Thông tin liên hệ",
@@ -56,7 +72,7 @@
     "infantX": "Em bé",
     "taxFee": "Thuế & Phí dịch vụ",
     "totalPayment": "Tổng thanh toán",
-    "secureCheckout": "Thanh Toán An Toàn",
+    "secureCheckout": "Xác nhận thông tin",
     "redirecting": "Đang chuyển hướng...",
     "loadingData": "Đang tải giỏ hàng...",
     "notFound": "Không tìm thấy thông tin Tour",
@@ -71,7 +87,8 @@
       "loginRequired": "Vui lòng đăng nhập để tiếp tục thanh toán!",
       "paymentInit": "Lỗi khởi tạo thanh toán",
       "tryAgain": "Vui lòng thử lại.",
-      "serverFail": "Không thể kết nối đến máy chủ."
+      "serverFail": "Không thể kết nối đến máy chủ.",
+      "paymentCancelledHome": "Thanh toán không thành công. Đơn đặt tour của bạn đã được lưu ở trạng thái \"Chờ thanh toán\". Bạn có thể vào \"Lịch sử đặt tour\" để tiến hành thanh toán lại."
     },
     "voucherTitle": "Mã giảm giá",
     "enterVoucher": "Nhập mã voucher",
@@ -79,10 +96,18 @@
     "serverError": "Lỗi kết nối server",
     "minOrder": "Đơn hàng phải tối thiểu {amount} để sử dụng voucher này",
     "invalidVoucher": "Mã voucher không hợp lệ",
+    "saleTourNoVoucher": "Lịch khởi hành này đang có giá ưu đãi nên không thể kết hợp thêm voucher.",
+    "salePriceApplied": "Giá ưu đãi đã được áp dụng",
     "chooseFromWallet": "Chọn từ ví",
     "subtotal": "Tạm tính",
     "discount": "Giảm giá",
     "voucherDiscount": "Giảm giá voucher",
-    "infoError": "Lỗi Thông Tin"
+    "infoError": "Lỗi Thông Tin",
+    "paymentStatus": "Trạng thái thanh toán",
+    "paymentMethodTitle": "Phương thức thanh toán",
+    "payosTitle": "Chuyển khoản Ngân hàng (PayOS)",
+    "payosDesc": "Thanh toán quét mã QR nhanh chóng và xác nhận tức thì.",
+    "inStoreTitle": "Thanh toán tại cửa hàng",
+    "inStoreDesc": "Giữ chỗ tối đa 24 giờ. Vui lòng đến văn phòng của chúng tôi để thanh toán."
   }
 }

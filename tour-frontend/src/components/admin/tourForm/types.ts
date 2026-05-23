@@ -1,0 +1,116 @@
+// ── Types ──────────────────────────────────────────────────────────────
+export type TravelScope = 'DOMESTIC' | 'INTERNATIONAL';
+
+export interface Destination {
+    id: number;
+    name: string;
+    travelScope?: TravelScope;
+    countryCode?: string | null;
+}
+
+export interface TourPackage {
+    id?: number;
+    name: string;
+    nameEn: string;
+    nameMode: 'select' | 'custom';
+    description: string;
+    descriptionEn: string;
+    price: string;
+    badge: string;
+    includes: string[];
+    includesEn: string[];
+    excludes: string[];
+    excludesEn: string[];
+}
+
+export interface TourDeparture {
+    id?: number;
+    departureDate: string;
+    price: string;
+    availableSeats: string;
+    maxSeats: string;
+    note: string;
+    noteEn: string;
+    category: SaleCategory;
+    flashSaleEndsAt: string;
+}
+
+export interface TourFormData {
+    name: string;
+    nameEn: string;
+    description: string;
+    descriptionEn: string;
+    price: string;
+    destinationId: string;
+    startDate: string;
+    duration: string;
+    durationEn: string;
+    availableSeats: string;
+    tourType: string;
+    imageUrl: string;
+    departurePoint: string;
+    departurePointEn: string;
+}
+
+export type SaleCategory = 'all' | 'flash' | 'early' | 'lastminute';
+
+export interface ExistingTourImage { id: number; url: string; }
+
+export interface ExistingTourPackage {
+    id?: number;
+    name?: string;
+    nameEn?: string | null;
+    description?: string;
+    descriptionEn?: string | null;
+    price?: number | string;
+    badge?: string;
+    includes?: string[] | string | null;
+    includesEn?: string[] | string | null;
+    excludes?: string[] | string | null;
+    excludesEn?: string[] | string | null;
+}
+
+export interface ExistingTourDeparture {
+    id?: number;
+    departureDate?: string | Date | null;
+    price?: number | string | null;
+    availableSeats?: number | string | null;
+    maxSeats?: number | string | null;
+    note?: string | null;
+    noteEn?: string | null;
+    category?: string | null;
+    flashSaleEndsAt?: string | Date | null;
+}
+
+export interface InitialTourData {
+    id: number;
+    name?: string;
+    nameEn?: string | null;
+    description?: string;
+    descriptionEn?: string | null;
+    price?: number | string;
+    destination?: Destination | null;
+    destinationId?: number | string | null;
+    startDate?: string | Date | null;
+    duration?: string;
+    durationEn?: string | null;
+    availableSeats?: number | string;
+    tourType?: string;
+    imageUrl?: string;
+    departurePoint?: string | null;
+    departurePointEn?: string | null;
+    status?: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED' | 'COMPLETED';
+    images?: ExistingTourImage[];
+    packages?: ExistingTourPackage[];
+    departures?: ExistingTourDeparture[];
+}
+
+export interface TourFormModalProps {
+    mode: 'create' | 'edit';
+    initialData?: InitialTourData;
+    destinations: Destination[];
+    userRole?: string;
+    onSuccess: (message: string, savedTour?: InitialTourData, action?: 'draft' | 'submit') => void;
+    onClose: () => void;
+    onDestinationCreated?: (dest: Destination) => void;
+}

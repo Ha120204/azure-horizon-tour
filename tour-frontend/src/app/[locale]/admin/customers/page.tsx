@@ -44,6 +44,18 @@ interface Meta {
     currentPage: number;
 }
 
+interface CustomerListPayload {
+    users: User[];
+    meta?: Meta;
+}
+
+interface ProfilePayload {
+    role?: string;
+    data?: {
+        role?: string;
+    };
+}
+
 interface ToastState {
     message: string;
     type: 'success' | 'error';
@@ -94,6 +106,9 @@ const getInitials = (name?: string | null) => {
     return name.substring(0, 2).toUpperCase();
 };
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error && error.message ? error.message : fallback;
+
 const avatarGradients = [
     'from-blue-500 to-indigo-600',
     'from-violet-500 to-purple-600',
@@ -122,10 +137,9 @@ export default function CustomerManagementPage() {
 
     // Fetch current user role
     useEffect(() => {
-        const { API_BASE_URL: API } = require('@/lib/constants');
         fetchWithAuth(`${API_BASE_URL}/auth/profile`)
             .then((r: Response) => r.json())
-            .then((d: any) => setCurrentUserRole(d.role || d.data?.role || ''))
+            .then((d: ProfilePayload) => setCurrentUserRole(d.role || d.data?.role || ''))
             .catch(() => {});
     }, []);
 
@@ -142,6 +156,8 @@ export default function CustomerManagementPage() {
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
     const [toggleTarget, setToggleTarget] = useState<User | null>(null);
     const [isToggling, setIsToggling] = useState(false);
+    const [hasFreshData, setHasFreshData] = useState(false);
+    const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
     
     // Editing state
     const [isEditing, setIsEditing] = useState(false);
@@ -155,6 +171,7 @@ export default function CustomerManagementPage() {
 
     // Debounce ref
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastCustomerSignature = useRef('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
 
     // ── Debounce search ─────────────────────────────────────────
@@ -168,32 +185,90 @@ export default function CustomerManagementPage() {
     }, [search]);
 
     // ── Fetch users ─────────────────────────────────────────────
+    const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3500);
+    }, []);
+
+    const buildCustomerSignature = useCallback((payload: CustomerListPayload) => JSON.stringify({
+        total: payload.meta?.totalItems ?? 0,
+        rows: payload.users.map(user => ({
+            id: user.id,
+            status: user.status,
+            deletedAt: user.deletedAt,
+            bookingCount: user.bookingCount,
+            reviewCount: user.reviewCount,
+            createdAt: user.createdAt,
+        })),
+    }), []);
+
+    const getUsersPayload = useCallback(async (): Promise<CustomerListPayload> => {
+        const qs = new URLSearchParams();
+        if (debouncedSearch) qs.append('search', debouncedSearch);
+        qs.append('role', 'CUSTOMER');
+        if (filterStatus) qs.append('status', filterStatus);
+        qs.append('page', String(page));
+        qs.append('limit', String(pageSize));
+
+        const res = await fetchWithAuth(`${API_BASE_URL}/user?${qs}`);
+        if (!res.ok) { const err = await res.json(); throw new Error(JSON.stringify(err)); }
+        const json = await res.json();
+        return { users: json.data ?? [], meta: json.meta };
+    }, [debouncedSearch, filterStatus, page, pageSize]);
+
     const fetchUsers = useCallback(async () => {
         setIsLoading(true);
         try {
-            const qs = new URLSearchParams();
-            if (debouncedSearch) qs.append('search', debouncedSearch);
-            qs.append('role', 'CUSTOMER');
-            if (filterStatus) qs.append('status', filterStatus);
-            qs.append('page', String(page));
-            qs.append('limit', String(pageSize));
-
-
-            const res = await fetchWithAuth(`${API_BASE_URL}/user?${qs}`);
-            if (!res.ok) { const err = await res.json(); throw new Error(JSON.stringify(err)); }
-            const json = await res.json();
+            const payload = await getUsersPayload();
             // Interceptor: service trả { data: User[], meta } → interceptor pull lên, nên json.data = User[]
-            setUsers(json.data ?? []);
-            if (json.meta) setMeta(json.meta);
-        } catch (error: any) {
+            setUsers(payload.users);
+            if (payload.meta) setMeta(payload.meta);
+            lastCustomerSignature.current = buildCustomerSignature(payload);
+            setHasFreshData(false);
+            setLastSyncedAt(new Date());
+        } catch {
             showToast('Lỗi tải danh sách khách hàng.', 'error');
         } finally {
             setIsLoading(false);
         }
-    }, [debouncedSearch, filterStatus, page, pageSize]);
+    }, [buildCustomerSignature, getUsersPayload, showToast]);
 
 
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+    useEffect(() => {
+        const checkForFreshData = async () => {
+            if (document.visibilityState !== 'visible' || detailUser || toggleTarget) return;
+
+            try {
+                const payload = await getUsersPayload();
+                const nextSignature = buildCustomerSignature(payload);
+                if (!lastCustomerSignature.current) {
+                    lastCustomerSignature.current = nextSignature;
+                    return;
+                }
+                if (nextSignature !== lastCustomerSignature.current) {
+                    setHasFreshData(true);
+                }
+            } catch {
+                // Background refresh is best-effort; keep the current table stable.
+            }
+        };
+
+        const handleVisibilityOrFocus = () => {
+            if (document.visibilityState === 'visible') void checkForFreshData();
+        };
+
+        const intervalId = window.setInterval(checkForFreshData, 45 * 1000);
+        window.addEventListener('focus', handleVisibilityOrFocus);
+        document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+        return () => {
+            window.clearInterval(intervalId);
+            window.removeEventListener('focus', handleVisibilityOrFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+        };
+    }, [buildCustomerSignature, detailUser, getUsersPayload, toggleTarget]);
 
     // ── Fetch stats ─────────────────────────────────────────────
     const fetchStats = useCallback(async () => {
@@ -209,12 +284,12 @@ export default function CustomerManagementPage() {
 
     useEffect(() => { fetchStats(); }, [fetchStats]);
 
-    // ── Toast ───────────────────────────────────────────────────
-    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3500);
-    };
+    const refreshCustomers = useCallback(async () => {
+        await fetchUsers();
+        await fetchStats();
+    }, [fetchStats, fetchUsers]);
 
+    // ── Toast ───────────────────────────────────────────────────
     // ── View Detail ─────────────────────────────────────────────
     const openDetail = async (userId: number, editMode: boolean = false) => {
         setIsLoadingDetail(true);
@@ -274,8 +349,8 @@ export default function CustomerManagementPage() {
             openDetail(detailUser.id);
             fetchUsers();
             
-        } catch (error: any) {
-            showToast('Lỗi: ' + (error.message || 'Lỗi lưu thông tin'), 'error');
+        } catch (error: unknown) {
+            showToast('Lỗi: ' + getErrorMessage(error, 'Lỗi lưu thông tin'), 'error');
         } finally {
             setIsSaving(false);
         }
@@ -306,8 +381,8 @@ export default function CustomerManagementPage() {
             if (detailUser && detailUser.id === toggleTarget.id) {
                 setDetailUser({ ...detailUser, status: payload.status, deletedAt: payload.deletedAt });
             }
-        } catch (e: any) {
-            showToast(e.message || 'Thao tác thất bại.', 'error');
+        } catch (e: unknown) {
+            showToast(getErrorMessage(e, 'Thao tác thất bại.'), 'error');
         } finally {
             setIsToggling(false);
         }
@@ -364,6 +439,29 @@ export default function CustomerManagementPage() {
                         Quản lý Khách Hàng
                     </h1>
                     <p className="text-on-surface-variant text-sm mt-1">Theo dõi và quản lý tài khoản khách hàng đã đăng ký trên hệ thống.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    {hasFreshData && (
+                        <button
+                            onClick={refreshCustomers}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">fiber_new</span>
+                            Có khách hàng mới
+                        </button>
+                    )}
+                    {lastSyncedAt && !hasFreshData && (
+                        <span className="hidden xl:inline text-xs font-medium text-on-surface-variant">
+                            Cập nhật {lastSyncedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    )}
+                    <button
+                        onClick={refreshCustomers}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/20 text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                        <span className="material-symbols-outlined text-[18px]">refresh</span>
+                        Làm mới
+                    </button>
                 </div>
             </div>
 
@@ -996,26 +1094,4 @@ function DetailInfoCard({ icon, label, value, isWarning = false }: { icon: strin
             <p className={`text-sm font-semibold pl-8 ${isWarning ? 'text-red-700' : 'text-on-surface'}`}>{value}</p>
         </div>
     );
-}
-
-// ── Pagination helper ────────────────────────────────────────────────
-function generatePageNumbers(current: number, total: number): (number | string)[] {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    const pages: (number | string)[] = [];
-    if (current <= 4) {
-        for (let i = 1; i <= 5; i++) pages.push(i);
-        pages.push('...');
-        pages.push(total);
-    } else if (current >= total - 3) {
-        pages.push(1);
-        pages.push('...');
-        for (let i = total - 4; i <= total; i++) pages.push(i);
-    } else {
-        pages.push(1);
-        pages.push('...');
-        for (let i = current - 1; i <= current + 1; i++) pages.push(i);
-        pages.push('...');
-        pages.push(total);
-    }
-    return pages;
 }

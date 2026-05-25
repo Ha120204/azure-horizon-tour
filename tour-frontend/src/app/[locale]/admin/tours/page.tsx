@@ -9,6 +9,7 @@ import ReviewTourModal from '@/components/admin/ReviewTourModal';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 // ── Types ────────────────────────────────────────────────────────────
 type TourStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED' | 'COMPLETED';
@@ -553,6 +554,25 @@ export default function AdminToursPage() {
     useEffect(() => {
         if (activeTab === 'trash' && isAdmin) fetchTrashedTours();
     }, [activeTab, fetchTrashedTours, isAdmin]);
+
+    const refreshTourData = useCallback(async () => {
+        if (activeTab === 'trash' && isAdmin) {
+            await Promise.all([fetchTrashedTours(), fetchStats()]);
+            return;
+        }
+        await Promise.all([fetchTours(), fetchStats()]);
+    }, [activeTab, fetchStats, fetchTours, fetchTrashedTours, isAdmin]);
+
+    useAdminAutoRefresh({
+        intervalMs: 90 * 1000,
+        pause: Boolean(
+            modalMode || contentDrawerTour || deleteTarget || reviewTarget || submitTarget ||
+            permDeleteTarget || showBulkConfirm || showTrashBulkDeleteConfirm || isDeleting ||
+            isBulkDeleting || isPermDeleting || isTrashBulkRestoring || isTrashBulkDeleting ||
+            restoring || isSubmitting
+        ),
+        onRefresh: refreshTourData,
+    });
 
     useEffect(() => {
         const timer = setTimeout(() => {

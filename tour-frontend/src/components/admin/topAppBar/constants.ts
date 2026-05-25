@@ -55,7 +55,8 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         actions: [
             { label: 'Khách hàng', desc: 'Lịch sử, hạng thành viên', icon: 'people', href: '/admin/customers', color: 'text-violet-500', roles: ADMIN_AND_SUPER_ROLES },
             { label: 'Kiểm duyệt Nhận xét', desc: 'Duyệt, ẩn, phản hồi review', icon: 'reviews', href: '/admin/reviews', color: 'text-purple-500', roles: ADMIN_AND_SUPER_ROLES },
-            { label: 'Quản lý Nhân viên', desc: 'Phân quyền, tài khoản staff', icon: 'badge', href: '/admin/staffs', color: 'text-rose-500', roles: ADMIN_AND_SUPER_ROLES },
+            { label: 'Quản lý Admin', desc: 'Tài khoản admin vận hành hệ thống', icon: 'manage_accounts', href: '/admin/staffs', color: 'text-rose-500', roles: ['SUPER_ADMIN'] },
+            { label: 'Quản lý Nhân viên', desc: 'Tài khoản staff nội bộ', icon: 'badge', href: '/admin/staffs', color: 'text-rose-500', roles: ['ADMIN'] },
         ],
     },
     {
@@ -76,7 +77,7 @@ const PAGE_META: Record<string, { title: string; icon: string; subtitle: string 
     '/admin/tours': { title: 'Quản lý Tour', icon: 'explore', subtitle: 'Thêm, sửa và quản lý tour du lịch' },
     '/admin/bookings': { title: 'Đơn đặt', icon: 'event_note', subtitle: 'Quản lý tất cả các đơn đặt tour' },
     '/admin/customers': { title: 'Khách hàng', icon: 'group', subtitle: 'Danh sách và thông tin khách hàng' },
-    '/admin/staffs': { title: 'Nhân viên', icon: 'badge', subtitle: 'Quản lý đội ngũ nhân viên & phân quyền' },
+    '/admin/staffs': { title: 'Nhân viên', icon: 'badge', subtitle: 'Quản lý tài khoản nhân viên nội bộ' },
     '/admin/vouchers': { title: 'Mã giảm giá', icon: 'confirmation_number', subtitle: 'Tạo và quản lý chương trình khuyến mãi' },
     '/admin/marketing': { title: 'Marketing', icon: 'campaign', subtitle: 'Quản lý subscriber và chiến dịch email' },
     '/admin/articles': { title: 'Bài viết', icon: 'article', subtitle: 'Quản lý nội dung & bài đăng blog' },

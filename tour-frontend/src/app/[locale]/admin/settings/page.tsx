@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Setting {
@@ -533,6 +534,11 @@ export default function SystemSettingsPage() {
     }, []);
 
     useEffect(() => { fetchSettings(); checkSystemHealth(); }, [fetchSettings, checkSystemHealth]);
+
+    useAdminAutoRefresh({
+        intervalMs: 5 * 60 * 1000,
+        onRefresh: checkSystemHealth,
+    });
 
     const handleManualHealthCheck = useCallback(async () => {
         setActivePanel('runtime');

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { API_BASE_URL } from '@/lib/constants';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -673,6 +674,17 @@ export default function ReviewManagementPage() {
 
     useEffect(() => { fetchReviews(); }, [fetchReviews]);
     useEffect(() => { fetchStats(); }, [fetchStats]);
+
+    const refreshReviewData = useCallback(async () => {
+        await Promise.all([fetchReviews(), fetchStats()]);
+    }, [fetchReviews, fetchStats]);
+
+    useAdminAutoRefresh({
+        intervalMs: 60 * 1000,
+        pause: Boolean(deleteTarget || replyTarget || lightbox || loadingId || bulkLoading || isDeleting),
+        onRefresh: refreshReviewData,
+    });
+
     useEffect(() => {
         setSelected([]);
     }, [debouncedSearch, ratingFilter, statusFilter, replyFilter, sortBy, pageSize]);

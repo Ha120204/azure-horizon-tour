@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 type Tone = 'blue' | 'amber' | 'red' | 'emerald' | 'violet';
 
@@ -202,17 +203,19 @@ export default function SuperAdminOverviewPage() {
     const [error, setError] = useState('');
     const [isExporting, setIsExporting] = useState(false);
 
-    const fetchOverview = useCallback(async () => {
-        setIsLoading(true);
-        setError('');
+    const fetchOverview = useCallback(async (options: { silent?: boolean } = {}) => {
+        if (!options.silent) setIsLoading(true);
+        if (!options.silent) setError('');
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/admin/super/overview`);
             const json = await res.json().catch(() => null);
             if (!res.ok) throw new Error(json?.message || 'Không thể tải dữ liệu Super Admin.');
             setData(json?.data ?? json);
         } catch (err) {
+            if (options.silent) return;
             setError(err instanceof Error ? err.message : 'Không thể tải dữ liệu Super Admin.');
         } finally {
+            if (options.silent) return;
             setIsLoading(false);
         }
     }, []);
@@ -220,6 +223,12 @@ export default function SuperAdminOverviewPage() {
     useEffect(() => {
         fetchOverview();
     }, [fetchOverview]);
+
+    useAdminAutoRefresh({
+        intervalMs: 60 * 1000,
+        pause: isExporting,
+        onRefresh: () => fetchOverview({ silent: true }),
+    });
 
     const exportAudit = async () => {
         setIsExporting(true);
@@ -251,7 +260,7 @@ export default function SuperAdminOverviewPage() {
                     </div>
                     <h1 className="mt-5 font-headline text-xl font-bold text-slate-800">Không tải được Super Overview</h1>
                     <p className="mt-2 text-sm text-slate-500">{error || 'Dữ liệu trả về không hợp lệ.'}</p>
-                    <button onClick={fetchOverview} className="mt-6 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 hover:bg-blue-700">
+                    <button onClick={() => fetchOverview()} className="mt-6 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 hover:bg-blue-700">
                         Thử lại
                     </button>
                 </div>
@@ -323,7 +332,7 @@ export default function SuperAdminOverviewPage() {
                                 <span className="material-symbols-outlined text-[22px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
                             </span>
                         </div>
-                        <button onClick={fetchOverview} className="mt-6 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        <button onClick={() => fetchOverview()} className="mt-6 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
                             Làm mới dữ liệu
                         </button>

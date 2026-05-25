@@ -41,6 +41,7 @@ type BookingDetail = {
     refundAmount?: number | string | null;
     refundNote?: string | null;
     cancellationPolicy?: CancellationPolicy;
+    supportTickets?: { id: number; status: string; subject?: string | null; createdAt: string }[];
     tour?: {
         id?: number;
         name?: string;
@@ -211,6 +212,34 @@ export default function BookingDetailPage() {
         setCancelSuccess(true);
         fetchBooking(); // Reload để lấy status mới
     }, [fetchBooking]);
+
+    // Report payment issue
+    const [showIssueForm, setShowIssueForm] = useState(false);
+    const [issueDesc, setIssueDesc] = useState('');
+    const [isReportingIssue, setIsReportingIssue] = useState(false);
+    const [issueSuccess, setIssueSuccess] = useState(false);
+    const [issueError, setIssueError] = useState('');
+
+    const handleReportIssue = async () => {
+        if (!issueDesc.trim() || issueDesc.trim().length < 10) {
+            setIssueError('Vui lòng mô tả vấn đề (ít nhất 10 ký tự)');
+            return;
+        }
+        setIsReportingIssue(true); setIssueError('');
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking!.id}/payment-issue`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ description: issueDesc.trim() }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json?.message ?? 'Gửi không thành công');
+            setIssueSuccess(true); setShowIssueForm(false);
+            fetchBooking();
+        } catch (e: unknown) {
+            setIssueError(e instanceof Error ? e.message : 'Lỗi kết nối');
+        } finally { setIsReportingIssue(false); }
+    };
 
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     useEffect(() => {
@@ -543,6 +572,7 @@ export default function BookingDetailPage() {
                                                 {language === 'vi' ? 'Xem Hướng Dẫn và Vé Giữ Chỗ' : 'View Instructions and Ticket'}
                                             </Link>
                                         ) : (
+                                            <>
                                             <button
                                                 onClick={handleRetryPayment}
                                                 disabled={isPaying}
@@ -554,6 +584,44 @@ export default function BookingDetailPage() {
                                                     <><span className="material-symbols-outlined text-lg">account_balance_wallet</span>{t('my_bookings.payNow')}</>
                                                 )}
                                             </button>
+                                            {/* Báo sự cố thanh toán */}
+                                            {issueSuccess ? (
+                                                <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-xl px-4 py-3 text-sm font-medium">
+                                                    <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                                                    Đã ghi nhận! Chúng tôi sẽ liên hệ trong vòng 24h.
+                                                </div>
+                                            ) : !showIssueForm ? (
+                                                <button
+                                                    onClick={() => { setShowIssueForm(true); setIssueError(''); }}
+                                                    className="w-full border border-purple-200 text-purple-700 bg-purple-50 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-100 transition-all text-sm"
+                                                >
+                                                    <span className="material-symbols-outlined text-base">report_problem</span>
+                                                    Đã chuyển khoản nhưng chưa được ghi nhận?
+                                                </button>
+                                            ) : (
+                                                <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-3">
+                                                    <p className="text-sm font-bold text-purple-800">Mô tả sự cố thanh toán</p>
+                                                    <textarea
+                                                        value={issueDesc}
+                                                        onChange={e => setIssueDesc(e.target.value)}
+                                                        rows={3}
+                                                        placeholder="VD: Tôi đã chuyển khoản lúc 14:30 ngày 23/05, mã GD: VCB123456, nhưng hệ thống chưa ghi nhận..."
+                                                        className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-300 resize-none"
+                                                    />
+                                                    {issueError && <p className="text-xs text-red-600 font-medium">{issueError}</p>}
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => { setShowIssueForm(false); setIssueError(''); }}
+                                                            className="flex-1 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+                                                            Hủy
+                                                        </button>
+                                                        <button onClick={handleReportIssue} disabled={isReportingIssue}
+                                                            className="flex-1 py-2 rounded-xl text-sm font-bold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
+                                                            {isReportingIssue ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Gửi…</> : <>Gửi báo lỗi</>}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            </>
                                         )}
                                         {canCancelBooking && (
                                             <button

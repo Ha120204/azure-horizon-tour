@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -184,8 +185,8 @@ export default function AdminProfilePage() {
     }, []);
 
     // ── Fetch profile ─────────────────────────────────────────────────────────
-    const fetchProfile = useCallback(async () => {
-        setIsLoading(true);
+    const fetchProfile = useCallback(async (options: { silent?: boolean } = {}) => {
+        if (!options.silent) setIsLoading(true);
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
             if (!res.ok) throw new Error();
@@ -204,13 +205,21 @@ export default function AdminProfilePage() {
                 gender: data.gender || '',
             });
         } catch {
+            if (options.silent) return;
             showToast('Không thể tải thông tin hồ sơ.', 'error');
         } finally {
+            if (options.silent) return;
             setIsLoading(false);
         }
     }, [showToast]);
 
     useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+    useAdminAutoRefresh({
+        intervalMs: 5 * 60 * 1000,
+        pause: Boolean(infoDirty || isSavingInfo || isUploadingAvatar || isSavingPw || isDragging),
+        onRefresh: () => fetchProfile({ silent: true }),
+    });
 
     // ── Info form dirty tracking ──────────────────────────────────────────────
     useEffect(() => {

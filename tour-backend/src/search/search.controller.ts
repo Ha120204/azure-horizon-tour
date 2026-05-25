@@ -1,183 +1,58 @@
-import { BadRequestException, Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { TravelScope } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { PrismaService } from '../prisma/prisma.service';
-import {
-    localizeDestination,
-    normalizeLocale,
-    toEnglishNameFallback,
-} from '../tour/tour-localization';
+import { SearchService } from './search.service';
 
-function parseTravelScope(input?: string): TravelScope | undefined {
-    if (!input) return undefined;
-    if (input === TravelScope.DOMESTIC || input === TravelScope.INTERNATIONAL) {
-        return input;
-    }
-    throw new BadRequestException('travelScope khong hop le');
-}
-
-function normalizeSearchText(value: string) {
-    return value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[đĐ]/g, 'd')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-}
 
 @Controller('search')
 export class SearchController {
-    constructor(private prisma: PrismaService) { }
+  constructor(private readonly searchService: SearchService) {}
 
-    /**
-     * Returns all destinations for suggestion dropdowns.
-     */
-    @Get('destinations')
-    async getAllDestinations(
-        @Query('travelScope') travelScopeInput?: string,
-        @Query('locale') localeInput?: string,
-    ) {
-        const travelScope = parseTravelScope(travelScopeInput);
-        const locale = normalizeLocale(localeInput);
-        return this.prisma.destination.findMany({
-            where: travelScope ? { travelScope } : undefined,
-            select: {
-                id: true,
-                name: true,
-                nameEn: true,
-                imageUrl: true,
-                region: true,
-                regionEn: true,
-                travelScope: true,
-                countryCode: true,
-            },
-            orderBy: { name: 'asc' },
-        }).then((destinations) =>
-            destinations.map((destination) => localizeDestination(destination, locale)),
-        );
-    }
+  /**
+   * GET /search/destinations
+   * Returns all destinations for suggestion dropdowns.
+   */
+  @Get('destinations')
+  async getAllDestinations(
+    @Query('travelScope') travelScope?: string,
+    @Query('locale') locale?: string,
+  ) {
+    return this.searchService.getAllDestinations(travelScope, locale);
+  }
 
-    /**
-     * Create a destination from the admin tour form.
-     */
-    @UseGuards(AuthGuard('jwt'), RolesGuard)
-    @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
-    @Post('destinations')
-    async createDestination(@Body() body: { name: string; travelScope?: string; countryCode?: string }) {
-        const name = (body.name || '').trim();
-        if (!name) throw new BadRequestException('Ten diem den khong duoc de trong');
-        const travelScope = parseTravelScope(body.travelScope) ?? TravelScope.DOMESTIC;
-        const countryCode = (body.countryCode || '').trim().toUpperCase() || (travelScope === TravelScope.DOMESTIC ? 'VN' : null);
+  /**
+   * POST /search/destinations
+   * Create a destination from the admin tour form.
+   */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+  @Post('destinations')
+  async createDestination(
+    @Body() body: { name: string; travelScope?: string; countryCode?: string },
+  ) {
+    return this.searchService.createDestination(body);
+  }
 
-        const existingDestination = await this.prisma.destination.findFirst({
-            where: {
-                name: {
-                    equals: name,
-                    mode: 'insensitive',
-                },
-            },
-        });
+  /**
+   * GET /search/price-range
+   * Returns min/max tour price.
+   */
+  @Get('price-range')
+  async getPriceRange() {
+    return this.searchService.getPriceRange();
+  }
 
-        if (existingDestination) {
-            throw new BadRequestException(`Diem den "${name}" da ton tai.`);
-        }
-
-        const slug = normalizeSearchText(name).replace(/\s+/g, '-');
-        return this.prisma.destination.create({
-            data: { name, slug: `${slug}-${Date.now()}`, travelScope, countryCode },
-            select: { id: true, name: true, travelScope: true, countryCode: true },
-        });
-    }
-
-    /**
-     * Returns min/max tour price.
-     */
-    @Get('price-range')
-    async getPriceRange() {
-        const result = await this.prisma.tour.aggregate({
-            where: { deletedAt: null },
-            _min: { price: true },
-            _max: { price: true },
-        });
-        return {
-            min: result._min.price ?? 0,
-            max: result._max.price ?? 0,
-        };
-    }
-
-    /**
-     * Live search destinations and tours. Matches Vietnamese names with or without accents.
-     */
-    @Get()
-    async liveSearch(
-        @Query('q') query: string,
-        @Query('travelScope') travelScopeInput?: string,
-        @Query('locale') localeInput?: string,
-    ) {
-        const normalizedQuery = normalizeSearchText(query || '');
-        if (normalizedQuery.length < 2) {
-            return { destinations: [], tours: [] };
-        }
-        const travelScope = parseTravelScope(travelScopeInput);
-        const locale = normalizeLocale(localeInput);
-
-        const [destinationCandidates, tourCandidates] = await Promise.all([
-            this.prisma.destination.findMany({
-                where: {
-                    ...(travelScope ? { travelScope } : {}),
-                },
-                select: {
-                    id: true,
-                    name: true,
-                    nameEn: true,
-                    imageUrl: true,
-                    region: true,
-                    regionEn: true,
-                    travelScope: true,
-                    countryCode: true,
-                },
-                orderBy: { name: 'asc' },
-            }),
-            this.prisma.tour.findMany({
-                where: {
-                    deletedAt: null,
-                    ...(travelScope ? { destination: { travelScope } } : {}),
-                },
-                select: {
-                    id: true,
-                    name: true,
-                    nameEn: true,
-                    price: true,
-                    destination: { select: { name: true, nameEn: true } },
-                },
-                orderBy: { name: 'asc' },
-            }),
-        ]);
-
-        const destinations = destinationCandidates
-            .filter(destination =>
-                normalizeSearchText(`${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''}`).includes(normalizedQuery)
-            )
-            .slice(0, 5)
-            .map((destination) => localizeDestination(destination, locale));
-
-        const tours = tourCandidates
-            .filter(tour =>
-                normalizeSearchText(`${tour.name} ${tour.nameEn ?? ''} ${tour.destination?.name ?? ''} ${tour.destination?.nameEn ?? ''}`).includes(normalizedQuery)
-            )
-            .slice(0, 4)
-            .map(({ destination, ...tour }) => {
-                void destination;
-                if (locale !== 'en') return tour;
-                return {
-                    ...tour,
-                    name: tour.nameEn?.trim() || toEnglishNameFallback(tour.name, tour.name),
-                };
-            });
-
-        return { destinations, tours };
-    }
+  /**
+   * GET /search
+   * Live search destinations and tours. Matches Vietnamese names with or without accents.
+   */
+  @Get()
+  async liveSearch(
+    @Query('q') query: string,
+    @Query('travelScope') travelScope?: string,
+    @Query('locale') locale?: string,
+  ) {
+    return this.searchService.liveSearch(query, travelScope, locale);
+  }
 }

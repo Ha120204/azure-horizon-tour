@@ -9,6 +9,7 @@ import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { Link, useRouter } from '@/i18n/routing';
 import StaffDashboard from '@/components/admin/StaffDashboard';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 // ─── Preset Config ────────────────────────────────────────────────────────────
 
@@ -244,9 +245,9 @@ export default function AdminDashboardPage() {
     const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
     const [dashboardError, setDashboardError] = useState('');
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true);
-        setDashboardError('');
+    const fetchAll = useCallback(async (options: { silent?: boolean } = {}) => {
+        if (!options.silent) setLoading(true);
+        if (!options.silent) setDashboardError('');
         const { from, to } = dateRange;
         const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
         const gran = getGranularity(diffDays);
@@ -288,9 +289,11 @@ export default function AdminDashboardPage() {
             });
             setLastUpdatedAt(new Date());
         } catch (e) {
+            if (options.silent) return;
             console.error('Dashboard error:', e);
             setDashboardError('Không tải được dữ liệu tổng quan. Vui lòng thử làm mới lại.');
         } finally {
+            if (options.silent) return;
             setLoading(false);
         }
     }, [dateRange]);
@@ -309,6 +312,12 @@ export default function AdminDashboardPage() {
     };
 
     useEffect(() => { if (userRole && userRole !== 'STAFF') fetchAll(); }, [fetchAll, userRole]);
+
+    useAdminAutoRefresh({
+        enabled: Boolean(userRole && userRole !== 'STAFF'),
+        intervalMs: 60 * 1000,
+        onRefresh: () => fetchAll({ silent: true }),
+    });
 
     // ── Render Staff view early ──
     if (!roleLoaded) {
@@ -363,7 +372,7 @@ export default function AdminDashboardPage() {
                         Thống kê chi tiết
                     </Link>
                     <button
-                        onClick={fetchAll}
+                        onClick={() => fetchAll()}
                         disabled={loading}
                         aria-label="Làm mới dữ liệu tổng quan"
                         className="flex items-center gap-1.5 px-3 py-2.5 bg-white text-slate-500 border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"

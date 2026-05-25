@@ -29,6 +29,13 @@ import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-dra
 import { ReviewAssistedBookingDraftDto } from './dto/review-assisted-booking-draft.dto';
 import { PaymentService } from '../payment/payment.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
+import {
+  BookingPaymentService,
+  type ConfirmInStoreDto,
+  type ReconcilePayosDto,
+  type ReportPaymentIssueDto,
+  type InStoreCollectionMethod,
+} from './booking-payment.service';
 
 type AuthenticatedRequest = {
   user?: {
@@ -93,6 +100,7 @@ export class BookingController {
     private readonly bookingService: BookingService,
     private readonly paymentService: PaymentService,
     private readonly configService: ConfigService,
+    private readonly bookingPaymentService: BookingPaymentService,
   ) {}
 
   // ============== PAYOS PAYMENT FLOW ==============
@@ -236,7 +244,13 @@ export class BookingController {
     @Query('dateTo') dateTo?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('paymentMethod') paymentMethod?: string,
+    @Query('needsReconciliation') needsReconciliation?: string,
   ) {
+    const validPaymentMethod =
+      paymentMethod === 'PAYOS' || paymentMethod === 'IN_STORE'
+        ? (paymentMethod as 'PAYOS' | 'IN_STORE')
+        : undefined;
     const result = await this.bookingService.getAllBookings(
       status,
       paymentStatus,
@@ -245,6 +259,8 @@ export class BookingController {
       dateTo,
       page ? Number(page) : 1,
       limit ? Number(limit) : 10,
+      validPaymentMethod,
+      needsReconciliation === 'true',
     );
     return { message: 'Success', ...result };
   }
@@ -534,6 +550,8 @@ export class BookingController {
 
   /**
    * Admin: Xác nhận thủ công booking PENDING khi khách đã thanh toán ngoài hệ thống
+   * @deprecated Dùng /payments/in-store/confirm hoặc /payments/payos/reconcile thay thế.
+   * Giữ lại để backward compat — tự động route sang flow mới theo paymentMethod.
    * PATCH /booking/admin/:id/confirm-manual
    */
   @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
@@ -543,7 +561,112 @@ export class BookingController {
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.bookingService.confirmManual(Number(id), getAuthUserId(req));
+    return this.bookingPaymentService.legacyConfirmManual(
+      Number(id),
+      getAuthUserId(req),
+    );
+  }
+
+  /**
+   * [ADMIN] Thống kê doanh thu theo nguồn thanh toán (confirmedSource)
+   * GET /booking/admin/payment-stats
+   * Query: dateFrom?, dateTo?
+   */
+  @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
+  @Get('admin/payment-stats')
+  async getPaymentStats(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    const data = await this.bookingPaymentService.getPaymentStats(dateFrom, dateTo);
+    return { message: 'Success', data };
+  }
+
+  // ─── Phân luồng thanh toán mới [PHASE 1] ─────────────────────────────────
+
+  /**
+   * [STAFF + ADMIN] Ghi nhận thu tiền tại cửa hàng
+   * POST /booking/admin/:id/payments/in-store/confirm
+   * Body: { collectionMethod: 'CASH'|'BANK_TRANSFER'|'CARD_POS', amount?, receiptRef?, note? }
+   */
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Post('admin/:id/payments/in-store/confirm')
+  @AuditLog('UPDATE', 'Booking')
+  async confirmInStore(
+    @Param('id') id: string,
+    @Body() body: ConfirmInStoreDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const validMethods: InStoreCollectionMethod[] = ['CASH', 'BANK_TRANSFER', 'CARD_POS'];
+    if (!validMethods.includes(body.collectionMethod)) {
+      throw new BadRequestException(
+        'collectionMethod phải là CASH, BANK_TRANSFER, hoặc CARD_POS',
+      );
+    }
+    return this.bookingPaymentService.confirmInStore(
+      Number(id),
+      body,
+      getAuthUserId(req),
+    );
+  }
+
+  /**
+   * [ADMIN] Gọi lại PayOS API để đồng bộ trạng thái thực tế
+   * POST /booking/admin/:id/payments/payos/sync
+   */
+  @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
+  @Post('admin/:id/payments/payos/sync')
+  @AuditLog('UPDATE', 'Booking')
+  async syncPayosStatus(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.bookingPaymentService.syncPayosStatus(
+      Number(id),
+      getAuthUserId(req),
+    );
+  }
+
+  /**
+   * [ADMIN] Xác nhận đối soát thủ công khi khách gửi ảnh CK
+   * POST /booking/admin/:id/payments/payos/reconcile
+   * Body: { transactionRef, amount, note, evidenceUrl? }
+   */
+  @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
+  @Post('admin/:id/payments/payos/reconcile')
+  @AuditLog('UPDATE', 'Booking')
+  async reconcilePayosManual(
+    @Param('id') id: string,
+    @Body() body: ReconcilePayosDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.bookingPaymentService.reconcilePayosManual(
+      Number(id),
+      body,
+      getAuthUserId(req),
+    );
+  }
+
+  /**
+   * [CUSTOMER] Báo sự cố thanh toán — tạo support ticket gắn booking
+   * POST /booking/:id/payment-issue
+   * Body: { message, transactionRef?, evidenceUrl? }
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post(':id/payment-issue')
+  async reportPaymentIssue(
+    @Param('id') id: string,
+    @Body() body: ReportPaymentIssueDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    if (!body.message?.trim() || body.message.trim().length < 5) {
+      throw new BadRequestException('Mô tả sự cố là bắt buộc (tối thiểu 5 ký tự)');
+    }
+    return this.bookingPaymentService.reportPaymentIssue(
+      Number(id),
+      getAuthUserId(req),
+      body,
+    );
   }
 
   // NOTE: Generic PATCH/DELETE được bảo vệ bởi AdminOnlyGuard.

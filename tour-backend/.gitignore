@@ -61,3 +61,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 compile_err.txt
 out.txt
 tsc_out.txt
+
+# Runtime uploads (dùng Cloudinary/S3 trên production)
+/public/uploads/

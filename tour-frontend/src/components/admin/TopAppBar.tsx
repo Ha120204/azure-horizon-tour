@@ -72,17 +72,31 @@ export default function TopAppBar() {
         return () => window.removeEventListener('auth-change', loadProfile);
     }, []);
 
-    const refreshNotifs = useCallback(async () => {
-        setNotifLoading(true); setNotifError(false);
+    const refreshNotifs = useCallback(async (silent = false) => {
+        if (!silent) setNotifLoading(true);
+        setNotifError(false);
         try { setNotifs(await fetchAllNotifs()); }
         catch { setNotifError(true); }
-        finally { setNotifLoading(false); }
+        finally {
+            if (!silent) setNotifLoading(false);
+        }
     }, []);
 
     useEffect(() => {
         refreshNotifs();
-        const interval = setInterval(refreshNotifs, 2 * 60 * 1000);
-        return () => clearInterval(interval);
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') void refreshNotifs(true);
+        };
+
+        const interval = window.setInterval(refreshWhenVisible, 30 * 1000);
+        window.addEventListener('focus', refreshWhenVisible);
+        document.addEventListener('visibilitychange', refreshWhenVisible);
+
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener('focus', refreshWhenVisible);
+            document.removeEventListener('visibilitychange', refreshWhenVisible);
+        };
     }, [refreshNotifs]);
 
     useEffect(() => {
@@ -110,7 +124,10 @@ export default function TopAppBar() {
         }
     };
 
-    const meta = getPageMeta(pathname ?? '');
+    const baseMeta = getPageMeta(pathname ?? '');
+    const meta = (pathname ?? '').replace(/^\/(en|vi)/, '') === '/admin/staffs' && userRole === 'SUPER_ADMIN'
+        ? { title: 'Quản lý Admin', icon: 'manage_accounts', subtitle: 'Quản lý tài khoản Admin vận hành hệ thống' }
+        : baseMeta;
     const visibleNotifTypes = new Set(
         TABS.filter(tab => tab.key !== 'all' && canAccessRole(userRole, tab.roles)).flatMap(tab => tab.types)
     );

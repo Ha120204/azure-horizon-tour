@@ -7,190 +7,33 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  AssistedDraftStatus,
-  BookingStatus,
-  PaymentStatus,
   Prisma,
-  type AssistedBookingDraft,
-  type Tour,
   type TourDeparture,
   type TourPackage,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
-import {
-  PaymentService,
-  type PaymentLinkResult,
-} from '../payment/payment.service';
+import { PaymentService } from '../payment/payment.service';
 import { VoucherService } from '../voucher/voucher.service';
 import { MailService } from '../mail/mail.service';
-import {
-  isSaleDeparture,
-  SALE_TOUR_NO_VOUCHER_MESSAGE,
-} from '../tour/promotion-rules';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import type { Response } from 'express';
-import { Readable } from 'stream';
-import moment from 'moment';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
 import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-draft.dto';
-
-type TransactionClient = Prisma.TransactionClient;
-type TripLifecycle = 'UPCOMING' | 'DEPARTING_TODAY' | 'COMPLETED';
-type CancellationPolicyTier =
-  | 'UNPAID'
-  | 'FULL_REFUND_24H'
-  | 'EIGHTY_REFUND'
-  | 'HALF_REFUND'
-  | 'NO_REFUND'
-  | 'NOT_CANCELABLE';
-
-type CancellationPolicy = {
-  canCancel: boolean;
-  tripLifecycle: TripLifecycle;
-  cancelUnavailableReason?: string;
-  refundPercent: number;
-  estimatedRefundAmount: number;
-  refundNote: string;
-  policyTier: CancellationPolicyTier;
-  departureDate: Date;
-  daysUntilDeparture: number;
-};
-
-type PassengerInput = {
-  type?: string;
-  [key: string]: Prisma.JsonValue | undefined;
-};
-
-const PASSENGER_TYPE_ALIASES: Record<string, string> = {
-  ADULT: 'Adult (12+)',
-  CHILD: 'Child (4-11)',
-  INFANT: 'Infant (<4)',
-  'ADULT (12+)': 'Adult (12+)',
-  'CHILD (4-11)': 'Child (4-11)',
-  'INFANT (<4)': 'Infant (<4)',
-};
-
-type AssistedQuoteDto = {
-  tourId: number;
-  departureId?: number;
-  packageId?: number;
-  numberOfPeople: number;
-  passengers?: PassengerInput[];
-  voucherCode?: string;
-};
-
-type AssistedQuote = {
-  tour: Tour;
-  basePrice: number;
-  totalPrice: number;
-  discountAmount: number;
-  voucherCode: string | null;
-};
-
-type AssistedDraftRecord = AssistedBookingDraft & Record<string, unknown>;
-
-type AssistedCustomerDraft = Pick<
-  AssistedBookingDraft,
-  | 'customerId'
-  | 'customerEmail'
-  | 'customerPhone'
-  | 'customerIdentityNo'
-  | 'customerName'
->;
-
-type PayosError = {
-  code?: string;
-};
-
-type ProxiedStream = Readable & {
-  pipe(destination: Response): Response;
-};
-
-type PaymentNotificationPayload = {
-  bookingCode: string;
-  customerName: string;
-  tourName: string;
-  startDate: string;
-  duration: string;
-  passengerBreakdown: string;
-  totalPrice: string;
-  discountAmount?: string;
-  deadlineText: string;
-};
-
-function isAssistedDraftStatus(value: string): value is AssistedDraftStatus {
-  return Object.values(AssistedDraftStatus).includes(
-    value as AssistedDraftStatus,
-  );
-}
-
-function isBookingStatus(value: string): value is BookingStatus {
-  return Object.values(BookingStatus).includes(value as BookingStatus);
-}
-
-function isPaymentStatus(value: string): value is PaymentStatus {
-  return Object.values(PaymentStatus).includes(value as PaymentStatus);
-}
-
-function isPassengerInput(value: unknown): value is PassengerInput {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function asPassengerInputs(value: unknown): PassengerInput[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.filter(isPassengerInput);
-}
-
-function normalizePassengerType(type: unknown): string {
-  const raw = typeof type === 'string' ? type.trim() : 'Adult (12+)';
-  return PASSENGER_TYPE_ALIASES[raw.toUpperCase()] ?? raw;
-}
-
-function normalizePassengers(
-  value: unknown,
-  fallbackPeople: number,
-): PassengerInput[] {
-  const inputs = asPassengerInputs(value);
-  if (inputs?.length) {
-    return inputs.map((passenger) => {
-      const normalized: PassengerInput = {};
-      for (const [key, entryValue] of Object.entries(passenger)) {
-        if (entryValue !== undefined) normalized[key] = entryValue;
-      }
-      normalized.type = normalizePassengerType(passenger.type);
-      return normalized;
-    });
-  }
-
-  const people = Math.max(1, Math.floor(Number(fallbackPeople) || 1));
-  return Array.from({ length: people }, () => ({ type: 'Adult (12+)' }));
-}
-
-function isPayosDuplicateError(error: unknown): error is PayosError {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as PayosError).code === '231'
-  );
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function assertVoucherAllowedForDeparture(
-  departure: TourDeparture | null,
-  voucherCode?: string | null,
-  regularPrice?: number | null,
-) {
-  if (!voucherCode?.trim() || !isSaleDeparture(departure, { regularPrice })) return;
-  throw new BadRequestException(SALE_TOUR_NO_VOUCHER_MESSAGE);
-}
+import { AssistedDraftService } from './assisted-draft.service';
+import { BookingCancellationService } from './booking-cancellation.service';
+import { BookingQueryService } from './booking-query.service';
+import {
+  asPassengerInputs,
+  assertVoucherAllowedForDeparture,
+  calculateBookingHoldExpiresAt,
+  generateBookingCode,
+  getPassengerTotal,
+  IN_STORE_MAX_HOLD_HOURS,
+  isPayosDuplicateError,
+  PAYOS_HOLD_MINUTES,
+} from './helpers/booking-helpers';
 
 @Injectable()
 export class BookingService {
@@ -203,1029 +46,74 @@ export class BookingService {
     private readonly mailService: MailService,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly assistedDraftService: AssistedDraftService,
+    private readonly cancellationService: BookingCancellationService,
+    private readonly queryService: BookingQueryService,
   ) {}
 
-  // Hàm hỗ trợ tạo mã Booking chuyên nghiệp
-  private generateBookingCode(): string {
-    const prefix = 'BKG';
+  // Cleaned comment
 
-    // Lấy ngày tháng năm hiện tại (VD: 290326)
-    const date = new Date();
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = String(date.getFullYear()).slice(-2);
-    const dateString = `${d}${m}${y}`;
-
-    // Tạo 4 ký tự ngẫu nhiên (Chữ in hoa + Số)
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let randomString = '';
-    for (let i = 0; i < 4; i++) {
-      randomString += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-
-    return `${prefix}-${dateString}-${randomString}`;
+  async createAssistedDraft(actorUserId: number, dto: CreateAssistedBookingDraftDto) {
+    return this.assistedDraftService.createAssistedDraft(actorUserId, dto);
   }
 
-  private generateAssistedDraftCode(): string {
-    const date = new Date();
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = String(date.getFullYear()).slice(-2);
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let randomString = '';
-    for (let i = 0; i < 4; i++) {
-      randomString += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return `ABD-${d}${m}${y}-${randomString}`;
+  async updateAssistedDraft(id: number, actorUserId: number, actorRole: string, dto: CreateAssistedBookingDraftDto) {
+    return this.assistedDraftService.updateAssistedDraft(id, actorUserId, actorRole, dto);
   }
 
-  private getPassengerTotal(
-    basePrice: number,
-    people: number,
-    passengers?: PassengerInput[],
-  ): number {
-    const multipliers: Record<string, number> = {
-      'Adult (12+)': 1,
-      'Child (4-11)': 0.7,
-      'Infant (<4)': 0.1,
-      ADULT: 1,
-      CHILD: 0.7,
-      INFANT: 0.1,
-    };
-
-    if (Array.isArray(passengers) && passengers.length > 0) {
-      return passengers.reduce((sum, p) => {
-        const type = String(p?.type ?? 'ADULT');
-        return sum + basePrice * (multipliers[type] ?? 1);
-      }, 0);
-    }
-
-    return basePrice * people;
+  async getAssistedDrafts(actorUserId: number, actorRole: string, status?: string, search?: string) {
+    return this.assistedDraftService.getAssistedDrafts(actorUserId, actorRole, status, search);
   }
 
-  private buildPayosOrderCode(bookingId: number): number {
-    const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
-    return Number(bookingId.toString() + timeSuffix);
+  async submitAssistedDraft(id: number, actorUserId: number, actorRole: string) {
+    return this.assistedDraftService.submitAssistedDraft(id, actorUserId, actorRole);
   }
 
-  private formatMoney(amount: number): string {
-    return `${Math.round(amount).toLocaleString('vi-VN')} đ`;
-  }
-
-  private getPassengerBreakdown(
-    passengers: unknown,
-    fallbackPeople: number,
-  ): string {
-    const counts: Record<string, number> = {
-      'Adult (12+)': 0,
-      'Child (4-11)': 0,
-      'Infant (<4)': 0,
-    };
-
-    const normalized = normalizePassengers(passengers, fallbackPeople);
-    normalized.forEach((passenger) => {
-      const type = normalizePassengerType(passenger.type);
-      counts[type] = (counts[type] ?? 0) + 1;
-    });
-
-    const parts = [
-      counts['Adult (12+)'] ? `${counts['Adult (12+)']} nguoi lon` : '',
-      counts['Child (4-11)'] ? `${counts['Child (4-11)']} tre em` : '',
-      counts['Infant (<4)'] ? `${counts['Infant (<4)']} em be` : '',
-    ].filter(Boolean);
-
-    return parts.length ? parts.join(', ') : `${fallbackPeople} khach`;
-  }
-
-  private buildPaymentRequestContent(
-    payload: PaymentNotificationPayload,
-    paymentUrl: string,
-  ): string {
-    return [
-      'Azure Horizon xac nhan thong tin dat tour cua anh/chi:',
-      '',
-      `Ma dat tour: ${payload.bookingCode}`,
-      `Khach hang: ${payload.customerName}`,
-      `Tour: ${payload.tourName}`,
-      `Khoi hanh: ${payload.startDate}`,
-      `Thoi gian: ${payload.duration}`,
-      `Hanh khach: ${payload.passengerBreakdown}`,
-      payload.discountAmount ? `Giam gia: -${payload.discountAmount}` : '',
-      `Tong thanh toan: ${payload.totalPrice}`,
-      `Han thanh toan: ${payload.deadlineText}`,
-      '',
-      'Vui long kiem tra thong tin. Neu dung, anh/chi thanh toan tai:',
-      paymentUrl,
-      '',
-      'Neu thong tin chua dung, vui long phan hoi voi nhan vien tu van truoc khi thanh toan.',
-    ]
-      .filter(Boolean)
-      .join('\n');
-  }
-
-  private async markVoucherAsUsed(
-    tx: TransactionClient,
-    userId: number,
-    voucherCode?: string | null,
-  ) {
-    const code = voucherCode?.trim().toUpperCase();
-    if (!code) return;
-
-    const voucher = await tx.voucher.findUnique({ where: { code } });
-    if (!voucher) return;
-
-    const updateResult = await tx.voucher.updateMany({
-      where: {
-        id: voucher.id,
-        usedCount: { lt: voucher.maxUses },
-      },
-      data: { usedCount: { increment: 1 } },
-    });
-
-    if (updateResult.count === 0) {
-      this.logger.warn(
-        `[VOUCHER] Voucher ${code} da het luot khi booking thanh toan thanh cong.`,
-      );
-      return;
-    }
-
-    await tx.userVoucher.updateMany({
-      where: { userId, voucherId: voucher.id, isUsed: false },
-      data: { isUsed: true },
-    });
-  }
-
-  private async createPaymentRequestForBooking(
-    bookingId: number,
-    actorUserId?: number,
-    forceEmail = false,
-  ) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
-      include: {
-        user: {
-          select: { id: true, fullName: true, email: true, phone: true },
-        },
-        tour: {
-          select: { id: true, name: true, startDate: true, duration: true },
-        },
-        assistedDraft: true,
-      },
-    });
-
-    if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.paymentStatus === 'PAID') {
-      throw new BadRequestException(
-        'Booking da thanh toan, khong the gui yeu cau thanh toan',
-      );
-    }
-
-    const channel = forceEmail
-      ? 'EMAIL'
-      : String(
-          booking.assistedDraft?.confirmationChannel || 'ZALO',
-        ).toUpperCase();
-    const normalizedChannel = ['EMAIL', 'ZALO', 'PHONE', 'MANUAL'].includes(
-      channel,
-    )
-      ? channel
-      : 'MANUAL';
-    const emailRecipient =
-      booking.assistedDraft?.emailForTicket ||
-      booking.assistedDraft?.customerEmail ||
-      booking.user.email;
-    const recipient =
-      normalizedChannel === 'EMAIL'
-        ? emailRecipient
-        : booking.assistedDraft?.customerPhone || booking.user.phone || null;
-    const amountVND = Math.round(booking.totalPrice);
-    const description = `AH ${booking.bookingCode}`;
-    const deadlineText = '15 phut ke tu khi nhan yeu cau';
-
-    const payload: PaymentNotificationPayload = {
-      bookingCode: booking.bookingCode,
-      customerName:
-        booking.assistedDraft?.customerName || booking.user.fullName,
-      tourName: booking.tour.name,
-      startDate: booking.tour.startDate.toLocaleDateString('vi-VN'),
-      duration: booking.tour.duration,
-      passengerBreakdown: this.getPassengerBreakdown(
-        booking.passengers,
-        booking.numberOfPeople,
-      ),
-      totalPrice: this.formatMoney(amountVND),
-      discountAmount:
-        booking.discountAmount > 0
-          ? this.formatMoney(booking.discountAmount)
-          : undefined,
-      deadlineText,
-    };
-
-    let paymentRequest: PaymentLinkResult;
-    try {
-      paymentRequest = await this.paymentService.createPaymentRequest(
-        this.buildPayosOrderCode(booking.id),
-        amountVND,
-        description,
-      );
-    } catch (error) {
-      const content = this.buildPaymentRequestContent(
-        payload,
-        'Khong tao duoc link thanh toan. Vui long gui lai.',
-      );
-      const notification = await this.prisma.bookingNotification.create({
-        data: {
-          bookingId: booking.id,
-          type: 'PAYMENT_REQUEST',
-          channel: normalizedChannel,
-          recipient,
-          status: 'FAILED',
-          subject: `Yeu cau thanh toan ${booking.bookingCode}`,
-          content,
-          errorMessage: getErrorMessage(error),
-          createdById: actorUserId,
-        },
-      });
-      this.logger.error(
-        `[ASSISTED PAYMENT] Khong tao duoc PayOS link cho booking #${booking.id}: ${getErrorMessage(error)}`,
-      );
-      return { notification, paymentRequest: null };
-    }
-
-    await this.prisma.paymentTransaction.create({
-      data: {
-        bookingId: booking.id,
-        gateway: 'PAYOS',
-        transactionRef: String(paymentRequest.orderCode),
-        amount: amountVND,
-        status: 'PENDING',
-        rawPayload: JSON.stringify({
-          ...paymentRequest,
-          assistedDraftId: booking.assistedDraftId,
-          sourceChannel: booking.assistedDraft?.sourceChannel,
-          notificationChannel: normalizedChannel,
-        }),
-      },
-    });
-
-    const content = this.buildPaymentRequestContent(
-      payload,
-      paymentRequest.checkoutUrl,
-    );
-    let notification = await this.prisma.bookingNotification.create({
-      data: {
-        bookingId: booking.id,
-        type: 'PAYMENT_REQUEST',
-        channel: normalizedChannel,
-        recipient,
-        status: normalizedChannel === 'EMAIL' ? 'PENDING' : 'PENDING',
-        subject: `Yeu cau thanh toan ${booking.bookingCode}`,
-        content,
-        paymentUrl: paymentRequest.checkoutUrl,
-        qrCodeUrl:
-          paymentRequest.qrCode ||
-          `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(paymentRequest.checkoutUrl)}`,
-        createdById: actorUserId,
-      },
-    });
-
-    if (normalizedChannel === 'EMAIL') {
-      if (!emailRecipient) {
-        notification = await this.prisma.bookingNotification.update({
-          where: { id: notification.id },
-          data: {
-            status: 'FAILED',
-            errorMessage: 'Missing email recipient',
-          },
-        });
-      } else {
-        try {
-          await this.mailService.sendPaymentRequestEmail({
-            ...payload,
-            to: emailRecipient,
-            paymentUrl: paymentRequest.checkoutUrl,
-            qrCodeUrl:
-              paymentRequest.qrCode || notification.qrCodeUrl || undefined,
-          });
-          notification = await this.prisma.bookingNotification.update({
-            where: { id: notification.id },
-            data: { status: 'SENT', sentAt: new Date() },
-          });
-        } catch (error) {
-          notification = await this.prisma.bookingNotification.update({
-            where: { id: notification.id },
-            data: {
-              status: 'FAILED',
-              errorMessage: getErrorMessage(error),
-            },
-          });
-        }
-      }
-    }
-
-    return { notification, paymentRequest };
-  }
-
-  private async calculateAssistedQuote(
-    tx: TransactionClient,
-    dto: AssistedQuoteDto,
-  ): Promise<AssistedQuote> {
-    const tour = await tx.tour.findUnique({
-      where: { id: dto.tourId, deletedAt: null },
-    });
-    if (!tour) throw new NotFoundException('Tour not found');
-    if (tour.startDate < new Date()) {
-      throw new BadRequestException(
-        'Tour nay da dien ra, khong the tao dat ho',
-      );
-    }
-
-    let selectedDeparture: TourDeparture | null = null;
-    if (dto.departureId) {
-      selectedDeparture = await tx.tourDeparture.findUnique({
-        where: { id: dto.departureId },
-      });
-      if (
-        !selectedDeparture ||
-        selectedDeparture.tourId !== tour.id ||
-        !selectedDeparture.isActive
-      ) {
-        throw new BadRequestException('Invalid departure');
-      }
-      if (selectedDeparture.availableSeats < dto.numberOfPeople) {
-        throw new BadRequestException('Not enough seats for this departure');
-      }
-    } else if (tour.availableSeats < dto.numberOfPeople) {
-      throw new BadRequestException('Not enough seats available');
-    }
-
-    let basePrice = selectedDeparture?.price ?? tour.price;
-    if (dto.packageId) {
-      const selectedPackage = await tx.tourPackage.findUnique({
-        where: { id: dto.packageId },
-      });
-      if (
-        !selectedPackage ||
-        selectedPackage.tourId !== tour.id ||
-        !selectedPackage.isActive
-      ) {
-        throw new BadRequestException('Invalid tour package');
-      }
-      basePrice += selectedPackage.price;
-    }
-
-    let totalPrice = this.getPassengerTotal(
-      basePrice,
-      dto.numberOfPeople,
-      dto.passengers,
-    );
-    let discountAmount = 0;
-    let voucherCode: string | null = null;
-
-    if (dto.voucherCode) {
-      assertVoucherAllowedForDeparture(selectedDeparture, dto.voucherCode, tour.price);
-      const voucherResult = await this.voucherService.validateVoucher(
-        dto.voucherCode,
-        totalPrice,
-        { tourId: tour.id, departureId: selectedDeparture?.id ?? null },
-      );
-      discountAmount = voucherResult.discountAmount;
-      totalPrice = voucherResult.finalPrice;
-      voucherCode = dto.voucherCode.trim().toUpperCase();
-    }
-
-    return {
-      tour,
-      basePrice,
-      totalPrice,
-      discountAmount,
-      voucherCode,
-    };
-  }
-
-  private formatAssistedDraft<T extends AssistedDraftRecord>(
-    draft: T,
-  ): T & {
-    quotedPrice: number;
-    unitPriceAtDraft: number | null;
-    discountAmount: number;
-  } {
-    return {
-      ...draft,
-      quotedPrice: Number(draft.quotedPrice),
-      unitPriceAtDraft:
-        draft.unitPriceAtDraft == null ? null : Number(draft.unitPriceAtDraft),
-      discountAmount: Number(draft.discountAmount || 0),
-    };
-  }
-
-  private async findOrCreateAssistedCustomer(
-    tx: TransactionClient,
-    draft: AssistedCustomerDraft,
-  ) {
-    if (draft.customerId) {
-      const user = await tx.user.findUnique({
-        where: { id: draft.customerId },
-      });
-      if (!user) throw new NotFoundException('Customer not found');
-      return user;
-    }
-
-    const email = String(draft.customerEmail || '')
-      .trim()
-      .toLowerCase();
-    const existing = await tx.user.findFirst({ where: { email } });
-    if (existing) {
-      return tx.user.update({
-        where: { id: existing.id },
-        data: {
-          phone: draft.customerPhone || existing.phone,
-          identityType: draft.customerIdentityNo
-            ? 'CCCD'
-            : existing.identityType,
-          identityNo: draft.customerIdentityNo || existing.identityNo,
-        },
-      });
-    }
-
-    const password = randomBytes(24).toString('hex');
-    const hashedPassword = await bcrypt.hash(password, 10);
-    return tx.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        fullName: draft.customerName ?? email,
-        phone: draft.customerPhone || null,
-        identityType: draft.customerIdentityNo ? 'CCCD' : null,
-        identityNo: draft.customerIdentityNo || null,
-        role: 'CUSTOMER',
-      },
-    });
-  }
-
-  async createAssistedDraft(
-    actorUserId: number,
-    dto: CreateAssistedBookingDraftDto,
-  ) {
-    const payload = {
-      ...dto,
-      customerName: dto.customerName?.trim(),
-      customerEmail: dto.customerEmail?.trim().toLowerCase(),
-      customerPhone: dto.customerPhone?.trim() || null,
-      customerIdentityNo: dto.customerIdentityNo?.trim() || null,
-      sourceChannel: dto.sourceChannel?.trim() || 'LIVE_CHAT',
-      confirmationChannel:
-        dto.confirmationChannel?.trim().toUpperCase() || 'ZALO',
-      emailForTicket:
-        dto.emailForTicket?.trim().toLowerCase() ||
-        dto.customerEmail?.trim().toLowerCase() ||
-        null,
-      voucherCode: dto.voucherCode?.trim() || undefined,
-      specialRequests: dto.specialRequests?.trim() || null,
-      internalNote: dto.internalNote?.trim() || null,
-      passengers: normalizePassengers(
-        dto.passengers,
-        Number(dto.numberOfPeople) || 1,
-      ),
-    };
-    const numberOfPeople = payload.passengers.length;
-
-    const draft = await this.prisma.$transaction(async (tx) => {
-      const quote = payload.tourId
-        ? await this.calculateAssistedQuote(tx, {
-            ...payload,
-            tourId: payload.tourId,
-            numberOfPeople,
-          })
-        : {
-            basePrice: null,
-            totalPrice: 0,
-            discountAmount: 0,
-            voucherCode: null,
-          };
-
-      return tx.assistedBookingDraft.create({
-        data: {
-          draftCode: this.generateAssistedDraftCode(),
-          customerId: payload.customerId || null,
-          customerName: payload.customerName || null,
-          customerEmail: payload.customerEmail || null,
-          customerPhone: payload.customerPhone,
-          customerIdentityNo: payload.customerIdentityNo,
-          sourceChannel: payload.sourceChannel,
-          confirmationChannel: payload.confirmationChannel,
-          emailForTicket: payload.emailForTicket,
-          sourceTicketId: payload.sourceTicketId || null,
-          tourId: payload.tourId || null,
-          packageId: payload.packageId || null,
-          departureId: payload.departureId || null,
-          numberOfPeople,
-          passengers: payload.passengers,
-          quotedPrice: quote.totalPrice,
-          unitPriceAtDraft: quote.basePrice,
-          voucherCode: quote.voucherCode,
-          discountAmount: quote.discountAmount,
-          specialRequests: payload.specialRequests,
-          internalNote: payload.internalNote,
-          createdByStaffId: actorUserId,
-        },
-        include: this.assistedDraftInclude(),
-      });
-    });
-
-    return this.formatAssistedDraft(draft);
-  }
-
-  async updateAssistedDraft(
-    id: number,
-    actorUserId: number,
-    actorRole: string,
-    dto: CreateAssistedBookingDraftDto,
-  ) {
-    const existing = await this.prisma.assistedBookingDraft.findUnique({
-      where: { id },
-    });
-    if (!existing) throw new NotFoundException('Draft not found');
-    if (actorRole === 'STAFF' && existing.createdByStaffId !== actorUserId) {
-      throw new ForbiddenException('Ban khong co quyen sua ban nhap nay');
-    }
-    if (!['DRAFT', 'NEEDS_REVISION'].includes(existing.status)) {
-      throw new BadRequestException(
-        'Chi co the sua ban nhap hoac ban can chinh sua',
-      );
-    }
-
-    const payload = {
-      ...dto,
-      customerName: dto.customerName?.trim(),
-      customerEmail: dto.customerEmail?.trim().toLowerCase(),
-      customerPhone: dto.customerPhone?.trim() || null,
-      customerIdentityNo: dto.customerIdentityNo?.trim() || null,
-      sourceChannel:
-        dto.sourceChannel?.trim() || existing.sourceChannel || 'LIVE_CHAT',
-      confirmationChannel:
-        dto.confirmationChannel?.trim().toUpperCase() ||
-        existing.confirmationChannel ||
-        'ZALO',
-      emailForTicket:
-        dto.emailForTicket?.trim().toLowerCase() ||
-        dto.customerEmail?.trim().toLowerCase() ||
-        existing.emailForTicket ||
-        null,
-      voucherCode: dto.voucherCode?.trim() || undefined,
-      specialRequests: dto.specialRequests?.trim() || null,
-      internalNote: dto.internalNote?.trim() || null,
-      passengers: normalizePassengers(
-        dto.passengers,
-        Number(dto.numberOfPeople) || existing.numberOfPeople || 1,
-      ),
-    };
-    const numberOfPeople = payload.passengers.length;
-
-    const draft = await this.prisma.$transaction(async (tx) => {
-      const quote = payload.tourId
-        ? await this.calculateAssistedQuote(tx, {
-            ...payload,
-            tourId: payload.tourId,
-            numberOfPeople,
-          })
-        : {
-            basePrice: null,
-            totalPrice: 0,
-            discountAmount: 0,
-            voucherCode: null,
-          };
-
-      return tx.assistedBookingDraft.update({
-        where: { id },
-        data: {
-          customerId: payload.customerId || null,
-          customerName: payload.customerName || null,
-          customerEmail: payload.customerEmail || null,
-          customerPhone: payload.customerPhone,
-          customerIdentityNo: payload.customerIdentityNo,
-          sourceChannel: payload.sourceChannel,
-          confirmationChannel: payload.confirmationChannel,
-          emailForTicket: payload.emailForTicket,
-          sourceTicketId: payload.sourceTicketId || null,
-          tourId: payload.tourId || null,
-          packageId: payload.packageId || null,
-          departureId: payload.departureId || null,
-          numberOfPeople,
-          passengers: payload.passengers,
-          quotedPrice: quote.totalPrice,
-          unitPriceAtDraft: quote.basePrice,
-          voucherCode: quote.voucherCode,
-          discountAmount: quote.discountAmount,
-          specialRequests: payload.specialRequests,
-          internalNote: payload.internalNote,
-        },
-        include: this.assistedDraftInclude(),
-      });
-    });
-
-    return this.formatAssistedDraft(draft);
-  }
-
-  private assistedDraftInclude(): Prisma.AssistedBookingDraftInclude {
-    return {
-      tour: {
-        select: {
-          id: true,
-          name: true,
-          imageUrl: true,
-          tourCode: true,
-          destination: { select: { name: true } },
-        },
-      },
-      customer: {
-        select: { id: true, fullName: true, email: true, phone: true },
-      },
-      createdByStaff: {
-        select: { id: true, fullName: true, email: true, role: true },
-      },
-      reviewedByAdmin: {
-        select: { id: true, fullName: true, email: true, role: true },
-      },
-      convertedBooking: {
-        select: {
-          id: true,
-          bookingCode: true,
-          status: true,
-          paymentStatus: true,
-        },
-      },
-      sourceTicket: {
-        select: {
-          id: true,
-          subject: true,
-          customerName: true,
-          customerEmail: true,
-        },
-      },
-    };
-  }
-
-  async getAssistedDrafts(
-    actorUserId: number,
-    actorRole: string,
-    status?: string,
-    search?: string,
-  ) {
-    const where: Prisma.AssistedBookingDraftWhereInput = {};
-    if (actorRole === 'STAFF') where.createdByStaffId = actorUserId;
-    if (status && status !== 'ALL') {
-      const normalizedStatus = status.toUpperCase();
-      if (!isAssistedDraftStatus(normalizedStatus)) {
-        throw new BadRequestException('Invalid assisted draft status');
-      }
-      where.status = normalizedStatus;
-    }
-    if (search) {
-      where.OR = [
-        { draftCode: { contains: search, mode: 'insensitive' } },
-        { customerName: { contains: search, mode: 'insensitive' } },
-        { customerEmail: { contains: search, mode: 'insensitive' } },
-        { tour: { name: { contains: search, mode: 'insensitive' } } },
-      ];
-    }
-
-    const drafts = await this.prisma.assistedBookingDraft.findMany({
-      where,
-      include: this.assistedDraftInclude(),
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-
-    return drafts.map((d) => this.formatAssistedDraft(d));
-  }
-
-  async submitAssistedDraft(
-    id: number,
-    actorUserId: number,
-    actorRole: string,
-  ) {
-    const draft = await this.prisma.assistedBookingDraft.findUnique({
-      where: { id },
-      include: {
-        tour: {
-          include: {
-            departures: { where: { isActive: true }, select: { id: true } },
-          },
-        },
-      },
-    });
-    if (!draft) throw new NotFoundException('Draft not found');
-    if (actorRole === 'STAFF' && draft.createdByStaffId !== actorUserId) {
-      throw new ForbiddenException('Ban khong co quyen gui ban nhap nay');
-    }
-    if (!['DRAFT', 'NEEDS_REVISION'].includes(draft.status)) {
-      throw new BadRequestException(
-        'Chi co the gui ban nhap hoac ban can chinh sua',
-      );
-    }
-    if (!draft.customerName?.trim()) {
-      throw new BadRequestException(
-        'Customer name is required before submitting for approval',
-      );
-    }
-    if (
-      !draft.customerEmail?.trim() ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.customerEmail)
-    ) {
-      throw new BadRequestException(
-        'Valid customer email is required before submitting for approval',
-      );
-    }
-    if (!draft.customerPhone?.trim()) {
-      throw new BadRequestException(
-        'Customer phone is required before submitting for approval',
-      );
-    }
-    if (
-      !/^(0|\+84)(\d{9})$/.test(draft.customerPhone.trim().replace(/\s+/g, ''))
-    ) {
-      throw new BadRequestException(
-        'Valid Vietnamese customer phone is required before submitting for approval',
-      );
-    }
-    if (!draft.customerIdentityNo?.trim()) {
-      throw new BadRequestException(
-        'Customer CCCD is required before submitting for approval',
-      );
-    }
-    if (!/^\d{12}$/.test(draft.customerIdentityNo.trim())) {
-      throw new BadRequestException('Customer CCCD must be exactly 12 digits');
-    }
-    const confirmationChannel = String(
-      draft.confirmationChannel || 'ZALO',
-    ).toUpperCase();
-    if (!['ZALO', 'EMAIL', 'PHONE', 'MANUAL'].includes(confirmationChannel)) {
-      throw new BadRequestException('Invalid confirmation channel');
-    }
-    if (
-      confirmationChannel === 'EMAIL' &&
-      !draft.emailForTicket?.trim() &&
-      !draft.customerEmail?.trim()
-    ) {
-      throw new BadRequestException(
-        'Email is required when confirmation channel is email',
-      );
-    }
-    if (!draft.tourId) {
-      throw new BadRequestException(
-        'Tour is required before submitting for approval',
-      );
-    }
-    if (!draft.numberOfPeople || draft.numberOfPeople < 1) {
-      throw new BadRequestException('Number of people must be at least 1');
-    }
-    if ((draft.tour?.departures?.length ?? 0) > 0 && !draft.departureId) {
-      throw new BadRequestException(
-        'Departure is required before submitting for approval',
-      );
-    }
-
-    const quote = await this.prisma.$transaction((tx) =>
-      this.calculateAssistedQuote(tx, {
-        tourId: draft.tourId!,
-        departureId: draft.departureId || undefined,
-        packageId: draft.packageId || undefined,
-        numberOfPeople: draft.numberOfPeople,
-        passengers: asPassengerInputs(draft.passengers),
-        voucherCode: draft.voucherCode || undefined,
-      }),
-    );
-
-    const updated = await this.prisma.assistedBookingDraft.update({
-      where: { id },
-      data: {
-        status: 'PENDING_APPROVAL',
-        quotedPrice: quote.totalPrice,
-        unitPriceAtDraft: quote.basePrice,
-        discountAmount: quote.discountAmount,
-        voucherCode: quote.voucherCode,
-        rejectionReason: null,
-        reviewedByAdminId: null,
-        reviewedAt: null,
-      },
-      include: this.assistedDraftInclude(),
-    });
-    return this.formatAssistedDraft(updated);
-  }
-
-  async requestRevisionAssistedDraft(
-    id: number,
-    adminId: number,
-    reason: string,
-  ) {
-    const draft = await this.prisma.assistedBookingDraft.findUnique({
-      where: { id },
-    });
-    if (!draft) throw new NotFoundException('Draft not found');
-    if (draft.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException(
-        'Chi ban nhap dang cho duyet moi co the yeu cau chinh sua',
-      );
-    }
-
-    const updated = await this.prisma.assistedBookingDraft.update({
-      where: { id },
-      data: {
-        status: 'NEEDS_REVISION',
-        reviewedByAdminId: adminId,
-        reviewedAt: new Date(),
-        rejectionReason: reason,
-      },
-      include: this.assistedDraftInclude(),
-    });
-    return this.formatAssistedDraft(updated);
+  async requestRevisionAssistedDraft(id: number, adminId: number, reason: string) {
+    return this.assistedDraftService.requestRevisionAssistedDraft(id, adminId, reason);
   }
 
   async rejectAssistedDraft(id: number, adminId: number, reason: string) {
-    const draft = await this.prisma.assistedBookingDraft.findUnique({
-      where: { id },
-    });
-    if (!draft) throw new NotFoundException('Draft not found');
-    if (draft.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException(
-        'Chi ban nhap dang cho duyet moi co the bi tu choi',
-      );
-    }
-
-    const updated = await this.prisma.assistedBookingDraft.update({
-      where: { id },
-      data: {
-        status: 'REJECTED',
-        reviewedByAdminId: adminId,
-        reviewedAt: new Date(),
-        rejectionReason: reason,
-      },
-      include: this.assistedDraftInclude(),
-    });
-    return this.formatAssistedDraft(updated);
+    return this.assistedDraftService.rejectAssistedDraft(id, adminId, reason);
   }
 
   async approveAssistedDraft(id: number, adminId: number, note?: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      const draft = await tx.assistedBookingDraft.findUnique({
-        where: { id },
-        include: { convertedBooking: true },
-      });
-      if (!draft) throw new NotFoundException('Draft not found');
-      if (draft.status !== 'PENDING_APPROVAL') {
-        throw new BadRequestException(
-          'Chi ban nhap dang cho duyet moi co the duyet',
-        );
-      }
-      if (draft.convertedBooking) {
-        throw new BadRequestException('Ban nhap nay da tao booking');
-      }
-      if (
-        !draft.tourId ||
-        !draft.customerName?.trim() ||
-        !draft.customerEmail?.trim() ||
-        !draft.customerPhone?.trim() ||
-        !draft.customerIdentityNo?.trim()
-      ) {
-        throw new BadRequestException(
-          'Ban nhap chua du thong tin de tao booking',
-        );
-      }
-
-      const tourId = draft.tourId;
-
-      const quote = await this.calculateAssistedQuote(tx, {
-        tourId,
-        departureId: draft.departureId || undefined,
-        packageId: draft.packageId || undefined,
-        numberOfPeople: draft.numberOfPeople,
-        passengers: asPassengerInputs(draft.passengers),
-        voucherCode: draft.voucherCode || undefined,
-      });
-
-      const customer = await this.findOrCreateAssistedCustomer(tx, draft);
-
-      await tx.tour.update({
-        where: { id: tourId },
-        data: { availableSeats: { decrement: draft.numberOfPeople } },
-      });
-      if (draft.departureId) {
-        await tx.tourDeparture.update({
-          where: { id: draft.departureId },
-          data: { availableSeats: { decrement: draft.numberOfPeople } },
-        });
-      }
-
-      const booking = await tx.booking.create({
-        data: {
-          bookingCode: this.generateBookingCode(),
-          userId: customer.id,
-          tourId,
-          departureId: draft.departureId,
-          packageId: draft.packageId,
-          numberOfPeople: draft.numberOfPeople,
-          totalPrice: quote.totalPrice,
-          unitPriceAtBooking: quote.basePrice,
-          voucherCode: quote.voucherCode,
-          discountAmount: quote.discountAmount,
-          contactInfo: {
-            name: draft.customerName,
-            email: draft.customerEmail,
-            phone: draft.customerPhone,
-            identityType: 'CCCD',
-            identityNo: draft.customerIdentityNo,
-            sourceChannel: draft.sourceChannel,
-            confirmationChannel: draft.confirmationChannel,
-            emailForTicket: draft.emailForTicket,
-            specialRequests: draft.specialRequests,
-          },
-          passengers: draft.passengers ?? Prisma.JsonNull,
-          status: 'PENDING',
-          paymentStatus: 'UNPAID',
-          isAssistedBooking: true,
-          assistedDraftId: draft.id,
-        },
-      });
-
-      const updatedDraft = await tx.assistedBookingDraft.update({
-        where: { id },
-        data: {
-          status: 'CONVERTED',
-          customerId: customer.id,
-          quotedPrice: quote.totalPrice,
-          unitPriceAtDraft: quote.basePrice,
-          discountAmount: quote.discountAmount,
-          voucherCode: quote.voucherCode,
-          reviewedByAdminId: adminId,
-          reviewedAt: new Date(),
-          approvalNote: note?.trim() || null,
-          rejectionReason: null,
-        },
-        include: this.assistedDraftInclude(),
-      });
-
-      await tx.systemLog.create({
-        data: {
-          action: 'APPROVE',
-          resource: 'AssistedBookingDraft',
-          resourceId: String(draft.id),
-          targetName: draft.draftCode,
-          description: `Approved assisted draft ${draft.draftCode} and created booking ${booking.bookingCode}`,
-          userId: adminId,
-          newData: { bookingId: booking.id, bookingCode: booking.bookingCode },
-        },
-      });
-
-      return { draft: updatedDraft, booking };
-    });
-    const paymentRequestResult = await this.createPaymentRequestForBooking(
-      result.booking.id,
-      adminId,
-    );
-
-    return {
-      draft: this.formatAssistedDraft(result.draft),
-      booking: result.booking,
-      paymentRequest: paymentRequestResult,
-    };
+    return this.assistedDraftService.approveAssistedDraft(id, adminId, note);
   }
 
-  async resendPaymentRequest(
-    bookingId: number,
-    actorUserId: number,
-    forceEmail = false,
-  ) {
-    return this.createPaymentRequestForBooking(
-      bookingId,
-      actorUserId,
-      forceEmail,
-    );
+  async resendPaymentRequest(bookingId: number, actorUserId: number, forceEmail = false) {
+    return this.assistedDraftService.resendPaymentRequest(bookingId, actorUserId, forceEmail);
   }
+
+  private async markVoucherAsUsed(tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0], userId: number, voucherCode?: string | null) {
+    return this.assistedDraftService.markVoucherAsUsed(tx, userId, voucherCode);
+  }
+
+  // Cleaned comment
 
   async create(userId: number | null, dto: CreateBookingDto, ip: string) {
     void ip;
     // ============== INTERACTIVE TRANSACTION ==============
-    // Bọc toàn bộ logic trong 1 transaction để đảm bảo tính nguyên tử:
-    // Nếu BẤT KỲ bước nào bên trong lỗi → rollback TẤT CẢ, không mất ghế.
+    // Wrap everything in a transaction to guarantee atomicity:
+    // If ANY step inside fails -> rollback EVERYTHING, no seats are lost.
     const booking = await this.prisma.$transaction(async (tx) => {
       let finalUserId = userId;
       if (!finalUserId || isNaN(finalUserId)) {
-        const contactEmail = dto.contactInfo?.email ? String(dto.contactInfo.email) : null;
+        const contactEmail = typeof dto.contactInfo?.email === 'string' ? dto.contactInfo.email : null;
         if (!contactEmail) {
-          throw new BadRequestException('Email liên hệ là bắt buộc khi đặt tour vãng lai');
+          throw new BadRequestException('Email lien he la bat buoc khi dat tour vang lai');
         }
 
         let guestUser = await tx.user.findUnique({
           where: { email: contactEmail },
         });
         if (!guestUser) {
-          const contactName = dto.contactInfo?.fullName ? String(dto.contactInfo.fullName) : 'Guest';
-          const contactPhone = dto.contactInfo?.phone ? String(dto.contactInfo.phone) : null;
-          const contactGender = dto.contactInfo?.gender ? String(dto.contactInfo.gender) : null;
-          const contactDob = dto.contactInfo?.dob ? String(dto.contactInfo.dob) : null;
-          const contactIdentityType = dto.contactInfo?.identityType ? String(dto.contactInfo.identityType) : null;
-          const contactIdentityNo = dto.contactInfo?.identityNo ? String(dto.contactInfo.identityNo) : null;
+          const contactName = typeof dto.contactInfo?.fullName === 'string' ? dto.contactInfo.fullName : 'Guest';
+          const contactPhone = typeof dto.contactInfo?.phone === 'string' ? dto.contactInfo.phone : (typeof dto.contactInfo?.phone === 'number' ? String(dto.contactInfo.phone) : null);
+          const contactGender = typeof dto.contactInfo?.gender === 'string' ? dto.contactInfo.gender : null;
+          const contactDob = typeof dto.contactInfo?.dob === 'string' ? dto.contactInfo.dob : null;
+          const contactIdentityType = typeof dto.contactInfo?.identityType === 'string' ? dto.contactInfo.identityType : null;
+          const contactIdentityNo = typeof dto.contactInfo?.identityNo === 'string' ? dto.contactInfo.identityNo : (typeof dto.contactInfo?.identityNo === 'number' ? String(dto.contactInfo.identityNo) : null);
 
           const randomPassword = Math.random().toString(36).slice(-8) + Date.now().toString().slice(-4);
           const hashedPassword = await bcrypt.hash(randomPassword, 10);
@@ -1246,21 +134,21 @@ export class BookingService {
         }
         finalUserId = guestUser.id;
       }
-      // 1. Tìm tour và khóa dòng dữ liệu
+      // Cleaned comment
       const tour = await tx.tour.findUnique({
-        where: { id: dto.tourId, deletedAt: null }, // [PHASE 1] Không cho đặt tour đã xóa
+        where: { id: dto.tourId, deletedAt: null }, // Cleaned comment
       });
 
       if (!tour) {
         throw new NotFoundException('Tour not found');
       }
 
-      // [FIX] Kiểm tra tour đã qua ngày khởi hành chưa
+      // Cleaned comment
       if (tour.startDate < new Date()) {
-        throw new BadRequestException('Tour này đã diễn ra, không thể đặt');
+        throw new BadRequestException('Tour nÃƒÂ y Ã„â€˜ÃƒÂ£ diÃ¡Â»â€¦n ra, khÃƒÂ´ng thÃ¡Â»Æ’ Ã„â€˜Ã¡ÂºÂ·t');
       }
 
-      // 1b. Validate departure (nếu có) và kiểm tra ghế của departure đó
+      // Cleaned comment
       let selectedDeparture: TourDeparture | null = null;
       if (dto.departureId) {
         selectedDeparture = await tx.tourDeparture.findUnique({
@@ -1273,7 +161,7 @@ export class BookingService {
           throw new BadRequestException('Not enough seats for this departure');
         }
       } else {
-        // Fallback: kiểm tra ghế trên tour
+        // Cleaned comment
         if (tour.availableSeats < dto.numberOfPeople) {
           throw new BadRequestException('Not enough seats available');
         }
@@ -1288,12 +176,12 @@ export class BookingService {
         if (!selectedPackage || selectedPackage.tourId !== tour.id) {
           throw new BadRequestException('Invalid tour package');
         }
-        // [PHASE 2] Phụ thu giá gói vào giá gốc của ngày khởi hành
+        // Cleaned comment
         basePrice += selectedPackage.price;
       }
 
-      // [FIX] Tính giá dựa trên loại hành khách (Adult / Child / Infant)
-      let totalPrice = this.getPassengerTotal(
+      // Cleaned comment
+      let totalPrice = getPassengerTotal(
         basePrice,
         dto.numberOfPeople,
         asPassengerInputs(dto.passengers),
@@ -1302,7 +190,7 @@ export class BookingService {
       let discountAmount = 0;
       let voucherCode: string | null = null;
 
-      // 2. Xác thực Voucher (nếu có)
+      // Cleaned comment
       if (dto.voucherCode) {
         assertVoucherAllowedForDeparture(selectedDeparture, dto.voucherCode, tour.price);
         const voucherResult = await this.voucherService.validateVoucher(
@@ -1315,13 +203,13 @@ export class BookingService {
         voucherCode = dto.voucherCode.trim().toUpperCase();
       }
 
-      // 3. Trừ ghế bằng Atomic Decrement
+      // Cleaned comment
       await tx.tour.update({
         where: { id: tour.id },
         data: { availableSeats: { decrement: dto.numberOfPeople } },
       });
 
-      // Trừ ghế trên TourDeparture nếu có chọn ngày khởi hành
+      // Cleaned comment
       if (dto.departureId) {
         await tx.tourDeparture.update({
           where: { id: dto.departureId },
@@ -1329,10 +217,16 @@ export class BookingService {
         });
       }
 
-      // 4. Tạo mã Booking chuyên nghiệp
-      const newBookingCode = this.generateBookingCode();
+      // Cleaned comment
+      const newBookingCode = generateBookingCode();
+      const paymentMethod = dto.paymentMethod === 'IN_STORE' ? 'IN_STORE' : 'PAYOS';
+      const departureDate = selectedDeparture?.departureDate ?? tour.startDate;
+      const holdExpiresAt = calculateBookingHoldExpiresAt({
+        paymentMethod,
+        departureDate,
+      });
 
-      // 5. Tạo record Booking
+      // Cleaned comment
       const newBooking = await tx.booking.create({
         data: {
           bookingCode: newBookingCode,
@@ -1340,21 +234,22 @@ export class BookingService {
           tourId: dto.tourId,
           numberOfPeople: dto.numberOfPeople,
           totalPrice,
-          unitPriceAtBooking: basePrice, // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
+          unitPriceAtBooking: basePrice, // Cleaned comment
           voucherCode,
           discountAmount,
           departureId: dto.departureId,
           packageId: dto.packageId,
           contactInfo: dto.contactInfo ?? Prisma.JsonNull,
           passengers: dto.passengers ?? Prisma.JsonNull,
-          paymentMethod: dto.paymentMethod === 'IN_STORE' ? 'IN_STORE' : 'PAYOS',
+          paymentMethod,
+          holdExpiresAt,
         },
       });
 
       return newBooking;
-    }); // ← Nếu có exception → toàn bộ rollback tự động
+    }); // Cleaned comment
 
-    // NẾU LÀ THANH TOÁN TẠI CỬA HÀNG
+    // Cleaned comment
     if (booking.paymentMethod === 'IN_STORE') {
       await this.prisma.paymentTransaction.create({
         data: {
@@ -1373,16 +268,16 @@ export class BookingService {
     }
 
     // ============== PAYOS INTEGRATION ==============
-    // totalPrice đã là VNĐ (frontend gửi VNĐ, DB lưu VNĐ)
-    // PayOS yêu cầu số nguyên VNĐ — làm tròn để loại bỏ số thập phân nếu có
+    // Cleaned comment
+    // Cleaned comment
     const amountVND = Math.round(booking.totalPrice);
 
-    // Mô tả hiển thị trên mã QR ngân hàng (tối đa 25 ký tự)
+    // Cleaned comment
     const description = `AH ${booking.bookingCode}`;
 
-    // Dùng booking.id kết hợp thời gian (6 số cuối) để tạo orderCode duy nhất.
-    // Điều này tránh lỗi "Link thanh toán đã tồn tại" nếu DB bị reset.
-    // Ví dụ: booking.id = 12, timeSuffix = 123456 => orderCode = 12123456
+    // Cleaned comment
+    // Cleaned comment
+    // Cleaned comment
     const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
     const orderCode = Number(booking.id.toString() + timeSuffix);
 
@@ -1394,25 +289,25 @@ export class BookingService {
         description,
       );
     } catch (payosError: unknown) {
-      // PayOS lỗi 231: Link thanh toán đã tồn tại → lấy lại link cũ thay vì tạo mới
+      // Cleaned comment
       if (isPayosDuplicateError(payosError)) {
         this.logger.warn(
-          `[BOOKING] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`,
+          `[BOOKING] PayOS order #${orderCode} Ã„â€˜ÃƒÂ£ tÃ¡Â»â€œn tÃ¡ÂºÂ¡i, lÃ¡ÂºÂ¥y lÃ¡ÂºÂ¡i checkout URL.`,
         );
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) {
           throw new BadRequestException(
-            'Không thể tạo liên kết thanh toán. Vui lòng thử lại sau.',
+            'KhÃƒÂ´ng thÃ¡Â»Æ’ tÃ¡ÂºÂ¡o liÃƒÂªn kÃ¡ÂºÂ¿t thanh toÃƒÂ¡n. Vui lÃƒÂ²ng thÃ¡Â»Â­ lÃ¡ÂºÂ¡i sau.',
           );
         }
-        // PaymentLink.id là paymentLinkId, dùng để tạo URL checkout
+        // Cleaned comment
         checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
       } else {
         throw payosError;
       }
     }
 
-    // [PHASE 1] Ghi log PaymentTransaction khi tạo link thanh toán
+    // Cleaned comment
     await this.prisma.paymentTransaction.create({
       data: {
         bookingId: booking.id,
@@ -1430,19 +325,19 @@ export class BookingService {
   }
 
   /**
-   * Xử lý khi người dùng quay về từ trang PayOS (hoặc Webhook gọi)
-   * Gọi thẳng API PayOS để xác nhận trạng thái thực tế, không tin query params
+   * XÃ¡Â»Â­ lÃƒÂ½ khi ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng quay vÃ¡Â»Â tÃ¡Â»Â« trang PayOS (hoÃ¡ÂºÂ·c Webhook gÃ¡Â»Âi)
+   * GÃ¡Â»Âi thÃ¡ÂºÂ³ng API PayOS Ã„â€˜Ã¡Â»Æ’ xÃƒÂ¡c nhÃ¡ÂºÂ­n trÃ¡ÂºÂ¡ng thÃƒÂ¡i thÃ¡Â»Â±c tÃ¡ÂºÂ¿, khÃƒÂ´ng tin query params
    */
   async handlePayosReturn(orderCode: number) {
-    // 1. Gọi PayOS API để lấy trạng thái thanh toán thực
+    // Cleaned comment
     const paymentInfo = await this.paymentService.getPaymentInfo(orderCode);
 
-    // Phục hồi booking.id từ orderCode (cắt bỏ 6 số cuối)
-    // Nếu orderCode nhỏ (cũ) thì dùng chính orderCode.
+    // Cleaned comment
+    // Cleaned comment
     const bookingId =
       orderCode >= 1000000 ? Math.floor(orderCode / 1000000) : orderCode;
 
-    // 2. Tìm booking theo ID (orderCode = booking.id)
+    // Cleaned comment
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
     });
@@ -1451,12 +346,12 @@ export class BookingService {
       throw new NotFoundException('Booking not found');
     }
 
-    // Nếu booking đã xử lý rồi (CONFIRMED hoặc CANCELLED) → bỏ qua, tránh xử lý trùng
+    // Cleaned comment
     if (booking.status === 'CONFIRMED' || booking.status === 'CANCELLED') {
       return paymentInfo;
     }
 
-    // 3. Cập nhật trạng thái dựa vào kết quả từ PayOS
+    // Cleaned comment
     if (paymentInfo.status === 'PAID') {
       const txnRef =
         paymentInfo.transactions?.[0]?.reference || `PAYOS-${orderCode}`;
@@ -1467,7 +362,7 @@ export class BookingService {
           data: {
             paymentStatus: 'PAID',
             status: 'CONFIRMED',
-            // Lưu mã tham chiếu giao dịch ngân hàng từ PayOS
+            // Cleaned comment
             vnpayTxnRef: txnRef,
           },
         });
@@ -1475,7 +370,7 @@ export class BookingService {
         await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
       });
 
-      // [PHASE 1] Ghi log thanh toán thành công vào PaymentTransaction
+      // Cleaned comment
       await this.prisma.paymentTransaction.create({
         data: {
           bookingId: bookingId,
@@ -1484,10 +379,13 @@ export class BookingService {
           amount: paymentInfo.amount || 0,
           status: 'SUCCESS',
           rawPayload: JSON.stringify(paymentInfo),
+          confirmedSource: 'PAYOS_RETURN_SYNC',
+          confirmedAt: new Date(),
+          confirmedNote: 'PayOS xac nhan qua return URL / webhook',
         },
       });
 
-      // ── GỬI EMAIL XÁC NHẬN ──
+      // Cleaned comment
       try {
         const fullBooking = await this.prisma.booking.findUnique({
           where: { id: bookingId },
@@ -1506,29 +404,30 @@ export class BookingService {
             startDate: fullBooking.tour.startDate.toLocaleDateString('vi-VN'),
             duration: fullBooking.tour.duration,
             numberOfPeople: fullBooking.numberOfPeople,
-            totalPrice: `${fullBooking.totalPrice.toLocaleString('vi-VN')}₫`,
+            totalPrice: `${fullBooking.totalPrice.toLocaleString('vi-VN')}Ã¢â€šÂ«`,
             discountAmount:
               fullBooking.discountAmount > 0
-                ? `${fullBooking.discountAmount.toLocaleString('vi-VN')}₫`
+                ? `${fullBooking.discountAmount.toLocaleString('vi-VN')}Ã¢â€šÂ«`
                 : undefined,
           });
         }
       } catch (emailError) {
-        this.logger.error('[EMAIL] Lỗi gửi email xác nhận:', emailError);
-        // Không throw — email lỗi không ảnh hưởng luồng thanh toán chính
+        this.logger.error('[EMAIL] LÃ¡Â»â€”i gÃ¡Â»Â­i email xÃƒÂ¡c nhÃ¡ÂºÂ­n:', emailError);
+        // Cleaned comment
       }
     } else if (
       paymentInfo.status === 'CANCELLED' ||
       paymentInfo.status === 'EXPIRED'
     ) {
-      // Hủy booking + hoàn trả ghế cho Tour
+      // Cleaned comment
       await this.cancelAndRestoreSeats(
         booking.id,
         booking.tourId,
         booking.numberOfPeople,
+        booking.departureId,
       );
 
-      // [PHASE 1] Ghi log thanh toán thất bại
+      // Cleaned comment
       await this.prisma.paymentTransaction.create({
         data: {
           bookingId: bookingId,
@@ -1539,13 +438,13 @@ export class BookingService {
         },
       });
     }
-    // Nếu status === 'PENDING' → Chưa thanh toán, không thay đổi gì
+    // Cleaned comment
 
     return paymentInfo;
   }
 
   /**
-   * Tìm booking theo ID (orderCode của PayOS)
+   * TÃƒÂ¬m booking theo ID (orderCode cÃ¡Â»Â§a PayOS)
    */
   async findByOrderCode(orderCode: number) {
     const bookingId =
@@ -1562,18 +461,19 @@ export class BookingService {
     return booking;
   }
 
-  // ============ HELPER: Hủy Booking + Hoàn Trả Ghế ============
+  // Cleaned comment
 
   /**
-   * Hủy 1 booking cụ thể và cộng lại số ghế vào Tour.
-   * Dùng chung cho: PayOS cancel, Webhook cancel, và Cron job tự hủy.
+   * Cancel a specific booking and restore seats to the tour.
+   * Shared by: PayOS cancel, Webhook cancel, and Cron job auto-cancel.
    */
   private async cancelAndRestoreSeats(
     bookingId: number,
     tourId: number,
     numberOfPeople: number,
+    departureId?: number | null,
   ) {
-    await this.prisma.$transaction([
+    const updates: Prisma.PrismaPromise<unknown>[] = [
       this.prisma.booking.update({
         where: { id: bookingId },
         data: {
@@ -1587,38 +487,53 @@ export class BookingService {
           availableSeats: { increment: numberOfPeople },
         },
       }),
-    ]);
+    ];
+
+    if (departureId) {
+      updates.push(
+        this.prisma.tourDeparture.update({
+          where: { id: departureId },
+          data: {
+            availableSeats: { increment: numberOfPeople },
+          },
+        }),
+      );
+    }
+
+    await this.prisma.$transaction(updates);
   }
 
   /**
-   * CRON JOB: Quét đơn hàng PENDING quá 15 phút và tự động hủy + hoàn trả ghế.
-   * Được gọi bởi @nestjs/schedule mỗi 5 phút.
+   * CRON JOB: QuÃƒÂ©t Ã„â€˜Ã†Â¡n hÃƒÂ ng PENDING quÃƒÂ¡ 15 phÃƒÂºt vÃƒÂ  tÃ¡Â»Â± Ã„â€˜Ã¡Â»â„¢ng hÃ¡Â»Â§y + hoÃƒÂ n trÃ¡ÂºÂ£ ghÃ¡ÂºÂ¿.
+   * Ã„ÂÃ†Â°Ã¡Â»Â£c gÃ¡Â»Âi bÃ¡Â»Å¸i @nestjs/schedule mÃ¡Â»â€”i 5 phÃƒÂºt.
    */
   async cancelExpiredBookings(): Promise<{
     batchSize: number;
     processedCount: number;
   }> {
-    const EXPIRY_PAYOS_MINUTES = 15;
-    const EXPIRY_INSTORE_HOURS = 24;
-
     const now = new Date();
-    const payosExpiryTime = new Date(now.getTime() - EXPIRY_PAYOS_MINUTES * 60 * 1000);
-    const instoreExpiryTime = new Date(now.getTime() - EXPIRY_INSTORE_HOURS * 60 * 60 * 1000);
+    const payosFallbackExpiryTime = new Date(now.getTime() - PAYOS_HOLD_MINUTES * 60 * 1000);
+    const instoreFallbackExpiryTime = new Date(now.getTime() - IN_STORE_MAX_HOLD_HOURS * 60 * 60 * 1000);
 
-    // Tìm tất cả đơn PENDING đã tạo quá hạn
+    // Cleaned comment
     const expiredBookings = await this.prisma.booking.findMany({
       where: {
         status: 'PENDING',
         paymentStatus: 'UNPAID',
-        deletedAt: null, // [PHASE 1] Bỏ qua booking đã xóa mềm
+        deletedAt: null, // Cleaned comment
         OR: [
           {
-            paymentMethod: 'PAYOS',
-            createdAt: { lt: payosExpiryTime },
+            holdExpiresAt: { lte: now },
           },
           {
+            holdExpiresAt: null,
+            paymentMethod: 'PAYOS',
+            createdAt: { lt: payosFallbackExpiryTime },
+          },
+          {
+            holdExpiresAt: null,
             paymentMethod: 'IN_STORE',
-            createdAt: { lt: instoreExpiryTime },
+            createdAt: { lt: instoreFallbackExpiryTime },
           },
         ],
       },
@@ -1629,7 +544,7 @@ export class BookingService {
     }
 
     this.logger.log(
-      `[CRON] Tìm thấy ${expiredBookings.length} đơn hàng PENDING quá hạn. Đang hủy...`,
+      `[CRON] Found ${expiredBookings.length} expired PENDING bookings. Cancelling...`,
     );
 
     let processedCount = 0;
@@ -1638,24 +553,25 @@ export class BookingService {
         booking.id,
         booking.tourId,
         booking.numberOfPeople,
+        booking.departureId,
       );
       processedCount += 1;
       this.logger.log(
-        `[CRON] Đã hủy booking #${booking.id} (${booking.bookingCode}) và hoàn ${booking.numberOfPeople} ghế cho tour #${booking.tourId}`,
+        `[CRON] Ã„ÂÃƒÂ£ hÃ¡Â»Â§y booking #${booking.id} (${booking.bookingCode}) vÃƒÂ  hoÃƒÂ n ${booking.numberOfPeople} ghÃ¡ÂºÂ¿ cho tour #${booking.tourId}`,
       );
     }
 
     this.logger.log(
-      `[CRON] Hoàn tất dọn dẹp ${processedCount}/${expiredBookings.length} đơn hàng.`,
+      `[CRON] HoÃƒÂ n tÃ¡ÂºÂ¥t dÃ¡Â»Ân dÃ¡ÂºÂ¹p ${processedCount}/${expiredBookings.length} Ã„â€˜Ã†Â¡n hÃƒÂ ng.`,
     );
     return { batchSize: expiredBookings.length, processedCount };
   }
 
-  // ============ CÁC HÀM CŨ GIỮ NGUYÊN ============
+  // Cleaned comment
 
   /**
-   * Admin: Xác nhận thủ công booking PENDING
-   * Dùng khi khách đã thanh toán ngoài hệ thống (chuyển khoản sai nội dung, tiền mặt, v.v.)
+   * Admin: XÃƒÂ¡c nhÃ¡ÂºÂ­n thÃ¡Â»Â§ cÃƒÂ´ng booking PENDING
+   * DÃƒÂ¹ng khi khÃƒÂ¡ch Ã„â€˜ÃƒÂ£ thanh toÃƒÂ¡n ngoÃƒÂ i hÃ¡Â»â€¡ thÃ¡Â»â€˜ng (chuyÃ¡Â»Æ’n khoÃ¡ÂºÂ£n sai nÃ¡Â»â„¢i dung, tiÃ¡Â»Ân mÃ¡ÂºÂ·t, v.v.)
    */
   async confirmManual(bookingId: number, adminId?: number) {
     const booking = await this.prisma.booking.findUnique({
@@ -1666,11 +582,11 @@ export class BookingService {
       },
     });
 
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (!booking) throw new NotFoundException('Booking khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i');
     if (booking.status === 'CONFIRMED')
-      throw new BadRequestException('Đơn hàng đã được xác nhận trước đó');
+      throw new BadRequestException('Ã„ÂÃ†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c xÃƒÂ¡c nhÃ¡ÂºÂ­n trÃ†Â°Ã¡Â»â€ºc Ã„â€˜ÃƒÂ³');
     if (booking.status === 'CANCELLED')
-      throw new BadRequestException('Không thể xác nhận đơn hàng đã hủy');
+      throw new BadRequestException('KhÃƒÂ´ng thÃ¡Â»Æ’ xÃƒÂ¡c nhÃ¡ÂºÂ­n Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ hÃ¡Â»Â§y');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const confirmed = await tx.booking.update({
@@ -1695,7 +611,7 @@ export class BookingService {
     });
 
     this.logger.log(
-      `[ADMIN MANUAL] Đã xác nhận thủ công booking #${bookingId} (${booking.bookingCode}) bởi Admin ID #${adminId}`,
+      `[ADMIN MANUAL] Ã„ÂÃƒÂ£ xÃƒÂ¡c nhÃ¡ÂºÂ­n thÃ¡Â»Â§ cÃƒÂ´ng booking #${bookingId} (${booking.bookingCode}) bÃ¡Â»Å¸i Admin ID #${adminId}`,
     );
 
     return {
@@ -1709,17 +625,35 @@ export class BookingService {
   async updatePaymentMethod(bookingId: number, paymentMethod: 'PAYOS' | 'IN_STORE', userId: number) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
+      include: { tour: { select: { startDate: true } } },
     });
 
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.userId !== userId) throw new ForbiddenException('Bạn không có quyền chỉnh sửa booking này');
+    if (!booking) throw new NotFoundException('Booking khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i');
+    if (booking.userId !== userId) throw new ForbiddenException('BÃ¡ÂºÂ¡n khÃƒÂ´ng cÃƒÂ³ quyÃ¡Â»Ân chÃ¡Â»â€°nh sÃ¡Â»Â­a booking nÃƒÂ y');
     if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
-      throw new BadRequestException('Chỉ có thể thay đổi phương thức thanh toán cho đơn hàng chưa thanh toán');
+      throw new BadRequestException('ChÃ¡Â»â€° cÃƒÂ³ thÃ¡Â»Æ’ thay Ã„â€˜Ã¡Â»â€¢i phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n cho Ã„â€˜Ã†Â¡n hÃƒÂ ng chÃ†Â°a thanh toÃƒÂ¡n');
     }
+
+    const now = new Date();
+    if (booking.holdExpiresAt && booking.holdExpiresAt.getTime() <= now.getTime()) {
+      throw new BadRequestException('Booking da het han giu cho. Vui long dat tour moi.');
+    }
+
+    const departure = booking.departureId
+      ? await this.prisma.tourDeparture.findUnique({
+          where: { id: booking.departureId },
+          select: { departureDate: true },
+        })
+      : null;
+    const holdExpiresAt = calculateBookingHoldExpiresAt({
+      paymentMethod,
+      departureDate: departure?.departureDate ?? booking.tour.startDate,
+      now,
+    });
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { paymentMethod },
+      data: { paymentMethod, holdExpiresAt },
     });
 
     if (paymentMethod === 'IN_STORE') {
@@ -1739,1150 +673,73 @@ export class BookingService {
     }
 
     return {
-      message: 'Cập nhật phương thức thanh toán thành công',
+      message: 'CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n thÃƒÂ nh cÃƒÂ´ng',
       booking: updated,
     };
   }
 
-  async getMyBookings(userId: number) {
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        userId,
-        deletedAt: null,
-        // Hiện tất cả trạng thái, kể cả CANCELLED và CANCEL_REQUESTED
-      },
-      select: {
-        id: true,
-        bookingCode: true,
-        status: true,
-        paymentStatus: true,
-        createdAt: true,
-        numberOfPeople: true,
-        totalPrice: true,
-        tour: {
-          select: {
-            id: true,
-            name: true,
-            tourCode: true,
-            imageUrl: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
 
-    return bookings.map((booking) => ({
-      ...booking,
-      totalPrice: Number(booking.totalPrice),
-    }));
+  // --- Query --- delegated to BookingQueryService -------------------------
+
+  async getMyBookings(userId: number) { return this.queryService.getMyBookings(userId); }
+  async getMyBookingById(bookingId: number, userId: number) { return this.queryService.getMyBookingById(bookingId, userId); }
+  async findMyByBookingCode(bookingCode: string, userId: number) { return this.queryService.findMyByBookingCode(bookingCode, userId); }
+  async getAllBookings(status?: string, paymentStatus?: string, search?: string, dateFrom?: string, dateTo?: string, page = 1, limit = 10, paymentMethod?: 'PAYOS' | 'IN_STORE', needsReconciliation = false) { return this.queryService.getAllBookings(status, paymentStatus, search, dateFrom, dateTo, page, limit, paymentMethod, needsReconciliation); }
+
+  async retryPayment(bookingId: number, userId: number) { return this.queryService.retryPayment(bookingId, userId); }
+  async findPublicByBookingCode(bookingCode: string, email: string) { return this.queryService.findPublicByBookingCode(bookingCode, email); }
+  async publicRetryPayment(bookingCode: string, email: string) { return this.queryService.publicRetryPayment(bookingCode, email); }
+  async getBookingById(bookingId: number) { return this.queryService.getBookingById(bookingId); }
+  async findByBookingCode(bookingCode: string) { return this.queryService.findByBookingCode(bookingCode); }
+  async proxyImage(imageUrl: string, res: import('express').Response) { return this.queryService.proxyImage(imageUrl, res); }
+
+  // Cleaned comment
+
+  async requestCancellation(bookingId: number, userId: number, reason: string, bankDetails?: import('@prisma/client').Prisma.InputJsonValue) {
+    return this.cancellationService.requestCancellation(bookingId, userId, reason, bankDetails);
   }
 
-  private toCustomerBookingDetail(
-    booking: {
-      id: number;
-      bookingCode: string;
-      status: BookingStatus;
-      paymentStatus: PaymentStatus;
-      paymentMethod: string;
-      createdAt: Date;
-      numberOfPeople: number;
-      totalPrice: number | Prisma.Decimal;
-      cancelReason?: string | null;
-      cancelRequestedAt?: Date | null;
-      cancelledAt?: Date | null;
-      refundAmount?: number | Prisma.Decimal | null;
-      refundNote?: string | null;
-      departureId?: number | null;
-      tour: {
-        id: number;
-        name: string;
-        tourCode: string;
-        imageUrl?: string | null;
-        duration?: string | null;
-        startDate: Date;
-      };
-    },
-    cancellationPolicy: CancellationPolicy,
-  ) {
-    return {
-      id: booking.id,
-      bookingCode: booking.bookingCode,
-      status: booking.status,
-      paymentStatus: booking.paymentStatus,
-      paymentMethod: booking.paymentMethod,
-      createdAt: booking.createdAt,
-      numberOfPeople: booking.numberOfPeople,
-      totalPrice: Number(booking.totalPrice),
-      cancelReason: booking.cancelReason ?? null,
-      cancelRequestedAt: booking.cancelRequestedAt ?? null,
-      cancelledAt: booking.cancelledAt ?? null,
-      refundAmount:
-        booking.refundAmount == null ? null : Number(booking.refundAmount),
-      refundNote: booking.refundNote ?? null,
-      cancellationPolicy,
-      tour: {
-        id: booking.tour.id,
-        name: booking.tour.name,
-        tourCode: booking.tour.tourCode,
-        imageUrl: booking.tour.imageUrl ?? null,
-        duration: booking.tour.duration ?? null,
-        startDate: booking.tour.startDate,
-      },
-    };
-  }
-
-  private async toETicketDto(booking: {
-    id: number;
-    bookingCode: string;
-    status: BookingStatus;
-    paymentStatus: PaymentStatus;
-    paymentMethod: string;
-    createdAt: Date;
-    numberOfPeople: number;
-    totalPrice: number | Prisma.Decimal;
-    departureId?: number | null;
-    user: { fullName: string };
-    tour: {
-      id: number;
-      name: string;
-      imageUrl?: string | null;
-      startDate: Date;
-      duration?: string | null;
-    };
-  }) {
-    const departureDate = await this.resolveBookingDepartureDate(booking);
-
-    return {
-      id: booking.id,
-      bookingCode: booking.bookingCode,
-      status: booking.status,
-      paymentStatus: booking.paymentStatus,
-      paymentMethod: booking.paymentMethod,
-      createdAt: booking.createdAt,
-      numberOfPeople: booking.numberOfPeople,
-      totalPrice: Number(booking.totalPrice),
-      leadTravelerName: booking.user.fullName,
-      user: { fullName: booking.user.fullName },
-      tour: {
-        id: booking.tour.id,
-        name: booking.tour.name,
-        imageUrl: booking.tour.imageUrl ?? null,
-        startDate: departureDate,
-        duration: booking.tour.duration ?? null,
-      },
-    };
-  }
-
-  async getMyBookingById(bookingId: number, userId: number) {
-    const booking = await this.prisma.booking.findFirst({
-      where: { id: bookingId, userId, deletedAt: null },
-      select: {
-        id: true,
-        bookingCode: true,
-        status: true,
-        paymentStatus: true,
-        paymentMethod: true,
-        createdAt: true,
-        numberOfPeople: true,
-        totalPrice: true,
-        cancelReason: true,
-        cancelRequestedAt: true,
-        cancelledAt: true,
-        refundAmount: true,
-        refundNote: true,
-        departureId: true,
-        tour: {
-          select: {
-            id: true,
-            name: true,
-            tourCode: true,
-            imageUrl: true,
-            duration: true,
-            startDate: true,
-          },
-        },
-      },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
-    }
-
-    const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
-
-    return this.toCustomerBookingDetail(booking, cancellationPolicy);
-  }
-
-  async findMyByBookingCode(bookingCode: string, userId: number) {
-    const booking = await this.prisma.booking.findFirst({
-      where: { bookingCode, userId, deletedAt: null },
-      select: {
-        id: true,
-        bookingCode: true,
-        status: true,
-        paymentStatus: true,
-        paymentMethod: true,
-        createdAt: true,
-        numberOfPeople: true,
-        totalPrice: true,
-        departureId: true,
-        user: {
-          select: { fullName: true },
-        },
-        tour: {
-          select: {
-            id: true,
-            name: true,
-            imageUrl: true,
-            startDate: true,
-            duration: true,
-          },
-        },
-      },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
-    }
-
-    return this.toETicketDto(booking);
-  }
-
-  /**
-   * Admin: Lấy toàn bộ danh sách booking (có filter tùy chọn)
-   */
-  async getAllBookings(
-    status?: string,
-    paymentStatus?: string,
-    search?: string,
-    dateFrom?: string,
-    dateTo?: string,
-    page = 1,
-    limit = 10,
-  ) {
-    const where: Prisma.BookingWhereInput = {
-      deletedAt: null,
-    };
-
-    // Không ẩn cancelled nữa ở admin — admin cần thấy để quản lý
-    if (status && status !== 'ALL') {
-      const normalizedStatus = status.toUpperCase();
-      if (!isBookingStatus(normalizedStatus)) {
-        throw new BadRequestException('Invalid booking status');
-      }
-      where.status = normalizedStatus;
-    }
-    if (paymentStatus && paymentStatus !== 'ALL') {
-      const normalizedPaymentStatus = paymentStatus.toUpperCase();
-      if (!isPaymentStatus(normalizedPaymentStatus)) {
-        throw new BadRequestException('Invalid payment status');
-      }
-      where.paymentStatus = normalizedPaymentStatus;
-    }
-    if (search) {
-      where.OR = [
-        { bookingCode: { contains: search, mode: 'insensitive' } },
-        { user: { fullName: { contains: search, mode: 'insensitive' } } },
-        { user: { email: { contains: search, mode: 'insensitive' } } },
-        { tour: { name: { contains: search, mode: 'insensitive' } } },
-      ];
-    }
-    if (dateFrom || dateTo) {
-      const createdAt: Prisma.DateTimeFilter<'Booking'> = {};
-      if (dateFrom) createdAt.gte = new Date(dateFrom);
-      if (dateTo) {
-        const end = new Date(dateTo);
-        end.setHours(23, 59, 59, 999);
-        createdAt.lte = end;
-      }
-      where.createdAt = createdAt;
-    }
-
-    const skip = (page - 1) * limit;
-
-    const [bookings, total] = await Promise.all([
-      this.prisma.booking.findMany({
-        where,
-        include: {
-          tour: {
-            select: {
-              id: true,
-              name: true,
-              imageUrl: true,
-              tourCode: true,
-              destination: { select: { name: true } },
-            },
-          },
-          user: {
-            select: { id: true, fullName: true, email: true, avatarUrl: true },
-          },
-          notifications: {
-            where: { type: 'PAYMENT_REQUEST' },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      this.prisma.booking.count({ where }),
-    ]);
-
-    // Thống kê tổng hợp (toàn bộ, không bị ảnh hưởng bởi filter)
-    const [globalStats, paymentStats, revenueResult, assistedDraftStats] =
-      await Promise.all([
-        this.prisma.booking.groupBy({
-          by: ['status'],
-          where: { deletedAt: null },
-          _count: { status: true },
-        }),
-        this.prisma.booking.groupBy({
-          by: ['paymentStatus'],
-          where: { deletedAt: null },
-          _count: { paymentStatus: true },
-        }),
-        this.prisma.booking.aggregate({
-          where: { deletedAt: null, paymentStatus: 'PAID' },
-          _sum: { totalPrice: true },
-          _count: { id: true },
-        }),
-        this.prisma.assistedBookingDraft.groupBy({
-          by: ['status'],
-          _count: { status: true },
-        }),
-      ]);
-
-    const statsMap: Record<string, number> = {};
-    for (const s of globalStats) {
-      statsMap[s.status] = s._count.status;
-    }
-    const paymentMap: Record<string, number> = {};
-    for (const s of paymentStats) {
-      paymentMap[s.paymentStatus] = s._count.paymentStatus;
-    }
-    const assistedDraftMap: Record<string, number> = {};
-    for (const s of assistedDraftStats) {
-      assistedDraftMap[s.status] = s._count.status;
-    }
-
-    return {
-      bookings: bookings.map((b) => ({
-        ...b,
-        totalPrice: Number(b.totalPrice),
-        unitPriceAtBooking: Number(b.unitPriceAtBooking),
-        discountAmount: Number(b.discountAmount),
-      })),
-      stats: {
-        pending: statsMap['PENDING'] || 0,
-        confirmed: statsMap['CONFIRMED'] || 0,
-        cancelRequested: statsMap['CANCEL_REQUESTED'] || 0,
-        cancelled: statsMap['CANCELLED'] || 0,
-        total: Object.values(statsMap).reduce((a, b) => a + b, 0),
-        totalRevenue: Number(revenueResult._sum.totalPrice || 0),
-        paidCount: revenueResult._count.id,
-        unpaidCount: paymentMap['UNPAID'] || 0,
-        processingCount: paymentMap['PROCESSING'] || 0,
-        failedPaymentCount: paymentMap['FAILED'] || 0,
-        assistedDraftPending: assistedDraftMap['PENDING_APPROVAL'] || 0,
-        assistedDraftNeedsRevision: assistedDraftMap['NEEDS_REVISION'] || 0,
-      },
-      meta: {
-        totalItems: total,
-        totalPages: Math.ceil(total / limit),
-        currentPage: page,
-        itemsPerPage: limit,
-      },
-    };
-  }
-
-  /**
-   * Khách hàng thanh toán lại booking PENDING (chưa quá 15 phút)
-   * Tạo lại PayOS payment link và trả về checkoutUrl
-   */
-  async retryPayment(bookingId: number, userId: number) {
-    const EXPIRY_MINUTES = 15;
-
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { tour: true },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
-    }
-
-    // Chỉ cho phép chủ booking thực hiện
-    if (booking.userId !== userId) {
-      throw new BadRequestException('Không có quyền truy cập booking này');
-    }
-
-    // Chỉ cho retry nếu booking vẫn PENDING và chưa thanh toán
-    if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
-      throw new BadRequestException(
-        'Booking này không ở trạng thái chờ thanh toán',
-      );
-    }
-
-    // Kiểm tra xem booking đã quá 15 phút chưa
-    const expiryTime = new Date(
-      booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000,
-    );
-    if (new Date() > expiryTime) {
-      throw new BadRequestException(
-        'Booking đã hết hạn thanh toán (quá 15 phút). Vui lòng đặt tour mới.',
-      );
-    }
-
-    // Lấy lại checkout URL từ PayOS thay vì tạo mới (tránh lỗi 231 "order đã tồn tại")
-    const amountVND = Math.round(booking.totalPrice);
-    const description = `AH ${booking.bookingCode}`;
-
-    // Tạo orderCode MỚI cho mỗi lần retry để tránh trùng lặp
-    const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
-    const orderCode = Number(booking.id.toString() + timeSuffix);
-
-    let checkoutUrl: string;
-    try {
-      // Thử tạo mới trước
-      checkoutUrl = await this.paymentService.createPaymentLink(
-        orderCode,
-        amountVND,
-        description,
-      );
-    } catch (payosError: unknown) {
-      // PayOS lỗi 231: đã tồn tại PayOS order này → lấy lại link cũ
-      if (isPayosDuplicateError(payosError)) {
-        this.logger.warn(
-          `[RETRY] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`,
-        );
-        const existing = await this.paymentService.getPaymentInfo(orderCode);
-        if (!existing?.id) {
-          throw new BadRequestException(
-            'Không thể lấy liên kết thanh toán. Link có thể đã hết hạn. Vui lòng đặt tour mới.',
-          );
-        }
-        // PaymentLink.id là paymentLinkId, dùng để tạo URL checkout
-        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
-      } else {
-        throw payosError;
-      }
-    }
-
-    this.logger.log(
-      `[RETRY] Tạo lại link thanh toán cho booking #${booking.id} (${booking.bookingCode})`,
-    );
-
-    return { checkoutUrl, expiresAt: expiryTime.toISOString() };
-  }
-
-  async findPublicByBookingCode(bookingCode: string, email: string) {
-    const booking = await this.prisma.booking.findFirst({
-      where: { bookingCode, deletedAt: null },
-      select: {
-        id: true,
-        bookingCode: true,
-        status: true,
-        paymentStatus: true,
-        numberOfPeople: true,
-        totalPrice: true,
-        departureId: true,
-        contactInfo: true,
-        passengers: true,
-        discountAmount: true,
-        voucherCode: true,
-        createdAt: true,
-        user: {
-          select: { fullName: true, email: true },
-        },
-        tour: {
-          select: {
-            id: true,
-            name: true,
-            imageUrl: true,
-            startDate: true,
-            duration: true,
-            tourCode: true,
-          },
-        },
-      },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Không tìm thấy đơn đặt tour');
-    }
-
-    const contactInfo = booking.contactInfo as any;
-    const contactEmail = contactInfo?.email ? String(contactInfo.email) : null;
-    const userEmail = booking.user?.email;
-
-    if (
-      (!contactEmail || contactEmail.toLowerCase() !== email.toLowerCase()) &&
-      (!userEmail || userEmail.toLowerCase() !== email.toLowerCase())
-    ) {
-      throw new ForbiddenException('Thông tin xác thực không chính xác');
-    }
-
-    return booking;
-  }
-
-  async publicRetryPayment(bookingCode: string, email: string) {
-    const EXPIRY_MINUTES = 15;
-
-    const booking = await this.prisma.booking.findFirst({
-      where: { bookingCode, deletedAt: null },
-      include: { user: true },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Không tìm thấy đơn đặt tour');
-    }
-
-    const contactInfo = booking.contactInfo as any;
-    const contactEmail = contactInfo?.email ? String(contactInfo.email) : null;
-    const userEmail = booking.user?.email;
-
-    if (
-      (!contactEmail || contactEmail.toLowerCase() !== email.toLowerCase()) &&
-      (!userEmail || userEmail.toLowerCase() !== email.toLowerCase())
-    ) {
-      throw new ForbiddenException('Thông tin xác thực không chính xác');
-    }
-
-    if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
-      throw new BadRequestException(
-        'Booking này không ở trạng thái chờ thanh toán',
-      );
-    }
-
-    const expiryTime = new Date(
-      booking.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000,
-    );
-    if (new Date() > expiryTime) {
-      throw new BadRequestException(
-        'Booking đã hết hạn thanh toán (quá 15 phút). Vui lòng đặt tour mới.',
-      );
-    }
-
-    const amountVND = Math.round(booking.totalPrice);
-    const description = `AH ${booking.bookingCode}`;
-
-    const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
-    const orderCode = Number(booking.id.toString() + timeSuffix);
-
-    let checkoutUrl: string;
-    try {
-      checkoutUrl = await this.paymentService.createPaymentLink(
-        orderCode,
-        amountVND,
-        description,
-      );
-    } catch (payosError: unknown) {
-      if (isPayosDuplicateError(payosError)) {
-        this.logger.warn(
-          `[PUBLIC-RETRY] PayOS order #${orderCode} đã tồn tại, lấy lại checkout URL.`,
-        );
-        const existing = await this.paymentService.getPaymentInfo(orderCode);
-        if (!existing?.id) {
-          throw new BadRequestException(
-            'Không thể lấy liên kết thanh toán. Link có thể đã hết hạn. Vui lòng đặt tour mới.',
-          );
-        }
-        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
-      } else {
-        throw payosError;
-      }
-    }
-
-    this.logger.log(
-      `[PUBLIC-RETRY] Tạo lại link thanh toán cho booking #${booking.id} (${booking.bookingCode})`,
-    );
-
-    return { checkoutUrl, expiresAt: expiryTime.toISOString() };
-  }
-
-  async getBookingById(bookingId: number) {
-    return this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        user: true, // Lấy fullName từ bảng User
-        tour: true, // Lấy name, startDate, imageUrl từ bảng Tour
-      },
-    });
-  }
-
-  async findByBookingCode(bookingCode: string) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { bookingCode: bookingCode },
-      include: {
-        tour: true,
-        user: true,
-      },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
-    }
-
-    // Bọc trong object { data: ... } để khớp 100% với Frontend của em
-    return booking;
-  }
-
-  async proxyImage(imageUrl: string, res: Response) {
-    try {
-      // Gọi sang Unsplash để lấy ảnh dưới dạng luồng dữ liệu (Stream)
-      const response = await firstValueFrom(
-        this.httpService.get<ProxiedStream>(imageUrl, {
-          responseType: 'stream',
-        }),
-      );
-
-      // Đặt thẻ tiêu đề cho phép CORS để Frontend chụp ảnh được
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      const contentType: unknown = response.headers['content-type'];
-      res.setHeader(
-        'Content-Type',
-        typeof contentType === 'string'
-          ? contentType
-          : 'application/octet-stream',
-      );
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache ảnh để tăng tốc
-
-      // Stream dữ liệu ảnh về cho Frontend
-      response.data.pipe(res);
-    } catch (error) {
-      this.logger.error('Lỗi khi proxy ảnh:', getErrorMessage(error));
-      throw new NotFoundException('Failed to proxy image');
-    }
-  }
-
-  // ============ CANCELLATION FLOW ============
-
-  /**
-   * Centralized cancellation policy for both customer booking detail and
-   * cancellation requests. Do not calculate refunds separately in the UI.
-   */
-  private async resolveBookingDepartureDate(booking: {
-    departureId?: number | null;
-    tour: { startDate: Date };
-  }): Promise<Date> {
-    if (!booking.departureId) return booking.tour.startDate;
-
-    const departure = await this.prisma.tourDeparture.findUnique({
-      where: { id: booking.departureId },
-      select: { departureDate: true },
-    });
-
-    return departure?.departureDate ?? booking.tour.startDate;
-  }
-
-  private buildCancellationPolicy(booking: {
-    status: BookingStatus;
-    paymentStatus: PaymentStatus;
-    totalPrice: number | Prisma.Decimal;
-    createdAt: Date;
-    departureDate: Date;
-  }): CancellationPolicy {
-    const today = moment().startOf('day');
-    const departureDay = moment(booking.departureDate).startOf('day');
-    const daysUntilDeparture = departureDay.diff(today, 'days');
-    const tripLifecycle: TripLifecycle =
-      daysUntilDeparture < 0
-        ? 'COMPLETED'
-        : daysUntilDeparture === 0
-          ? 'DEPARTING_TODAY'
-          : 'UPCOMING';
-    const totalPrice = Number(booking.totalPrice);
-
-    if (booking.status === 'CANCELLED') {
-      return {
-        canCancel: false,
-        tripLifecycle,
-        cancelUnavailableReason: 'Đơn đặt tour đã được hủy.',
-        refundPercent: 0,
-        estimatedRefundAmount: 0,
-        refundNote: 'Đơn đặt tour đã được hủy.',
-        policyTier: 'NOT_CANCELABLE',
-        departureDate: booking.departureDate,
-        daysUntilDeparture,
-      };
-    }
-
-    if (booking.status === 'CANCEL_REQUESTED') {
-      return {
-        canCancel: false,
-        tripLifecycle,
-        cancelUnavailableReason: 'Yêu cầu hủy đang chờ xử lý.',
-        refundPercent: 0,
-        estimatedRefundAmount: 0,
-        refundNote: 'Yêu cầu hủy đang chờ admin xử lý.',
-        policyTier: 'NOT_CANCELABLE',
-        departureDate: booking.departureDate,
-        daysUntilDeparture,
-      };
-    }
-
-    if (tripLifecycle === 'DEPARTING_TODAY') {
-      return {
-        canCancel: false,
-        tripLifecycle,
-        cancelUnavailableReason: 'Tour khởi hành hôm nay, không thể hủy online.',
-        refundPercent: 0,
-        estimatedRefundAmount: 0,
-        refundNote: 'Không hỗ trợ hủy online vào ngày khởi hành.',
-        policyTier: 'NOT_CANCELABLE',
-        departureDate: booking.departureDate,
-        daysUntilDeparture,
-      };
-    }
-
-    if (tripLifecycle === 'COMPLETED') {
-      return {
-        canCancel: false,
-        tripLifecycle,
-        cancelUnavailableReason: 'Chuyến đi đã hoàn thành.',
-        refundPercent: 0,
-        estimatedRefundAmount: 0,
-        refundNote: 'Chuyến đi đã hoàn thành, không thể hủy booking.',
-        policyTier: 'NOT_CANCELABLE',
-        departureDate: booking.departureDate,
-        daysUntilDeparture,
-      };
-    }
-
-    if (booking.paymentStatus !== 'PAID') {
-      return {
-        canCancel: true,
-        tripLifecycle,
-        refundPercent: 0,
-        estimatedRefundAmount: 0,
-        refundNote: 'Chưa thanh toán - không có khoản hoàn tiền.',
-        policyTier: 'UNPAID',
-        departureDate: booking.departureDate,
-        daysUntilDeparture,
-      };
-    }
-
-    const hoursSinceBooking = moment().diff(
-      moment(booking.createdAt),
-      'hours',
-      true,
-    );
-    let refundPercent = 0;
-    let refundNote = 'Không hoàn tiền (hủy dưới 3 ngày trước khởi hành).';
-    let policyTier: CancellationPolicyTier = 'NO_REFUND';
-
-    if (hoursSinceBooking <= 24) {
-      refundPercent = 100;
-      refundNote = 'Hoàn 100% do hủy trong 24h sau khi đặt.';
-      policyTier = 'FULL_REFUND_24H';
-    } else if (daysUntilDeparture >= 7) {
-      refundPercent = 80;
-      refundNote = 'Hoàn 80% do hủy trước ngày khởi hành từ 7 ngày trở lên.';
-      policyTier = 'EIGHTY_REFUND';
-    } else if (daysUntilDeparture >= 3) {
-      refundPercent = 50;
-      refundNote =
-        'Hoàn 50% do hủy trước ngày khởi hành từ 3 đến dưới 7 ngày.';
-      policyTier = 'HALF_REFUND';
-    }
-
-    return {
-      canCancel: true,
-      tripLifecycle,
-      refundPercent,
-      estimatedRefundAmount: Math.round((totalPrice * refundPercent) / 100),
-      refundNote,
-      policyTier,
-      departureDate: booking.departureDate,
-      daysUntilDeparture,
-    };
-  }
-
-  private async getCancellationPolicyForBooking(booking: {
-    status: BookingStatus;
-    paymentStatus: PaymentStatus;
-    totalPrice: number | Prisma.Decimal;
-    createdAt: Date;
-    departureId?: number | null;
-    tour: { startDate: Date };
-  }): Promise<CancellationPolicy> {
-    const departureDate = await this.resolveBookingDepartureDate(booking);
-    return this.buildCancellationPolicy({ ...booking, departureDate });
-  }
-
-  /**
-   * Khách hàng gửi yêu cầu hủy booking.
-   * - PENDING (chưa thanh toán): hủy ngay, không cần admin duyệt.
-   * - CONFIRMED (đã thanh toán): chuyển sang CANCEL_REQUESTED, chờ admin.
-   */
-  async requestCancellation(
-    bookingId: number,
-    userId: number,
-    reason: string,
-    bankDetails?: Prisma.InputJsonValue,
-  ) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
-      include: { user: true, tour: true },
-    });
-
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.userId !== userId)
-      throw new BadRequestException('Không có quyền hủy booking này');
-
-    if (booking.status === 'CANCELLED') {
-      throw new BadRequestException('Booking này đã được hủy trước đó');
-    }
-    if (booking.status === 'CANCEL_REQUESTED') {
-      throw new BadRequestException('Yêu cầu hủy của bạn đang chờ xử lý');
-    }
-
-    const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
-    if (!cancellationPolicy.canCancel) {
-      throw new BadRequestException(
-        cancellationPolicy.cancelUnavailableReason ??
-          'Không thể hủy booking này.',
-      );
-    }
-    const refundAmount = cancellationPolicy.estimatedRefundAmount;
-    const refundNote = cancellationPolicy.refundNote;
-
-    // PENDING = chưa thanh toán → hủy ngay, hoàn ghế
-    if (booking.status === 'PENDING') {
-      // [FIX] Optimistic Concurrency Control: Đảm bảo status vẫn là PENDING lúc update
-      await this.prisma.$transaction(async (tx) => {
-        const updateResult = await tx.booking.updateMany({
-          where: { id: bookingId, status: 'PENDING' },
-          data: {
-            status: 'CANCELLED',
-            cancelReason: reason,
-            cancelledAt: new Date(),
-            cancelledBy: 'CUSTOMER',
-            refundAmount: 0,
-            refundNote: 'Hủy trước khi thanh toán',
-          },
-        });
-
-        if (updateResult.count === 0) {
-          throw new BadRequestException(
-            'Trạng thái đơn hàng đã thay đổi, không thể hủy tự động. Vui lòng tải lại trang.',
-          );
-        }
-
-        await tx.tour.update({
-          where: { id: booking.tourId },
-          data: { availableSeats: { increment: booking.numberOfPeople } },
-        });
-      });
-
-      // [FIX] Hủy link thanh toán bên PayOS để khách không thanh toán nhầm vào đơn đã hủy
-      try {
-        await this.paymentService.cancelPaymentLink(
-          bookingId,
-          'Khách hàng chủ động hủy đơn',
-        );
-      } catch {
-        this.logger.warn(
-          `[PAYOS] Không thể hủy link PayOS cho booking #${bookingId} (có thể link đã hết hạn).`,
-        );
-      }
-
-      this.logger.log(
-        `[CANCEL] Khách hủy booking PENDING #${bookingId} trước khi thanh toán`,
-      );
-      return {
-        message: 'Đã hủy đặt tour thành công',
-        refundAmount: 0,
-        refundNote: 'Chưa thanh toán — không có hoàn tiền',
-      };
-    }
-
-    // CONFIRMED = đã thanh toán → chuyển sang CANCEL_REQUESTED, chờ admin
-    await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'CANCEL_REQUESTED',
-        cancelReason: reason,
-        cancelRequestedAt: new Date(),
-        refundAmount,
-        refundNote,
-        refundBankDetails:
-          bankDetails === undefined ? Prisma.JsonNull : bankDetails, // Luu thong tin ngan hang neu co
-      },
-    });
-
-    // Gửi email xác nhận cho khách
-    try {
-      if (booking.user?.email) {
-        await this.mailService.sendCancelRequestConfirmation({
-          to: booking.user.email,
-          customerName: booking.user.fullName,
-          bookingCode: booking.bookingCode,
-          tourName: booking.tour.name,
-          cancelReason: reason,
-          refundAmount,
-          refundNote,
-        });
-      }
-    } catch (emailError) {
-      this.logger.error('[EMAIL] Lỗi gửi email yêu cầu hủy:', emailError);
-    }
-
-    this.logger.log(
-      `[CANCEL] Booking #${bookingId} chuyển sang CANCEL_REQUESTED. Dự kiến hoàn: ${refundAmount}đ`,
-    );
-    return {
-      message: 'Yêu cầu hủy đã được ghi nhận, đang chờ xử lý',
-      refundAmount,
-      refundNote,
-    };
-  }
-
-  /**
-   * Admin duyệt yêu cầu hủy → CANCELLED + hoàn ghế
-   */
   async approveCancellation(bookingId: number, adminNote?: string) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
-      include: { user: true, tour: true },
-    });
-
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.status !== 'CANCEL_REQUESTED') {
-      throw new BadRequestException(
-        'Booking này không ở trạng thái chờ duyệt hủy',
-      );
-    }
-
-    const refundAmount = Number(booking.refundAmount ?? 0);
-
-    await this.prisma.$transaction([
-      this.prisma.booking.update({
-        where: { id: bookingId },
-        data: {
-          status: 'CANCELLED',
-          paymentStatus: 'FAILED',
-          cancelledAt: new Date(),
-          cancelledBy: 'ADMIN',
-          refundNote: adminNote || booking.refundNote,
-          refundedAt: new Date(), // Ghi nhận thời điểm thực sự hoàn tiền
-        },
-      }),
-      this.prisma.tour.update({
-        where: { id: booking.tourId },
-        data: { availableSeats: { increment: booking.numberOfPeople } },
-      }),
-    ]);
-
-    // Ghi log PaymentTransaction REFUND nếu có hoàn tiền
-    if (refundAmount > 0) {
-      await this.prisma.paymentTransaction.create({
-        data: {
-          bookingId,
-          gateway: 'MANUAL',
-          amount: refundAmount,
-          // [FIX] Trạng thái PENDING vì kế toán còn phải duyệt lệnh chuyển tiền thực tế
-          status: 'PENDING',
-          transactionRef: `REFUND-${bookingId}-${Date.now()}`,
-        },
-      });
-    }
-
-    // Gửi email thông báo cho khách
-    try {
-      if (booking.user?.email) {
-        await this.mailService.sendCancellationApproved({
-          to: booking.user.email,
-          customerName: booking.user.fullName,
-          bookingCode: booking.bookingCode,
-          tourName: booking.tour.name,
-          refundAmount,
-          adminNote,
-        });
-      }
-    } catch (emailError) {
-      this.logger.error('[EMAIL] Lỗi gửi email duyệt hủy:', emailError);
-    }
-
-    this.logger.log(
-      `[ADMIN] Đã duyệt hủy booking #${bookingId}. Hoàn tiền: ${refundAmount}đ`,
-    );
-    return { message: 'Đã duyệt hủy booking và hoàn trả ghế', refundAmount };
+    return this.cancellationService.approveCancellation(bookingId, adminNote);
   }
 
-  /**
-   * Admin từ chối yêu cầu hủy → CONFIRMED trở lại
-   */
   async rejectCancellation(bookingId: number, rejectReason: string) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
-      include: { user: true, tour: true },
-    });
-
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.status !== 'CANCEL_REQUESTED') {
-      throw new BadRequestException(
-        'Booking này không ở trạng thái chờ duyệt hủy',
-      );
-    }
-
-    await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'CONFIRMED',
-        cancelReason: null,
-        cancelRequestedAt: null,
-        refundAmount: null,
-        refundNote: rejectReason,
-      },
-    });
-
-    // Gửi email thông báo từ chối cho khách
-    try {
-      if (booking.user?.email) {
-        await this.mailService.sendCancellationRejected({
-          to: booking.user.email,
-          customerName: booking.user.fullName,
-          bookingCode: booking.bookingCode,
-          tourName: booking.tour.name,
-          rejectReason,
-        });
-      }
-    } catch (emailError) {
-      this.logger.error('[EMAIL] Lỗi gửi email từ chối hủy:', emailError);
-    }
-
-    this.logger.log(
-      `[ADMIN] Đã từ chối hủy booking #${bookingId}. Lý do: ${rejectReason}`,
-    );
-    return { message: 'Đã từ chối yêu cầu hủy, booking tiếp tục hiệu lực' };
+    return this.cancellationService.rejectCancellation(bookingId, rejectReason);
   }
 
-  /**
-   * Admin lấy danh sách yêu cầu hủy đang chờ xử lý và thống kê hoàn tiền
-   */
   async getCancelRequests() {
-    // 1. Lấy danh sách yêu cầu đang chờ
-    const requests = await this.prisma.booking.findMany({
-      where: { status: 'CANCEL_REQUESTED', deletedAt: null },
-      include: {
-        user: {
-          select: { id: true, fullName: true, email: true, avatarUrl: true },
-        },
-        tour: {
-          select: {
-            id: true,
-            name: true,
-            imageUrl: true,
-            tourCode: true,
-            startDate: true,
-          },
-        },
-      },
-      orderBy: { cancelRequestedAt: 'asc' }, // Xử lý theo thứ tự gửi
-    });
-
-    const formattedRequests = requests.map((b) => ({
-      ...b,
-      totalPrice: Number(b.totalPrice),
-      unitPriceAtBooking: Number(b.unitPriceAtBooking),
-      discountAmount: Number(b.discountAmount),
-      refundAmount: Number(b.refundAmount ?? 0),
-    }));
-
-    // 2. Tính toán thống kê hoàn tiền
-    const pendingCancelCount = formattedRequests.length;
-    const pendingRefundAmount = formattedRequests.reduce(
-      (sum, r) => sum + r.refundAmount,
-      0,
-    );
-
-    // Lấy tổng tiền đã hoàn (những booking đã CANCELLED và có refundedAt)
-    const refundedAgg = await this.prisma.booking.aggregate({
-      where: {
-        status: 'CANCELLED',
-        refundedAt: { not: null },
-        deletedAt: null,
-      },
-      _sum: { refundAmount: true },
-    });
-    const totalRefundedAmount = Number(refundedAgg._sum.refundAmount ?? 0);
-
-    return {
-      requests: formattedRequests,
-      stats: {
-        pendingCancelCount,
-        pendingRefundAmount,
-        totalRefundedAmount,
-      },
-    };
+    return this.cancellationService.getCancelRequests();
   }
 
-  /**
-   * Quick stats for Staff Dashboard (no revenue, just booking counts).
-   * Accessible by STAFF | ADMIN | SUPER_ADMIN.
-   */
   async getAdminQuickStats() {
-    const [grouped, paymentGrouped, myToursCount, assistedDraftGrouped] =
-      await Promise.all([
-        this.prisma.booking.groupBy({
-          by: ['status'],
-          where: { deletedAt: null },
-          _count: { status: true },
-        }),
-        this.prisma.booking.groupBy({
-          by: ['paymentStatus'],
-          where: { deletedAt: null },
-          _count: { paymentStatus: true },
-        }),
-        this.prisma.tour.count({
-          where: { deletedAt: null, status: 'PUBLISHED' },
-        }),
-        this.prisma.assistedBookingDraft.groupBy({
-          by: ['status'],
-          _count: { status: true },
-        }),
-      ]);
-
+    const [grouped, paymentGrouped, myToursCount, assistedDraftGrouped] = await Promise.all([
+      this.prisma.booking.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { status: true } }),
+      this.prisma.booking.groupBy({ by: ['paymentStatus'], where: { deletedAt: null }, _count: { paymentStatus: true } }),
+      this.prisma.tour.count({ where: { deletedAt: null, status: 'PUBLISHED' } }),
+      this.prisma.assistedBookingDraft.groupBy({ by: ['status'], _count: { status: true } }),
+    ]);
     const map: Record<string, number> = {};
     for (const row of grouped) map[row.status] = row._count.status;
     const paymentMap: Record<string, number> = {};
-    for (const row of paymentGrouped)
-      paymentMap[row.paymentStatus] = row._count.paymentStatus;
+    for (const row of paymentGrouped) paymentMap[row.paymentStatus] = row._count.paymentStatus;
     const assistedDraftMap: Record<string, number> = {};
-    for (const row of assistedDraftGrouped)
-      assistedDraftMap[row.status] = row._count.status;
-
+    for (const row of assistedDraftGrouped) assistedDraftMap[row.status] = row._count.status;
     return {
-      pending: map['PENDING'] || 0,
-      confirmed: map['CONFIRMED'] || 0,
-      cancelRequested: map['CANCEL_REQUESTED'] || 0,
-      cancelled: map['CANCELLED'] || 0,
+      pending: map['PENDING'] || 0, confirmed: map['CONFIRMED'] || 0,
+      cancelRequested: map['CANCEL_REQUESTED'] || 0, cancelled: map['CANCELLED'] || 0,
       total: Object.values(map).reduce((a, b) => a + b, 0),
       publishedTours: myToursCount,
-      unpaidCount: paymentMap['UNPAID'] || 0,
-      processingCount: paymentMap['PROCESSING'] || 0,
+      unpaidCount: paymentMap['UNPAID'] || 0, processingCount: paymentMap['PROCESSING'] || 0,
       failedPaymentCount: paymentMap['FAILED'] || 0,
       assistedDraftPending: assistedDraftMap['PENDING_APPROVAL'] || 0,
       assistedDraftNeedsRevision: assistedDraftMap['NEEDS_REVISION'] || 0,
     };
   }
 
-  findAll() {
-    return `This action returns all booking`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} booking`;
-  }
-
-  update(id: number, updateBookingDto: UpdateBookingDto) {
-    void updateBookingDto;
-    return `This action updates a #${id} booking`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} booking`;
-  }
+  findAll() { return `This action returns all booking`; }
+  findOne(id: number) { return `This action returns a #${id} booking`; }
+  update(id: number, updateBookingDto: UpdateBookingDto) { void updateBookingDto; return `This action updates a #${id} booking`; }
+  remove(id: number) { return `This action removes a #${id} booking`; }
 }
+
+

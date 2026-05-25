@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { API_BASE_URL } from '@/lib/constants';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 interface UserInfo {
     id: number;
@@ -643,6 +644,12 @@ export default function SystemLogsPage() {
         }, 400);
         return () => clearTimeout(timer);
     }, [page, search, actionFilter, dateFrom, dateTo]);
+
+    useAdminAutoRefresh({
+        intervalMs: 60 * 1000,
+        pause: Boolean(isExporting || expandedRow),
+        onRefresh: () => fetchLogs(page, search, actionFilter, dateFrom, dateTo),
+    });
 
     useEffect(() => {
         if (!linkedLogIdParam) {

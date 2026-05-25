@@ -1,0 +1,438 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
+import { BookingStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { Response } from 'express';
+import { firstValueFrom } from 'rxjs';
+import { HttpService } from '@nestjs/axios';
+import { Readable } from 'stream';
+import { PrismaService } from '../prisma/prisma.service';
+import { PaymentService } from '../payment/payment.service';
+import { BookingCancellationService } from './booking-cancellation.service';
+import {
+  calculateBookingHoldExpiresAt,
+  getErrorMessage,
+  isBookingStatus,
+  isPaymentStatus,
+  isPayosDuplicateError,
+  PAYOS_HOLD_MINUTES,
+} from './helpers/booking-helpers';
+import type { CancellationPolicy } from './types';
+
+// Stream type for image proxy
+type ProxiedStream = Readable & { pipe(destination: Response): Response };
+
+@Injectable()
+export class BookingQueryService {
+  private readonly logger = new Logger(BookingQueryService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentService: PaymentService,
+    private readonly httpService: HttpService,
+    private readonly cancellationService: BookingCancellationService,
+  ) {}
+
+  // ─── Private formatting helpers ────────────────────────────────────────────
+
+  private toCustomerBookingDetail(
+    booking: {
+      id: number; bookingCode: string; status: BookingStatus; paymentStatus: PaymentStatus;
+      paymentMethod: string; createdAt: Date; numberOfPeople: number;
+      holdExpiresAt?: Date | null;
+      totalPrice: number | Prisma.Decimal; cancelReason?: string | null;
+      cancelRequestedAt?: Date | null; cancelledAt?: Date | null;
+      refundAmount?: number | Prisma.Decimal | null; refundNote?: string | null;
+      departureId?: number | null;
+      tour: { id: number; name: string; tourCode: string; imageUrl?: string | null; duration?: string | null; startDate: Date };
+    },
+    cancellationPolicy: CancellationPolicy,
+  ) {
+    return {
+      id: booking.id, bookingCode: booking.bookingCode, status: booking.status,
+      paymentStatus: booking.paymentStatus, paymentMethod: booking.paymentMethod,
+      createdAt: booking.createdAt, holdExpiresAt: booking.holdExpiresAt ?? null,
+      numberOfPeople: booking.numberOfPeople,
+      totalPrice: Number(booking.totalPrice),
+      cancelReason: booking.cancelReason ?? null,
+      cancelRequestedAt: booking.cancelRequestedAt ?? null,
+      cancelledAt: booking.cancelledAt ?? null,
+      refundAmount: booking.refundAmount == null ? null : Number(booking.refundAmount),
+      refundNote: booking.refundNote ?? null,
+      cancellationPolicy,
+      tour: {
+        id: booking.tour.id, name: booking.tour.name, tourCode: booking.tour.tourCode,
+        imageUrl: booking.tour.imageUrl ?? null, duration: booking.tour.duration ?? null,
+        startDate: booking.tour.startDate,
+      },
+    };
+  }
+
+  async toETicketDto(booking: {
+    id: number; bookingCode: string; status: BookingStatus; paymentStatus: PaymentStatus;
+    paymentMethod: string; createdAt: Date; numberOfPeople: number;
+    holdExpiresAt?: Date | null;
+    totalPrice: number | Prisma.Decimal; departureId?: number | null;
+    user: { fullName: string };
+    tour: { id: number; name: string; imageUrl?: string | null; startDate: Date; duration?: string | null };
+  }) {
+    const departureDate = await this.cancellationService.resolveBookingDepartureDate(booking);
+    return {
+      id: booking.id, bookingCode: booking.bookingCode, status: booking.status,
+      paymentStatus: booking.paymentStatus, paymentMethod: booking.paymentMethod,
+      createdAt: booking.createdAt, holdExpiresAt: booking.holdExpiresAt ?? null,
+      numberOfPeople: booking.numberOfPeople,
+      totalPrice: Number(booking.totalPrice),
+      leadTravelerName: booking.user.fullName, user: { fullName: booking.user.fullName },
+      tour: {
+        id: booking.tour.id, name: booking.tour.name,
+        imageUrl: booking.tour.imageUrl ?? null,
+        startDate: departureDate, duration: booking.tour.duration ?? null,
+      },
+    };
+  }
+
+  // ─── Customer-facing queries ───────────────────────────────────────────────
+
+  async getMyBookings(userId: number) {
+    const bookings = await this.prisma.booking.findMany({
+      where: { userId, deletedAt: null },
+      select: {
+        id: true, bookingCode: true, status: true, paymentStatus: true,
+        paymentMethod: true, holdExpiresAt: true,
+        createdAt: true, numberOfPeople: true, totalPrice: true,
+        tour: { select: { id: true, name: true, tourCode: true, imageUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return bookings.map((b) => ({ ...b, totalPrice: Number(b.totalPrice) }));
+  }
+
+  async getMyBookingById(bookingId: number, userId: number) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, userId, deletedAt: null },
+      select: {
+        id: true, bookingCode: true, status: true, paymentStatus: true, paymentMethod: true,
+        holdExpiresAt: true,
+        createdAt: true, numberOfPeople: true, totalPrice: true, cancelReason: true,
+        cancelRequestedAt: true, cancelledAt: true, refundAmount: true, refundNote: true,
+        departureId: true,
+        tour: { select: { id: true, name: true, tourCode: true, imageUrl: true, duration: true, startDate: true } },
+        transactions: {
+          select: { id: true, gateway: true, transactionRef: true, amount: true, status: true, confirmedSource: true, confirmedAt: true, createdAt: true },
+          orderBy: { createdAt: 'desc' }, take: 5,
+        },
+        supportTickets: {
+          where: { category: 'payment' },
+          select: { id: true, status: true, subject: true, createdAt: true },
+          orderBy: { createdAt: 'desc' }, take: 3,
+        },
+      },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    const cancellationPolicy = await this.cancellationService.getCancellationPolicyForBooking(booking);
+    const base = this.toCustomerBookingDetail(booking, cancellationPolicy);
+    return {
+      ...base,
+      transactions: booking.transactions.map(t => ({ ...t, amount: Number(t.amount) })),
+      supportTickets: booking.supportTickets,
+    };
+  }
+
+  async findMyByBookingCode(bookingCode: string, userId: number) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { bookingCode, userId, deletedAt: null },
+      select: {
+        id: true, bookingCode: true, status: true, paymentStatus: true, paymentMethod: true,
+        holdExpiresAt: true,
+        createdAt: true, numberOfPeople: true, totalPrice: true, departureId: true,
+        user: { select: { fullName: true } },
+        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true } },
+      },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    return this.toETicketDto(booking);
+  }
+
+  async retryPayment(bookingId: number, userId: number) {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId }, include: { tour: true } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.userId !== userId) throw new BadRequestException('Khong co quyen truy cap booking nay');
+    if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID')
+      throw new BadRequestException('Booking nay khong o trang thai cho thanh toan');
+
+    const now = new Date();
+    let expiryTime = booking.holdExpiresAt ?? new Date(booking.createdAt.getTime() + PAYOS_HOLD_MINUTES * 60 * 1000);
+    if (expiryTime.getTime() <= now.getTime())
+      throw new BadRequestException('Booking da het han thanh toan. Vui long dat tour moi.');
+    if (booking.paymentMethod !== 'PAYOS') {
+      const departureDate = await this.cancellationService.resolveBookingDepartureDate(booking);
+      expiryTime = calculateBookingHoldExpiresAt({
+        paymentMethod: 'PAYOS',
+        departureDate,
+        now,
+      });
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { paymentMethod: 'PAYOS', holdExpiresAt: expiryTime },
+      });
+    }
+
+    const amountVND = Math.round(booking.totalPrice);
+    const description = `AH ${booking.bookingCode}`;
+    const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
+    const orderCode = Number(booking.id.toString() + timeSuffix);
+
+    let checkoutUrl: string;
+    try {
+      checkoutUrl = await this.paymentService.createPaymentLink(orderCode, amountVND, description);
+    } catch (payosError: unknown) {
+      if (isPayosDuplicateError(payosError)) {
+        this.logger.warn(`[RETRY] PayOS order #${orderCode} da ton tai, lay lai checkout URL.`);
+        const existing = await this.paymentService.getPaymentInfo(orderCode);
+        if (!existing?.id) throw new BadRequestException('Khong the lay lien ket thanh toan. Vui long dat tour moi.');
+        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
+      } else {
+        throw payosError;
+      }
+    }
+
+    this.logger.log(`[RETRY] Tao lai link thanh toan cho booking #${booking.id} (${booking.bookingCode})`);
+    return { checkoutUrl, expiresAt: expiryTime.toISOString() };
+  }
+
+  async findPublicByBookingCode(bookingCode: string, email: string) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { bookingCode, deletedAt: null },
+      select: {
+        id: true, bookingCode: true, status: true, paymentStatus: true,
+        paymentMethod: true, holdExpiresAt: true,
+        numberOfPeople: true, totalPrice: true, departureId: true,
+        contactInfo: true, passengers: true, discountAmount: true, voucherCode: true, createdAt: true,
+        user: { select: { fullName: true, email: true } },
+        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true, tourCode: true } },
+      },
+    });
+    if (!booking) throw new NotFoundException('Khong tim thay don dat tour');
+
+    const contactInfo = booking.contactInfo as { email?: string } | null;
+    const contactEmail = contactInfo?.email ? String(contactInfo.email) : null;
+    const userEmail = booking.user?.email;
+
+    if (
+      (!contactEmail || contactEmail.toLowerCase() !== email.toLowerCase()) &&
+      (!userEmail || userEmail.toLowerCase() !== email.toLowerCase())
+    ) {
+      throw new ForbiddenException('Thong tin xac thuc khong chinh xac');
+    }
+
+    return booking;
+  }
+
+  async publicRetryPayment(bookingCode: string, email: string) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { bookingCode, deletedAt: null },
+      include: { user: true, tour: { select: { startDate: true } } },
+    });
+    if (!booking) throw new NotFoundException('Khong tim thay don dat tour');
+
+    const contactInfo = booking.contactInfo as { email?: string } | null;
+    const contactEmail = contactInfo?.email ? String(contactInfo.email) : null;
+    const userEmail = booking.user?.email;
+
+    if (
+      (!contactEmail || contactEmail.toLowerCase() !== email.toLowerCase()) &&
+      (!userEmail || userEmail.toLowerCase() !== email.toLowerCase())
+    ) {
+      throw new ForbiddenException('Thong tin xac thuc khong chinh xac');
+    }
+
+    if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID')
+      throw new BadRequestException('Booking nay khong o trang thai cho thanh toan');
+
+    const now = new Date();
+    let expiryTime = booking.holdExpiresAt ?? new Date(booking.createdAt.getTime() + PAYOS_HOLD_MINUTES * 60 * 1000);
+    if (expiryTime.getTime() <= now.getTime())
+      throw new BadRequestException('Booking da het han thanh toan. Vui long dat tour moi.');
+    if (booking.paymentMethod !== 'PAYOS') {
+      const departureDate = await this.cancellationService.resolveBookingDepartureDate(booking);
+      expiryTime = calculateBookingHoldExpiresAt({
+        paymentMethod: 'PAYOS',
+        departureDate,
+        now,
+      });
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { paymentMethod: 'PAYOS', holdExpiresAt: expiryTime },
+      });
+    }
+
+    const amountVND = Math.round(booking.totalPrice);
+    const description = `AH ${booking.bookingCode}`;
+    const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
+    const orderCode = Number(booking.id.toString() + timeSuffix);
+
+    let checkoutUrl: string;
+    try {
+      checkoutUrl = await this.paymentService.createPaymentLink(orderCode, amountVND, description);
+    } catch (payosError: unknown) {
+      if (isPayosDuplicateError(payosError)) {
+        this.logger.warn(`[PUBLIC-RETRY] PayOS order #${orderCode} da ton tai, lay lai checkout URL.`);
+        const existing = await this.paymentService.getPaymentInfo(orderCode);
+        if (!existing?.id) throw new BadRequestException('Khong the lay lien ket thanh toan. Vui long dat tour moi.');
+        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
+      } else {
+        throw payosError;
+      }
+    }
+
+    this.logger.log(`[PUBLIC-RETRY] Tao lai link thanh toan cho booking #${booking.id} (${booking.bookingCode})`);
+    return { checkoutUrl, expiresAt: expiryTime.toISOString() };
+  }
+
+  // ─── Admin queries ─────────────────────────────────────────────────────────
+
+  async getAllBookings(
+    status?: string, paymentStatus?: string, search?: string,
+    dateFrom?: string, dateTo?: string, page = 1, limit = 10,
+    paymentMethod?: 'PAYOS' | 'IN_STORE',
+    needsReconciliation = false,
+  ) {
+    const where: Prisma.BookingWhereInput = { deletedAt: null };
+
+    if (status && status !== 'ALL') {
+      const normalizedStatus = status.toUpperCase();
+      if (!isBookingStatus(normalizedStatus)) throw new BadRequestException('Invalid booking status');
+      where.status = normalizedStatus as BookingStatus;
+    }
+    if (paymentStatus && paymentStatus !== 'ALL') {
+      const normalizedPaymentStatus = paymentStatus.toUpperCase();
+      if (!isPaymentStatus(normalizedPaymentStatus)) throw new BadRequestException('Invalid payment status');
+      where.paymentStatus = normalizedPaymentStatus as PaymentStatus;
+    }
+    // ── Filter mới: phương thức thanh toán ────────────────────────────────────
+    if (paymentMethod) {
+      where.paymentMethod = paymentMethod;
+    }
+    // ── Filter mới: chỉ đơn PayOS đang chờ đối soát (có support ticket payment open) ─
+    if (needsReconciliation) {
+      where.paymentMethod = 'PAYOS';
+      where.paymentStatus = { in: ['UNPAID', 'PROCESSING'] };
+      where.supportTickets = {
+        some: {
+          category: 'payment',
+          status: { in: ['NEW', 'IN_PROGRESS'] },
+        },
+      };
+    }
+    // ────────────────────────────────────────────────────────────────────────
+    if (search) {
+      where.OR = [
+        { bookingCode: { contains: search, mode: 'insensitive' } },
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+        { tour: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    if (dateFrom || dateTo) {
+      const createdAt: Prisma.DateTimeFilter<'Booking'> = {};
+      if (dateFrom) createdAt.gte = new Date(dateFrom);
+      if (dateTo) { const end = new Date(dateTo); end.setHours(23, 59, 59, 999); createdAt.lte = end; }
+      where.createdAt = createdAt;
+    }
+
+    const skip = (page - 1) * limit;
+    const [bookings, total] = await Promise.all([
+      this.prisma.booking.findMany({
+        where,
+        include: {
+          tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, destination: { select: { name: true } } } },
+          user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+          notifications: { where: { type: 'PAYMENT_REQUEST' }, orderBy: { createdAt: 'desc' }, take: 1 },
+          transactions: {
+            select: {
+              id: true, gateway: true, transactionRef: true, amount: true, status: true,
+              confirmedSource: true, confirmedById: true, confirmedAt: true,
+              confirmedNote: true, evidenceUrl: true, createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          },
+          supportTickets: {
+            where: { category: 'payment' },
+            select: { id: true, status: true, category: true, subject: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+          },
+        },
+        orderBy: { createdAt: 'desc' }, skip, take: limit,
+      }),
+      this.prisma.booking.count({ where }),
+    ]);
+
+    const [globalStats, paymentStats, revenueResult, assistedDraftStats] = await Promise.all([
+      this.prisma.booking.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { status: true } }),
+      this.prisma.booking.groupBy({ by: ['paymentStatus'], where: { deletedAt: null }, _count: { paymentStatus: true } }),
+      this.prisma.booking.aggregate({ where: { deletedAt: null, paymentStatus: 'PAID' }, _sum: { totalPrice: true }, _count: { id: true } }),
+      this.prisma.assistedBookingDraft.groupBy({ by: ['status'], _count: { status: true } }),
+    ]);
+
+    const statsMap: Record<string, number> = {};
+    for (const s of globalStats) statsMap[s.status] = s._count.status;
+    const paymentMap: Record<string, number> = {};
+    for (const s of paymentStats) paymentMap[s.paymentStatus] = s._count.paymentStatus;
+    const assistedDraftMap: Record<string, number> = {};
+    for (const s of assistedDraftStats) assistedDraftMap[s.status] = s._count.status;
+
+    return {
+      bookings: bookings.map((b) => ({ ...b, totalPrice: Number(b.totalPrice), unitPriceAtBooking: Number(b.unitPriceAtBooking), discountAmount: Number(b.discountAmount) })),
+      stats: {
+        pending: statsMap['PENDING'] || 0, confirmed: statsMap['CONFIRMED'] || 0,
+        cancelRequested: statsMap['CANCEL_REQUESTED'] || 0, cancelled: statsMap['CANCELLED'] || 0,
+        total: Object.values(statsMap).reduce((a, b) => a + b, 0),
+        totalRevenue: Number(revenueResult._sum.totalPrice || 0), paidCount: revenueResult._count.id,
+        unpaidCount: paymentMap['UNPAID'] || 0, processingCount: paymentMap['PROCESSING'] || 0,
+        failedPaymentCount: paymentMap['FAILED'] || 0,
+        assistedDraftPending: assistedDraftMap['PENDING_APPROVAL'] || 0,
+        assistedDraftNeedsRevision: assistedDraftMap['NEEDS_REVISION'] || 0,
+      },
+      meta: { totalItems: total, totalPages: Math.ceil(total / limit), currentPage: page, itemsPerPage: limit },
+    };
+  }
+
+  async getBookingById(bookingId: number) {
+    return this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { user: true, tour: true },
+    });
+  }
+
+  async findByBookingCode(bookingCode: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { bookingCode },
+      include: { tour: true, user: true },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    return booking;
+  }
+
+  async proxyImage(imageUrl: string, res: Response) {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<ProxiedStream>(imageUrl, { responseType: 'stream' }),
+      );
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      const contentType: unknown = response.headers['content-type'];
+      res.setHeader('Content-Type', typeof contentType === 'string' ? contentType : 'application/octet-stream');
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      response.data.pipe(res);
+    } catch (error) {
+      this.logger.error('Loi khi proxy anh:', getErrorMessage(error));
+      throw new NotFoundException('Failed to proxy image');
+    }
+  }
+}

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import ArticleDrawer, { type Article } from '@/components/admin/ArticleDrawer';
 import AdminPagination from '@/components/admin/AdminPagination';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 import { API_BASE_URL } from '@/lib/constants';
@@ -361,6 +362,23 @@ export default function ArticleManagementPage() {
   }, [isAdmin, trashPage, trashSearch]);
 
   useEffect(() => { if (showTrash) fetchTrash(); }, [showTrash, fetchTrash]);
+
+  const refreshArticleData = useCallback(async () => {
+    if (showTrash) {
+      await Promise.all([fetchTrash(), fetchStats()]);
+      return;
+    }
+    await Promise.all([fetchArticles(), fetchStats()]);
+  }, [fetchArticles, fetchStats, fetchTrash, showTrash]);
+
+  useAdminAutoRefresh({
+    intervalMs: 90 * 1000,
+    pause: Boolean(
+      drawerMode || deleteTarget || hardDeleteTarget || reviewTarget || submitTarget ||
+      isDeleting || isHardDeleting || isRestoring || isReviewing || isSubmitting
+    ),
+    onRefresh: refreshArticleData,
+  });
 
   const handleRestore = async (id: number, title: string) => {
     setIsRestoring(id);

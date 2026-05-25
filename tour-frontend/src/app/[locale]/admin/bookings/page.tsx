@@ -29,7 +29,8 @@ interface Booking {
   id: number;
   bookingCode: string;
   status: 'PENDING' | 'CONFIRMED' | 'CANCEL_REQUESTED' | 'CANCELLED';
-  paymentStatus: 'UNPAID' | 'PAID' | 'FAILED';
+  paymentStatus: 'UNPAID' | 'PAID' | 'FAILED' | 'PROCESSING';
+  paymentMethod: 'PAYOS' | 'IN_STORE';
   numberOfPeople: number;
   totalPrice: number;
   unitPriceAtBooking: number;
@@ -41,6 +42,8 @@ interface Booking {
   refundAmount?: number | null;
   refundedAt?: string | null;
   notifications?: BookingNotification[];
+  transactions?: PaymentTransaction[];
+  supportTickets?: { id: number; status: string; category: string; subject?: string | null; createdAt: string }[];
 }
 
 interface BookingNotification {
@@ -54,6 +57,20 @@ interface BookingNotification {
   qrCodeUrl?: string | null;
   errorMessage?: string | null;
   sentAt?: string | null;
+  createdAt: string;
+}
+
+interface PaymentTransaction {
+  id: number;
+  gateway: string;
+  transactionRef?: string | null;
+  amount: number;
+  status: string;
+  confirmedSource?: string | null;
+  confirmedById?: number | null;
+  confirmedAt?: string | null;
+  confirmedNote?: string | null;
+  evidenceUrl?: string | null;
   createdAt: string;
 }
 
@@ -77,6 +94,12 @@ interface Meta {
   totalPages: number;
   currentPage: number;
   itemsPerPage: number;
+}
+
+interface BookingListPayload {
+  bookings?: Booking[];
+  stats?: Stats;
+  meta?: Meta;
 }
 
 type AssistedDraftStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'NEEDS_REVISION' | 'REJECTED' | 'CONVERTED';
@@ -313,10 +336,27 @@ const STATUS_CFG: Record<string, { label: string; dot: string; badge: string; ic
 };
 
 const PAY_CFG: Record<string, { label: string; badge: string; icon: string }> = {
-  PAID:   { label: 'Đã thanh toán',   badge: 'bg-blue-50 text-blue-700 border-blue-200',       icon: 'paid'            },
-  UNPAID: { label: 'Chưa thanh toán', badge: 'bg-orange-50 text-orange-600 border-orange-200', icon: 'pending_actions' },
-  FAILED: { label: 'Thất bại',        badge: 'bg-red-50 text-red-600 border-red-200',           icon: 'money_off'       },
+  PAID:       { label: 'Đã thanh toán',   badge: 'bg-blue-50 text-blue-700 border-blue-200',         icon: 'paid'            },
+  UNPAID:     { label: 'Chưa thanh toán', badge: 'bg-orange-50 text-orange-600 border-orange-200',   icon: 'pending_actions' },
+  FAILED:     { label: 'Thất bại',        badge: 'bg-red-50 text-red-600 border-red-200',             icon: 'money_off'       },
+  PROCESSING: { label: 'Đang xử lý',     badge: 'bg-purple-50 text-purple-700 border-purple-200',   icon: 'sync'            },
 };
+
+const PAYMENT_METHOD_CFG: Record<string, { label: string; badge: string; icon: string }> = {
+  PAYOS:    { label: 'PayOS',     badge: 'bg-sky-50 text-sky-700 border-sky-200',         icon: 'account_balance' },
+  IN_STORE: { label: 'Tại quầy', badge: 'bg-teal-50 text-teal-700 border-teal-200',     icon: 'storefront'      },
+};
+
+const CONFIRMED_SOURCE_LABEL: Record<string, string> = {
+  PAYOS_WEBHOOK:               'Webhook tự động',
+  PAYOS_RETURN_SYNC:           'Xác nhận PayOS',
+  PAYOS_MANUAL_RECONCILIATION: 'Đối soát thủ công',
+  IN_STORE_CASH:               'Tiền mặt',
+  IN_STORE_BANK_TRANSFER:      'Chuyển khoản',
+  IN_STORE_CARD_POS:           'Quẹt thẻ POS',
+  ADMIN_OVERRIDE:              'Admin override',
+};
+
 
 // ─── Skeleton Row ─────────────────────────────────────────────────────────────
 
@@ -370,48 +410,93 @@ function BookingDetailModal({
   const subtotalBeforeDiscount = booking.totalPrice + discountAmount;
   const hasDiscount = discountAmount > 0;
 
-  // Confirm dialog state
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [confirmError, setConfirmError] = useState('');
+  const mc = PAYMENT_METHOD_CFG[booking.paymentMethod] ?? PAYMENT_METHOD_CFG.PAYOS;
+
+  // ── IN_STORE form state
+  const [inStoreMethod, setInStoreMethod] = useState<'CASH'|'BANK_TRANSFER'|'CARD_POS'>('CASH');
+  const [inStoreNote, setInStoreNote] = useState('');
+  const [inStoreRef, setInStoreRef] = useState('');
+  const [isConfirmingInStore, setIsConfirmingInStore] = useState(false);
+  const [showInStoreForm, setShowInStoreForm] = useState(false);
+
+  // ── PayOS reconcile form state
+  const [showReconcileForm, setShowReconcileForm] = useState(false);
+  const [reconcileTxRef, setReconcileTxRef] = useState('');
+  const [reconcileNote, setReconcileNote] = useState('');
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [isSyncingPayos, setIsSyncingPayos] = useState(false);
+
+  const [actionError, setActionError] = useState('');
+
+  const isPending = booking.status === 'PENDING';
+  const isUnpaidOrProcessing = booking.paymentStatus === 'UNPAID' || booking.paymentStatus === 'PROCESSING';
+  const openPaymentTicket = booking.supportTickets?.find(t => t.category === 'payment' && ['NEW','IN_PROGRESS'].includes(t.status));
 
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showConfirmDialog) setShowConfirmDialog(false);
-        else onClose();
+        if (showInStoreForm) { setShowInStoreForm(false); return; }
+        if (showReconcileForm) { setShowReconcileForm(false); return; }
+        onClose();
       }
     };
     window.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
     return () => { window.removeEventListener('keydown', handler); document.body.style.overflow = ''; };
-  }, [onClose, showConfirmDialog]);
+  }, [onClose, showInStoreForm, showReconcileForm]);
 
-  const handleConfirmManual = async () => {
-    setIsConfirming(true);
-    setConfirmError('');
+  const handleConfirmInStore = async () => {
+    setIsConfirmingInStore(true); setActionError('');
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/confirm-manual`, { method: 'PATCH' });
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/payments/in-store/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ collectionMethod: inStoreMethod, receiptRef: inStoreRef || undefined, note: inStoreNote || undefined }),
+      });
       const json = await res.json();
-      if (!res.ok) {
-        const msg = json?.message ?? 'Xác nhận thất bại';
-        throw new Error(Array.isArray(msg) ? msg.join(', ') : String(msg));
-      }
-      // TransformInterceptor: json.data = updated booking
-      const updated = json?.data ?? json;
-      onConfirmSuccess({ ...booking, ...updated });
-      setShowConfirmDialog(false);
-    } catch (e: unknown) {
-      setConfirmError(getErrorMessage(e, 'Có lỗi xảy ra'));
-    } finally {
-      setIsConfirming(false);
-    }
+      if (!res.ok) throw new Error(json?.message ?? 'Xác nhận thất bại');
+      onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' });
+      setShowInStoreForm(false);
+    } catch (e: unknown) { setActionError(getErrorMessage(e, 'Có lỗi xảy ra')); }
+    finally { setIsConfirmingInStore(false); }
+  };
+
+  const handleSyncPayos = async () => {
+    setIsSyncingPayos(true); setActionError('');
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/payments/payos/sync`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message ?? 'Sync thất bại');
+      const data = json?.data ?? json;
+      if (data?.synced) onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' });
+      else setActionError(data?.message ?? 'PayOS chưa ghi nhận thanh toán.');
+    } catch (e: unknown) { setActionError(getErrorMessage(e, 'Không kết nối được PayOS')); }
+    finally { setIsSyncingPayos(false); }
+  };
+
+  const handleReconcile = async () => {
+    if (!reconcileTxRef.trim()) { setActionError('Mã giao dịch là bắt buộc'); return; }
+    if (!reconcileNote.trim() || reconcileNote.trim().length < 5) { setActionError('Ghi chú tối thiểu 5 ký tự'); return; }
+    setIsReconciling(true); setActionError('');
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/payments/payos/reconcile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionRef: reconcileTxRef.trim(), amount: booking.totalPrice, note: reconcileNote.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message ?? 'Đối soát thất bại');
+      onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' });
+      setShowReconcileForm(false);
+    } catch (e: unknown) { setActionError(getErrorMessage(e, 'Có lỗi xảy ra')); }
+    finally { setIsReconciling(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="bk-modal-title">
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={showConfirmDialog ? undefined : onClose} />
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={showInStoreForm || showReconcileForm ? undefined : onClose} />
+
 
       <div className="relative bg-surface rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden overscroll-contain animate-fade-slide-up">
 
@@ -600,82 +685,244 @@ function BookingDetailModal({
               </section>
             )}
 
-          </div>
-        </div>
-
-        {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-outline-variant/10 bg-surface-container-lowest/50 flex flex-col-reverse items-stretch justify-end shrink-0 gap-3 sm:flex-row sm:items-center">
-          {/* Nút xác nhận thủ công — chỉ hiển thị khi đơn PENDING */}
-          {booking.status === 'PENDING' && (
-            <button
-              onClick={() => setShowConfirmDialog(true)}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 active:scale-[0.98] transition-[background-color,box-shadow,transform] shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            >
-              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-              Xác nhận & Thu tiền thủ công
-            </button>
-          )}
-
-          <button onClick={onClose}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary">
-            Đóng
-          </button>
-        </div>
-      </div>
-
-      {/* ── Confirm Dialog (overlay on top of modal) ── */}
-      {showConfirmDialog && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm rounded-3xl" />
-          <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-fade-slide-up">
-
-            {/* Warning icon */}
-            <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-amber-500 text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
-            </div>
-
-            <h3 className="text-lg font-bold text-on-surface text-center mb-2">Xác nhận thủ công?</h3>
-            <p className="text-sm text-on-surface-variant text-center leading-relaxed mb-1">
-              Thao tác này sẽ đánh dấu đơn
-            </p>
-            <p className="font-mono text-sm font-bold text-primary text-center mb-3">{booking.bookingCode}</p>
-            <p className="text-sm text-on-surface-variant text-center leading-relaxed mb-5">
-              là <strong className="text-emerald-600">ĐÃ XÁC NHẬN</strong> và <strong className="text-blue-600">ĐÃ THANH TOÁN</strong>.<br />
-              Chỉ thực hiện khi bạn chắc chắn khách hàng đã thanh toán thực tế.
-            </p>
-
-            {confirmError && (
-              <div className="mb-4 px-4 py-3 bg-error/10 text-error rounded-xl text-sm font-medium border border-error/20">
-                {confirmError}
-              </div>
+            {/* ── Payment Timeline ── */}
+            {booking.transactions && booking.transactions.length > 0 && (
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-[14px]">timeline</span>
+                  Lịch sử giao dịch
+                </h3>
+                <div className="space-y-2">
+                  {booking.transactions.map((tx) => {
+                    const isSuccess = tx.status === 'SUCCESS';
+                    const isFailed = tx.status === 'FAILED';
+                    const srcLabel = CONFIRMED_SOURCE_LABEL[tx.confirmedSource ?? ''] ?? tx.confirmedSource ?? null;
+                    return (
+                      <div key={tx.id} className={`flex items-start gap-3 p-3 rounded-xl border text-xs ${isSuccess ? 'bg-emerald-50 border-emerald-100' : isFailed ? 'bg-red-50 border-red-100' : 'bg-surface-container border-outline-variant/10'}`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${isSuccess ? 'bg-emerald-100' : isFailed ? 'bg-red-100' : 'bg-amber-100'}`}>
+                          <span className={`material-symbols-outlined text-[14px] ${isSuccess ? 'text-emerald-600' : isFailed ? 'text-red-500' : 'text-amber-600'}`} style={{ fontVariationSettings: "'FILL' 1" }}>
+                            {isSuccess ? 'check_circle' : isFailed ? 'cancel' : 'pending'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-on-surface">{tx.gateway}</span>
+                            <span className={`font-bold ${isSuccess ? 'text-emerald-600' : isFailed ? 'text-red-500' : 'text-amber-600'}`}>{fmt(tx.amount)}</span>
+                          </div>
+                          {tx.transactionRef && <p className="text-on-surface-variant/60 font-mono mt-0.5 truncate">Ref: {tx.transactionRef}</p>}
+                          {srcLabel && (
+                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-white/70 border border-outline-variant/20 text-on-surface-variant font-medium">
+                              <span className="material-symbols-outlined text-[11px]">info</span>{srcLabel}
+                            </span>
+                          )}
+                          {tx.confirmedNote && <p className="mt-1 text-on-surface-variant/70 italic line-clamp-2">{tx.confirmedNote}</p>}
+                          <p className="mt-1 text-on-surface-variant/50">{fmtDateTime(tx.confirmedAt ?? tx.createdAt)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
             )}
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowConfirmDialog(false); setConfirmError(''); }}
-                disabled={isConfirming}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors disabled:opacity-50 outline-none"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                onClick={handleConfirmManual}
-                disabled={isConfirming}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-              >
-                {isConfirming ? (
-                  <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span> Đang xử lý…</>
-                ) : (
-                  <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span> Xác nhận ngay</>
-                )}
-              </button>
-            </div>
+            {/* ── Support Tickets ── */}
+            {booking.supportTickets && booking.supportTickets.length > 0 && (
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-[14px]">support_agent</span>
+                  Ticket hỗ trợ thanh toán
+                </h3>
+                <div className="space-y-2">
+                  {booking.supportTickets.map((ticket) => {
+                    const isOpen = ['NEW', 'IN_PROGRESS'].includes(ticket.status);
+                    return (
+                      <div key={ticket.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-xs ${isOpen ? 'bg-purple-50 border-purple-100' : 'bg-surface-container border-outline-variant/10'}`}>
+                        <span className={`material-symbols-outlined text-[16px] ${isOpen ? 'text-purple-600 animate-pulse' : 'text-outline'}`}>
+                          {isOpen ? 'support_agent' : 'task_alt'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-on-surface truncate">{ticket.subject ?? `Ticket #${ticket.id}`}</p>
+                          <p className="text-on-surface-variant/50 mt-0.5">{fmtDateTime(ticket.createdAt)}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] border ${isOpen ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                          {ticket.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
           </div>
         </div>
-      )}
+
+
+        {/* ── Footer — context-aware theo paymentMethod ── */}
+        <div className="px-6 py-4 border-t border-outline-variant/10 bg-surface-container-lowest/50 shrink-0">
+
+          {/* Error banner */}
+          {actionError && (
+            <div className="mb-3 px-4 py-2.5 bg-error/10 text-error rounded-xl text-sm font-medium border border-error/20 flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">error</span>
+              {actionError}
+              <button onClick={() => setActionError('')} className="ml-auto opacity-60 hover:opacity-100"><span className="material-symbols-outlined text-sm">close</span></button>
+            </div>
+          )}
+
+          {/* ── CASE: ĐÃ THANH TOÁN ── */}
+          {booking.paymentStatus === 'PAID' ? (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-emerald-700">
+                <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                <div>
+                  <p className="text-sm font-bold">Đã thanh toán</p>
+                  {booking.transactions?.[0]?.confirmedSource && (
+                    <p className="text-xs text-emerald-600/70">
+                      {CONFIRMED_SOURCE_LABEL[booking.transactions[0].confirmedSource] ?? booking.transactions[0].confirmedSource}
+                      {booking.transactions[0].confirmedAt && ` · ${fmtDateTime(booking.transactions[0].confirmedAt)}`}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button onClick={onClose} className="px-5 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
+            </div>
+          ) : isPending && isUnpaidOrProcessing ? (
+            /* ── CASE: PENDING + chờ thanh toán ── */
+            <div className="space-y-3">
+
+              {/* Badge phương thức thanh toán */}
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${mc.badge}`}>
+                  <span className="material-symbols-outlined text-[13px]">{mc.icon}</span>
+                  {mc.label}
+                </span>
+                {booking.paymentStatus === 'PROCESSING' && openPaymentTicket && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                    <span className="material-symbols-outlined text-[13px]">support_agent</span>
+                    Ticket #{openPaymentTicket.id} đang mở
+                  </span>
+                )}
+              </div>
+
+              {/* IN_STORE actions */}
+              {booking.paymentMethod === 'IN_STORE' && !showInStoreForm && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => { setShowInStoreForm(true); setActionError(''); }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  >
+                    <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>point_of_sale</span>
+                    Ghi nhận thu tại quầy
+                  </button>
+                  <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
+                </div>
+              )}
+
+              {/* IN_STORE form */}
+              {booking.paymentMethod === 'IN_STORE' && showInStoreForm && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
+                  <p className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">storefront</span>
+                    Ghi nhận thu tại cửa hàng
+                  </p>
+                  <div>
+                    <label className="text-xs font-semibold text-emerald-700 mb-1.5 block">Cách thu tiền</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {([['CASH','Tiền mặt','payments'],['BANK_TRANSFER','Chuyển khoản','account_balance'],['CARD_POS','Thẻ POS','credit_card']] as const).map(([val,lbl,ico]) => (
+                        <button key={val} onClick={() => setInStoreMethod(val)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${inStoreMethod === val ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50'}`}>
+                          <span className="material-symbols-outlined text-[14px]">{ico}</span>{lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-emerald-700 mb-1 block">Mã biên nhận / ghi chú (tùy chọn)</label>
+                    <input value={inStoreRef} onChange={e => setInStoreRef(e.target.value)} placeholder="VD: BILL-2024-001..."
+                      className="w-full bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-emerald-700 mb-1 block">Ghi chú nội bộ (tùy chọn)</label>
+                    <input value={inStoreNote} onChange={e => setInStoreNote(e.target.value)} placeholder="Ghi chú thêm..."
+                      className="w-full bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-400" />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setShowInStoreForm(false); setActionError(''); }}
+                      className="flex-1 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">
+                      Hủy
+                    </button>
+                    <button onClick={handleConfirmInStore} disabled={isConfirmingInStore}
+                      className="flex-1 py-2 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2 outline-none">
+                      {isConfirmingInStore ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang lưu…</> : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>Xác nhận đã thu</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* PayOS actions */}
+              {booking.paymentMethod === 'PAYOS' && !showReconcileForm && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleSyncPayos} disabled={isSyncingPayos}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-sky-700 bg-sky-50 border border-sky-200 hover:bg-sky-100 disabled:opacity-60 transition-colors outline-none">
+                      <span className={`material-symbols-outlined text-[16px] ${isSyncingPayos ? 'animate-spin' : ''}`}>sync</span>
+                      {isSyncingPayos ? 'Đang kiểm tra…' : 'Kiểm tra PayOS'}
+                    </button>
+                    <button onClick={() => { setShowReconcileForm(true); setActionError(''); }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors outline-none">
+                      <span className="material-symbols-outlined text-[16px]">find_in_page</span>
+                      Đối soát thủ công
+                    </button>
+                    <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
+                  </div>
+                </div>
+              )}
+
+              {/* PayOS reconcile form */}
+              {booking.paymentMethod === 'PAYOS' && showReconcileForm && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+                  <p className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">receipt_long</span>
+                    Đối soát thanh toán thủ công
+                  </p>
+                  <div>
+                    <label className="text-xs font-semibold text-amber-700 mb-1 block">Mã tham chiếu giao dịch <span className="text-error">*</span></label>
+                    <input value={reconcileTxRef} onChange={e => setReconcileTxRef(e.target.value)} placeholder="VD: VCB12345678..."
+                      className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-amber-400 font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-amber-700 mb-1 block">Ghi chú xác nhận <span className="text-error">*</span></label>
+                    <textarea value={reconcileNote} onChange={e => setReconcileNote(e.target.value)} rows={2} placeholder="VD: Đã xem ảnh CK khớp với hóa đơn, xác nhận thu đủ 5.500.000đ..."
+                      className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-amber-400 resize-none" />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setShowReconcileForm(false); setActionError(''); }}
+                      className="flex-1 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">
+                      Hủy
+                    </button>
+                    <button onClick={handleReconcile} disabled={isReconciling}
+                      className="flex-1 py-2 rounded-xl text-sm font-bold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2 outline-none">
+                      {isReconciling ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang lưu…</> : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>task_alt</span>Xác nhận đối soát</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          ) : (
+            /* ── CASE: Đã xác nhận hoặc huỷ ── */
+            <div className="flex justify-end">
+              <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
+            </div>
+          )}
+
+        </div>
+      </div>
     </div>
   );
 }
+
 
 // ─── Cancel Request Panel ─────────────────────────────────────────────────────
 interface CancelRequest {
@@ -2210,6 +2457,8 @@ export default function BookingManagementPage() {
   const [search, setSearch] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [paymentFilter, setPaymentFilter] = useState('');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('');
+  const [needsReconciliation, setNeedsReconciliation] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -2219,8 +2468,11 @@ export default function BookingManagementPage() {
   // UI state
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [hasFreshData, setHasFreshData] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastBookingSignature = useRef('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Debounce search
@@ -2241,34 +2493,121 @@ export default function BookingManagementPage() {
     if (debouncedSearch) qs.set('search', debouncedSearch);
     if (statusFilter) qs.set('status', statusFilter);
     if (paymentFilter) qs.set('paymentStatus', paymentFilter);
+    if (paymentMethodFilter) qs.set('paymentMethod', paymentMethodFilter);
+    if (needsReconciliation) qs.set('needsReconciliation', 'true');
     if (dateFrom) qs.set('dateFrom', dateFrom);
     if (dateTo) qs.set('dateTo', dateTo);
     Object.entries(overrides).forEach(([k, v]) => qs.set(k, v));
     return qs.toString();
-  }, [debouncedSearch, statusFilter, paymentFilter, dateFrom, dateTo]);
+  }, [debouncedSearch, statusFilter, paymentFilter, paymentMethodFilter, needsReconciliation, dateFrom, dateTo]);
+
+  const buildBookingSignature = useCallback((payload: BookingListPayload) => JSON.stringify({
+    total: payload.meta?.totalItems ?? 0,
+    stats: payload.stats ? {
+      pending: payload.stats.pending,
+      confirmed: payload.stats.confirmed,
+      cancelRequested: payload.stats.cancelRequested,
+      cancelled: payload.stats.cancelled,
+      unpaidCount: payload.stats.unpaidCount,
+      processingCount: payload.stats.processingCount,
+    } : null,
+    rows: (payload.bookings ?? []).map(booking => ({
+      id: booking.id,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      createdAt: booking.createdAt,
+      latestPaymentRequest: booking.notifications?.[0]
+        ? `${booking.notifications[0].id}:${booking.notifications[0].status}`
+        : '',
+    })),
+  }), []);
+
+  const getBookingsPayload = useCallback(async (): Promise<BookingListPayload> => {
+    const qs = buildQs({ page: String(page), limit: String(pageSize) });
+    const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/all?${qs}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error();
+    return json?.data ?? json;
+  }, [buildQs, page, pageSize]);
 
   // Fetch bookings
   const fetchBookings = useCallback(async () => {
     setIsLoading(true);
     try {
-      const qs = buildQs({ page: String(page), limit: String(pageSize) });
-
-      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/all?${qs}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error();
-      const payload = json?.data ?? json;
+      const payload = await getBookingsPayload();
       setBookings(payload.bookings ?? []);
       if (payload.stats) setStats(payload.stats);
       if (payload.meta) setMeta(payload.meta);
+      lastBookingSignature.current = buildBookingSignature(payload);
+      setHasFreshData(false);
+      setLastSyncedAt(new Date());
     } catch {
       showToast('Lỗi tải danh sách đặt tour', false);
     } finally {
       setIsLoading(false);
     }
-  }, [buildQs, page, pageSize, showToast]);
+  }, [buildBookingSignature, getBookingsPayload, showToast]);
 
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
+
+  useEffect(() => {
+    const checkForFreshData = async () => {
+      if (document.visibilityState !== 'visible' || selectedBooking) return;
+
+      try {
+        const payload = await getBookingsPayload();
+        const nextSignature = buildBookingSignature(payload);
+        if (!lastBookingSignature.current) {
+          lastBookingSignature.current = nextSignature;
+          return;
+        }
+        if (nextSignature !== lastBookingSignature.current) {
+          setHasFreshData(true);
+        }
+      } catch {
+        // Background refresh is best-effort; keep the current table stable.
+      }
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') void checkForFreshData();
+    };
+
+    const intervalId = window.setInterval(checkForFreshData, 30 * 1000);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [buildBookingSignature, getBookingsPayload, selectedBooking]);
+
+  // ── Payment stats (Phase 3) ──────────────────────────────────────────────
+  type PaymentStatBreakdown = { source: string; revenue: number; count: number; percentage: number };
+  type PaymentStats = {
+    totalRevenue: number; totalCount: number;
+    breakdown: PaymentStatBreakdown[];
+    byGroup: Record<string, { revenue: number; percentage: number }>;
+  };
+  const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
+  const [statsDateFrom, setStatsDateFrom] = useState('');
+  const [statsDateTo, setStatsDateTo] = useState('');
+
+  const fetchPaymentStats = useCallback(async () => {
+    try {
+      const qs = new URLSearchParams();
+      if (statsDateFrom) qs.set('dateFrom', statsDateFrom);
+      if (statsDateTo) qs.set('dateTo', statsDateTo);
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/payment-stats?${qs}`);
+      const json = await res.json();
+      if (res.ok) setPaymentStats(json?.data ?? null);
+    } catch { /* non-critical */ }
+  }, [statsDateFrom, statsDateTo]);
+
+  useEffect(() => { fetchPaymentStats(); }, [fetchPaymentStats]);
 
   // Handle manual confirm success
   const handleConfirmSuccess = (updated: Booking) => {
@@ -2346,9 +2685,10 @@ export default function BookingManagementPage() {
 
   const resetFilters = () => {
     setSearch(''); setStatusFilter(''); setPaymentFilter('');
+    setPaymentMethodFilter(''); setNeedsReconciliation(false);
     setDateFrom(''); setDateTo(''); setPage(1);
   };
-  const hasFilter = !!(search || statusFilter || paymentFilter || dateFrom || dateTo);
+  const hasFilter = !!(search || statusFilter || paymentFilter || paymentMethodFilter || needsReconciliation || dateFrom || dateTo);
 
   const copyPaymentRequest = async (booking: Booking) => {
     const latest = booking.notifications?.[0];
@@ -2455,6 +2795,20 @@ export default function BookingManagementPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {hasFreshData && (
+            <button
+              onClick={fetchBookings}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <span className="material-symbols-outlined text-[18px]">fiber_new</span>
+              Có dữ liệu mới
+            </button>
+          )}
+          {lastSyncedAt && !hasFreshData && (
+            <span className="hidden xl:inline text-xs font-medium text-on-surface-variant">
+              Cập nhật {lastSyncedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
           {/* Export button */}
           <button
             id="export-bookings-btn"
@@ -2505,6 +2859,92 @@ export default function BookingManagementPage() {
         ))}
       </div>
 
+      {/* ── Nguồn Doanh Thu (Phase 3) ─────────────────────── */}
+      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm p-5 mb-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>donut_small</span>
+            <h2 className="text-sm font-bold text-on-surface">Nguồn Doanh Thu</h2>
+            {paymentStats && (
+              <span className="text-xs text-on-surface-variant">
+                · {paymentStats.totalCount} giao dịch · {fmtCompact(paymentStats.totalRevenue)}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="date" value={statsDateFrom} onChange={e => setStatsDateFrom(e.target.value)}
+              className="bg-surface-container-low border border-outline-variant/15 rounded-lg py-1.5 px-2.5 text-xs text-on-surface outline-none focus-visible:ring-1 focus-visible:ring-primary" />
+            <span className="text-xs text-on-surface-variant">–</span>
+            <input type="date" value={statsDateTo} onChange={e => setStatsDateTo(e.target.value)}
+              className="bg-surface-container-low border border-outline-variant/15 rounded-lg py-1.5 px-2.5 text-xs text-on-surface outline-none focus-visible:ring-1 focus-visible:ring-primary" />
+            {(statsDateFrom || statsDateTo) && (
+              <button onClick={() => { setStatsDateFrom(''); setStatsDateTo(''); }}
+                className="text-xs text-error hover:underline">
+                Xóa
+              </button>
+            )}
+          </div>
+        </div>
+
+        {paymentStats && paymentStats.totalRevenue > 0 ? (
+          <div className="space-y-3">
+            {/* Group summary */}
+            <div className="grid grid-cols-3 gap-3 mb-2">
+              {[
+                { key: 'IN_STORE', label: 'Tại quầy', icon: 'storefront', color: 'teal' },
+                { key: 'PAYOS',    label: 'PayOS',    icon: 'account_balance', color: 'sky' },
+                { key: 'OTHER',    label: 'Khác',     icon: 'more_horiz', color: 'slate' },
+              ].map(({ key, label, icon, color }) => {
+                const g = paymentStats.byGroup[key] ?? { revenue: 0, percentage: 0 };
+                const colorMap: Record<string, string> = {
+                  teal:  'bg-teal-50 border-teal-100 text-teal-700',
+                  sky:   'bg-sky-50 border-sky-100 text-sky-700',
+                  slate: 'bg-slate-50 border-slate-100 text-slate-600',
+                };
+                return (
+                  <div key={key} className={`rounded-xl border p-3 ${colorMap[color]}`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="material-symbols-outlined text-[14px]">{icon}</span>
+                      <span className="text-[11px] font-bold">{label}</span>
+                    </div>
+                    <p className="text-base font-extrabold">{fmtCompact(g.revenue)}</p>
+                    <p className="text-[10px] opacity-70 mt-0.5">{g.percentage}%</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Breakdown bars */}
+            <div className="space-y-2">
+              {paymentStats.breakdown.map((row) => {
+                const srcLabel = CONFIRMED_SOURCE_LABEL[row.source] ?? row.source;
+                const isPayos = row.source.startsWith('PAYOS');
+                const barColor = isPayos ? 'bg-sky-400' : row.source.startsWith('IN_STORE') ? 'bg-teal-400' : 'bg-slate-300';
+                return (
+                  <div key={row.source}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-semibold text-on-surface">{srcLabel}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-on-surface-variant">{row.count} giao dịch</span>
+                        <span className="font-bold text-on-surface">{fmt(row.revenue)}</span>
+                        <span className="text-on-surface-variant w-10 text-right">{row.percentage}%</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-surface-container rounded-full h-2 overflow-hidden">
+                      <div className={`h-2 rounded-full transition-all ${barColor}`} style={{ width: `${row.percentage}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-on-surface-variant text-center py-4">
+            {paymentStats ? 'Chưa có giao dịch nào trong kỳ.' : 'Đang tải…'}
+          </p>
+        )}
+      </div>
+
       {/* ── Filters ───────────────────────────────────────────── */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm p-4 mb-5">
         <div className="flex flex-wrap gap-3 items-center">
@@ -2543,8 +2983,28 @@ export default function BookingManagementPage() {
               <option value="">Tất cả thanh toán</option>
               <option value="PAID">Đã thanh toán</option>
               <option value="UNPAID">Chưa thanh toán</option>
+              <option value="PROCESSING">Đang xử lý</option>
               <option value="FAILED">Thất bại</option>
             </select>
+
+            {/* Payment Method filter */}
+            <label htmlFor="bk-method" className="sr-only">Lọc phương thức</label>
+            <select id="bk-method" value={paymentMethodFilter}
+              onChange={e => { setPaymentMethodFilter(e.target.value); setPage(1); }}
+              className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm text-on-surface appearance-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors">
+              <option value="">Tất cả phương thức</option>
+              <option value="PAYOS">PayOS</option>
+              <option value="IN_STORE">Tại quầy</option>
+            </select>
+
+            {/* Needs reconciliation toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-2.5 rounded-xl border border-outline-variant/15 bg-surface-container-low hover:bg-surface-container transition-colors">
+              <input type="checkbox" checked={needsReconciliation}
+                onChange={e => { setNeedsReconciliation(e.target.checked); setPage(1); }}
+                className="w-4 h-4 accent-primary" />
+              <span className="text-sm text-on-surface whitespace-nowrap">Cần đối soát</span>
+              {needsReconciliation && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
+            </label>
 
             {/* Date range */}
             <div className="flex items-center gap-1.5">
@@ -2584,9 +3044,9 @@ export default function BookingManagementPage() {
             <thead>
               <tr className="border-b border-outline-variant/15 bg-surface-container/40">
                 {(() => {
-                  const baseHeaders = ['Mã Đặt Tour', 'Khách Hàng', 'Tour', 'Giá Trị', 'Trạng Thái'];
-                  const tailHeaders = statusFilter === 'CANCELLED' 
-                    ? ['Tiền Đã Hoàn', 'Ngày Hoàn', 'Thao Tác'] 
+                  const baseHeaders = ['Mã Đặt Tour', 'Khách Hàng', 'Tour', 'Giá Trị', 'Trạng Thái', 'Phương Thức'];
+                  const tailHeaders = statusFilter === 'CANCELLED'
+                    ? ['Tiền Đã Hoàn', 'Ngày Hoàn', 'Thao Tác']
                     : ['Thanh Toán', 'Ngày Đặt', 'Thao Tác'];
                   const allHeaders = [...baseHeaders, ...tailHeaders];
                   return allHeaders.map((h, i) => (
@@ -2696,7 +3156,21 @@ export default function BookingManagementPage() {
                         </span>
                       </td>
 
-                      {/* Thanh toán / Tiền Đã Hoàn */}
+                      {/* Phương thức thanh toán */}
+                      <td className="py-4 px-5">
+                        {(() => {
+                          const mc2 = PAYMENT_METHOD_CFG[b.paymentMethod];
+                          if (!mc2) return <span className="text-on-surface-variant/40 text-sm">—</span>;
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${mc2.badge}`}>
+                              <span className="material-symbols-outlined text-[12px]">{mc2.icon}</span>
+                              {mc2.label}
+                            </span>
+                          );
+                        })()}
+                      </td>
+
+
                       {statusFilter === 'CANCELLED' ? (
                         <td className="py-4 px-5">
                           {b.refundAmount != null && b.refundAmount > 0 ? (

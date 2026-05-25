@@ -11,37 +11,21 @@ import {
   isSaleDeparture,
   SALE_TOUR_NO_VOUCHER_MESSAGE,
 } from '../tour/promotion-rules';
+import type {
+  CreateVoucherDto,
+  UpdateVoucherDto,
+  AdminVoucherQuery,
+  VoucherValidationContext,
+} from './dto';
 
-// ─── DTOs ─────────────────────────────────────────────────────────────────────
+// ─── Re-export DTOs for backward compatibility ────────────────────────────────
+export type {
+  CreateVoucherDto,
+  UpdateVoucherDto,
+  AdminVoucherQuery,
+  VoucherValidationContext,
+} from './dto';
 
-export interface CreateVoucherDto {
-  code: string;
-  label: string;
-  description: string;
-  discountType: 'PERCENTAGE' | 'FIXED_AMOUNT';
-  discountValue: number;
-  minOrderValue?: number;
-  maxUses?: number | null; // null = unlimited
-  expiresAt?: string | null; // null = never expires
-  isActive?: boolean;
-}
-
-export type UpdateVoucherDto = Partial<CreateVoucherDto>;
-
-export interface AdminVoucherQuery {
-  search?: string;
-  discountType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
-  status?: 'active' | 'expired' | 'depleted' | 'inactive' | 'expiringSoon' | 'expiredThisMonth' | 'redeemed';
-  page?: number;
-  limit?: number;
-  sortBy?: 'createdAt' | 'expiresAt' | 'usedCount';
-  sortOrder?: 'asc' | 'desc';
-}
-
-export interface VoucherValidationContext {
-  tourId?: number | null;
-  departureId?: number | null;
-}
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 

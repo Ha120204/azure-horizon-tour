@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 type SubscriberStatus = 'all' | 'active' | 'inactive';
 type CampaignType = 'PROMOTION' | 'TRAVEL_STORY' | 'NEWSLETTER';
@@ -237,6 +238,12 @@ export default function MarketingPage() {
   useEffect(() => {
     void fetchSubscribers();
   }, [fetchSubscribers]);
+
+  useAdminAutoRefresh({
+    intervalMs: 90 * 1000,
+    pause: Boolean(composerOpen || deleteTarget || scheduleTarget || isDeleting || isSendingTest || isScheduling || loadingId),
+    onRefresh: fetchSubscribers,
+  });
 
   const filteredSummary = useMemo(() => {
     if (status === 'active') return `${stats.active.toLocaleString('vi-VN')} email đang nhận tin`;

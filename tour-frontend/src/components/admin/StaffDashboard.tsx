@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import Link from 'next/link';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 import type { QuickStats, MyTour, MyTicket, BookingResult, Tone } from './staffDashboard/types';
 import {
     toneClass, TOUR_STATUS, TICKET_STATUS, BOOKING_STATUS,
@@ -161,9 +162,9 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
     const [hasSearched, setHasSearched] = useState(false);
     const [searchError, setSearchError] = useState('');
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        setLoadError('');
+    const fetchData = useCallback(async (options: { silent?: boolean } = {}) => {
+        if (!options.silent) setLoading(true);
+        if (!options.silent) setLoadError('');
 
         try {
             const [statsRes, toursRes, ticketsRes, tourStatsRes, articleStatsRes, supportStatsRes] = await Promise.all([
@@ -221,14 +222,22 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
 
             setLastUpdated(new Date());
         } catch (error) {
+            if (options.silent) return;
             console.error('Staff dashboard error:', error);
             setLoadError(error instanceof Error ? error.message : 'Không thể tải dữ liệu tổng quan.');
         } finally {
+            if (options.silent) return;
             setLoading(false);
         }
     }, []);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    useAdminAutoRefresh({
+        intervalMs: 60 * 1000,
+        pause: searching,
+        onRefresh: () => fetchData({ silent: true }),
+    });
 
     const handleSearch = async (event?: FormEvent<HTMLFormElement>) => {
         event?.preventDefault();
@@ -344,7 +353,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                             </div>
                             <button
                                 type="button"
-                                onClick={fetchData}
+                                onClick={() => fetchData()}
                                 disabled={loading}
                                 aria-label="Làm mới dữ liệu tổng quan"
                                 className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"

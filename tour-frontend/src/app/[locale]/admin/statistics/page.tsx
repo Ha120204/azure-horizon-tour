@@ -8,6 +8,7 @@ import {
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { Link } from '@/i18n/routing';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 // ─── Preset & Granularity Config ─────────────────────────────────────────────
 
@@ -214,9 +215,9 @@ export default function StatisticsPage() {
     const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
     const [dashboardError, setDashboardError] = useState('');
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true);
-        setDashboardError('');
+    const fetchAll = useCallback(async (options: { silent?: boolean } = {}) => {
+        if (!options.silent) setLoading(true);
+        if (!options.silent) setDashboardError('');
         const { from, to } = dateRange;
         const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
         const gran = getGranularity(diffDays);
@@ -241,9 +242,11 @@ export default function StatisticsPage() {
             }
             setLastUpdatedAt(new Date());
         } catch (e) {
+            if (options.silent) return;
             console.error('Statistics error:', e);
             setDashboardError('Không tải được dữ liệu thống kê. Vui lòng thử làm mới lại.');
         } finally {
+            if (options.silent) return;
             setLoading(false);
         }
     }, [dateRange]);
@@ -262,6 +265,11 @@ export default function StatisticsPage() {
     };
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
+
+    useAdminAutoRefresh({
+        intervalMs: 3 * 60 * 1000,
+        onRefresh: () => fetchAll({ silent: true }),
+    });
 
     const { from, to } = dateRange;
     const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
@@ -367,7 +375,7 @@ export default function StatisticsPage() {
                     </span>
                     <span className="hidden text-xs font-medium text-slate-400 xl:inline">{periodLabel}</span>
                     <button
-                        onClick={fetchAll}
+                        onClick={() => fetchAll()}
                         disabled={loading}
                         className="flex items-center gap-1.5 px-3 py-2 bg-white text-slate-500 border border-slate-200 rounded-xl text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
                     >

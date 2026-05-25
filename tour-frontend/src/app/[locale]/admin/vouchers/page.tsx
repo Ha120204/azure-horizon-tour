@@ -6,6 +6,7 @@ import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import VoucherFormModal from '@/components/admin/VoucherFormModal';
 import VoucherDetailDrawer from '@/components/admin/VoucherDetailDrawer';
 import AdminPagination from '@/components/admin/AdminPagination';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,16 @@ export default function VoucherManagementPage() {
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => { fetchVouchers(); }, [fetchVouchers]);
+
+  const refreshVoucherData = useCallback(async () => {
+    await Promise.all([fetchStats(), fetchVouchers()]);
+  }, [fetchStats, fetchVouchers]);
+
+  useAdminAutoRefresh({
+    intervalMs: 90 * 1000,
+    pause: Boolean(modalMode || detailId || deleteTarget || isDeleting || toggleLoadingId),
+    onRefresh: refreshVoucherData,
+  });
 
   // ── Debounced search ─────────────────────────────────────────────────────
   const handleSearchChange = (val: string) => {

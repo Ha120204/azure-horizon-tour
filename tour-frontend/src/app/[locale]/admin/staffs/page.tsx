@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import AdminPagination from '@/components/admin/AdminPagination';
+import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -79,9 +80,9 @@ const roleConfig: Record<string, { label: string; bg: string; text: string; icon
     },
 };
 
-const statusConfig: Record<string, { dot: string; text: string; bg: string }> = {
-    Active: { dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-500/10' },
-    Deactivated: { dot: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-500/10' },
+const statusConfig: Record<string, { dot: string; text: string; bg: string; label: string }> = {
+    Active: { dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-500/10', label: 'Hoạt động' },
+    Deactivated: { dot: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-500/10', label: 'Đã vô hiệu hóa' },
 };
 
 const formatDate = (d: string | null | undefined) => {
@@ -130,11 +131,14 @@ const getProfileRole = (payload: unknown) => {
     return '';
 };
 
-const bookingStatusStyle: Record<string, string> = {
-    CONFIRMED: 'bg-emerald-500/10 text-emerald-700',
-    PENDING: 'bg-amber-500/10 text-amber-700',
-    CANCELLED: 'bg-red-500/10 text-red-600',
+const bookingStatusStyle: Record<string, { className: string; label: string }> = {
+    CONFIRMED: { className: 'bg-emerald-500/10 text-emerald-700', label: 'Đã xác nhận' },
+    PENDING: { className: 'bg-amber-500/10 text-amber-700', label: 'Chờ xử lý' },
+    CANCELLED: { className: 'bg-red-500/10 text-red-600', label: 'Đã hủy' },
 };
+
+const actionTooltipClass =
+    'absolute -top-9 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-on-surface text-surface text-[11px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 transition-opacity pointer-events-none shadow-lg';
 
 // ── Component ────────────────────────────────────────────────────────
 export default function StaffManagementPage() {
@@ -147,7 +151,6 @@ export default function StaffManagementPage() {
 
     // Filter state
     const [search, setSearch] = useState('');
-    const [filterRole, setFilterRole] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -177,6 +180,19 @@ export default function StaffManagementPage() {
     const [isCreating, setIsCreating] = useState(false);
     const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
 
+    const isSuperAdminView = currentUserRole === 'SUPER_ADMIN';
+    const managedRole = isSuperAdminView ? 'ADMIN' : 'STAFF';
+    const managedRoleLabel = isSuperAdminView ? 'Admin' : 'nhân viên';
+    const pageTitle = isSuperAdminView ? 'Quản lý Admin' : 'Danh sách Nhân Sự';
+    const pageDescription = isSuperAdminView
+        ? 'Quản lý các tài khoản Admin được phân quyền vận hành hệ thống.'
+        : 'Quản lý tài khoản nhân viên nội bộ của hệ thống.';
+    const createTitle = isSuperAdminView ? 'Thêm admin mới' : 'Thêm nhân viên mới';
+    const createDescription = isSuperAdminView ? 'Tạo tài khoản Admin nội bộ' : 'Tạo tài khoản nhân viên nội bộ';
+    const createButtonLabel = isSuperAdminView ? 'Thêm admin' : 'Thêm nhân viên';
+    // Route này được scope theo vai trò, nên không cho đổi role qua lại trong cùng màn hình.
+    const canEditRoles = false;
+
     // Debounce ref
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -201,14 +217,12 @@ export default function StaffManagementPage() {
 
     // ── Fetch users ─────────────────────────────────────────────
     const fetchUsers = useCallback(async () => {
+        if (!currentUserRole) return;
         setIsLoading(true);
         try {
             const qs = new URLSearchParams();
-            const roleParam = currentUserRole === 'SUPER_ADMIN'
-                ? (filterRole || 'STAFF,ADMIN')
-                : 'STAFF';
             if (debouncedSearch) qs.append('search', debouncedSearch);
-            qs.append('role', roleParam);
+            qs.append('role', managedRole);
             if (filterStatus) qs.append('status', filterStatus);
             qs.append('page', String(page));
             qs.append('limit', String(pageSize));
@@ -224,7 +238,7 @@ export default function StaffManagementPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [currentUserRole, debouncedSearch, filterRole, filterStatus, page, pageSize]);
+    }, [currentUserRole, debouncedSearch, filterStatus, managedRole, page, pageSize]);
 
 
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
@@ -241,6 +255,19 @@ export default function StaffManagementPage() {
     }, []);
 
     useEffect(() => { fetchStats(); }, [fetchStats]);
+
+    const refreshStaffData = useCallback(async () => {
+        await Promise.all([fetchUsers(), fetchStats()]);
+    }, [fetchStats, fetchUsers]);
+
+    useAdminAutoRefresh({
+        intervalMs: 120 * 1000,
+        pause: Boolean(
+            detailUser || roleEditUser || toggleTarget || showCreateModal ||
+            isSaving || isUpdatingRole || isToggling || isCreating
+        ),
+        onRefresh: refreshStaffData,
+    });
 
     // ── Toast ───────────────────────────────────────────────────
     const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -405,36 +432,60 @@ export default function StaffManagementPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...createForm,
-                    role: currentUserRole === 'SUPER_ADMIN' ? createForm.role : 'STAFF',
+                    role: managedRole,
                 }),
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(getApiMessage(err, 'Thêm nhân viên thất bại'));
+                throw new Error(getApiMessage(err, `Thêm ${managedRoleLabel} thất bại`));
             }
-            showToast(`Thêm nhân viên "${createForm.fullName}" thành công!`);
+            showToast(`Thêm ${managedRoleLabel} "${createForm.fullName}" thành công!`);
             setShowCreateModal(false);
-            setCreateForm({ email: '', password: '', fullName: '', phone: '', role: 'STAFF', sendEmail: true });
+            setCreateForm({ email: '', password: '', fullName: '', phone: '', role: managedRole, sendEmail: true });
             setConfirmPassword('');
             fetchUsers();
             fetchStats();
         } catch (e: unknown) {
-            showToast(getErrorMessage(e, 'Thêm nhân viên thất bại.'), 'error');
+            showToast(getErrorMessage(e, `Thêm ${managedRoleLabel} thất bại.`), 'error');
         } finally {
             setIsCreating(false);
         }
     };
 
     // ── KPI Cards Data ──────────────────────────────────────────
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const currentMonthLabel = new Intl.DateTimeFormat('vi-VN', { month: '2-digit', year: 'numeric' }).format(new Date());
+    const visibleActiveCount = users.filter(user => user.status === 'Active').length;
+    const visibleNewThisMonth = users.filter(user => user.createdAt?.slice(0, 7) === currentMonth).length;
+    const activeManagedCount = isSuperAdminView ? visibleActiveCount : (stats?.staffActive ?? visibleActiveCount);
+    const newManagedCount = isSuperAdminView ? visibleNewThisMonth : (stats?.staffNewThisMonth ?? visibleNewThisMonth);
     const kpis = [
-        { icon: 'shield_person', label: 'Tổng Nhân Sự', value: stats?.staffAndAdmin ?? '—', color: 'bg-amber-500/10 text-amber-600' },
-        { icon: 'verified_user', label: 'Nhân Sự Hoạt Động', value: stats?.staffActive ?? '—', color: 'bg-emerald-500/10 text-emerald-600' },
-        { icon: 'person_add', label: 'Nhân Sự Mới Tháng Này', value: stats?.staffNewThisMonth ?? '—', color: 'bg-violet-500/10 text-violet-600' },
+        {
+            icon: isSuperAdminView ? 'admin_panel_settings' : 'shield_person',
+            label: isSuperAdminView ? 'Tổng Admin' : 'Tổng nhân sự',
+            value: meta.totalItems,
+            helper: isSuperAdminView ? 'Tài khoản admin trong phạm vi quản lý' : 'Tài khoản nhân sự nội bộ',
+            color: 'bg-amber-500/10 text-amber-600',
+        },
+        {
+            icon: 'verified_user',
+            label: isSuperAdminView ? 'Đang hoạt động' : 'Nhân sự hoạt động',
+            value: activeManagedCount,
+            helper: `${activeManagedCount.toLocaleString('vi-VN')}/${meta.totalItems.toLocaleString('vi-VN')} tài khoản có thể đăng nhập`,
+            color: 'bg-emerald-500/10 text-emerald-600',
+        },
+        {
+            icon: 'person_add',
+            label: isSuperAdminView ? 'Admin mới tháng này' : 'Nhân sự mới tháng này',
+            value: newManagedCount,
+            helper: `Tính trong tháng ${currentMonthLabel}`,
+            color: 'bg-violet-500/10 text-violet-600',
+        },
     ];
 
     // ── Render ───────────────────────────────────────────────────
     return (
-        <main className="flex-1 pt-8 px-8 pb-12 overflow-y-auto w-full max-w-[1600px] mx-auto" style={{ fontVariantNumeric: 'tabular-nums' }}>
+        <main className="flex-1 w-full max-w-[1600px] mx-auto overflow-y-auto px-4 pb-12 pt-8 sm:px-6 lg:px-8" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {/* Skip link */}
             <a href="#users-table" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-primary text-on-primary px-4 py-2 rounded-lg z-50 font-semibold text-sm">
                 Nhảy đến bảng dữ liệu
@@ -444,32 +495,33 @@ export default function StaffManagementPage() {
             <div className="flex justify-between items-start mb-8 gap-4 flex-wrap">
                 <div>
                     <h1 className="font-headline text-[1.75rem] font-semibold text-on-surface" style={{ textWrap: 'balance' } as React.CSSProperties}>
-                        Danh sách Nhân Sự
+                        {pageTitle}
                     </h1>
-                    <p className="text-on-surface-variant text-sm mt-1">Quản lý tài khoản quản trị và nhân viên nội bộ của hệ thống.</p>
+                    <p className="text-on-surface-variant text-sm mt-1">{pageDescription}</p>
                 </div>
                 {currentUserRole !== 'STAFF' && (
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-sm focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                >
-                    <span className="material-symbols-outlined text-lg" aria-hidden="true">person_add</span>
-                    Thêm nhân viên
-                </button>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-sm focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                    >
+                        <span className="material-symbols-outlined text-lg" aria-hidden="true">person_add</span>
+                        {createButtonLabel}
+                    </button>
                 )}
             </div>
 
             {/* ── KPI Cards ─── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 xl:grid-cols-3">
                 {kpis.map(kpi => (
                     <div key={kpi.label} className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/10 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${kpi.color}`}>
+                        <div className="flex items-start gap-4">
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${kpi.color}`}>
                                 <span className="material-symbols-outlined text-xl" aria-hidden="true">{kpi.icon}</span>
                             </div>
                             <div className="min-w-0">
                                 <p className="text-xs text-on-surface-variant font-medium truncate">{kpi.label}</p>
                                 <p className="text-xl font-bold text-on-surface leading-tight mt-0.5 truncate">{kpi.value}</p>
+                                <p className="mt-1 text-xs leading-5 text-on-surface-variant/75">{kpi.helper}</p>
                             </div>
                         </div>
                     </div>
@@ -477,32 +529,28 @@ export default function StaffManagementPage() {
             </div>
 
             {/* ── Filters ─── */}
-            <div className="bg-surface-container-lowest rounded-2xl p-4 mb-6 border border-outline-variant/10 shadow-sm flex flex-wrap gap-3 items-center">
+            <div className="bg-surface-container-lowest rounded-2xl p-4 mb-6 border border-outline-variant/10 shadow-sm flex flex-wrap gap-3 items-stretch sm:items-center">
                 <div className="flex-1 min-w-[220px] relative">
                     <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg pointer-events-none" aria-hidden="true">search</span>
-                    <label htmlFor="search-users" className="sr-only">Tìm kiếm người dùng</label>
+                    <label htmlFor="search-users" className="sr-only">{isSuperAdminView ? 'Tìm kiếm admin' : 'Tìm kiếm nhân sự'}</label>
                     <input
                         id="search-users"
                         type="search"
                         autoComplete="off"
-                        placeholder="Tìm theo tên hoặc email…"
+                        name="staff-search"
+                        placeholder={isSuperAdminView ? 'Tìm admin theo tên hoặc email…' : 'Tìm nhân sự theo tên hoặc email…'}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="w-full bg-surface-container-low border border-outline-variant/15 rounded-xl pl-11 pr-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
                     />
                 </div>
                 <div className="flex gap-3 flex-wrap">
-                    <label htmlFor="filter-role" className="sr-only">Lọc theo role</label>
-                    <select
-                        id="filter-role"
-                        value={currentUserRole === 'SUPER_ADMIN' ? filterRole : 'STAFF'}
-                        onChange={e => { setFilterRole(e.target.value); setPage(1); }}
-                        className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
-                    >
-                        <option value="">Tất cả Role</option>
-                        {currentUserRole === 'SUPER_ADMIN' && <option value="ADMIN">Admin</option>}
-                        <option value="STAFF">Staff</option>
-                    </select>
+                    <div className="inline-flex items-center gap-2 rounded-xl border border-outline-variant/15 bg-surface-container-low px-4 py-2.5 text-sm font-semibold text-on-surface-variant">
+                        <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
+                            {isSuperAdminView ? 'admin_panel_settings' : 'badge'}
+                        </span>
+                        {isSuperAdminView ? 'Phạm vi: Admin' : 'Phạm vi: Staff'}
+                    </div>
                     <label htmlFor="filter-status" className="sr-only">Lọc theo trạng thái</label>
                     <select
                         id="filter-status"
@@ -511,25 +559,34 @@ export default function StaffManagementPage() {
                         className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
                     >
                         <option value="">Tất cả trạng thái</option>
-                        <option value="active">Active</option>
-                        <option value="deactivated">Deactivated</option>
+                        <option value="active">Hoạt động</option>
+                        <option value="deactivated">Đã vô hiệu hóa</option>
                     </select>
                 </div>
             </div>
 
             {/* ── Table ─── */}
             <div id="users-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                <div className="overflow-x-auto lg:overflow-x-visible">
+                    <table className="w-full min-w-[900px] table-fixed text-left border-collapse lg:min-w-0">
+                        <colgroup>
+                            <col className="w-[20%]" />
+                            <col className="w-[22%]" />
+                            <col className="w-[12%]" />
+                            <col className="w-[12%]" />
+                            <col className="w-[8%]" />
+                            <col className="w-[13%]" />
+                            <col className="w-[13%]" />
+                        </colgroup>
                         <thead>
                             <tr className="border-b border-outline-variant/15 bg-surface-container/40">
-                                <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Người dùng</th>
-                                <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Liên hệ</th>
-                                <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Role</th>
-                                <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Ngày tạo</th>
-                                <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Bookings</th>
-                                <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Trạng thái</th>
-                                <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-right">Thao tác</th>
+                                <th scope="col" className="py-3.5 px-4 xl:px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Người dùng</th>
+                                <th scope="col" className="py-3.5 px-4 xl:px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Liên hệ</th>
+                                <th scope="col" className="py-3.5 px-4 xl:px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Role</th>
+                                <th scope="col" className="py-3.5 px-4 xl:px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Ngày tạo</th>
+                                <th scope="col" className="py-3.5 px-4 xl:px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-right">Booking</th>
+                                <th scope="col" className="py-3.5 px-4 xl:px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Trạng thái</th>
+                                <th scope="col" className="py-3.5 px-4 xl:px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-right">Thao tác</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-outline-variant/10">
@@ -537,13 +594,13 @@ export default function StaffManagementPage() {
                                 /* Loading skeleton */
                                 Array.from({ length: 5 }).map((_, i) => (
                                     <tr key={`skel-${i}`} className="animate-pulse">
-                                        <td className="py-4 px-5"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-surface-container-high" /><div className="space-y-2"><div className="h-3.5 w-28 bg-surface-container-high rounded" /><div className="h-2.5 w-20 bg-surface-container rounded" /></div></div></td>
-                                        <td className="py-4 px-5"><div className="space-y-2"><div className="h-3 w-36 bg-surface-container-high rounded" /><div className="h-2.5 w-24 bg-surface-container rounded" /></div></td>
-                                        <td className="py-4 px-5"><div className="h-6 w-20 bg-surface-container-high rounded-lg" /></td>
-                                        <td className="py-4 px-5"><div className="h-3 w-20 bg-surface-container-high rounded" /></td>
-                                        <td className="py-4 px-5"><div className="h-3 w-8 bg-surface-container-high rounded" /></td>
-                                        <td className="py-4 px-5"><div className="h-6 w-20 bg-surface-container-high rounded-lg" /></td>
-                                        <td className="py-4 px-5"><div className="h-6 w-20 bg-surface-container-high rounded ml-auto" /></td>
+                                        <td className="py-4 px-4 xl:px-5"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-surface-container-high" /><div className="space-y-2"><div className="h-3.5 w-28 bg-surface-container-high rounded" /><div className="h-2.5 w-20 bg-surface-container rounded" /></div></div></td>
+                                        <td className="py-4 px-4 xl:px-5"><div className="space-y-2"><div className="h-3 w-36 bg-surface-container-high rounded" /><div className="h-2.5 w-24 bg-surface-container rounded" /></div></td>
+                                        <td className="py-4 px-4 xl:px-5"><div className="h-6 w-20 bg-surface-container-high rounded-lg" /></td>
+                                        <td className="py-4 px-4 xl:px-5"><div className="h-3 w-20 bg-surface-container-high rounded" /></td>
+                                        <td className="py-4 px-4 xl:px-5"><div className="ml-auto h-3 w-8 bg-surface-container-high rounded" /></td>
+                                        <td className="py-4 px-4 xl:px-5"><div className="h-6 w-20 bg-surface-container-high rounded-lg" /></td>
+                                        <td className="py-4 px-4 xl:px-5"><div className="h-6 w-20 bg-surface-container-high rounded ml-auto" /></td>
                                     </tr>
                                 ))
                             ) : users.length === 0 ? (
@@ -561,7 +618,7 @@ export default function StaffManagementPage() {
                                     return (
                                         <tr key={user.id} className={`hover:bg-surface-container-low/40 transition-colors group ${user.status === 'Deactivated' ? 'opacity-60' : ''}`}>
                                             {/* Avatar + Name */}
-                                            <td className="py-3 px-5">
+                                            <td className="py-3 px-4 align-middle xl:px-5">
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     {user.avatarUrl ? (
                                                         <img
@@ -575,7 +632,7 @@ export default function StaffManagementPage() {
                                                         </div>
                                                     )}
                                                     <div className="min-w-0">
-                                                        <p className="font-semibold text-sm text-on-surface truncate max-w-[180px]">{user.fullName || 'Chưa cập nhật'}</p>
+                                                        <p className="font-semibold text-sm text-on-surface truncate">{user.fullName || 'Chưa cập nhật'}</p>
                                                         <p className="text-xs text-on-surface-variant mt-0.5">
                                                             <span translate="no" className="font-mono">#{user.id}</span>
                                                         </p>
@@ -583,45 +640,46 @@ export default function StaffManagementPage() {
                                                 </div>
                                             </td>
                                             {/* Contact */}
-                                            <td className="py-3 px-5">
-                                                <p className="text-sm text-on-surface-variant truncate max-w-[200px]">{user.email}</p>
+                                            <td className="py-3 px-4 align-middle xl:px-5">
+                                                <p className="text-sm text-on-surface-variant truncate">{user.email}</p>
                                                 <p className="text-xs text-outline mt-0.5">{user.phone || '—'}</p>
                                             </td>
                                             {/* Role Badge */}
-                                            <td className="py-3 px-5">
+                                            <td className="py-3 px-4 align-middle xl:px-5">
                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${rc.bg} ${rc.text}`}>
                                                     <span className="material-symbols-outlined text-[13px]" aria-hidden="true">{rc.icon}</span>
                                                     {rc.label}
                                                 </span>
                                             </td>
                                             {/* Created */}
-                                            <td className="py-3 px-5 text-sm text-on-surface-variant whitespace-nowrap">
+                                            <td className="py-3 px-4 align-middle text-sm text-on-surface-variant whitespace-nowrap xl:px-5">
                                                 {formatDate(user.createdAt)}
                                             </td>
                                             {/* Bookings count */}
-                                            <td className="py-3 px-5 text-sm font-semibold text-on-surface">
+                                            <td className="py-3 px-4 align-middle text-right text-sm font-semibold text-on-surface xl:px-5">
                                                 {user.bookingCount}
                                             </td>
                                             {/* Status */}
-                                            <td className="py-3 px-5">
+                                            <td className="py-3 px-4 align-middle xl:px-5">
                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${sc.bg} ${sc.text}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                                                    {user.status}
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} aria-hidden="true" />
+                                                    {sc.label}
                                                 </span>
                                             </td>
                                             {/* Actions */}
-                                            <td className="py-3 px-5 text-right whitespace-nowrap">
+                                            <td className="py-3 px-4 align-middle text-right whitespace-nowrap xl:px-5">
                                                 <div className="flex justify-end gap-1">
                                                     {/* View detail */}
                                                     <div className="relative group/tip">
                                                         <button
                                                             onClick={() => openDetail(user.id)}
                                                             aria-label={`Xem chi tiết ${user.fullName}`}
+                                                            title="Xem chi tiết"
                                                             className="w-9 h-9 flex items-center justify-center rounded-xl border border-outline-variant/20 text-on-surface-variant hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all focus-visible:ring-2 focus-visible:ring-primary outline-none"
                                                         >
                                                             <span className="material-symbols-outlined text-[19px]" aria-hidden="true" style={{ fontVariationSettings: "'wght' 300" }}>visibility</span>
                                                         </button>
-                                                        <span className="absolute -top-9 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-on-surface text-surface text-[11px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none shadow-lg">Xem chi tiết</span>
+                                                        <span className={actionTooltipClass} aria-hidden="true">Xem chi tiết</span>
                                                     </div>
                                                     {/* Edit info — chỉ ADMIN trở lên */}
                                                     {currentUserRole !== 'STAFF' && (
@@ -629,24 +687,26 @@ export default function StaffManagementPage() {
                                                         <button
                                                             onClick={() => openDetail(user.id, true)}
                                                             aria-label={`Sửa thông tin ${user.fullName}`}
+                                                            title="Sửa thông tin"
                                                             className="w-9 h-9 flex items-center justify-center rounded-xl border border-outline-variant/20 text-on-surface-variant hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/30 transition-all focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
                                                         >
                                                             <span className="material-symbols-outlined text-[19px]" aria-hidden="true" style={{ fontVariationSettings: "'wght' 300" }}>edit</span>
                                                         </button>
-                                                        <span className="absolute -top-9 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-on-surface text-surface text-[11px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none shadow-lg">Sửa thông tin</span>
+                                                        <span className={actionTooltipClass} aria-hidden="true">Sửa thông tin</span>
                                                     </div>
                                                     )}
                                                     {/* Edit role — only SUPER_ADMIN */}
-                                                    {currentUserRole === 'SUPER_ADMIN' && (
+                                                    {canEditRoles && (
                                                         <div className="relative group/tip">
                                                             <button
                                                                 onClick={() => { setRoleEditUser(user); setNewRole(user.role); }}
                                                                 aria-label={`Đổi role ${user.fullName}`}
+                                                                title="Đổi quyền"
                                                                 className="w-9 h-9 flex items-center justify-center rounded-xl border border-outline-variant/20 text-on-surface-variant hover:bg-violet-500/10 hover:text-violet-600 hover:border-violet-500/30 transition-all focus-visible:ring-2 focus-visible:ring-violet-500 outline-none"
                                                             >
                                                                 <span className="material-symbols-outlined text-[19px]" aria-hidden="true" style={{ fontVariationSettings: "'wght' 300" }}>shield</span>
                                                             </button>
-                                                            <span className="absolute -top-9 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-on-surface text-surface text-[11px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none shadow-lg">Đổi quyền</span>
+                                                            <span className={actionTooltipClass} aria-hidden="true">Đổi quyền</span>
                                                         </div>
                                                     )}
                                                     {/* Toggle status — chỉ ADMIN trở lên */}
@@ -655,6 +715,7 @@ export default function StaffManagementPage() {
                                                         <button
                                                             onClick={() => setToggleTarget(user)}
                                                             aria-label={user.status === 'Active' ? `Vô hiệu hóa ${user.fullName}` : `Kích hoạt ${user.fullName}`}
+                                                            title={user.status === 'Active' ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản'}
                                                             className={`w-9 h-9 flex items-center justify-center rounded-xl border border-outline-variant/20 transition-all focus-visible:ring-2 outline-none ${user.status === 'Active'
                                                                     ? 'text-on-surface-variant hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 focus-visible:ring-red-500'
                                                                     : 'text-on-surface-variant hover:bg-emerald-500/10 hover:text-emerald-600 hover:border-emerald-500/30 focus-visible:ring-emerald-500'
@@ -664,7 +725,7 @@ export default function StaffManagementPage() {
                                                                 {user.status === 'Active' ? 'block' : 'lock_open'}
                                                             </span>
                                                         </button>
-                                                        <span className="absolute -top-9 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-on-surface text-surface text-[11px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none shadow-lg">{user.status === 'Active' ? 'Vô hiệu hóa' : 'Kích hoạt'}</span>
+                                                        <span className={actionTooltipClass} aria-hidden="true">{user.status === 'Active' ? 'Vô hiệu hóa' : 'Kích hoạt'}</span>
                                                     </div>
                                                     )}
                                                 </div>
@@ -686,7 +747,7 @@ export default function StaffManagementPage() {
                         pageSize={pageSize}
                         onPageChange={(p) => setPage(p)}
                         onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
-                        itemLabel="nhân sự"
+                        itemLabel={isSuperAdminView ? 'admin' : 'nhân sự'}
                     />
                 </div>
             </div>
@@ -718,10 +779,11 @@ export default function StaffManagementPage() {
                                         {!isEditing ? (
                                             <button
                                                 onClick={() => startEditing(detailUser)}
+                                                aria-label="Sửa thông tin người dùng"
                                                 className="w-10 h-10 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors"
                                                 title="Sửa thông tin"
                                             >
-                                                <span className="material-symbols-outlined text-[20px]">edit</span>
+                                                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">edit</span>
                                             </button>
                                         ) : (
                                             <button
@@ -733,10 +795,11 @@ export default function StaffManagementPage() {
                                         )}
                                         <button
                                             onClick={() => { setDetailUser(null); setIsLoadingDetail(false); setIsEditing(false); }}
+                                            aria-label="Đóng chi tiết người dùng"
                                             className="w-10 h-10 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-sm text-white hover:bg-black/30 transition-colors"
                                             title="Đóng"
                                         >
-                                            <span className="material-symbols-outlined text-lg">close</span>
+                                            <span className="material-symbols-outlined text-lg" aria-hidden="true">close</span>
                                         </button>
                                     </div>
 
@@ -770,8 +833,8 @@ export default function StaffManagementPage() {
                                                                 ? 'bg-emerald-400/20 text-emerald-200'
                                                                 : 'bg-red-400/20 text-red-200'
                                                             }`}>
-                                                            <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                                                            {detailUser.status}
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} aria-hidden="true" />
+                                                            {sc.label}
                                                         </span>
                                                     </>
                                                 );
@@ -973,7 +1036,7 @@ export default function StaffManagementPage() {
                                                         <span className="material-symbols-outlined text-[18px]">edit</span>
                                                         Sửa thông tin
                                                     </button>
-                                                    {currentUserRole === 'SUPER_ADMIN' && (
+                                                    {canEditRoles && (
                                                         <button
                                                             onClick={() => { setRoleEditUser(detailUser); setNewRole(detailUser.role); }}
                                                             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-outline-variant/20 text-on-surface-variant hover:bg-violet-500/8 hover:text-violet-700 hover:border-violet-500/30 transition-all"
@@ -984,13 +1047,14 @@ export default function StaffManagementPage() {
                                                     )}
                                                     <button
                                                         onClick={() => setToggleTarget(detailUser)}
+                                                        aria-label={detailUser.status === 'Active' ? `Khóa tài khoản ${detailUser.fullName}` : `Mở khóa tài khoản ${detailUser.fullName}`}
                                                         className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-outline-variant/20 transition-all ${
                                                             detailUser.status === 'Active'
                                                                 ? 'text-on-surface-variant hover:bg-red-500/8 hover:text-red-600 hover:border-red-500/30'
                                                                 : 'text-on-surface-variant hover:bg-emerald-500/8 hover:text-emerald-600 hover:border-emerald-500/30'
                                                         }`}
                                                     >
-                                                        <span className="material-symbols-outlined text-[18px]">
+                                                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                                                             {detailUser.status === 'Active' ? 'block' : 'lock_open'}
                                                         </span>
                                                         {detailUser.status === 'Active' ? 'Khóa tài khoản' : 'Mở khóa'}
@@ -1023,9 +1087,14 @@ export default function StaffManagementPage() {
                                                                 </div>
                                                                 <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                                                                     <span className="text-sm font-bold text-on-surface">{formatCurrency(b.totalPrice)}</span>
-                                                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${bookingStatusStyle[b.status] || 'bg-surface-container text-on-surface-variant'}`}>
-                                                                        {b.status}
-                                                                    </span>
+                                                                    {(() => {
+                                                                        const bookingStatus = bookingStatusStyle[b.status];
+                                                                        return (
+                                                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${bookingStatus?.className ?? 'bg-surface-container text-on-surface-variant'}`}>
+                                                                                {bookingStatus?.label ?? b.status}
+                                                                            </span>
+                                                                        );
+                                                                    })()}
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -1053,7 +1122,7 @@ export default function StaffManagementPage() {
             {/* ════════════════════════════════════════════════════════
                  MODAL: Edit Role
                  ════════════════════════════════════════════════════════ */}
-            {roleEditUser && (
+            {canEditRoles && roleEditUser && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="role-dialog-title">
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRoleEditUser(null)} />
                     <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
@@ -1186,15 +1255,16 @@ export default function StaffManagementPage() {
                                         <span className="material-symbols-outlined text-white text-xl">person_add</span>
                                     </div>
                                     <div>
-                                        <h2 id="create-dialog-title" className="text-lg font-bold text-white">Thêm nhân viên mới</h2>
-                                        <p className="text-white/60 text-xs mt-0.5">Tạo tài khoản nhân viên nội bộ</p>
+                                        <h2 id="create-dialog-title" className="text-lg font-bold text-white">{createTitle}</h2>
+                                        <p className="text-white/60 text-xs mt-0.5">{createDescription}</p>
                                     </div>
                                 </div>
                                 <button
                                     onClick={() => setShowCreateModal(false)}
+                                    aria-label="Đóng form tạo tài khoản"
                                     className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
                                 >
-                                    <span className="material-symbols-outlined text-lg">close</span>
+                                    <span className="material-symbols-outlined text-lg" aria-hidden="true">close</span>
                                 </button>
                             </div>
                         </div>
@@ -1254,8 +1324,13 @@ export default function StaffManagementPage() {
                                         placeholder="Nhập mật khẩu"
                                         className={`w-full bg-surface-container-low border rounded-xl pl-11 pr-11 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors ${createErrors.password ? 'border-red-400' : 'border-outline-variant/15'}`}
                                     />
-                                    <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 hover:text-on-surface-variant transition-colors">
-                                        <span className="material-symbols-outlined text-[18px]">{showPassword ? 'visibility' : 'visibility_off'}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(v => !v)}
+                                        aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 hover:text-on-surface-variant transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{showPassword ? 'visibility' : 'visibility_off'}</span>
                                     </button>
                                 </div>
                                 {createErrors.password && <p className="mt-1 text-xs text-red-500 font-medium">{createErrors.password}</p>}
@@ -1305,8 +1380,13 @@ export default function StaffManagementPage() {
                                         placeholder="Nhập lại mật khẩu"
                                         className={`w-full bg-surface-container-low border rounded-xl pl-11 pr-11 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors ${(createErrors.confirmPassword || (confirmPassword && confirmPassword !== createForm.password)) ? 'border-red-400' : 'border-outline-variant/15'}`}
                                     />
-                                    <button type="button" onClick={() => setShowConfirmPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 hover:text-on-surface-variant transition-colors">
-                                        <span className="material-symbols-outlined text-[18px]">{showConfirmPassword ? 'visibility' : 'visibility_off'}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(v => !v)}
+                                        aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 hover:text-on-surface-variant transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{showConfirmPassword ? 'visibility' : 'visibility_off'}</span>
                                     </button>
                                 </div>
                                 {confirmPassword && confirmPassword !== createForm.password && (
@@ -1364,7 +1444,7 @@ export default function StaffManagementPage() {
                                 ) : (
                                     <>
                                         <span className="material-symbols-outlined text-base" aria-hidden="true">person_add</span>
-                                        Thêm nhân viên
+                                        {createButtonLabel}
                                     </>
                                 )}
                             </button>

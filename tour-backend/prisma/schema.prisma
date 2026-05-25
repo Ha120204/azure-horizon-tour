@@ -334,6 +334,7 @@ model Booking {
   status           BookingStatus @default(PENDING)
   paymentStatus    PaymentStatus @default(UNPAID)
   paymentMethod    PaymentMethod @default(PAYOS)
+  holdExpiresAt    DateTime?
   confirmedById    Int?
   confirmedBy      User?         @relation("BookingConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
   vnpayTxnRef      String?       // Mã giao dịch từ cổng thanh toán để đối soát
@@ -364,9 +365,11 @@ model Booking {
   assistedDraft    AssistedBookingDraft? @relation(fields: [assistedDraftId], references: [id], onDelete: SetNull)
   transactions     PaymentTransaction[] // [PHASE 1] Log thanh toán
   notifications    BookingNotification[]
+  supportTickets   SupportTicket[]      // [PHASE 1] Ticket hỗ trợ liên quan đến đơn
 
   @@index([userId, status])                  // [PHASE 1] Index: lịch sử booking user
   @@index([status, paymentStatus, createdAt]) // [PHASE 1] Index: cron job quét đơn hết hạn
+  @@index([status, paymentStatus, holdExpiresAt])
 }
 
 // =============================================
@@ -427,15 +430,32 @@ model PaymentTransaction {
   bookingId      Int
   booking        Booking  @relation(fields: [bookingId], references: [id])
   
-  gateway        String   // "PAYOS" | "SEPAY" | "MANUAL"
-  transactionRef String?  // Mã tham chiếu từ cổng thanh toán
+  gateway        String   // "PAYOS" | "MANUAL"
+  transactionRef String?  // Mã tham chiếu từ cổng thanh toán hoặc biên lai
   amount         Float    // Số tiền giao dịch (VNĐ)
   status         String   // "PENDING" | "SUCCESS" | "FAILED"
   rawPayload     String?  @db.Text // JSON payload gốc từ webhook để đối soát
-  
+
+  // ── Audit nguồn tiền [PHASE 1] ───────────────────────────────────────────────
+  // Ghi rõ bằng cách nào tiền được ghi nhận:
+  //   PAYOS_WEBHOOK               — PayOS gọi webhook thành công
+  //   PAYOS_RETURN_SYNC           — Return URL + gọi lại PayOS API
+  //   PAYOS_MANUAL_RECONCILIATION — Admin xác nhận ảnh CK thủ công
+  //   IN_STORE_CASH               — Thu tiền mặt tại quầy
+  //   IN_STORE_BANK_TRANSFER      — Chuyển khoản tại quầy (có biên lai)
+  //   IN_STORE_CARD_POS           — Quẹt thẻ POS
+  //   ADMIN_OVERRIDE              — Override khẩn cấp (chỉ SUPER_ADMIN)
+  confirmedSource  String?   // Enum string, null nếu chưa xác nhận
+  confirmedById    Int?      // Admin/Staff thực hiện xác nhận
+  confirmedAt      DateTime? // Thời điểm xác nhận
+  confirmedNote    String?   @db.Text // Ghi chú — bắt buộc với manual flows
+  evidenceUrl      String?   // URL ảnh giao dịch (Cloudinary)
+  // ────────────────────────────────────────────────────────────────────
+
   createdAt      DateTime @default(now())
 
   @@index([bookingId])
+  @@index([confirmedSource, confirmedAt]) // Tăng tốc thống kê theo nguồn tiền
 }
 
 model BookingNotification {
@@ -641,7 +661,13 @@ model SupportTicket {
   customerName    String
   customerEmail   String
   customerPhone   String?
-  bookingRef      String?                // Mã booking liên quan (nếu có)
+  bookingRef      String?                // Mã booking liên quan — giữ để tương thích với dữ liệu cũ
+  // ── Liên kết FK thật tới Booking [PHASE 1] ──────────────────────────────
+  // Dùng song song với bookingRef. bookingId = FK chuẩn cho ticket mới.
+  // Dữ liệu cũ giữ nguyên bookingRef, không cần migrate.
+  bookingId       Int?                   // FK thật tới Booking
+  booking         Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  // ─────────────────────────────────────────────────────────────────────
   subject         String
   message         String   @db.Text
   category        String   @default("general") // booking|payment|reschedule|complaint|general
@@ -662,6 +688,7 @@ model SupportTicket {
   @@index([status])
   @@index([customerEmail])
   @@index([userId])
+  @@index([bookingId])  // [PHASE 1] Tìm ticket theo booking
 }
 
 model TicketReply {

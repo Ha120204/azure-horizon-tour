@@ -17,7 +17,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
     { href: '/admin/super',      icon: 'admin_panel_settings', label: 'Tổng quan cấp cao', roles: ['SUPER_ADMIN'], section: 'super' },
-    { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Phân quyền', roles: ['SUPER_ADMIN'], section: 'super' },
+    { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Quản lý Admin', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/logs',       icon: 'history',              label: 'Audit hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/settings',   icon: 'settings',             label: 'Cấu hình hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
 

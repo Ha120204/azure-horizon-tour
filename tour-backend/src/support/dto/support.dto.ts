@@ -1,6 +1,6 @@
 import {
   IsIn, IsNotEmpty, IsOptional, IsString, MaxLength,
-  IsEmail, IsInt, Min, Max, IsNumber,
+  IsInt, Min, Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 

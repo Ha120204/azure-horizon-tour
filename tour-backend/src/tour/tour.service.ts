@@ -31,7 +31,7 @@ export class TourService {
     private readonly queryService: TourQueryService,
   ) {}
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Create Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  // ── Create ────────────────────────────────────────────────────────────
 
   async resolveDestinationId(destinationId?: number) {
     if (destinationId) return destinationId;
@@ -50,7 +50,7 @@ export class TourService {
   ) {
     const { destinationId, status: dtoStatus } = createTourDto;
 
-    // Admin/SuperAdmin tÃ¡ÂºÂ¡o thÃ¡ÂºÂ³ng PUBLISHED; Staff tÃ¡ÂºÂ¡o DRAFT (bÃ¡ÂºÂ£n nhÃƒÂ¡p Ã¢â‚¬â€ tÃ¡Â»Â± chÃ¡Â»â€°nh sÃ¡Â»Â­a trÃ†Â°Ã¡Â»â€ºc khi gÃ¡Â»Â­i duyÃ¡Â»â€¡t)
+    // Admin/SuperAdmin tạo thẳng PUBLISHED; Staff tạo DRAFT (bản nháp — tự chỉnh sửa trước khi gửi duyệt)
     const isAdminRole =
       creatorRole === 'SUPER_ADMIN' || creatorRole === 'ADMIN';
     const finalStatus: TourStatus = isAdminRole
@@ -90,7 +90,7 @@ export class TourService {
     });
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ FindAll Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  // ── FindAll ───────────────────────────────────────────────────────────
 
   async findAll(
     query: FilterTourDto = {},
@@ -119,7 +119,7 @@ export class TourService {
     const where: Prisma.TourWhereInput = { deletedAt: null };
     const travelScope = parseTravelScope(travelScopeInput);
 
-    // Visibility: Staff chÃ¡Â»â€° thÃ¡ÂºÂ¥y tour cÃ¡Â»Â§a mÃƒÂ¬nh; Admin thÃ¡ÂºÂ¥y tÃ¡ÂºÂ¥t cÃ¡ÂºÂ£; Public chÃ¡Â»â€° thÃ¡ÂºÂ¥y PUBLISHED
+    // Visibility: Staff chỉ thấy tour của mình; Admin thấy tất cả; Public chỉ thấy PUBLISHED
     if (requesterRole === 'STAFF' && requesterId) {
       if (status && Object.values(TourStatus).includes(status as TourStatus)) {
         where.status = status as TourStatus;
@@ -296,20 +296,20 @@ export class TourService {
   }
 
 
-  // â”€â”€â”€ Workflow â”€â”€â”€ delegated to TourWorkflowService â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Workflow ─── delegated to TourWorkflowService ─────────────────────────
   async submitForReview(id: number, requesterId: number) { return this.workflowService.submitForReview(id, requesterId); }
   async reviewTour(id: number, reviewerId: number, action: 'approve' | 'reject', note?: string) { return this.workflowService.reviewTour(id, reviewerId, action, note); }
   async publishTour(id: number, publisherId: number) { return this.workflowService.publishTour(id, publisherId); }
   async getPendingTours() { return this.workflowService.getPendingTours(); }
 
-  // â”€â”€â”€ Content â”€â”€â”€ delegated to TourContentService â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Content ─── delegated to TourContentService ────────────────────────────
   async addGalleryImages(tourId: number, urls: string[], requesterId?: number, requesterRole?: string) { return this.contentService.addGalleryImages(tourId, urls, requesterId, requesterRole); }
   async removeGalleryImage(tourId: number, imageId: number, requesterId?: number, requesterRole?: string) { return this.contentService.removeGalleryImage(tourId, imageId, requesterId, requesterRole); }
   async upsertHighlights(tourId: number, highlights: any[], requesterId?: number, requesterRole?: string) { return this.contentService.upsertHighlights(tourId, highlights, requesterId, requesterRole); }
   async upsertFaqs(tourId: number, faqs: any[], requesterId?: number, requesterRole?: string) { return this.contentService.upsertFaqs(tourId, faqs, requesterId, requesterRole); }
   async updateItineraryDay(tourId: number, dayId: number, data: any, requesterId?: number, requesterRole?: string) { return this.contentService.updateItineraryDay(tourId, dayId, data, requesterId, requesterRole); }
 
-  // â”€â”€â”€ Query â”€â”€â”€ delegated to TourQueryService â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Query ─── delegated to TourQueryService ─────────────────────────────────
   async getAdminStats(requesterId?: number, requesterRole?: string) { return this.queryService.getAdminStats(requesterId, requesterRole); }
   async getTrashedTours(page = 1, limit = 10, query: { search?: string; status?: string; deletable?: string } = {}) { return this.queryService.getTrashedTours(page, limit, query); }
   async restoreTour(id: number) { return this.queryService.restoreTour(id); }

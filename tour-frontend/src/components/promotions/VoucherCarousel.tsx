@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { getTranslatedVoucher } from '@/lib/dev/mockTranslations';
+import { useLocale } from '@/context/LocaleContext';
+import { getLocalizedVoucher } from '@/lib/i18n/vouchers';
 
 interface Voucher {
     id: number;
@@ -23,7 +24,7 @@ interface VoucherCarouselProps {
     onSave: (voucherId: number) => void;
     isModalOpen: boolean;
     setIsModalOpen: (v: boolean) => void;
-    t: (key: string, params?: Record<string, any>) => string;
+    t: (key: string, params?: Record<string, string | number>) => string;
     formatPrice: (price: number) => string;
     language: string;
 }
@@ -40,9 +41,10 @@ const ACCENT_STYLES = [
 function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, onCopy, onSave, t, formatPrice, language, compact }: {
     v: Voucher; idx: number; copiedCode: string | null; savedIds: Set<number>; savingId: number | null;
     onCopy: (code: string) => void; onSave: (id: number) => void;
-    t: (key: string, params?: Record<string, any>) => string; formatPrice: (price: number) => string; language: string; compact?: boolean;
+    t: (key: string, params?: Record<string, string | number>) => string; formatPrice: (price: number) => string; language: string; compact?: boolean;
 }) {
-    const v = getTranslatedVoucher(originalVoucher, language);
+    const { formatDate } = useLocale();
+    const v = getLocalizedVoucher(originalVoucher, language);
     const s = ACCENT_STYLES[idx % ACCENT_STYLES.length];
     const isCopied = copiedCode === v.code;
     const isSaved = savedIds.has(v.id);
@@ -52,10 +54,7 @@ function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, o
         ? `${v.discountValue}% ${t('off')}`
         : `${t('save')} ${formatPrice(v.discountValue)}`;
 
-    const expiryDate = new Date(v.expiresAt).toLocaleDateString(
-        language === 'vi' ? 'vi-VN' : 'en-US',
-        { day: '2-digit', month: 'short', year: 'numeric' }
-    );
+    const expiryDate = formatDate(v.expiresAt, { day: '2-digit', month: 'short', year: 'numeric' });
 
     return (
         <div

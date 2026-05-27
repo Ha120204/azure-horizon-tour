@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
+import { API_BASE_URL } from '@/lib/constants';
 
 export default function RegisterPage() {
     const [fullName, setFullName] = useState('');
@@ -38,7 +39,7 @@ export default function RegisterPage() {
         }
 
         try {
-            const res = await fetch('http://localhost:3000/auth/register', {
+            const res = await fetch(`${API_BASE_URL}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, fullName }),
@@ -50,7 +51,7 @@ export default function RegisterPage() {
                 const errData = await res.json();
                 setError(errData.message || t('auth.regFailed'));
             }
-        } catch (err) {
+        } catch {
             setError(t('auth.serverError'));
         }
     };

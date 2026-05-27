@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { SubscriberService } from './subscriber.service';
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown subscriber cron error';
+}
+
 @Injectable()
 export class SubscriberCronService {
   private readonly logger = new Logger(SubscriberCronService.name);
@@ -13,7 +17,7 @@ export class SubscriberCronService {
     try {
       await this.subscriberService.processDueCampaigns();
     } catch (error) {
-      this.logger.error('Failed to process scheduled marketing campaigns', error);
+      this.logger.error('Failed to process scheduled marketing campaigns', getErrorMessage(error));
     }
   }
 }

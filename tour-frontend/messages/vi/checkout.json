@@ -2,6 +2,10 @@
   "checkout": {
     "continue": "Tiếp tục",
     "edit": "Chỉnh sửa",
+    "deletePassenger": "Xóa hành khách",
+    "editPassenger": "Chỉnh sửa hành khách",
+    "updatePassenger": "Cập nhật hành khách",
+    "editingPassenger": "Đang sửa",
     "backToEdit": "Quay lại chỉnh sửa thông tin",
     "leadRepresentative": "Đại diện",
     "passengerN": "Hành khách {number}",

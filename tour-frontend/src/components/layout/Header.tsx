@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from '@/i18n/routing';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useLocale } from '@/context/LocaleContext';
 import LocaleSwitcher from './LocaleSwitcher';
 import { API_BASE_URL } from '@/lib/constants';
@@ -361,7 +362,17 @@ export default function Header() {
                                     : 'text-white/90 hover:text-white border-white/20 hover:bg-white/10'
                             }`}
                         >
-                            <span className="material-symbols-outlined text-lg">language</span>
+                            {language === 'vi' ? (
+                                <Image
+                                    src="https://flagcdn.com/w40/vn.png"
+                                    alt="Cờ Việt Nam"
+                                    width={24}
+                                    height={18}
+                                    className="h-4 w-6 rounded-[3px] border border-white/40 object-cover shadow-sm"
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-lg">language</span>
+                            )}
                             <span className="text-xs font-bold tracking-wide">{localeLabel}</span>
                         </button>
 
@@ -381,7 +392,7 @@ export default function Header() {
                                     style={{ boxShadow: (isScrolled || !isHomepage) ? undefined : '0 0 0 2px rgba(255,255,255,0.2)' }}
                                 >
                                     {userAvatar ? (
-                                        <img className="w-full h-full object-cover" src={userAvatar} alt={userName} />
+                                        <Image className="h-full w-full object-cover" src={userAvatar} alt={userName} width={36} height={36} sizes="36px" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-primary text-white font-bold text-sm">
                                             {userName ? userName.charAt(0).toUpperCase() : '?'}

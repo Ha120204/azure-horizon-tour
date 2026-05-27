@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 
 // Controller thanh toán riêng (hiện tại logic chính nằm trong BookingController)

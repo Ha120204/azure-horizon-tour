@@ -3,6 +3,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { TourStatus } from '@prisma/client';
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown tour cron error';
+}
+
 @Injectable()
 export class TourCronService {
   private readonly logger = new Logger(TourCronService.name);
@@ -74,7 +78,7 @@ export class TourCronService {
         this.logger.log('No expired tours found to process today.');
       }
     } catch (error) {
-      this.logger.error('Failed to process expired tours', error);
+      this.logger.error('Failed to process expired tours', getErrorMessage(error));
     }
   }
 }

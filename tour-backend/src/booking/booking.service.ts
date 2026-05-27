@@ -29,6 +29,7 @@ import {
   assertVoucherAllowedForDeparture,
   calculateBookingHoldExpiresAt,
   generateBookingCode,
+  getErrorMessage,
   getPassengerTotal,
   IN_STORE_MAX_HOLD_HOURS,
   isPayosDuplicateError,
@@ -63,6 +64,10 @@ export class BookingService {
 
   async getAssistedDrafts(actorUserId: number, actorRole: string, status?: string, search?: string) {
     return this.assistedDraftService.getAssistedDrafts(actorUserId, actorRole, status, search);
+  }
+
+  async deleteAssistedDraft(id: number, actorUserId: number, actorRole: string) {
+    return this.assistedDraftService.deleteAssistedDraft(id, actorUserId, actorRole);
   }
 
   async submitAssistedDraft(id: number, actorUserId: number, actorRole: string) {
@@ -145,7 +150,7 @@ export class BookingService {
 
       // Cleaned comment
       if (tour.startDate < new Date()) {
-        throw new BadRequestException('Tour nÃƒÂ y Ã„â€˜ÃƒÂ£ diÃ¡Â»â€¦n ra, khÃƒÂ´ng thÃ¡Â»Æ’ Ã„â€˜Ã¡ÂºÂ·t');
+        throw new BadRequestException('Tour này đã diễn ra, không thể đặt');
       }
 
       // Cleaned comment
@@ -291,13 +296,11 @@ export class BookingService {
     } catch (payosError: unknown) {
       // Cleaned comment
       if (isPayosDuplicateError(payosError)) {
-        this.logger.warn(
-          `[BOOKING] PayOS order #${orderCode} Ã„â€˜ÃƒÂ£ tÃ¡Â»â€œn tÃ¡ÂºÂ¡i, lÃ¡ÂºÂ¥y lÃ¡ÂºÂ¡i checkout URL.`,
-        );
+        this.logger.warn('[BOOKING] PayOS order already exists, reusing checkout URL.');
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) {
           throw new BadRequestException(
-            'KhÃƒÂ´ng thÃ¡Â»Æ’ tÃ¡ÂºÂ¡o liÃƒÂªn kÃ¡ÂºÂ¿t thanh toÃƒÂ¡n. Vui lÃƒÂ²ng thÃ¡Â»Â­ lÃ¡ÂºÂ¡i sau.',
+            'Không thể tạo liên kết thanh toán. Vui lòng thử lại sau.',
           );
         }
         // Cleaned comment
@@ -312,6 +315,7 @@ export class BookingService {
       data: {
         bookingId: booking.id,
         gateway: 'PAYOS',
+        transactionRef: String(orderCode),
         amount: amountVND,
         status: 'PENDING',
       },
@@ -325,8 +329,8 @@ export class BookingService {
   }
 
   /**
-   * XÃ¡Â»Â­ lÃƒÂ½ khi ngÃ†Â°Ã¡Â»Âi dÃƒÂ¹ng quay vÃ¡Â»Â tÃ¡Â»Â« trang PayOS (hoÃ¡ÂºÂ·c Webhook gÃ¡Â»Âi)
-   * GÃ¡Â»Âi thÃ¡ÂºÂ³ng API PayOS Ã„â€˜Ã¡Â»Æ’ xÃƒÂ¡c nhÃ¡ÂºÂ­n trÃ¡ÂºÂ¡ng thÃƒÂ¡i thÃ¡Â»Â±c tÃ¡ÂºÂ¿, khÃƒÂ´ng tin query params
+   * Xử lý khi người dùng quay về từ trang PayOS (hoặc Webhook gọi)
+   * Gọi thẳng API PayOS để xác nhận trạng thái thực tế, không tin query params
    */
   async handlePayosReturn(orderCode: number) {
     // Cleaned comment
@@ -404,15 +408,15 @@ export class BookingService {
             startDate: fullBooking.tour.startDate.toLocaleDateString('vi-VN'),
             duration: fullBooking.tour.duration,
             numberOfPeople: fullBooking.numberOfPeople,
-            totalPrice: `${fullBooking.totalPrice.toLocaleString('vi-VN')}Ã¢â€šÂ«`,
+            totalPrice: `${fullBooking.totalPrice.toLocaleString('vi-VN')}₫`,
             discountAmount:
               fullBooking.discountAmount > 0
-                ? `${fullBooking.discountAmount.toLocaleString('vi-VN')}Ã¢â€šÂ«`
+                ? `${fullBooking.discountAmount.toLocaleString('vi-VN')}₫`
                 : undefined,
           });
         }
       } catch (emailError) {
-        this.logger.error('[EMAIL] LÃ¡Â»â€”i gÃ¡Â»Â­i email xÃƒÂ¡c nhÃ¡ÂºÂ­n:', emailError);
+        this.logger.error('[EMAIL] Failed to send confirmation email:', getErrorMessage(emailError));
         // Cleaned comment
       }
     } else if (
@@ -444,7 +448,7 @@ export class BookingService {
   }
 
   /**
-   * TÃƒÂ¬m booking theo ID (orderCode cÃ¡Â»Â§a PayOS)
+   * Tìm booking theo ID (orderCode của PayOS)
    */
   async findByOrderCode(orderCode: number) {
     const bookingId =
@@ -504,8 +508,8 @@ export class BookingService {
   }
 
   /**
-   * CRON JOB: QuÃƒÂ©t Ã„â€˜Ã†Â¡n hÃƒÂ ng PENDING quÃƒÂ¡ 15 phÃƒÂºt vÃƒÂ  tÃ¡Â»Â± Ã„â€˜Ã¡Â»â„¢ng hÃ¡Â»Â§y + hoÃƒÂ n trÃ¡ÂºÂ£ ghÃ¡ÂºÂ¿.
-   * Ã„ÂÃ†Â°Ã¡Â»Â£c gÃ¡Â»Âi bÃ¡Â»Å¸i @nestjs/schedule mÃ¡Â»â€”i 5 phÃƒÂºt.
+   * CRON JOB: Quét đơn hàng PENDING quá 15 phút và tự động hủy + hoàn trả ghế.
+   * Được gọi bởi @nestjs/schedule mỗi 5 phút.
    */
   async cancelExpiredBookings(): Promise<{
     batchSize: number;
@@ -557,12 +561,12 @@ export class BookingService {
       );
       processedCount += 1;
       this.logger.log(
-        `[CRON] Ã„ÂÃƒÂ£ hÃ¡Â»Â§y booking #${booking.id} (${booking.bookingCode}) vÃƒÂ  hoÃƒÂ n ${booking.numberOfPeople} ghÃ¡ÂºÂ¿ cho tour #${booking.tourId}`,
+        `[CRON] Cancelled bookingId=${booking.id} and restored ${booking.numberOfPeople} seats for tourId=${booking.tourId}`,
       );
     }
 
     this.logger.log(
-      `[CRON] HoÃƒÂ n tÃ¡ÂºÂ¥t dÃ¡Â»Ân dÃ¡ÂºÂ¹p ${processedCount}/${expiredBookings.length} Ã„â€˜Ã†Â¡n hÃƒÂ ng.`,
+      `[CRON] Hoàn tất dọn dẹp ${processedCount}/${expiredBookings.length} đơn hàng.`,
     );
     return { batchSize: expiredBookings.length, processedCount };
   }
@@ -570,8 +574,8 @@ export class BookingService {
   // Cleaned comment
 
   /**
-   * Admin: XÃƒÂ¡c nhÃ¡ÂºÂ­n thÃ¡Â»Â§ cÃƒÂ´ng booking PENDING
-   * DÃƒÂ¹ng khi khÃƒÂ¡ch Ã„â€˜ÃƒÂ£ thanh toÃƒÂ¡n ngoÃƒÂ i hÃ¡Â»â€¡ thÃ¡Â»â€˜ng (chuyÃ¡Â»Æ’n khoÃ¡ÂºÂ£n sai nÃ¡Â»â„¢i dung, tiÃ¡Â»Ân mÃ¡ÂºÂ·t, v.v.)
+   * Admin: Xác nhận thủ công booking PENDING
+   * Dùng khi khách đã thanh toán ngoài hệ thống (chuyển khoản sai nội dung, tiền mặt, v.v.)
    */
   async confirmManual(bookingId: number, adminId?: number) {
     const booking = await this.prisma.booking.findUnique({
@@ -582,11 +586,11 @@ export class BookingService {
       },
     });
 
-    if (!booking) throw new NotFoundException('Booking khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i');
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
     if (booking.status === 'CONFIRMED')
-      throw new BadRequestException('Ã„ÂÃ†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ Ã„â€˜Ã†Â°Ã¡Â»Â£c xÃƒÂ¡c nhÃ¡ÂºÂ­n trÃ†Â°Ã¡Â»â€ºc Ã„â€˜ÃƒÂ³');
+      throw new BadRequestException('Đơn hàng đã được xác nhận trước đó');
     if (booking.status === 'CANCELLED')
-      throw new BadRequestException('KhÃƒÂ´ng thÃ¡Â»Æ’ xÃƒÂ¡c nhÃ¡ÂºÂ­n Ã„â€˜Ã†Â¡n hÃƒÂ ng Ã„â€˜ÃƒÂ£ hÃ¡Â»Â§y');
+      throw new BadRequestException('Không thể xác nhận đơn hàng đã hủy');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const confirmed = await tx.booking.update({
@@ -611,7 +615,7 @@ export class BookingService {
     });
 
     this.logger.log(
-      `[ADMIN MANUAL] Ã„ÂÃƒÂ£ xÃƒÂ¡c nhÃ¡ÂºÂ­n thÃ¡Â»Â§ cÃƒÂ´ng booking #${bookingId} (${booking.bookingCode}) bÃ¡Â»Å¸i Admin ID #${adminId}`,
+      `[ADMIN MANUAL] Booking confirmed manually bookingId=${bookingId} adminId=${adminId ?? 'system'}`,
     );
 
     return {
@@ -628,10 +632,10 @@ export class BookingService {
       include: { tour: { select: { startDate: true } } },
     });
 
-    if (!booking) throw new NotFoundException('Booking khÃƒÂ´ng tÃ¡Â»â€œn tÃ¡ÂºÂ¡i');
-    if (booking.userId !== userId) throw new ForbiddenException('BÃ¡ÂºÂ¡n khÃƒÂ´ng cÃƒÂ³ quyÃ¡Â»Ân chÃ¡Â»â€°nh sÃ¡Â»Â­a booking nÃƒÂ y');
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.userId !== userId) throw new ForbiddenException('Bạn không có quyền chỉnh sửa booking này');
     if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
-      throw new BadRequestException('ChÃ¡Â»â€° cÃƒÂ³ thÃ¡Â»Æ’ thay Ã„â€˜Ã¡Â»â€¢i phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n cho Ã„â€˜Ã†Â¡n hÃƒÂ ng chÃ†Â°a thanh toÃƒÂ¡n');
+      throw new BadRequestException('Chỉ có thể thay đổi phương thức thanh toán cho đơn hàng chưa thanh toán');
     }
 
     const now = new Date();
@@ -657,6 +661,25 @@ export class BookingService {
     });
 
     if (paymentMethod === 'IN_STORE') {
+      await this.prisma.paymentTransaction.updateMany({
+        where: { bookingId, gateway: 'PAYOS', status: 'PENDING' },
+        data: {
+          status: 'FAILED',
+          confirmedNote: 'Khach chuyen sang thanh toan tai cua hang',
+        },
+      });
+      await this.prisma.bookingNotification.updateMany({
+        where: {
+          bookingId,
+          type: 'PAYMENT_REQUEST',
+          status: { in: ['PENDING', 'SENT'] },
+        },
+        data: {
+          status: 'FAILED',
+          errorMessage: 'Don da chuyen sang thanh toan tai quay',
+        },
+      });
+
       const existingTx = await this.prisma.paymentTransaction.findFirst({
         where: { bookingId, gateway: 'MANUAL' },
       });
@@ -670,10 +693,18 @@ export class BookingService {
           },
         });
       }
+    } else {
+      await this.prisma.paymentTransaction.updateMany({
+        where: { bookingId, gateway: 'MANUAL', status: 'PENDING' },
+        data: {
+          status: 'FAILED',
+          confirmedNote: 'Khach chuyen sang thanh toan PayOS',
+        },
+      });
     }
 
     return {
-      message: 'CÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t phÃ†Â°Ã†Â¡ng thÃ¡Â»Â©c thanh toÃƒÂ¡n thÃƒÂ nh cÃƒÂ´ng',
+      message: 'Cập nhật phương thức thanh toán thành công',
       booking: updated,
     };
   }

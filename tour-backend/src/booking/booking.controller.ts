@@ -45,6 +45,10 @@ type AuthenticatedRequest = {
   };
 };
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown booking error';
+}
+
 type PayosReturnQuery = {
   orderCode?: string | number;
   cancel?: string;
@@ -89,7 +93,14 @@ class AdminOnlyGuard implements CanActivate {
 /** Guard JWT tùy chọn — không chặn khách vãng lai (không ném lỗi 401) */
 @Injectable()
 class OptionalJwtAuthGuard extends AuthGuard('jwt') {
-  handleRequest(err, user, info, context) {
+  handleRequest<TUser = AuthenticatedRequest['user'] | null>(
+    _err: unknown,
+    user: TUser | false | null,
+    _info: unknown,
+    _context: ExecutionContext,
+  ): TUser | null {
+    void _info;
+    void _context;
     return user || null;
   }
 }
@@ -142,7 +153,7 @@ export class BookingController {
       // Thanh toán thất bại hoặc chưa hoàn tất
       return res.redirect(`${frontendUrl}/?error=payment_failed`);
     } catch (error) {
-      console.error('PayOS Return Error:', error);
+      console.error('PayOS Return Error:', getErrorMessage(error));
       return res.redirect(`${frontendUrl}/?error=payment_failed`);
     }
   }
@@ -166,7 +177,7 @@ export class BookingController {
 
       return { success: true };
     } catch (error) {
-      console.error('PayOS Webhook Error:', error);
+      console.error('PayOS Webhook Error:', getErrorMessage(error));
       return { success: false };
     }
   }
@@ -249,7 +260,7 @@ export class BookingController {
   ) {
     const validPaymentMethod =
       paymentMethod === 'PAYOS' || paymentMethod === 'IN_STORE'
-        ? (paymentMethod as 'PAYOS' | 'IN_STORE')
+        ? paymentMethod
         : undefined;
     const result = await this.bookingService.getAllBookings(
       status,
@@ -312,6 +323,18 @@ export class BookingController {
       dto,
     );
     return { message: 'Success', data };
+  }
+
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Delete('admin/assisted-drafts/:id')
+  @AuditLog('DELETE', 'AssistedBookingDraft')
+  async deleteAssistedDraft(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    const userId = getAuthUserId(req);
+    const role = getAuthRole(req);
+    return this.bookingService.deleteAssistedDraft(Number(id), userId, role);
   }
 
   @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
@@ -648,9 +671,9 @@ export class BookingController {
   }
 
   /**
-   * [CUSTOMER] Báo sự cố thanh toán — tạo support ticket gắn booking
+   * [CUSTOMER] Yêu cầu kiểm tra thanh toán — tạo support ticket gắn booking
    * POST /booking/:id/payment-issue
-   * Body: { message, transactionRef?, evidenceUrl? }
+   * Body: { amount, transferredAt, transactionRef, senderBank, senderAccountName, message?, evidenceUrl? }
    */
   @UseGuards(AuthGuard('jwt'))
   @Post(':id/payment-issue')
@@ -659,13 +682,44 @@ export class BookingController {
     @Body() body: ReportPaymentIssueDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    if (!body.message?.trim() || body.message.trim().length < 5) {
-      throw new BadRequestException('Mô tả sự cố là bắt buộc (tối thiểu 5 ký tự)');
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestException('Số tiền đã chuyển là bắt buộc');
+    }
+    if (!body.transferredAt?.trim()) {
+      throw new BadRequestException('Thời gian chuyển khoản là bắt buộc');
+    }
+    const transferredAt = new Date(body.transferredAt);
+    if (Number.isNaN(transferredAt.getTime())) {
+      throw new BadRequestException('Thời gian chuyển khoản không hợp lệ');
+    }
+    if (!body.transactionRef?.trim() || body.transactionRef.trim().length < 4) {
+      throw new BadRequestException('Mã giao dịch hoặc nội dung chuyển khoản là bắt buộc');
+    }
+    if (!body.senderBank?.trim()) {
+      throw new BadRequestException('Ngân hàng chuyển khoản là bắt buộc');
+    }
+    if (!body.senderAccountName?.trim() || body.senderAccountName.trim().length < 2) {
+      throw new BadRequestException('Tên chủ tài khoản chuyển là bắt buộc');
+    }
+    const message = body.message?.trim() ?? '';
+    if (message && message.length < 5) {
+      throw new BadRequestException('Ghi chú phải có tối thiểu 5 ký tự');
     }
     return this.bookingPaymentService.reportPaymentIssue(
       Number(id),
       getAuthUserId(req),
-      body,
+      {
+        ...body,
+        amount,
+        transferredAt: transferredAt.toISOString(),
+        transactionRef: body.transactionRef.trim(),
+        senderBank: body.senderBank.trim(),
+        senderAccountName: body.senderAccountName.trim(),
+        message:
+          message ||
+          `Khách báo đã chuyển ${amount.toLocaleString('vi-VN')}đ nhưng hệ thống chưa ghi nhận.`,
+      },
     );
   }
 

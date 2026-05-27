@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown mail error';
+}
+
 @Injectable()
 export class MailService {
   private transporter: nodemailer.Transporter;
@@ -44,28 +48,28 @@ export class MailService {
     const safeSubject = this.escapeHtml(data.subject);
     const safePreview = this.escapeHtml(data.previewText ?? '');
     const safeBody = this.escapeHtml(data.body).replace(/\n/g, '<br/>');
-    const safeCampaignName = this.escapeHtml(data.campaignName || 'Marketing campaign');
+    const safeCampaignName = this.escapeHtml(data.campaignName || 'Chiến dịch tiếp thị');
 
     const info: unknown = await this.sendMail({
-      from: `"Azure Horizon Marketing" <${this.configService.get('MAIL_USER')}>`,
+      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
       to: data.to,
-      subject: `[TEST] ${data.subject}`,
+      subject: `[GỬI THỬ] ${data.subject}`,
       html: `
         <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
           <div style="background:#0f3d8a;padding:32px 28px;color:white;">
-            <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#bfdbfe;">Azure Horizon Test Email</p>
+            <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#bfdbfe;">Email gửi thử Azure Horizon</p>
             <h1 style="margin:0;font-size:26px;line-height:1.25;">${safeSubject}</h1>
             ${safePreview ? `<p style="margin:14px 0 0;color:#dbeafe;font-size:15px;line-height:1.6;">${safePreview}</p>` : ''}
           </div>
           <div style="padding:28px;background:white;">
-            <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Campaign draft: <strong style="color:#0f172a;">${safeCampaignName}</strong></p>
+            <p style="margin:0 0 16px;color:#64748b;font-size:13px;">Bản nháp chiến dịch: <strong style="color:#0f172a;">${safeCampaignName}</strong></p>
             <div style="color:#1e293b;font-size:15px;line-height:1.75;">${safeBody}</div>
             <div style="margin-top:28px;padding:16px;border-radius:14px;background:#eff6ff;color:#1d4ed8;font-size:13px;line-height:1.6;">
-              Đây là email test nội bộ. Campaign chưa được gửi tới subscriber.
+              Đây là email gửi thử nội bộ. Chiến dịch chưa được gửi tới người đăng ký.
             </div>
           </div>
           <div style="padding:18px 28px;background:#f1f5f9;color:#94a3b8;font-size:12px;text-align:center;">
-            © 2026 Azure Horizon. Test campaign only.
+            © 2026 Azure Horizon. Chỉ dùng để gửi thử chiến dịch.
           </div>
         </div>
       `,
@@ -83,7 +87,7 @@ export class MailService {
     const safeSubject = this.escapeHtml(data.subject);
     const safePreview = this.escapeHtml(data.previewText ?? '');
     const safeBody = this.escapeHtml(data.body).replace(/\n/g, '<br/>');
-    const safeCampaignName = this.escapeHtml(data.campaignName || 'Azure Horizon newsletter');
+    const safeCampaignName = this.escapeHtml(data.campaignName || 'Bản tin Azure Horizon');
 
     const info: unknown = await this.sendMail({
       from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
@@ -154,10 +158,10 @@ export class MailService {
 
     try {
       const info: unknown = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Email sent successfully to:', to);
+      console.log('Password reset email sent successfully.');
       return info;
     } catch (error) {
-      console.error('❌ Error sending email:', error);
+      console.error('Error sending password reset email:', getErrorMessage(error));
       throw error;
     }
   }
@@ -206,10 +210,10 @@ export class MailService {
 
     try {
       const info: unknown = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Welcome email sent successfully to:', to);
+      console.log('Welcome email sent successfully.');
       return info;
     } catch (error) {
-      console.error('❌ Error sending welcome email:', error);
+      console.error('Error sending welcome email:', getErrorMessage(error));
       // Optional: do not throw to avoid interrupting registration flow
       return null;
     }
@@ -324,10 +328,10 @@ export class MailService {
 
     try {
       const info: unknown = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Booking confirmation email sent to:', data.to);
+      console.log('Booking confirmation email sent successfully.');
       return info;
     } catch (error) {
-      console.error('❌ Error sending booking confirmation:', error);
+      console.error('Error sending booking confirmation:', getErrorMessage(error));
       // Không throw — email thất bại không nên ảnh hưởng luồng chính
     }
   }
@@ -469,9 +473,9 @@ export class MailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log('✅ Cancel request email sent to:', data.to);
+      console.log('Cancel request email sent successfully.');
     } catch (error) {
-      console.error('❌ Error sending cancel request email:', error);
+      console.error('Error sending cancel request email:', getErrorMessage(error));
     }
   }
 
@@ -551,9 +555,9 @@ export class MailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log('✅ Cancellation approved email sent to:', data.to);
+      console.log('Cancellation approved email sent successfully.');
     } catch (error) {
-      console.error('❌ Error sending cancellation approved email:', error);
+      console.error('Error sending cancellation approved email:', getErrorMessage(error));
     }
   }
 
@@ -622,9 +626,9 @@ export class MailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log('✅ Cancellation rejected email sent to:', data.to);
+      console.log('Cancellation rejected email sent successfully.');
     } catch (error) {
-      console.error('❌ Error sending cancellation rejected email:', error);
+      console.error('Error sending cancellation rejected email:', getErrorMessage(error));
     }
   }
 }

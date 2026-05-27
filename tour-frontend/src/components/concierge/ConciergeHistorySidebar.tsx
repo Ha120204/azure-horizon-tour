@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from '@/context/LocaleContext';
 import type { ChatSessionSummary } from './types';
 
 interface ConciergeHistorySidebarProps {
@@ -18,6 +19,8 @@ export default function ConciergeHistorySidebar({
     handleDeleteSession,
     setIsHistoryOpen,
 }: ConciergeHistorySidebarProps) {
+    const { formatDate } = useLocale();
+
     return (
         <aside className="absolute inset-x-3 bottom-[104px] top-[132px] z-30 rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex h-full flex-col">
@@ -68,7 +71,7 @@ export default function ConciergeHistorySidebar({
                                                     {session.title}
                                                 </p>
                                                 <span className="shrink-0 text-[10px] font-semibold uppercase text-slate-400">
-                                                    {new Date(session.updatedAt).toLocaleDateString('vi-VN', {
+                                                    {formatDate(session.updatedAt, {
                                                         day: '2-digit',
                                                         month: '2-digit',
                                                     })}

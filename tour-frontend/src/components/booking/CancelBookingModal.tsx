@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/constants';
+import { useLocale } from '@/context/LocaleContext';
 
 const CANCEL_REASONS = [
   'Thay đổi kế hoạch cá nhân',
@@ -65,6 +68,7 @@ export default function CancelBookingModal({
   onClose,
   onSuccess,
 }: CancelBookingModalProps) {
+  const { formatPrice, formatDate } = useLocale();
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
   const [bankName, setBankName] = useState('');
@@ -80,6 +84,14 @@ export default function CancelBookingModal({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = 'cancel-booking-title';
+  const errorId = 'cancel-booking-error';
+  const bankButtonId = 'cancel-refund-bank-button';
+  const bankListboxId = 'cancel-refund-bank-listbox';
+  const bankSearchId = 'cancel-refund-bank-search';
+  const accountNumberId = 'cancel-refund-account-number';
+  const accountNameId = 'cancel-refund-account-name';
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -89,6 +101,10 @@ export default function CancelBookingModal({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
   }, []);
 
   const filteredBanks = banksList.filter(b => 
@@ -109,7 +125,14 @@ export default function CancelBookingModal({
 
   // Đóng modal bằng Escape & Fetch Banks
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (isDropdownOpen) {
+        setIsDropdownOpen(false);
+        return;
+      }
+      onClose();
+    };
     window.addEventListener('keydown', handleKey);
     
     // Gọi API danh sách ngân hàng Việt Nam từ VietQR (Napas)
@@ -123,7 +146,7 @@ export default function CancelBookingModal({
       .catch(err => console.error('Lỗi lấy danh sách ngân hàng:', err));
 
     return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
+  }, [isDropdownOpen, onClose]);
 
   const getFinalReason = () =>
     selectedReason === 'Khác' ? customReason.trim() : selectedReason;
@@ -147,7 +170,7 @@ export default function CancelBookingModal({
 
     try {
       const res = await fetchWithAuth(
-        `http://localhost:3000/booking/${bookingId}/cancel-request`,
+        `${API_BASE_URL}/booking/${bookingId}/cancel-request`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -194,10 +217,19 @@ export default function CancelBookingModal({
       style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={error ? errorId : undefined}
+        tabIndex={-1}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300 focus:outline-none"
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-red-500 to-rose-600 px-8 py-6 relative">
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
             aria-label="Đóng"
@@ -209,7 +241,7 @@ export default function CancelBookingModal({
               <span className="material-symbols-outlined text-white text-xl">cancel</span>
             </div>
             <div>
-              <h2 className="text-white font-bold text-lg leading-tight">
+              <h2 id={titleId} className="text-white font-bold text-lg leading-tight">
                 {isPaid ? 'Yêu Cầu Hủy Tour' : 'Hủy Đặt Tour'}
               </h2>
               <p className="text-white/70 text-xs mt-0.5">Mã đặt tour: {bookingCode}</p>
@@ -224,7 +256,7 @@ export default function CancelBookingModal({
             <p className="font-bold text-slate-800 text-sm leading-snug">{tourName}</p>
             {tourStartDate && (
               <p className="text-xs text-slate-500 mt-1">
-                Ngày khởi hành: {new Date(tourStartDate).toLocaleDateString('vi-VN', { dateStyle: 'long' })}
+                Ngày khởi hành: {formatDate(tourStartDate, { dateStyle: 'long' })}
               </p>
             )}
           </div>
@@ -237,7 +269,7 @@ export default function CancelBookingModal({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-slate-600">
                 <span>Tổng đã thanh toán</span>
-                <span className="font-semibold">{isPaid ? totalPrice.toLocaleString('vi-VN') + 'đ' : '—'}</span>
+                <span className="font-semibold">{isPaid ? formatPrice(totalPrice) : '—'}</span>
               </div>
               <div className={`flex justify-between font-bold pt-2 border-t ${tierColor.border}`}>
                 <span className={tierColor.text}>
@@ -245,7 +277,7 @@ export default function CancelBookingModal({
                 </span>
                 <span className={`text-lg ${tierColor.amount}`}>
                   {refundPreview.refundAmount > 0
-                    ? refundPreview.refundAmount.toLocaleString('vi-VN') + 'đ'
+                    ? formatPrice(refundPreview.refundAmount)
                     : isPaid ? 'Không hoàn' : '—'}
                 </span>
               </div>
@@ -258,7 +290,7 @@ export default function CancelBookingModal({
             <p className="text-sm font-bold text-slate-700 mb-3">
               📝 Lý Do Hủy <span className="text-red-500">*</span>
             </p>
-            <div className="space-y-2">
+            <div role="radiogroup" aria-label="Lý do hủy tour" className="space-y-2">
               {CANCEL_REASONS.map((reason) => (
                 <label
                   key={reason}
@@ -287,6 +319,7 @@ export default function CancelBookingModal({
                 className="mt-3 w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent resize-none transition-all"
                 rows={3}
                 placeholder="Nhập lý do cụ thể của bạn..."
+                aria-label="Lý do hủy khác"
                 value={customReason}
                 onChange={(e) => setCustomReason(e.target.value)}
                 maxLength={500}
@@ -303,7 +336,13 @@ export default function CancelBookingModal({
               </p>
               <div className="space-y-3">
                 <div className="relative" ref={dropdownRef}>
-                  <div 
+                  <button
+                    id={bankButtonId}
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isDropdownOpen}
+                    aria-controls={isDropdownOpen ? bankListboxId : undefined}
+                    aria-label="Tìm hoặc chọn ngân hàng nhận tiền hoàn"
                     className={`w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm flex items-center justify-between cursor-pointer transition-all bg-white ${bankName ? 'text-slate-700' : 'text-slate-400'}`}
                     onClick={() => {
                       setIsDropdownOpen(!isDropdownOpen);
@@ -316,7 +355,7 @@ export default function CancelBookingModal({
                     <span className="material-symbols-outlined text-slate-400 text-lg transition-transform duration-200" style={{ transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0)' }}>
                       expand_more
                     </span>
-                  </div>
+                  </button>
 
                   {isDropdownOpen && banksList.length > 0 && (
                     <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col max-h-72 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -324,8 +363,10 @@ export default function CancelBookingModal({
                         <div className="relative">
                           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
                           <input
+                            id={bankSearchId}
                             type="text"
                             placeholder="Gõ để tìm tên hoặc mã ngân hàng..."
+                            aria-label="Tìm ngân hàng nhận tiền hoàn"
                             className="w-full pl-9 pr-4 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -333,12 +374,15 @@ export default function CancelBookingModal({
                           />
                         </div>
                       </div>
-                      <div className="overflow-y-auto overflow-x-hidden flex-1">
+                      <div id={bankListboxId} role="listbox" aria-labelledby={bankButtonId} className="overflow-y-auto overflow-x-hidden flex-1">
                         {filteredBanks.length > 0 ? (
-                          filteredBanks.map((bank, idx) => (
-                            <div 
-                              key={idx} 
-                              className={`px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm text-slate-700 border-b border-slate-50 last:border-0 transition-colors flex items-center gap-3 ${bankName === bank.shortName ? 'bg-blue-50/80 font-medium' : ''}`}
+                          filteredBanks.map((bank) => (
+                            <button
+                              key={`${bank.shortName}-${bank.name}`}
+                              type="button"
+                              role="option"
+                              aria-selected={bankName === bank.shortName}
+                              className={`flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left text-sm text-slate-700 transition-colors last:border-0 hover:bg-blue-50 ${bankName === bank.shortName ? 'bg-blue-50/80 font-medium' : ''}`}
                               onClick={() => {
                                 setBankName(bank.shortName);
                                 setIsDropdownOpen(false);
@@ -348,10 +392,10 @@ export default function CancelBookingModal({
                               }}
                             >
                               <div className="w-8 h-8 rounded-full border border-slate-200 bg-white shrink-0 flex items-center justify-center p-1">
-                                {bank.logo ? <img src={bank.logo} alt={bank.shortName} className="max-w-full max-h-full object-contain" /> : <span className="material-symbols-outlined text-slate-400 text-xs">account_balance</span>}
+                                {bank.logo ? <Image src={bank.logo} alt={bank.shortName} width={32} height={32} sizes="32px" className="max-h-full max-w-full object-contain" unoptimized /> : <span className="material-symbols-outlined text-slate-400 text-xs">account_balance</span>}
                               </div>
                               <span className="truncate">{bank.shortName} - {bank.name}</span>
-                            </div>
+                            </button>
                           ))
                         ) : (
                           <div className="px-4 py-6 text-center text-sm text-slate-500">
@@ -364,10 +408,16 @@ export default function CancelBookingModal({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                   <div>
+                    <label htmlFor={accountNumberId} className="mb-1.5 block text-xs font-bold text-blue-900">
+                      Số tài khoản nhận hoàn
+                    </label>
                     <input
+                      id={accountNumberId}
                       type="text"
                       placeholder="Số tài khoản"
                       value={accountNumber}
+                      aria-required="true"
+                      required
                       onChange={(e) => {
                         setAccountNumber(e.target.value.replace(/[^0-9]/g, ''));
                         setIsVerified(false);
@@ -410,7 +460,11 @@ export default function CancelBookingModal({
                   </div>
                 </div>
                 <div>
+                  <label htmlFor={accountNameId} className="mb-1.5 block text-xs font-bold text-blue-900">
+                    Tên chủ tài khoản
+                  </label>
                   <input
+                    id={accountNameId}
                     type="text"
                     placeholder="Tên chủ tài khoản (Tự động điền)"
                     value={accountName}
@@ -435,7 +489,7 @@ export default function CancelBookingModal({
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+            <div id={errorId} role="alert" className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
               <span className="material-symbols-outlined text-base">error</span>
               {error}
             </div>
@@ -445,6 +499,7 @@ export default function CancelBookingModal({
         {/* Footer Buttons */}
         <div className="px-8 pb-8 pt-2 grid grid-cols-2 gap-3">
           <button
+            type="button"
             onClick={onClose}
             disabled={isSubmitting}
             className="py-3.5 rounded-xl border-2 border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all text-sm disabled:opacity-50"
@@ -452,6 +507,7 @@ export default function CancelBookingModal({
             Quay Lại
           </button>
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={isSubmitting || !selectedReason || (selectedReason === 'Khác' && customReason.trim().length < 3)}
             className="py-3.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold hover:opacity-90 transition-all text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"

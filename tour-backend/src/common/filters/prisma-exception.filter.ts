@@ -67,10 +67,7 @@ export class PrismaExceptionFilter implements ExceptionFilter {
 
       default: {
         // Log lỗi chi tiết phía server để debug, không hiện cho client
-        this.logger.error(
-          `Prisma Error [${exception.code}]: ${exception.message}`,
-          exception.stack,
-        );
+        this.logger.error(`Prisma Error [${exception.code}]`);
         break;
       }
     }

@@ -1,5 +1,6 @@
 import type { Notif } from './types';
 import { API_BASE_URL } from '@/lib/constants';
+import { ADMIN_AND_SUPER_ROLES, ALL_ADMIN_ROLES, canAccessRole } from '@/lib/adminAccess';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
 // ── API utilities ─────────────────────────────────────────────────────────────
@@ -45,11 +46,17 @@ function getNumber(value: unknown, fallback = 0) {
 }
 
 // ── Fetch all notification sources ───────────────────────────────────────────
-export async function fetchAllNotifs(): Promise<Notif[]> {
+export async function fetchAllNotifs(userRole: string): Promise<Notif[]> {
+    const canSeeReviewNotifs = canAccessRole(userRole, ADMIN_AND_SUPER_ROLES);
+    const canSeeCustomerNotifs = canAccessRole(userRole, ALL_ADMIN_ROLES);
     const [bookingRes, reviewRes, userRes, supportRes] = await Promise.allSettled([
         fetchWithAuth(`${API_BASE_URL}/booking/admin/all?limit=15&status=ALL`),
-        fetchWithAuth(`${API_BASE_URL}/review/admin/all?page=1&limit=10`),
-        fetchWithAuth(`${API_BASE_URL}/user?role=CUSTOMER&page=1&limit=8`),
+        canSeeReviewNotifs
+            ? fetchWithAuth(`${API_BASE_URL}/review/admin/all?page=1&limit=10`)
+            : Promise.resolve(null),
+        canSeeCustomerNotifs
+            ? fetchWithAuth(`${API_BASE_URL}/user?role=CUSTOMER&page=1&limit=8`)
+            : Promise.resolve(null),
         fetchWithAuth(`${API_BASE_URL}/support/tickets?status=ALL&page=1&limit=10`),
     ]);
 
@@ -98,7 +105,7 @@ export async function fetchAllNotifs(): Promise<Notif[]> {
     }
 
     // ── 2. Review notifications ──
-    if (reviewRes.status === 'fulfilled' && reviewRes.value.ok) {
+    if (reviewRes.status === 'fulfilled' && reviewRes.value?.ok) {
         const json = await reviewRes.value.json();
         const reviews = pickArray(json, ['reviews']);
         for (const r of reviews) {
@@ -141,7 +148,7 @@ export async function fetchAllNotifs(): Promise<Notif[]> {
     }
 
     // ── 4. New customer notifications ──
-    if (userRes.status === 'fulfilled' && userRes.value.ok) {
+    if (userRes.status === 'fulfilled' && userRes.value?.ok) {
         const json = await userRes.value.json();
         const users = pickArray(json, ['users']);
         const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;

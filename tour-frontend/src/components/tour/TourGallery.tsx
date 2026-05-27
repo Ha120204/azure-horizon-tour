@@ -1,17 +1,45 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
+import type { Tour } from '@/types';
 
 interface TourImage { id: number; url: string; altText?: string; sortOrder: number; }
+type GalleryTour = Pick<Tour, 'name' | 'tourCode' | 'imageUrl'> & {
+    images?: TourImage[];
+};
 
 interface TourGalleryProps {
-    tour: any;
+    tour: GalleryTour;
     t: (key: string) => string;
 }
 
 const FALLBACK_IMAGES = [
     'https://images.unsplash.com/photo-1723380775952-28ea1a7a330a?auto=format&fit=crop&q=80&w=1200',
 ];
+
+function GalleryImage({
+    src,
+    alt,
+    sizes,
+    priority = false,
+}: {
+    src: string;
+    alt: string;
+    sizes: string;
+    priority?: boolean;
+}) {
+    return (
+        <Image
+            src={src}
+            alt={alt}
+            fill
+            sizes={sizes}
+            priority={priority}
+            className="object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+    );
+}
 
 export default function TourGallery({ tour, t }: TourGalleryProps) {
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -56,7 +84,7 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
         if (imgCount === 1) {
             return (
                 <div className="w-full h-[300px] md:h-[480px] rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                    <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={allImages[0]} />
+                    <GalleryImage src={allImages[0]} alt={tour.name} sizes="100vw" priority />
                     {renderTourCode()}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                 </div>
@@ -68,12 +96,12 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
                     <div className="rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={allImages[0]} />
+                        <GalleryImage src={allImages[0]} alt={tour.name} sizes="(min-width: 768px) 50vw, 100vw" priority />
                         {renderTourCode()}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
                     <div className="hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(1)}>
-                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} 2`} src={allImages[1]} />
+                        <GalleryImage src={allImages[1]} alt={`${tour.name} 2`} sizes="50vw" />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                         {renderViewAllBtn()}
                     </div>
@@ -86,16 +114,16 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
                     <div className="md:col-span-2 md:row-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={allImages[0]} />
+                        <GalleryImage src={allImages[0]} alt={tour.name} sizes="(min-width: 768px) 67vw, 100vw" priority />
                         {renderTourCode()}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
                     <div className="hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(1)}>
-                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} 2`} src={allImages[1]} />
+                        <GalleryImage src={allImages[1]} alt={`${tour.name} 2`} sizes="33vw" />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
                     <div className="hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(2)}>
-                        <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} 3`} src={allImages[2]} />
+                        <GalleryImage src={allImages[2]} alt={`${tour.name} 3`} sizes="33vw" />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                         {renderViewAllBtn()}
                     </div>
@@ -110,7 +138,7 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
             <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
                 {/* Ảnh chính */}
                 <div className="md:col-span-2 md:row-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                    <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={tour.name} src={main} />
+                    <GalleryImage src={main} alt={tour.name} sizes="(min-width: 768px) 50vw, 100vw" priority />
                     {renderTourCode()}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                 </div>
@@ -121,7 +149,7 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
                     const extraCount = allImages.length - 4;
                     return (
                         <div key={i} className={`hidden md:block rounded-2xl overflow-hidden relative cursor-zoom-in group ${i === 2 ? 'md:col-span-2' : ''}`} onClick={() => setLightboxIndex(i + 1)}>
-                            <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={`${tour.name} ${i + 2}`} src={url} />
+                            <GalleryImage src={url} alt={`${tour.name} ${i + 2}`} sizes={i === 2 ? '50vw' : '25vw'} />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                             {isLast && (
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
@@ -188,9 +216,12 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
                     )}
 
                     <div onClick={(e) => e.stopPropagation()} className="max-w-5xl w-full">
-                        <img
+                        <Image
                             src={allImages[lightboxIndex]}
                             alt={`${tour.name} - ảnh ${lightboxIndex + 1}`}
+                            width={1200}
+                            height={800}
+                            sizes="100vw"
                             className="w-full max-h-[80vh] object-contain rounded-xl"
                         />
                         <p className="text-center text-white/60 text-xs mt-3">

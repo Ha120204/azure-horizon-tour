@@ -10,6 +10,7 @@ interface BookingSidebarProps {
     initialDepartureId?: number | null;
     selectedPackage: TourPackage | null;
     formatPrice: (n: number) => string;
+    formatDate: (value: string | number | Date, options?: Intl.DateTimeFormatOptions) => string;
     t: TranslationFn;
     language: string;
 }
@@ -19,6 +20,7 @@ export default function BookingSidebarNew({
     initialDepartureId,
     selectedPackage,
     formatPrice,
+    formatDate,
     t,
     language,
 }: BookingSidebarProps) {
@@ -126,7 +128,7 @@ export default function BookingSidebarNew({
                                         {selectedDeparture ? (
                                             <>
                                                 <p className="font-bold text-sm text-on-surface">
-                                                    {new Date(selectedDeparture.departureDate).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                    {formatDate(selectedDeparture.departureDate, { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                 </p>
                                                 <p className="text-[11px] text-primary font-medium mt-0.5">
                                                     {selectedDeparture.availableSeats <= 5

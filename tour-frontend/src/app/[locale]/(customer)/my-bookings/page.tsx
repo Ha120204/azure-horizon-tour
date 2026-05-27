@@ -3,16 +3,36 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/constants';
 
+type BookingHistoryItem = {
+    id: number | string;
+    bookingCode?: string;
+    createdAt: string;
+    numberOfPeople: number;
+    totalPrice: number;
+    paymentStatus: 'PAID' | 'UNPAID' | 'PENDING' | 'FAILED' | 'REFUNDED';
+    status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'CANCEL_REQUESTED';
+    tour?: {
+        name?: string;
+        tourCode?: string;
+        imageUrl?: string;
+    };
+};
+
+type BookingHistoryResponse = {
+    data?: BookingHistoryItem[];
+};
+
 export default function MyBookingsPage() {
-    const [bookings, setBookings] = useState<any[]>([]);
+    const [bookings, setBookings] = useState<BookingHistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const { t, formatPrice } = useLocale();
+    const { t, formatPrice, formatDate } = useLocale();
     const router = useRouter();
 
     const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'UNPAID' | 'CANCELLED'>('ALL');
@@ -27,10 +47,10 @@ export default function MyBookingsPage() {
 
             try {
                 const res = await fetchWithAuth(`${API_BASE_URL}/booking/history/my-bookings`);
-                const result = await res.json();
+                const result = (await res.json()) as BookingHistoryResponse;
 
                 if (res.ok && result.data) {
-                    const sortedBookings = result.data.sort((a: any, b: any) =>
+                    const sortedBookings = [...result.data].sort((a, b) =>
                         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
                     );
                     setBookings(sortedBookings);
@@ -43,7 +63,7 @@ export default function MyBookingsPage() {
         };
 
         fetchMyBookings();
-    }, []);
+    }, [router]);
 
     const filteredBookings = bookings.filter(booking => {
         if (filterStatus === 'ALL') return true;
@@ -130,18 +150,15 @@ export default function MyBookingsPage() {
                         </div>
                     ) : (
                         filteredBookings.map((booking) => {
-                            const isPaid = booking.paymentStatus === 'PAID';
-                            const badgeBgColor = isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100';
-                            const badgeIcon = isPaid ? 'check_circle' : 'pending';
-                            const badgeText = isPaid ? t('my_bookings.paidBadge') : t('my_bookings.unpaidBadge');
-
                             return (
                                 <div key={booking.id} className="bg-white rounded-[2rem] overflow-hidden flex flex-col md:flex-row border border-outline-variant/10 shadow-[0_8px_32px_rgba(25,28,33,0.02)] group hover:shadow-[0_12px_48px_rgba(25,28,33,0.08)] hover:border-primary/20 transition-all duration-500">
                                     <div className="md:w-1/3 h-64 md:h-auto relative overflow-hidden p-2">
-                                        <img
+                                        <Image
                                             alt={booking.tour?.name || "Tour Image"}
-                                            className="w-full h-full object-cover rounded-2xl transition-transform duration-700 group-hover:scale-105"
                                             src={booking.tour?.imageUrl || "https://images.unsplash.com/photo-1499681404123-6c7102ce0033"}
+                                            fill
+                                            sizes="(min-width: 768px) 33vw, 100vw"
+                                            className="object-cover rounded-2xl transition-transform duration-700 group-hover:scale-105"
                                         />
                                     </div>
 
@@ -194,7 +211,7 @@ export default function MyBookingsPage() {
                                                     <div>
                                                         <p className="text-[10px] font-label text-outline uppercase tracking-wider">{t('my_bookings.dateLbl')}</p>
                                                         <p className="text-sm font-semibold">
-                                                            {new Date(booking.createdAt).toLocaleDateString('vi-VN')}
+                                                            {formatDate(booking.createdAt)}
                                                         </p>
                                                     </div>
                                                 </div>

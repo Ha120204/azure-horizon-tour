@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
@@ -24,7 +25,7 @@ interface ArticleFull {
 export default function ArticleDetailPage() {
     const params = useParams();
     const slug = params.slug as string;
-    const { t, language } = useLocale();
+    const { t, language, formatDate: formatLocaleDate } = useLocale();
     const [article, setArticle] = useState<ArticleFull | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [emailInput, setEmailInput] = useState('');
@@ -37,7 +38,7 @@ export default function ArticleDetailPage() {
         const fetchArticle = async () => {
             setIsLoading(true);
             try {
-                const res = await fetch(`http://localhost:3000/article/${slug}`);
+                const res = await fetch(`${API_BASE_URL}/article/${slug}`);
                 if (res.ok) {
                     const payload = await res.json();
                     const extracted = payload.data !== undefined ? payload.data : payload;
@@ -57,10 +58,7 @@ export default function ArticleDetailPage() {
     }, []);
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString(
-            language === 'vi' ? 'vi-VN' : 'en-US',
-            { month: 'long', day: 'numeric', year: 'numeric' }
-        );
+        return formatLocaleDate(dateStr, { month: 'long', day: 'numeric', year: 'numeric' });
     };
 
     const handleSubscribe = async (e: React.FormEvent) => {
@@ -160,10 +158,13 @@ export default function ArticleDetailPage() {
             <main className="min-h-screen bg-slate-50 pt-24">
                 {/* Hero Image */}
                 <section className="relative h-[50vh] md:h-[70vh] overflow-hidden">
-                    <img
+                    <Image
                         src={article.imageUrl}
                         alt={article.title}
-                        className="absolute inset-0 w-full h-full object-cover"
+                        fill
+                        priority
+                        sizes="100vw"
+                        className="object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/30 to-transparent"></div>
 

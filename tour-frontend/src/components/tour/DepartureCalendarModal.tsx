@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TourDeparture } from '@/types';
 
 type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
@@ -15,6 +15,19 @@ interface DepartureCalendarModalProps {
     language: string;
 }
 
+function getInitialCalendarDate(selectedDeparture: TourDeparture | null, departures: TourDeparture[]) {
+    if (selectedDeparture) {
+        return new Date(selectedDeparture.departureDate);
+    }
+
+    if (departures.length === 0) return new Date();
+
+    const sorted = [...departures].sort((a, b) => new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime());
+    const today = new Date(new Date().setHours(0, 0, 0, 0));
+    const firstFuture = sorted.find((departure) => new Date(departure.departureDate) >= today);
+    return new Date((firstFuture || sorted[0]).departureDate);
+}
+
 export default function DepartureCalendarModal({
     isOpen,
     onClose,
@@ -26,21 +39,19 @@ export default function DepartureCalendarModal({
     t,
     language,
 }: DepartureCalendarModalProps) {
-    const [currentDate, setCurrentDate] = useState<Date>(new Date());
+    const initialDate = useMemo(
+        () => getInitialCalendarDate(selectedDeparture, departures),
+        [selectedDeparture, departures]
+    );
+    const calendarResetKey = `${selectedDeparture?.id ?? 'none'}:${departures.map((departure) => `${departure.id}-${departure.departureDate}`).join('|')}`;
+    const [calendarState, setCalendarState] = useState({ date: initialDate, resetKey: calendarResetKey });
 
-    // Initialize calendar to the month of the first available departure, or current month
-    useEffect(() => {
-        if (isOpen) {
-            if (selectedDeparture) {
-                setCurrentDate(new Date(selectedDeparture.departureDate));
-            } else if (departures.length > 0) {
-                // Sort departures by date
-                const sorted = [...departures].sort((a, b) => new Date(a.departureDate).getTime() - new Date(b.departureDate).getTime());
-                const firstFuture = sorted.find(d => new Date(d.departureDate) >= new Date(new Date().setHours(0,0,0,0)));
-                setCurrentDate(new Date((firstFuture || sorted[0]).departureDate));
-            }
-        }
-    }, [isOpen, selectedDeparture, departures]);
+    if (isOpen && calendarState.resetKey !== calendarResetKey) {
+        setCalendarState({ date: initialDate, resetKey: calendarResetKey });
+    }
+
+    const currentDate = calendarState.date;
+    const setCurrentDate = (date: Date) => setCalendarState({ date, resetKey: calendarResetKey });
 
     // Create a dictionary of departures for O(1) lookup
     const departuresMap = useMemo(() => {

@@ -118,10 +118,11 @@ function CheckoutContent() {
     const [passengers, setPassengers] = useState<Passenger[]>([]);
     const [isBookForMyself, setIsBookForMyself] = useState(true);
     const [activeFormType, setActiveFormType] = useState<PassengerType | null>(null);
+    const [editingPassengerIndex, setEditingPassengerIndex] = useState<number | null>(null);
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState<'PAYOS' | 'IN_STORE'>('PAYOS');
+    const [paymentMethod] = useState<'PAYOS' | 'IN_STORE'>('PAYOS');
 
     // Toast Alert State
     const [errorMsg, setErrorMsg] = useState('');
@@ -193,17 +194,17 @@ function CheckoutContent() {
 
         const savedContact = sessionStorage.getItem('checkout_contactInfo');
         if (savedContact) {
-            try { setContactInfo(JSON.parse(savedContact)); } catch(e){}
+            try { setContactInfo(JSON.parse(savedContact)); } catch {}
         }
 
         const savedLead = sessionStorage.getItem('checkout_leadTraveler');
         if (savedLead) {
-            try { setLeadTraveler(JSON.parse(savedLead)); } catch(e){}
+            try { setLeadTraveler(JSON.parse(savedLead)); } catch {}
         }
 
         const savedPassengers = sessionStorage.getItem('checkout_passengers');
         if (savedPassengers) {
-            try { setPassengers(JSON.parse(savedPassengers)); } catch(e){}
+            try { setPassengers(JSON.parse(savedPassengers)); } catch {}
         }
 
         const savedBookMyself = sessionStorage.getItem('checkout_isBookForMyself');
@@ -213,7 +214,7 @@ function CheckoutContent() {
 
         const savedVoucher = sessionStorage.getItem('checkout_appliedVoucher');
         if (savedVoucher) {
-            try { setAppliedVoucher(JSON.parse(savedVoucher)); } catch(e){}
+            try { setAppliedVoucher(JSON.parse(savedVoucher)); } catch {}
         }
         
         const savedVoucherCode = sessionStorage.getItem('checkout_voucherCode');
@@ -492,9 +493,25 @@ function CheckoutContent() {
     };
 
     const handleOpenForm = (type: PassengerType | null) => {
+        setEditingPassengerIndex(null);
         setActiveFormType(type);
         const defaultIdType = type === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD';
         setTempFormData({ fullName: '', dob: '', gender: '', identityType: defaultIdType, identityNo: '' });
+    };
+
+    const handleEditPassenger = (index: number) => {
+        const passenger = passengers[index];
+        if (!passenger) return;
+
+        setEditingPassengerIndex(index);
+        setActiveFormType(passenger.type);
+        setTempFormData({
+            fullName: passenger.fullName,
+            dob: passenger.dob,
+            gender: passenger.gender,
+            identityType: passenger.identityType || (passenger.type === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD'),
+            identityNo: passenger.identityNo || '',
+        });
     };
 
     const handleSavePassenger = () => {
@@ -503,13 +520,28 @@ function CheckoutContent() {
             return;
         }
         if (activeFormType) {
-            setPassengers([...passengers, { type: activeFormType, ...tempFormData }]);
+            const passengerPayload = { type: activeFormType, ...tempFormData };
+            setPassengers(prev => (
+                editingPassengerIndex !== null && prev[editingPassengerIndex]
+                    ? prev.map((passenger, index) => index === editingPassengerIndex ? passengerPayload : passenger)
+                    : [...prev, passengerPayload]
+            ));
+            setEditingPassengerIndex(null);
             setActiveFormType(null);
         }
     };
 
     const handleRemovePassenger = (indexToRemove: number) => {
-        setPassengers(passengers.filter((_, index) => index !== indexToRemove));
+        setPassengers(prev => prev.filter((_, index) => index !== indexToRemove));
+        if (editingPassengerIndex === indexToRemove) {
+            setEditingPassengerIndex(null);
+            setActiveFormType(null);
+            return;
+        }
+        setEditingPassengerIndex(prev => {
+            if (prev === null) return null;
+            return indexToRemove < prev ? prev - 1 : prev;
+        });
     };
 
     const handlePayment = async () => {
@@ -650,7 +682,9 @@ function CheckoutContent() {
                         setTempFormData={setTempFormData}
                         onOpenForm={handleOpenForm}
                         onSavePassenger={handleSavePassenger}
+                        onEditPassenger={handleEditPassenger}
                         onRemovePassenger={handleRemovePassenger}
+                        editingPassengerIndex={editingPassengerIndex}
                         t={t}
                         maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats ?? undefined}
                     />

@@ -1,0 +1,55 @@
+import type { AssistedDraftStatus, PassengerType } from './types';
+
+type StatusConfig = { label: string; dot: string; badge: string; icon: string };
+type BadgeConfig = { label: string; badge: string; icon: string };
+
+export const AVATAR_COLORS = [
+  'from-blue-500 to-indigo-600', 'from-violet-500 to-purple-600',
+  'from-teal-400 to-cyan-600', 'from-rose-400 to-pink-600',
+  'from-amber-400 to-orange-500', 'from-emerald-400 to-green-600',
+];
+
+export const PASSENGER_PRICING: Record<PassengerType, { label: string; age: string; icon: string; multiplier: number }> = {
+  'Adult (12+)': { label: 'Người lớn', age: '12+', icon: 'person', multiplier: 1 },
+  'Child (4-11)': { label: 'Trẻ em', age: '4-11', icon: 'child_care', multiplier: 0.7 },
+  'Infant (<4)': { label: 'Em bé', age: '<4', icon: 'baby_changing_station', multiplier: 0.1 },
+};
+
+export const passengerTypeOrder: PassengerType[] = ['Adult (12+)', 'Child (4-11)', 'Infant (<4)'];
+
+export const STATUS_CFG: Record<string, StatusConfig> = {
+  PENDING: { label: 'Chờ xử lý', dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'schedule' },
+  CONFIRMED: { label: 'Đã xác nhận', dot: 'bg-emerald-400', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'check_circle' },
+  CANCEL_REQUESTED: { label: 'Chờ Duyệt Hủy', dot: 'bg-orange-400', badge: 'bg-orange-50 text-orange-600 border-orange-200', icon: 'pending' },
+  CANCELLED: { label: 'Đã hủy', dot: 'bg-red-400', badge: 'bg-red-50 text-red-600 border-red-200', icon: 'cancel' },
+};
+
+export const PAY_CFG: Record<string, BadgeConfig> = {
+  PAID: { label: 'Đã thanh toán', badge: 'bg-blue-50 text-blue-700 border-blue-200', icon: 'paid' },
+  UNPAID: { label: 'Chưa thanh toán', badge: 'bg-orange-50 text-orange-600 border-orange-200', icon: 'pending_actions' },
+  FAILED: { label: 'Thất bại', badge: 'bg-red-50 text-red-600 border-red-200', icon: 'money_off' },
+  PROCESSING: { label: 'Đang xử lý', badge: 'bg-purple-50 text-purple-700 border-purple-200', icon: 'sync' },
+};
+
+export const PAYMENT_METHOD_CFG: Record<string, BadgeConfig> = {
+  PAYOS: { label: 'PayOS', badge: 'bg-sky-50 text-sky-700 border-sky-200', icon: 'account_balance' },
+  IN_STORE: { label: 'Tại quầy', badge: 'bg-teal-50 text-teal-700 border-teal-200', icon: 'storefront' },
+};
+
+export const CONFIRMED_SOURCE_LABEL: Record<string, string> = {
+  PAYOS_WEBHOOK: 'Webhook tự động',
+  PAYOS_RETURN_SYNC: 'Xác nhận PayOS',
+  PAYOS_MANUAL_RECONCILIATION: 'Đối soát thủ công',
+  IN_STORE_CASH: 'Tiền mặt',
+  IN_STORE_BANK_TRANSFER: 'Chuyển khoản',
+  IN_STORE_CARD_POS: 'Quẹt thẻ POS',
+  ADMIN_OVERRIDE: 'Admin override',
+};
+
+export const ASSISTED_STATUS_CFG: Record<AssistedDraftStatus, BadgeConfig> = {
+  DRAFT: { label: 'Bản nháp', badge: 'bg-slate-50 text-slate-700 border-slate-200', icon: 'edit_note' },
+  PENDING_APPROVAL: { label: 'Chờ duyệt', badge: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'approval_delegation' },
+  NEEDS_REVISION: { label: 'Cần sửa', badge: 'bg-orange-50 text-orange-700 border-orange-200', icon: 'rate_review' },
+  REJECTED: { label: 'Từ chối', badge: 'bg-red-50 text-red-700 border-red-200', icon: 'block' },
+  CONVERTED: { label: 'Đã tạo đơn', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'task_alt' },
+};

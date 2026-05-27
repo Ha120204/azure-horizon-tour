@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
@@ -464,7 +465,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                                         <Link key={tour.id} href="/admin/tours" className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-slate-50/70">
                                             <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100">
                                                 {tour.imageUrl ? (
-                                                    <img src={tour.imageUrl} alt={tour.name} className="h-full w-full rounded-xl object-cover" loading="lazy" />
+                                                    <Image src={tour.imageUrl} alt={tour.name} width={44} height={44} sizes="44px" className="h-full w-full rounded-xl object-cover" />
                                                 ) : (
                                                     <span className="material-symbols-outlined text-[18px] text-blue-400" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>explore</span>
                                                 )}

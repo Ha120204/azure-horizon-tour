@@ -31,7 +31,9 @@ interface PassengerSectionProps {
     setTempFormData: React.Dispatch<React.SetStateAction<{ fullName: string; dob: string; gender: string; identityType: string; identityNo: string }>>;
     onOpenForm: (type: PassengerType | null) => void;
     onSavePassenger: () => void;
+    onEditPassenger: (index: number) => void;
     onRemovePassenger: (index: number) => void;
+    editingPassengerIndex: number | null;
     t: (key: string) => string;
     /** Số ghế tối đa còn lại (availableSeats của departure/tour). Infant (<4) không tính ghế. */
     maxPassengers?: number;
@@ -109,10 +111,13 @@ export default function PassengerSection({
     setTempFormData,
     onOpenForm,
     onSavePassenger,
+    onEditPassenger,
     onRemovePassenger,
+    editingPassengerIndex,
     t,
     maxPassengers,
 }: PassengerSectionProps) {
+    const isEditingPassenger = editingPassengerIndex !== null;
     // ── Seat capacity logic ──────────────────────────────────────────────────────
     // Infant (<4) không chiếm ghế theo chuẩn du lịch (ngồi lòng người lớn)
     const seatConsumingPassengers = passengers.filter(p => p.type !== 'Infant (<4)');
@@ -163,6 +168,11 @@ export default function PassengerSection({
     const handleOpenForm = (type: PassengerType | null) => {
         setFieldErrors({});
         onOpenForm(type);
+    };
+
+    const handleEditPassenger = (index: number) => {
+        setFieldErrors({});
+        onEditPassenger(index);
     };
 
     const ageLabel = (p: Passenger) => {
@@ -271,23 +281,60 @@ export default function PassengerSection({
                     <div className="space-y-3">
                         <h4 className="font-bold text-sm text-on-surface-variant">{t('checkout.addedPassengers')}</h4>
                         {passengers.map((p, idx) => (
-                            <div key={idx} className="flex justify-between items-center bg-white border border-primary/20 p-4 rounded-xl shadow-sm">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <div
+                                key={idx}
+                                className={`flex items-center justify-between gap-3 rounded-xl border p-4 shadow-sm transition-all ${
+                                    editingPassengerIndex === idx
+                                        ? 'border-primary bg-primary/5 ring-2 ring-primary/10'
+                                        : 'border-primary/20 bg-white hover:border-primary/40'
+                                }`}
+                            >
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                                        editingPassengerIndex === idx ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
+                                    }`}>
                                         <span className="material-symbols-outlined text-xl">{p.type.includes('Child') ? 'child_care' : p.type.includes('Infant') ? 'baby_changing_station' : 'person'}</span>
                                     </div>
-                                    <div>
-                                        <p className="font-bold text-on-surface">{p.fullName}</p>
-                                        <p className="text-xs text-outline font-medium">
+                                    <div className="min-w-0">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <p className="truncate font-bold text-on-surface">{p.fullName}</p>
+                                            {editingPassengerIndex === idx && (
+                                                <span className="hidden shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary sm:inline-flex">
+                                                    {t('checkout.editingPassenger')}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="truncate text-xs font-medium text-outline">
                                             {t(p.type === 'Adult (12+)' ? 'checkout.adult' : p.type === 'Child (4-11)' ? 'checkout.child' : 'checkout.infant')}
                                             {' '}•{' '}{ageLabel(p)}
                                             {' '}•{' '}{p.dob}
                                         </p>
                                     </div>
                                 </div>
-                                <button onClick={() => onRemovePassenger(idx)} className="text-error hover:bg-error/10 p-2 rounded-lg transition-colors">
-                                    <span className="material-symbols-outlined">delete</span>
-                                </button>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleEditPassenger(idx)}
+                                        aria-label={`${t('checkout.edit')} ${p.fullName}`}
+                                        title={t('checkout.edit')}
+                                        className={`rounded-lg p-2 transition-colors ${
+                                            editingPassengerIndex === idx
+                                                ? 'bg-primary text-white'
+                                                : 'text-primary hover:bg-primary/10'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">edit</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => onRemovePassenger(idx)}
+                                        aria-label={`${t('checkout.deletePassenger')} ${p.fullName}`}
+                                        title={t('checkout.deletePassenger')}
+                                        className="rounded-lg p-2 text-error transition-colors hover:bg-error/10"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">delete</span>
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -297,8 +344,10 @@ export default function PassengerSection({
                 <div className="space-y-4 pt-4 border-t border-outline-variant/20">
                     {/* Header: tiêu đề + seat counter badge */}
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 className="font-headline font-bold text-lg">{t('checkout.addPassenger')}</h3>
-                        {maxPassengers !== undefined && (
+                        <h3 className="font-headline font-bold text-lg">
+                            {isEditingPassenger ? t('checkout.editPassenger') : t('checkout.addPassenger')}
+                        </h3>
+                        {maxPassengers !== undefined && !isEditingPassenger && (
                             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
                                 isSeatFull
                                     ? 'bg-amber-50 border-amber-300 text-amber-700'
@@ -318,7 +367,7 @@ export default function PassengerSection({
                     </div>
 
                     {/* Banner cảnh báo khi đầy ghế */}
-                    {isSeatFull && (
+                    {isSeatFull && !isEditingPassenger && (
                         <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                             <span className="material-symbols-outlined text-amber-500 text-xl mt-0.5 flex-shrink-0">info</span>
                             <div>
@@ -334,77 +383,81 @@ export default function PassengerSection({
                         </div>
                     )}
 
-                    <div className="grid grid-cols-3 gap-2 md:gap-4">
-                        {(['Adult (12+)', 'Child (4-11)', 'Infant (<4)'] as PassengerType[]).map((type) => {
-                            const isActive = activeFormType === type;
-                            const icon = type.includes('Child') ? 'child_care' : type.includes('Infant') ? 'baby_changing_station' : 'person';
-                            const translatedType = type === 'Adult (12+)' ? t('checkout.adult') : type === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant');
-                            const ageRange = type === 'Adult (12+)' ? '12+' : type === 'Child (4-11)' ? '4–11' : '<4';
+                    {!isEditingPassenger && (
+                        <div className="grid grid-cols-3 gap-2 md:gap-4">
+                            {(['Adult (12+)', 'Child (4-11)', 'Infant (<4)'] as PassengerType[]).map((type) => {
+                                const isActive = activeFormType === type;
+                                const icon = type.includes('Child') ? 'child_care' : type.includes('Infant') ? 'baby_changing_station' : 'person';
+                                const translatedType = type === 'Adult (12+)' ? t('checkout.adult') : type === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant');
+                                const ageRange = type === 'Adult (12+)' ? '12+' : type === 'Child (4-11)' ? '4–11' : '<4';
 
-                            // Infant không tính ghế nhưng không được vượt quá số người lớn
-                            const isDisabled = type === 'Infant (<4)' ? isInfantFull : isSeatFull;
+                                // Infant không tính ghế nhưng không được vượt quá số người lớn
+                                const isDisabled = type === 'Infant (<4)' ? isInfantFull : isSeatFull;
 
-                            // Tooltip giải thích khi bị disabled
-                            const disabledReason = type === 'Infant (<4)'
-                                ? (isInfantFull ? `Tối đa ${adultCount} em bé (= số người lớn)` : '')
-                                : (isSeatFull ? 'Đã hết ghế trống' : '');
+                                // Tooltip giải thích khi bị disabled
+                                const disabledReason = type === 'Infant (<4)'
+                                    ? (isInfantFull ? `Tối đa ${adultCount} em bé (= số người lớn)` : '')
+                                    : (isSeatFull ? 'Đã hết ghế trống' : '');
 
-                            return (
-                                <div key={type} className="relative group">
-                                    <button
-                                        disabled={isDisabled && !isActive}
-                                        onClick={() => {
-                                            if (isDisabled && !isActive) return;
-                                            handleOpenForm(isActive ? null : type);
-                                        }}
-                                        aria-disabled={isDisabled && !isActive}
-                                        className={`w-full relative flex flex-col items-center justify-center gap-1.5 p-3 md:p-4 rounded-xl border-2 transition-all ${
-                                            isDisabled && !isActive
-                                                ? 'border-outline-variant/20 bg-surface-container-low/50 cursor-not-allowed opacity-50'
-                                                : isActive
-                                                ? 'border-primary bg-primary/5 shadow-sm'
-                                                : 'border-outline-variant/30 hover:border-primary/50 bg-white'
-                                        }`}
-                                    >
-                                        {isActive && (
-                                            <div className="absolute -top-2 -right-2 bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md">
-                                                <span className="material-symbols-outlined text-[12px] font-bold">check</span>
+                                return (
+                                    <div key={type} className="relative group">
+                                        <button
+                                            disabled={isDisabled && !isActive}
+                                            onClick={() => {
+                                                if (isDisabled && !isActive) return;
+                                                handleOpenForm(isActive ? null : type);
+                                            }}
+                                            aria-disabled={isDisabled && !isActive}
+                                            className={`w-full relative flex flex-col items-center justify-center gap-1.5 p-3 md:p-4 rounded-xl border-2 transition-all ${
+                                                isDisabled && !isActive
+                                                    ? 'border-outline-variant/20 bg-surface-container-low/50 cursor-not-allowed opacity-50'
+                                                    : isActive
+                                                    ? 'border-primary bg-primary/5 shadow-sm'
+                                                    : 'border-outline-variant/30 hover:border-primary/50 bg-white'
+                                            }`}
+                                        >
+                                            {isActive && (
+                                                <div className="absolute -top-2 -right-2 bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                                                    <span className="material-symbols-outlined text-[12px] font-bold">check</span>
+                                                </div>
+                                            )}
+                                            {isDisabled && !isActive && (
+                                                <div className="absolute -top-2 -right-2 bg-amber-500 text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                                                    <span className="material-symbols-outlined text-[12px]">block</span>
+                                                </div>
+                                            )}
+                                            <span className={`material-symbols-outlined ${
+                                                isDisabled && !isActive ? 'text-outline-variant' : isActive ? 'text-primary' : 'text-on-surface-variant'
+                                            }`}>{icon}</span>
+                                            <span className={`text-[10px] md:text-xs font-bold uppercase tracking-tight ${
+                                                isDisabled && !isActive ? 'text-outline-variant' : isActive ? 'text-primary' : 'text-on-surface-variant'
+                                            }`}>{translatedType}</span>
+                                            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${
+                                                isDisabled && !isActive ? 'bg-slate-100 text-slate-400' : isActive ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500'
+                                            }`}>{ageRange} {t('checkout.yearsOld')}</span>
+                                        </button>
+                                        {/* Tooltip giải thích khi disabled */}
+                                        {isDisabled && !isActive && disabledReason && (
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[160px] bg-gray-800 text-white text-[10px] font-medium px-2.5 py-1.5 rounded-lg shadow-lg z-10
+                                                opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none text-center leading-relaxed">
+                                                {disabledReason}
+                                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
                                             </div>
                                         )}
-                                        {isDisabled && !isActive && (
-                                            <div className="absolute -top-2 -right-2 bg-amber-500 text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md">
-                                                <span className="material-symbols-outlined text-[12px]">block</span>
-                                            </div>
-                                        )}
-                                        <span className={`material-symbols-outlined ${
-                                            isDisabled && !isActive ? 'text-outline-variant' : isActive ? 'text-primary' : 'text-on-surface-variant'
-                                        }`}>{icon}</span>
-                                        <span className={`text-[10px] md:text-xs font-bold uppercase tracking-tight ${
-                                            isDisabled && !isActive ? 'text-outline-variant' : isActive ? 'text-primary' : 'text-on-surface-variant'
-                                        }`}>{translatedType}</span>
-                                        <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${
-                                            isDisabled && !isActive ? 'bg-slate-100 text-slate-400' : isActive ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500'
-                                        }`}>{ageRange} {t('checkout.yearsOld')}</span>
-                                    </button>
-                                    {/* Tooltip giải thích khi disabled */}
-                                    {isDisabled && !isActive && disabledReason && (
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[160px] bg-gray-800 text-white text-[10px] font-medium px-2.5 py-1.5 rounded-lg shadow-lg z-10
-                                            opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none text-center leading-relaxed">
-                                            {disabledReason}
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     {activeFormType && (
-                        <div className="relative bg-primary/5 rounded-2xl p-5 md:p-8 border border-primary/20 animate-fade-in mt-4">
-                            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-surface border-t border-l border-primary/20 rotate-45" style={{ backgroundColor: '#f6f8fb' }}></div>
+                        <div className={`relative rounded-2xl border p-5 md:p-8 animate-fade-in ${isEditingPassenger ? 'mt-2 border-primary/30 bg-white shadow-sm' : 'mt-4 border-primary/20 bg-primary/5'}`}>
+                            {!isEditingPassenger && (
+                                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-surface border-t border-l border-primary/20 rotate-45" style={{ backgroundColor: '#f6f8fb' }}></div>
+                            )}
                             <div className="flex justify-between items-center mb-6">
                                 <h4 className="font-headline font-bold text-lg text-primary">
-                                    {t('checkout.enterInfoFor')} {activeFormType === 'Adult (12+)' ? t('checkout.adult') : activeFormType === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant')}
+                                    {isEditingPassenger ? t('checkout.editPassenger') : t('checkout.enterInfoFor')} {activeFormType === 'Adult (12+)' ? t('checkout.adult') : activeFormType === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant')}
                                     <span className="ml-2 text-sm font-normal text-on-surface-variant">
                                         ({activeFormType === 'Adult (12+)' ? '>=12' : activeFormType === 'Child (4-11)' ? '4-11' : '<4'} {t('checkout.yearsOld')})
                                     </span>
@@ -549,7 +602,9 @@ export default function PassengerSection({
                             </div>
                             <div className="mt-8 flex justify-end gap-3">
                                 <button onClick={() => handleOpenForm(null)} className="px-6 py-3 rounded-full font-bold text-sm text-outline hover:text-on-surface transition-colors">{t('checkout.cancel')}</button>
-                                <button onClick={handleValidatedSave} className="bg-primary text-white px-8 py-3 rounded-full font-bold text-sm hover:opacity-90 transition-all shadow-md shadow-primary/20 active:scale-95">{t('checkout.savePassenger')}</button>
+                                <button onClick={handleValidatedSave} className="bg-primary text-white px-8 py-3 rounded-full font-bold text-sm hover:opacity-90 transition-all shadow-md shadow-primary/20 active:scale-95">
+                                    {isEditingPassenger ? t('checkout.updatePassenger') : t('checkout.savePassenger')}
+                                </button>
                             </div>
                         </div>
                     )}

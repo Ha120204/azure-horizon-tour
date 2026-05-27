@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useLocale } from '@/context/LocaleContext';
 
 interface PaginationProps {
     page: number;
@@ -34,7 +33,6 @@ function generatePageNumbers(current: number, total: number): number[] {
 }
 
 export default function Pagination({ page, totalPages, setPage, totalItems = 0, limit = 12, setLimit }: PaginationProps) {
-    const { t } = useLocale();
     const [sizeOpen, setSizeOpen] = useState(false);
     const sizeRef = useRef<HTMLDivElement>(null);
 
@@ -48,8 +46,6 @@ export default function Pagination({ page, totalPages, setPage, totalItems = 0, 
 
     if (totalPages <= 1 && totalItems === 0) return null;
 
-    const from = totalItems === 0 ? 0 : (page - 1) * limit + 1;
-    const to = Math.min(page * limit, totalItems);
     const pageNums = generatePageNumbers(page, totalPages);
 
     return (

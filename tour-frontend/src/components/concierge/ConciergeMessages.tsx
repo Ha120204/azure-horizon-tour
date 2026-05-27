@@ -1,6 +1,7 @@
 'use client';
 import { RefObject } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import type { Message } from './types';
 import { getPromptSuggestions } from './constants';
@@ -99,10 +100,12 @@ export default function ConciergeMessages({
                                 <div className="ml-11 w-[calc(100%-2.75rem)]">
                                     <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-500 group">
                                         <div className="relative h-48 overflow-hidden">
-                                            <img
+                                            <Image
                                                 alt={msg.tourCard.name || 'Tour'}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                                                 src={msg.tourCard.image}
+                                                fill
+                                                sizes="100vw"
+                                                className="object-cover group-hover:scale-105 transition-transform duration-700"
                                                 onError={(e) => {
                                                     (e.target as HTMLImageElement).src =
                                                         'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=80';

@@ -10,6 +10,7 @@ import { PaymentService } from '../payment/payment.service';
 import { MailService } from '../mail/mail.service';
 import { AssistedDraftService } from './assisted-draft.service';
 import type { TransactionClient } from './types';
+import { getErrorMessage } from './helpers/booking-helpers';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,9 +48,17 @@ export interface ReconcilePayosDto {
 
 export interface ReportPaymentIssueDto {
   /** Mô tả sự cố từ khách */
-  message: string;
+  message?: string;
+  /** Số tiền khách báo đã chuyển */
+  amount?: number;
+  /** Thời điểm khách chuyển khoản, dạng ISO hoặc datetime-local */
+  transferredAt?: string;
   /** Mã giao dịch nếu khách có */
   transactionRef?: string;
+  /** Ngân hàng hoặc tài khoản chuyển nếu khách cung cấp */
+  senderBank?: string;
+  /** Tên chủ tài khoản chuyển nếu khách cung cấp */
+  senderAccountName?: string;
   /** URL ảnh giao dịch khách upload */
   evidenceUrl?: string;
 }
@@ -111,20 +120,53 @@ export class BookingPaymentService {
       });
 
       // 2. Ghi PaymentTransaction với đầy đủ audit trail
-      await tx.paymentTransaction.create({
-        data: {
+      const pendingTransaction = await tx.paymentTransaction.findFirst({
+        where: {
           bookingId,
           gateway: transactionData.gateway,
-          transactionRef: transactionData.transactionRef ?? null,
-          amount: Math.round(transactionData.amount),
-          status: 'SUCCESS',
-          confirmedSource,
-          confirmedById,
-          confirmedAt: now,
-          confirmedNote: transactionData.confirmedNote ?? null,
-          evidenceUrl: transactionData.evidenceUrl ?? null,
+          status: 'PENDING',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+
+      await tx.paymentTransaction.updateMany({
+        where: {
+          bookingId,
+          status: 'PENDING',
+          ...(pendingTransaction ? { id: { not: pendingTransaction.id } } : {}),
+        },
+        data: {
+          status: 'FAILED',
+          confirmedNote: 'Superseded by a successful payment confirmation',
         },
       });
+
+      const successTransactionData = {
+        gateway: transactionData.gateway,
+        transactionRef: transactionData.transactionRef ?? null,
+        amount: Math.round(transactionData.amount),
+        status: 'SUCCESS',
+        confirmedSource,
+        confirmedById,
+        confirmedAt: now,
+        confirmedNote: transactionData.confirmedNote ?? null,
+        evidenceUrl: transactionData.evidenceUrl ?? null,
+      };
+
+      if (pendingTransaction) {
+        await tx.paymentTransaction.update({
+          where: { id: pendingTransaction.id },
+          data: successTransactionData,
+        });
+      } else {
+        await tx.paymentTransaction.create({
+          data: {
+            bookingId,
+            ...successTransactionData,
+          },
+        });
+      }
 
       // 3. Mark voucher đã dùng (nếu có)
       const booking = await tx.booking.findUnique({
@@ -166,7 +208,7 @@ export class BookingPaymentService {
         });
       }
     } catch (emailError) {
-      this.logger.error('[EMAIL] Lỗi gửi email xác nhận:', emailError);
+      this.logger.error('[EMAIL] Failed to send confirmation email:', getErrorMessage(emailError));
       // Không throw — email lỗi không được làm hỏng luồng xác nhận
     }
   }
@@ -202,8 +244,7 @@ export class BookingPaymentService {
     });
 
     this.logger.log(
-      `[IN_STORE] Đã thu tiền booking #${bookingId} (${booking.bookingCode}) ` +
-        `bằng ${dto.collectionMethod} · Actor #${actorId}`,
+      `[IN_STORE] Payment collected for bookingId=${bookingId} method=${dto.collectionMethod} actorId=${actorId ?? 'system'}`,
     );
 
     await this.sendConfirmationEmail(bookingId);
@@ -232,16 +273,22 @@ export class BookingPaymentService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Tính orderCode từ bookingId + timeSuffix (theo logic hiện tại)
-    // Nếu không có tx thì dùng bookingId làm orderCode fallback
     const orderCode = latestTx?.transactionRef
       ? Number(latestTx.transactionRef)
-      : bookingId;
+      : Number.NaN;
+    if (!Number.isFinite(orderCode)) {
+      throw new BadRequestException(
+        'Đơn này chưa lưu mã PayOS orderCode. Vui lòng tạo lại liên kết thanh toán hoặc dùng đối soát thủ công.',
+      );
+    }
 
     let paymentInfo: Awaited<ReturnType<typeof this.paymentService.getPaymentInfo>>;
     try {
       paymentInfo = await this.paymentService.getPaymentInfo(orderCode);
-    } catch {
+    } catch (error) {
+      this.logger.error(
+        `[PAYOS_SYNC] Unable to fetch PayOS status for bookingId=${bookingId}: ${getErrorMessage(error)}`,
+      );
       throw new BadRequestException(
         'Không thể kết nối PayOS. Vui lòng thử lại sau.',
       );
@@ -342,8 +389,7 @@ export class BookingPaymentService {
     }
 
     this.logger.log(
-      `[PAYOS_RECONCILE] Booking #${bookingId} (${booking.bookingCode}) ` +
-        `· txRef: ${dto.transactionRef} · Actor #${actorId}`,
+      `[PAYOS_RECONCILE] Payment reconciled for bookingId=${bookingId} actorId=${actorId}`,
     );
 
     await this.sendConfirmationEmail(bookingId);
@@ -402,6 +448,32 @@ export class BookingPaymentService {
       };
     }
 
+    const amountText =
+      typeof dto.amount === 'number' && Number.isFinite(dto.amount)
+        ? `${Math.round(dto.amount).toLocaleString('vi-VN')}đ`
+        : null;
+    const transferredAt = dto.transferredAt
+      ? new Date(dto.transferredAt)
+      : null;
+    const transferredAtText =
+      transferredAt && !Number.isNaN(transferredAt.getTime())
+        ? transferredAt.toLocaleString('vi-VN')
+        : null;
+    const issueDetails = [
+      'Khách báo đã chuyển khoản nhưng hệ thống chưa ghi nhận.',
+      amountText ? `Số tiền khách báo đã chuyển: ${amountText}` : null,
+      transferredAtText ? `Thời gian chuyển khoản: ${transferredAtText}` : null,
+      dto.transactionRef?.trim()
+        ? `Mã giao dịch/nội dung chuyển khoản: ${dto.transactionRef.trim()}`
+        : null,
+      dto.senderBank?.trim() ? `Ngân hàng chuyển: ${dto.senderBank.trim()}` : null,
+      dto.senderAccountName?.trim()
+        ? `Tên chủ tài khoản chuyển: ${dto.senderAccountName.trim()}`
+        : null,
+      dto.message?.trim() ? `Ghi chú của khách: ${dto.message.trim()}` : null,
+      dto.evidenceUrl?.trim() ? `Biên lai/ảnh xác nhận: ${dto.evidenceUrl.trim()}` : null,
+    ].filter(Boolean).join('\n');
+
     const [ticket] = await this.prisma.$transaction([
       // Tạo support ticket gắn FK thật
       this.prisma.supportTicket.create({
@@ -411,8 +483,8 @@ export class BookingPaymentService {
           bookingRef: booking.bookingCode,
           bookingId: booking.id,
           userId,
-          subject: `Sự cố thanh toán - Đơn ${booking.bookingCode}`,
-          message: dto.message,
+          subject: `Kiểm tra thanh toán - Đơn ${booking.bookingCode}`,
+          message: issueDetails,
           category: 'payment',
           status: 'NEW',
         },
@@ -425,13 +497,12 @@ export class BookingPaymentService {
     ]);
 
     this.logger.log(
-      `[PAYMENT_ISSUE] Booking #${bookingId} (${booking.bookingCode}) ` +
-        `· Ticket #${ticket.id} · User #${userId}`,
+      `[PAYMENT_ISSUE] Ticket #${ticket.id} created for bookingId=${bookingId} userId=${userId}`,
     );
 
     return {
       message:
-        'Đã ghi nhận sự cố thanh toán. Chúng tôi sẽ xử lý trong thời gian sớm nhất.',
+        'Đã nhận yêu cầu kiểm tra thanh toán. Chúng tôi sẽ đối soát và phản hồi trong thời gian sớm nhất.',
       ticketId: ticket.id,
       accessCode: ticket.accessCode,
     };

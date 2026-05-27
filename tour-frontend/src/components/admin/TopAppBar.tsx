@@ -1,9 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/constants';
+import type { AdminRole } from '@/lib/adminAccess';
 import type { SearchTourResult, SearchDestinationResult } from './topAppBar/types';
 import {
     getPageMeta, getInitials, canAccessRole, filterActionsByRole,
@@ -14,7 +16,11 @@ import type { Notif } from './topAppBar/types';
 import LiveClock from './topAppBar/LiveClock';
 import NotificationPanel from './topAppBar/NotificationPanel';
 
-export default function TopAppBar() {
+type TopAppBarProps = {
+    currentUserRole?: AdminRole | '';
+};
+
+export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: TopAppBarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const notifRef = useRef<HTMLDivElement>(null);
@@ -22,7 +28,7 @@ export default function TopAppBar() {
     const [userName, setUserName] = useState('Admin');
     const [userInitials, setUserInitials] = useState('A');
     const [userEmail, setUserEmail] = useState('');
-    const [userRole, setUserRole] = useState('');
+    const [userRole, setUserRole] = useState<string>(authenticatedRole);
     const [userAvatarUrl, setUserAvatarUrl] = useState('');
     const [loginTime] = useState(() => new Date());
     const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -72,15 +78,25 @@ export default function TopAppBar() {
         return () => window.removeEventListener('auth-change', loadProfile);
     }, []);
 
+    useEffect(() => {
+        if (authenticatedRole) {
+            setUserRole(authenticatedRole);
+        }
+    }, [authenticatedRole]);
+
     const refreshNotifs = useCallback(async (silent = false) => {
+        if (!userRole) {
+            setNotifs([]);
+            return;
+        }
         if (!silent) setNotifLoading(true);
         setNotifError(false);
-        try { setNotifs(await fetchAllNotifs()); }
+        try { setNotifs(await fetchAllNotifs(userRole)); }
         catch { setNotifError(true); }
         finally {
             if (!silent) setNotifLoading(false);
         }
-    }, []);
+    }, [userRole]);
 
     useEffect(() => {
         refreshNotifs();
@@ -251,7 +267,7 @@ export default function TopAppBar() {
                         <button onClick={() => { setShowProfileMenu(v => !v); setShowNotifPanel(false); }} className={`flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl border transition-all ${showProfileMenu ? 'bg-blue-50 border-blue-200' : 'border-transparent hover:bg-slate-50 hover:border-slate-200'}`}>
                             <div className="relative flex-shrink-0">
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-sm overflow-hidden">
-                                    {userAvatarUrl ? <img src={userAvatarUrl} alt="" className="h-full w-full object-cover" /> : userInitials}
+                                    {userAvatarUrl ? <Image src={userAvatarUrl} alt="" width={32} height={32} sizes="32px" className="h-full w-full object-cover" /> : userInitials}
                                 </div>
                                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full" />
                             </div>
@@ -270,7 +286,7 @@ export default function TopAppBar() {
                                     <div className="flex items-center gap-3">
                                         <div className="relative flex-shrink-0">
                                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-md overflow-hidden">
-                                                {userAvatarUrl ? <img src={userAvatarUrl} alt="" className="h-full w-full object-cover" /> : userInitials}
+                                                {userAvatarUrl ? <Image src={userAvatarUrl} alt="" width={44} height={44} sizes="44px" className="h-full w-full object-cover" /> : userInitials}
                                             </div>
                                             <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full" />
                                         </div>

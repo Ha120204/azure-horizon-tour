@@ -1,0 +1,39 @@
+export interface Setting {
+    id: number;
+    key: string;
+    value: string;
+    label: string;
+    description?: string;
+    group: string;
+    updatedAt: string;
+    updatedBy?: number | null;
+}
+
+export type GroupedSettings = Record<string, Setting[]>;
+export type SettingInputType = 'text' | 'email' | 'tel' | 'number' | 'boolean';
+export type SettingsPanel = 'company' | 'booking' | 'announcement' | 'runtime' | 'security' | 'payment' | 'email';
+
+export interface SettingMeta {
+    type: SettingInputType;
+    min?: number;
+    max?: number;
+    maxLength?: number;
+    impact: string;
+    risky?: boolean;
+}
+
+export type SystemHealthStatus = 'ok' | 'warning' | 'error';
+
+export interface SystemHealthItem {
+    key: string;
+    label: string;
+    status: SystemHealthStatus;
+    message: string;
+    latencyMs?: number;
+}
+
+export interface SystemHealth {
+    checkedAt: string;
+    uptimeSeconds?: number;
+    items: SystemHealthItem[];
+}

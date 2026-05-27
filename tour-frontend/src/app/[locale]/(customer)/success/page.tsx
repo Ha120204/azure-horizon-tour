@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/constants';
 
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
@@ -125,7 +126,7 @@ const successDict = {
 function SuccessTicketContent() {
     const searchParams = useSearchParams();
     const bookingId = searchParams.get('bookingId');
-    const { formatPrice, language } = useLocale();
+    const { formatPrice, formatDateTime, language } = useLocale();
 
     const [ticketData, setTicketData] = useState<TicketData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -144,8 +145,7 @@ function SuccessTicketContent() {
 
         const fetchTicket = async () => {
             try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-                const res = await fetchWithAuth(`${apiUrl}/booking/my/code/${bookingId}`);
+                const res = await fetchWithAuth(`${API_BASE_URL}/booking/my/code/${bookingId}`);
                 const result: TicketResponse = await res.json();
 
                 if (res.ok && result.data) {
@@ -330,7 +330,7 @@ function SuccessTicketContent() {
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">{sd.dateTime}</p>
                                         <p className="font-semibold text-sm md:text-base">
-                                            {ticketData.tour?.startDate ? new Date(ticketData.tour.startDate).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'TBA'}
+                                            {ticketData.tour?.startDate ? formatDateTime(ticketData.tour.startDate, { dateStyle: 'medium', timeStyle: 'short' }) : 'TBA'}
                                         </p>
                                     </div>
                                     <div>
@@ -395,7 +395,7 @@ function SuccessTicketContent() {
                             <div className="bg-amber-50/80 rounded-xl p-4 border border-amber-100 text-right min-w-[250px]">
                                 <span className="block text-[10px] font-bold uppercase text-amber-800 tracking-wider">{sd.deadlineLabel}</span>
                                 <span className="block font-mono font-bold text-base text-amber-900 mt-1">
-                                    {ticketData.createdAt ? new Date(new Date(ticketData.createdAt).getTime() + 24 * 60 * 60 * 1000).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'TBA'}
+                                    {ticketData.createdAt ? formatDateTime(new Date(new Date(ticketData.createdAt).getTime() + 24 * 60 * 60 * 1000), { dateStyle: 'medium', timeStyle: 'short' }) : 'TBA'}
                                 </span>
                             </div>
                         </div>

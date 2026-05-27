@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { API_BASE_URL } from '@/lib/constants';
+import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { canAccessRole, getCleanAdminPath, type AdminRole } from '@/lib/adminAccess';
 import React, { useState } from 'react';
-
-type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'STAFF';
 
 type NavItem = {
     href: string;
@@ -18,19 +18,19 @@ type NavItem = {
 const navItems: NavItem[] = [
     { href: '/admin/super',      icon: 'admin_panel_settings', label: 'Tổng quan cấp cao', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Quản lý Admin', roles: ['SUPER_ADMIN'], section: 'super' },
-    { href: '/admin/logs',       icon: 'history',              label: 'Audit hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
+    { href: '/admin/logs',       icon: 'history',              label: 'Nhật ký hành động', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/settings',   icon: 'settings',             label: 'Cấu hình hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
 
     { href: '/admin',            icon: 'dashboard',            label: 'Tổng quan', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
     { href: '/admin/statistics', icon: 'bar_chart',            label: 'Thống kê', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
     { href: '/admin/tours',      icon: 'explore',              label: 'Quản lý Tour', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
     { href: '/admin/bookings',   icon: 'event_note',           label: 'Đơn đặt', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/customers',  icon: 'group',                label: 'Khách hàng', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
+    { href: '/admin/customers',  icon: 'group',                label: 'Khách hàng', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
     { href: '/admin/vouchers',   icon: 'confirmation_number',  label: 'Mã giảm giá', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/marketing',  icon: 'campaign',             label: 'Marketing', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
+    { href: '/admin/marketing',  icon: 'campaign',             label: 'Tiếp thị', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
     { href: '/admin/articles',   icon: 'article',              label: 'Bài viết', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
     { href: '/admin/reviews',    icon: 'reviews',              label: 'Đánh giá', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
-    { href: '/admin/support',    icon: 'support_agent',        label: 'Hỗ trợ KH', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
+    { href: '/admin/support',    icon: 'support_agent',        label: 'Hỗ trợ', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
 
     { href: '/admin/staffs',     icon: 'badge',                label: 'Nhân viên', roles: ['ADMIN'], section: 'governance' },
     { href: '/admin/logs',       icon: 'history',              label: 'Nhật ký', roles: ['ADMIN'], section: 'governance' },
@@ -43,9 +43,19 @@ const SECTION_LABEL: Record<NavItem['section'], string> = {
     governance: 'Quản trị',
 };
 
-export default function SideNavBar() {
+type SideNavBarProps = {
+    currentUserRole?: AdminRole | '';
+};
+
+export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: SideNavBarProps) {
     const pathname = usePathname();
-    const [currentUserRole, setCurrentUserRole] = useState<string>('');
+    const [currentUserRole, setCurrentUserRole] = useState<string>(authenticatedRole);
+
+    React.useEffect(() => {
+        if (authenticatedRole) {
+            setCurrentUserRole(authenticatedRole);
+        }
+    }, [authenticatedRole]);
 
     React.useEffect(() => {
         const applyLocalRole = () => {
@@ -53,13 +63,12 @@ export default function SideNavBar() {
             if (savedRole) setCurrentUserRole(savedRole);
         };
 
-        const loadProfile = () => {
-            applyLocalRole();
-            fetch(`${API_BASE_URL}/auth/profile`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
-            })
-            .then(res => res.json())
-            .then(data => {
+        const loadProfile = async () => {
+            if (!authenticatedRole) applyLocalRole();
+            try {
+                const res = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
+                if (!res.ok) return;
+                const data = await res.json();
                 const profile = data.data ?? data;
                 const role = profile.role || '';
                 setCurrentUserRole(role);
@@ -68,22 +77,27 @@ export default function SideNavBar() {
                 if (profile.email) localStorage.setItem('userEmail', profile.email);
                 if (profile.avatarUrl) localStorage.setItem('userAvatarUrl', profile.avatarUrl);
                 else localStorage.removeItem('userAvatarUrl');
-            })
-            .catch(err => console.error('Error fetching profile:', err));
+            } catch (err) {
+                console.error('Error fetching profile:', err);
+            }
         };
 
-        loadProfile();
-        window.addEventListener('auth-change', loadProfile);
-        return () => window.removeEventListener('auth-change', loadProfile);
-    }, []);
+        const handleAuthChange = () => {
+            void loadProfile();
+        };
+
+        void loadProfile();
+        window.addEventListener('auth-change', handleAuthChange);
+        return () => window.removeEventListener('auth-change', handleAuthChange);
+    }, [authenticatedRole]);
 
     const isActive = (href: string) => {
-        const cleanPath = pathname?.replace(/^\/(en|vi)/, '') || '';
+        const cleanPath = getCleanAdminPath(pathname);
         if (href === '/admin') return cleanPath === '/admin';
         return cleanPath.startsWith(href);
     };
 
-    const visibleItems = navItems.filter(item => item.roles.includes(currentUserRole as AdminRole));
+    const visibleItems = navItems.filter(item => canAccessRole(currentUserRole, item.roles));
     const sections = (['super', 'operations', 'governance'] as const)
         .map(section => ({
             section,

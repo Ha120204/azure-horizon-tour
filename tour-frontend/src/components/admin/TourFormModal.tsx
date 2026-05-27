@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import type {
     TravelScope, Destination, TourPackage, TourDeparture, TourFormData,
-    SaleCategory, ExistingTourImage, ExistingTourPackage, ExistingTourDeparture,
-    InitialTourData, TourFormModalProps,
+    SaleCategory, ExistingTourPackage, ExistingTourDeparture,
+    TourFormModalProps,
 } from './tourForm/types';
 import {
     EMPTY_FORM, DRAFT_DESTINATION_NAME, MIN_START_DATE, isBookableDepartureDate,
@@ -962,10 +963,13 @@ export default function TourFormModal({
                         >
                             {imagePreview ? (
                                 <div className="relative shrink-0">
-                                    <img
+                                    <Image
                                         src={imagePreview}
                                         alt="Tour preview"
-                                        className="w-24 h-24 object-cover rounded-xl shadow-md"
+                                        width={96}
+                                        height={96}
+                                        sizes="96px"
+                                        className="h-24 w-24 object-cover rounded-xl shadow-md"
                                     />
                                     <div className="absolute inset-0 rounded-xl bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                         <span className="material-symbols-outlined text-white text-xl">edit</span>
@@ -1015,7 +1019,7 @@ export default function TourFormModal({
                                 <div className="flex flex-wrap gap-2">
                                     {existingImages.map(img => (
                                         <div key={img.id} className="relative group">
-                                            <img src={img.url} alt="gallery" className="w-20 h-20 object-cover rounded-xl border border-outline-variant/20" />
+                                            <Image src={img.url} alt="gallery" width={80} height={80} sizes="80px" className="h-20 w-20 object-cover rounded-xl border border-outline-variant/20" />
                                             <button
                                                 type="button"
                                                 disabled={deletingImageId === img.id}
@@ -1056,7 +1060,7 @@ export default function TourFormModal({
                             <div className="mt-3 flex flex-wrap gap-2">
                                 {galleryPreviews.map((src, i) => (
                                     <div key={i} className="relative group">
-                                        <img src={src} alt={`new-${i}`} className="w-20 h-20 object-cover rounded-xl border-2 border-indigo-300" />
+                                        <Image src={src} alt={`new-${i}`} width={80} height={80} sizes="80px" className="h-20 w-20 object-cover rounded-xl border-2 border-indigo-300" />
                                         <button
                                             type="button"
                                             onClick={() => {

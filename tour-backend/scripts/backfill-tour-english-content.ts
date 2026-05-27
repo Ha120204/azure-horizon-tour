@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { isUsableEnglishText, localizeTour } from '../src/tour/tour-localization';
@@ -10,15 +10,68 @@ const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool as never);
 const prisma = new PrismaClient({ adapter });
 
+const tourBackfillQuery = Prisma.validator<Prisma.TourFindManyArgs>()({
+  include: {
+    destination: true,
+    itinerary: { orderBy: { dayNumber: 'asc' } },
+    packages: { orderBy: { sortOrder: 'asc' } },
+    departures: { orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }] },
+    highlights: { orderBy: { sortOrder: 'asc' } },
+    faqs: { orderBy: { sortOrder: 'asc' } },
+  },
+  orderBy: { id: 'asc' },
+});
+
+type BackfillTour = Prisma.TourGetPayload<typeof tourBackfillQuery>;
+type LocalizedDestination = Record<string, unknown> & {
+  name?: unknown;
+  region?: unknown;
+};
+type LocalizedHighlight = Record<string, unknown> & { content?: unknown };
+type LocalizedItineraryDay = Record<string, unknown> & {
+  title?: unknown;
+  description?: unknown;
+  accommodation?: unknown;
+  transport?: unknown;
+  activities?: unknown;
+  timeline?: unknown;
+};
+type LocalizedFaq = Record<string, unknown> & {
+  question?: unknown;
+  answer?: unknown;
+};
+type LocalizedPackage = Record<string, unknown> & {
+  name?: unknown;
+  description?: unknown;
+  includes?: unknown;
+  excludes?: unknown;
+};
+type LocalizedDeparture = Record<string, unknown> & { note?: unknown };
+type LocalizedBackfillTour = Record<string, unknown> & {
+  name?: unknown;
+  description?: unknown;
+  duration?: unknown;
+  departurePoint?: unknown;
+  destination?: LocalizedDestination;
+  highlights?: LocalizedHighlight[];
+  itinerary?: LocalizedItineraryDay[];
+  faqs?: LocalizedFaq[];
+  packages?: LocalizedPackage[];
+  departures?: LocalizedDeparture[];
+};
+
 const hasText = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
+
+const getTextArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter(hasText) : [];
 
 const needsArrayPatch = (value: unknown) =>
   !Array.isArray(value) ||
   value.length === 0 ||
   !value.every(isUsableEnglishText);
 
-const hasTimeline = (value: unknown) =>
+const hasTimeline = (value: unknown): value is unknown[] =>
   Array.isArray(value) && value.length > 0;
 
 const needsTimelinePatch = (value: unknown) =>
@@ -41,17 +94,7 @@ const patchIfBlank = (
 };
 
 async function main() {
-  const tours = await prisma.tour.findMany({
-    include: {
-      destination: true,
-      itinerary: { orderBy: { dayNumber: 'asc' } },
-      packages: { orderBy: { sortOrder: 'asc' } },
-      departures: { orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }] },
-      highlights: { orderBy: { sortOrder: 'asc' } },
-      faqs: { orderBy: { sortOrder: 'asc' } },
-    },
-    orderBy: { id: 'asc' },
-  });
+  const tours: BackfillTour[] = await prisma.tour.findMany(tourBackfillQuery);
 
   let patchedTours = 0;
   let patchedDestinations = 0;
@@ -62,7 +105,10 @@ async function main() {
   let patchedDepartures = 0;
 
   for (const tour of tours) {
-    const localized = localizeTour(tour as any, 'en') as any;
+    const localized = localizeTour(
+      tour as unknown as LocalizedBackfillTour,
+      'en',
+    );
 
     const tourData: Record<string, unknown> = {};
     patchIfBlank(tourData, 'nameEn', tour.nameEn, localized.name);
@@ -116,8 +162,9 @@ async function main() {
       patchIfBlank(data, 'descriptionEn', day.descriptionEn, fallback.description);
       patchIfBlank(data, 'accommodationEn', day.accommodationEn, fallback.accommodation);
       patchIfBlank(data, 'transportEn', day.transportEn, fallback.transport);
-      if (needsArrayPatch(day.activitiesEn) && Array.isArray(fallback.activities)) {
-        data.activitiesEn = fallback.activities.filter(hasText);
+      const fallbackActivities = getTextArray(fallback.activities);
+      if (needsArrayPatch(day.activitiesEn) && fallbackActivities.length > 0) {
+        data.activitiesEn = fallbackActivities;
       }
       if (needsTimelinePatch(day.timelineEn) && hasTimeline(fallback.timeline)) {
         data.timelineEn = fallback.timeline;
@@ -146,11 +193,13 @@ async function main() {
       const data: Record<string, unknown> = {};
       patchIfBlank(data, 'nameEn', pkg.nameEn, fallback.name);
       patchIfBlank(data, 'descriptionEn', pkg.descriptionEn, fallback.description);
-      if (needsArrayPatch(pkg.includesEn) && Array.isArray(fallback.includes)) {
-        data.includesEn = fallback.includes.filter(hasText);
+      const fallbackIncludes = getTextArray(fallback.includes);
+      if (needsArrayPatch(pkg.includesEn) && fallbackIncludes.length > 0) {
+        data.includesEn = fallbackIncludes;
       }
-      if (needsArrayPatch(pkg.excludesEn) && Array.isArray(fallback.excludes)) {
-        data.excludesEn = fallback.excludes.filter(hasText);
+      const fallbackExcludes = getTextArray(fallback.excludes);
+      if (needsArrayPatch(pkg.excludesEn) && fallbackExcludes.length > 0) {
+        data.excludesEn = fallbackExcludes;
       }
       if (Object.keys(data).length > 0) {
         await prisma.tourPackage.update({ where: { id: pkg.id }, data });

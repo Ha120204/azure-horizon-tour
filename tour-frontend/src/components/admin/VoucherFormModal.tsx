@@ -23,7 +23,7 @@ export interface VoucherFormData {
 
 interface VoucherFormModalProps {
   mode: 'create' | 'edit';
-  initialData?: Partial<VoucherFormData & { computedStatus?: string }>;
+  initialData?: Partial<VoucherFormData & { computedStatus?: string; usedCount?: number }>;
   onSuccess: (message: string) => void;
   onClose: () => void;
 }
@@ -166,8 +166,8 @@ export default function VoucherFormModal({
 
       onSuccess(isEdit ? `Đã cập nhật voucher "${voucherData.code}"` : `Tạo voucher "${voucherData.code}" thành công!`);
       onClose();
-    } catch (err: any) {
-      setErrors({ code: err.message });
+    } catch (err) {
+      setErrors({ code: err instanceof Error ? err.message : 'Lỗi không xác định' });
     } finally {
       setIsSaving(false);
     }
@@ -246,13 +246,13 @@ export default function VoucherFormModal({
                 value={form.code}
                 onChange={(e) => set('code', e.target.value.toUpperCase())}
                 placeholder="VD: AZURE2026"
-                disabled={isEdit && (initialData as any)?.usedCount > 0}
+                disabled={isEdit && (initialData?.usedCount ?? 0) > 0}
                 className={fieldClass('code')}
                 autoComplete="off"
                 maxLength={20}
               />
               {errors.code && <p className="text-error text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-sm">error</span>{errors.code}</p>}
-              {isEdit && (initialData as any)?.usedCount > 0 && (
+              {isEdit && (initialData?.usedCount ?? 0) > 0 && (
                 <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm">lock</span>
                   Mã đã được dùng, không thể thay đổi

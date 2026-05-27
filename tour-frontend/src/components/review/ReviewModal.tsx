@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { useLocale } from '@/context/LocaleContext';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/constants';
 
 type ReviewModalProps = {
     isOpen: boolean;
@@ -17,8 +19,11 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [images, setImages] = useState<string[]>([]);
-
-    if (!isOpen) return null;
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const titleId = 'review-modal-title';
+    const errorId = 'review-modal-error';
+    const commentId = 'review-modal-comment';
+    const imageInputId = 'review-modal-images';
 
     const handleCloseModal = () => {
         setImages([]);
@@ -26,6 +31,33 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
         setComment('');
         setErrorMsg('');
         onClose();
+    };
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        dialogRef.current?.focus();
+
+        const handleKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') handleCloseModal();
+        };
+
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleRatingKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, star: number) => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            setRating(Math.min(5, star + 1));
+        }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            setRating(Math.max(1, star - 1));
+        }
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,7 +86,7 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
         setErrorMsg('');
 
         try {
-            const res = await fetchWithAuth(`http://localhost:3000/tour/${tourId}/reviews`, {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}/reviews`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -75,7 +107,7 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                 const data = await res.json();
                 setErrorMsg(data.message || t('reviews.errorSubmit') || 'Gửi đánh giá không thành công.');
             }
-        } catch (error) {
+        } catch {
             setErrorMsg(t('reviews.errorSubmit') || 'Có lỗi xảy ra.');
         } finally {
             setIsSubmitting(false);
@@ -83,17 +115,32 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            onClick={(event) => {
+                if (event.target === event.currentTarget) handleCloseModal();
+            }}
+        >
+            <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                aria-describedby={errorMsg ? errorId : undefined}
+                tabIndex={-1}
+                className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-200 focus:outline-none"
+            >
                 <button 
+                    type="button"
                     onClick={handleCloseModal}
+                    aria-label={t('reviews.cancel')}
                     className="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant w-8 h-8 rounded-full flex items-center justify-center transition-colors"
                 >
                     <span className="material-symbols-outlined text-sm">close</span>
                 </button>
 
                 <div className="p-8">
-                    <h2 className="text-2xl font-headline font-bold text-on-surface mb-6">
+                    <h2 id={titleId} className="text-2xl font-headline font-bold text-on-surface mb-6">
                         {t('reviews.modalTitle')}
                     </h2>
 
@@ -107,7 +154,7 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                     ) : (
                         <form onSubmit={handleSubmit} className="space-y-6">
                             {errorMsg && (
-                                <div className="p-4 bg-error/10 text-error rounded-xl text-sm font-semibold flex items-center gap-2">
+                                <div id={errorId} role="alert" className="p-4 bg-error/10 text-error rounded-xl text-sm font-semibold flex items-center gap-2">
                                     <span className="material-symbols-outlined text-lg">error</span>
                                     {errorMsg}
                                 </div>
@@ -116,12 +163,17 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                                 <label className="block text-sm font-bold text-on-surface mb-3">
                                     {t('reviews.ratingLabel')}
                                 </label>
-                                <div className="flex gap-2 text-outline-variant">
+                                <div role="radiogroup" aria-label={t('reviews.ratingLabel')} className="flex gap-2 text-outline-variant">
                                     {[1, 2, 3, 4, 5].map((star) => (
                                         <button
                                             key={star}
                                             type="button"
+                                            role="radio"
+                                            aria-checked={rating === star}
+                                            aria-label={`${star} ${star === 1 ? t('reviews.star') : t('reviews.stars', { count: star })}`}
+                                            tabIndex={rating === star ? 0 : -1}
                                             onClick={() => setRating(star)}
+                                            onKeyDown={(event) => handleRatingKeyDown(event, star)}
                                             className={`transition-colors ${star <= rating ? 'text-secondary-container' : 'hover:text-secondary-container/50'}`}
                                         >
                                             <span 
@@ -136,10 +188,11 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-on-surface mb-2">
+                                <label htmlFor={commentId} className="block text-sm font-bold text-on-surface mb-2">
                                     {t('reviews.commentLabel')}
                                 </label>
                                 <textarea
+                                    id={commentId}
                                     required
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
@@ -148,21 +201,22 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                                 ></textarea>
                                 
                                 <div className="mt-4">
-                                    <label className="inline-flex items-center gap-2 px-4 py-2 border border-outline-variant/30 rounded-lg cursor-pointer hover:bg-surface-container-low transition-colors text-sm font-bold text-on-surface">
+                                    <label htmlFor={imageInputId} className="inline-flex items-center gap-2 px-4 py-2 border border-outline-variant/30 rounded-lg cursor-pointer hover:bg-surface-container-low transition-colors text-sm font-bold text-on-surface">
                                         <span className="material-symbols-outlined text-[20px] text-primary">add_photo_alternate</span>
                                         {t('reviews.attachImages')}
-                                        <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
                                     </label>
+                                    <input id={imageInputId} type="file" multiple accept="image/*" className="sr-only" onChange={handleImageUpload} />
                                     
                                     {images.length > 0 && (
                                         <div className="flex gap-3 mt-4 overflow-x-auto pb-2 scrollbar-thin">
                                             {images.map((img, idx) => (
                                                 <div key={idx} className="relative w-16 h-16 rounded-md overflow-hidden shrink-0 border border-outline-variant/20 group">
-                                                    <img src={img} alt="review" className="w-full h-full object-cover" />
+                                                    <Image src={img} alt={`Review image ${idx + 1}`} fill sizes="64px" className="object-cover" />
                                                     <button 
                                                         type="button" 
                                                         onClick={() => removeImage(idx)} 
-                                                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-error"
+                                                        aria-label={`Remove image ${idx + 1}`}
+                                                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-error"
                                                     >
                                                         <span className="material-symbols-outlined text-[12px]">close</span>
                                                     </button>

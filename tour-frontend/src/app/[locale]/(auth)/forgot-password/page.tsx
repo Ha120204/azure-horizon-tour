@@ -1,5 +1,10 @@
 "use client";
 import { useState } from "react";
+import { API_BASE_URL } from "@/lib/constants";
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
 
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState("");
@@ -14,7 +19,7 @@ export default function ForgotPasswordPage() {
         setError("");
 
         try {
-            const res = await fetch("http://localhost:3000/auth/forgot-password", {
+            const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email }),
@@ -27,8 +32,8 @@ export default function ForgotPasswordPage() {
 
             // Nếu gửi thành công, bật màn hình Success
             setIsSuccess(true);
-        } catch (err: any) {
-            setError(err.message || "An error occurred. Please try again later.");
+        } catch (err) {
+            setError(getErrorMessage(err, "An error occurred. Please try again later."));
         } finally {
             setIsLoading(false);
         }
@@ -38,7 +43,7 @@ export default function ForgotPasswordPage() {
         setIsLoading(true);
         setResendToast(null);
         try {
-            const res = await fetch("http://localhost:3000/auth/forgot-password", {
+            const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email }),
@@ -50,7 +55,7 @@ export default function ForgotPasswordPage() {
             }
             // Hiện toast thành công trên giao diện
             setResendToast("success");
-        } catch (err: any) {
+        } catch {
             // Hiện toast lỗi trên giao diện
             setResendToast("error");
         } finally {
@@ -110,7 +115,7 @@ export default function ForgotPasswordPage() {
                                 </div>
                                 <h2 className="font-headline text-3xl font-extrabold tracking-tight mb-3">Forgot Password</h2>
                                 <p className="text-on-surface-variant leading-relaxed px-4">
-                                    Enter your email address and we'll send you a link to reset your password.
+                                    Enter your email address and we&apos;ll send you a link to reset your password.
                                 </p>
                             </header>
 
@@ -186,7 +191,7 @@ export default function ForgotPasswordPage() {
                                     Check your inbox
                                 </h3>
                                 <p className="text-on-surface-variant leading-relaxed text-sm">
-                                    We've sent a password reset link to
+                                    We&apos;ve sent a password reset link to
                                 </p>
                                 <div className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-surface-container-low rounded-full border border-outline-variant/15">
                                     <span className="material-symbols-outlined text-primary text-sm">mail</span>
@@ -199,7 +204,7 @@ export default function ForgotPasswordPage() {
                                 <div className="flex items-start gap-3">
                                     <span className="material-symbols-outlined text-on-surface-variant text-lg mt-0.5">info</span>
                                     <p className="text-xs text-on-surface-variant leading-relaxed">
-                                        The link will expire in <span className="font-bold text-on-surface">15 minutes</span>. If you don't see the email, check your spam folder.
+                                        The link will expire in <span className="font-bold text-on-surface">15 minutes</span>. If you don&apos;t see the email, check your spam folder.
                                     </p>
                                 </div>
                             </div>

@@ -3,6 +3,7 @@ import { BookingController } from './booking.controller';
 import { BookingService } from './booking.service';
 import { PaymentService } from '../payment/payment.service';
 import { ConfigService } from '@nestjs/config';
+import { BookingPaymentService } from './booking-payment.service';
 
 describe('BookingController', () => {
   let controller: BookingController;
@@ -15,6 +16,7 @@ describe('BookingController', () => {
         { provide: BookingService, useValue: mockValue },
         { provide: PaymentService, useValue: mockValue },
         { provide: ConfigService, useValue: mockValue },
+        { provide: BookingPaymentService, useValue: mockValue },
       ],
     }).compile();
 

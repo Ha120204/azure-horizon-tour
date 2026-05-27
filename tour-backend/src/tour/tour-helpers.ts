@@ -110,6 +110,6 @@ export const sanitizePublicTourDetail = <T extends Record<string, unknown>>(tour
 
 export const parseTravelScope = (input?: string) => {
   if (!input) return undefined;
-  if (input === 'DOMESTIC' || input === 'INTERNATIONAL') return input as 'DOMESTIC' | 'INTERNATIONAL';
+  if (input === 'DOMESTIC' || input === 'INTERNATIONAL') return input;
   throw new BadRequestException('travelScope khong hop le');
 };

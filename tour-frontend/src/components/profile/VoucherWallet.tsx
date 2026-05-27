@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useLocale } from '@/context/LocaleContext';
-import { getTranslatedVoucher } from '@/lib/dev/mockTranslations';
+import { getLocalizedVoucher } from '@/lib/i18n/vouchers';
+import type { UserVoucher } from '@/types';
 
 interface VoucherWalletProps {
-    myVouchers: any[];
+    myVouchers: UserVoucher[];
     showAllVouchers: boolean;
     setShowAllVouchers: (v: boolean) => void;
     t: (key: string) => string;
@@ -19,7 +20,7 @@ export default function VoucherWallet({
     t,
     formatPrice,
 }: VoucherWalletProps) {
-    const { language } = useLocale();
+    const { language, formatDate } = useLocale();
 
     return (
         <div className="bg-surface-container-lowest p-8 rounded-xl ambient-shadow space-y-4 h-fit">
@@ -49,11 +50,10 @@ export default function VoucherWallet({
             ) : (
                 <>
                     <div className="space-y-3">
-                        {(showAllVouchers ? myVouchers : myVouchers.slice(0, 2)).map((uv: any) => {
-                            const isExpired = uv.status === 'expired';
+                        {(showAllVouchers ? myVouchers : myVouchers.slice(0, 2)).map((uv) => {
                             const isUsed = uv.status === 'used';
                             const isAvailable = uv.status === 'available';
-                            const v = getTranslatedVoucher(uv.voucher, language);
+                            const v = getLocalizedVoucher(uv.voucher, language);
 
                             return (
                                 <div
@@ -87,7 +87,7 @@ export default function VoucherWallet({
                                             </p>
                                         </div>
                                         <p className="text-[10px] text-outline">
-                                            HSD: {new Date(uv.voucher.expiresAt).toLocaleDateString('vi-VN')}
+                                            HSD: {formatDate(uv.voucher.expiresAt)}
                                         </p>
                                     </div>
                                 </div>

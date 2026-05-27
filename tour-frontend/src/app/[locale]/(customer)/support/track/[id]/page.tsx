@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import SupportTicketDetail from '@/components/profile/SupportTicketDetail';
+import { API_BASE_URL } from '@/lib/constants';
 import type { SupportTicket } from '@/components/profile/SupportTicketList';
 
 type TicketResponse = SupportTicket | { data?: SupportTicket; message?: string };
@@ -58,8 +59,7 @@ export default function GuestSupportTicketPage() {
     setError('');
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
-      const res = await fetch(`${apiBase}/support/customer/ticket/${params.id}?accessCode=${encodeURIComponent(trimmedCode)}`);
+      const res = await fetch(`${API_BASE_URL}/support/customer/ticket/${params.id}?accessCode=${encodeURIComponent(trimmedCode)}`);
       const payload = (await res.json()) as TicketResponse;
 
       if (!res.ok) {

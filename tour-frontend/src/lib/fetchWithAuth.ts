@@ -1,67 +1,90 @@
-/**
- * fetchWithAuth — Utility tập trung gọi API có xác thực.
- *
- * Tự động:
- * 1. Gắn Authorization header với access token
- * 2. Nếu nhận 401 → dùng refresh token xin access token mới
- * 3. Retry lại request ban đầu với token mới
- * 4. Nếu refresh cũng thất bại → xóa token, redirect về /login
- */
-
 import { API_BASE_URL } from './constants';
+
+const AUTH_STORAGE_KEYS = [
+  'accessToken',
+  'userName',
+  'userEmail',
+  'userRole',
+  'userAvatarUrl',
+  'userAvatar',
+];
+
+function isBrowser() {
+  return typeof window !== 'undefined';
+}
+
+function clearAuthStorage() {
+  if (!isBrowser()) return;
+
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  window.dispatchEvent(new Event('auth-change'));
+}
+
+function getLoginPath() {
+  if (!isBrowser()) return '/login';
+
+  const pathWithoutLocale = window.location.pathname.replace(/^\/(en|vi)(?=\/|$)/, '') || '/';
+  return pathWithoutLocale.startsWith('/admin') ? '/admin/login' : '/login';
+}
+
+async function logoutAndRedirect() {
+  clearAuthStorage();
+  await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+
+  if (isBrowser()) {
+    window.location.href = getLoginPath();
+  }
+}
 
 export async function fetchWithAuth(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const accessToken = localStorage.getItem('accessToken');
-
-  // Gắn Authorization header
+  const accessToken = isBrowser() ? localStorage.getItem('accessToken') : null;
   const headers = new Headers(options.headers || {});
+
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  // Gọi request ban đầu
   let response = await fetch(url, { ...options, headers });
 
-  // Nếu 401 Unauthorized → thử refresh token ngầm bằng HttpOnly Cookie
-  if (response.status === 401) {
-
-    try {
-      // Gọi endpoint refresh
-      const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Bắt buộc để trình duyệt đính kèm HttpOnly Cookie
-      });
-
-        if (refreshRes.ok) {
-          const payload = await refreshRes.json();
-          const data = payload.data || payload;
-  
-          // Lưu access token mới
-          localStorage.setItem('accessToken', data.access_token);
-  
-          // Retry request ban đầu với token mới
-          const retryHeaders = new Headers(options.headers || {});
-          retryHeaders.set('Authorization', `Bearer ${data.access_token}`);
-          response = await fetch(url, { ...options, headers: retryHeaders });
-        } else {
-          // Refresh token cũng hết hạn hoặc lỗi → buộc đăng nhập lại
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('userName');
-          // Tuỳ chọn: gọi API logout để xóa cookie trên Server
-          await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
-          window.location.href = '/login';
-        }
-      } catch (error) {
-        console.error('Lỗi khi refresh token:', error);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userName');
-        window.location.href = '/login';
-      }
-    }
-  
+  if (response.status !== 401) {
     return response;
   }
+
+  try {
+    const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+
+    if (!refreshRes.ok) {
+      await logoutAndRedirect();
+      return response;
+    }
+
+    const payload = await refreshRes.json();
+    const data = payload.data || payload;
+    const nextAccessToken = data.access_token || data.accessToken;
+
+    if (!nextAccessToken) {
+      await logoutAndRedirect();
+      return response;
+    }
+
+    if (isBrowser()) {
+      localStorage.setItem('accessToken', nextAccessToken);
+    }
+
+    const retryHeaders = new Headers(options.headers || {});
+    retryHeaders.set('Authorization', `Bearer ${nextAccessToken}`);
+    response = await fetch(url, { ...options, headers: retryHeaders });
+  } catch {
+    console.error('Failed to refresh access token');
+    await logoutAndRedirect();
+  }
+
+  return response;
+}

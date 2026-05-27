@@ -53,7 +53,7 @@ export const COMMAND_GROUPS: CommandGroup[] = [
     {
         title: 'Người dùng',
         actions: [
-            { label: 'Khách hàng', desc: 'Lịch sử, hạng thành viên', icon: 'people', href: '/admin/customers', color: 'text-violet-500', roles: ADMIN_AND_SUPER_ROLES },
+            { label: 'Khách hàng', desc: 'Lịch sử, hạng thành viên', icon: 'people', href: '/admin/customers', color: 'text-violet-500', roles: ALL_ADMIN_ROLES },
             { label: 'Kiểm duyệt Nhận xét', desc: 'Duyệt, ẩn, phản hồi review', icon: 'reviews', href: '/admin/reviews', color: 'text-purple-500', roles: ADMIN_AND_SUPER_ROLES },
             { label: 'Quản lý Admin', desc: 'Tài khoản admin vận hành hệ thống', icon: 'manage_accounts', href: '/admin/staffs', color: 'text-rose-500', roles: ['SUPER_ADMIN'] },
             { label: 'Quản lý Nhân viên', desc: 'Tài khoản staff nội bộ', icon: 'badge', href: '/admin/staffs', color: 'text-rose-500', roles: ['ADMIN'] },
@@ -63,7 +63,7 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         title: 'Quản trị',
         actions: [
             { label: 'Cài đặt hệ thống', desc: 'Cấu hình vận hành nền tảng', icon: 'settings', href: '/admin/settings', color: 'text-slate-600', roles: ['SUPER_ADMIN', 'ADMIN'] },
-            { label: 'Marketing', desc: 'Subscriber và chiến dịch email', icon: 'campaign', href: '/admin/marketing', color: 'text-orange-500', roles: ADMIN_AND_SUPER_ROLES },
+            { label: 'Tiếp thị', desc: 'Người đăng ký và chiến dịch email', icon: 'campaign', href: '/admin/marketing', color: 'text-orange-500', roles: ADMIN_AND_SUPER_ROLES },
             { label: 'Tổng quan cấp cao', desc: 'Rủi ro hệ thống và quyền cấp cao', icon: 'admin_panel_settings', href: '/admin/super', color: 'text-amber-600', roles: ['SUPER_ADMIN'] },
         ],
     },
@@ -79,7 +79,7 @@ const PAGE_META: Record<string, { title: string; icon: string; subtitle: string 
     '/admin/customers': { title: 'Khách hàng', icon: 'group', subtitle: 'Danh sách và thông tin khách hàng' },
     '/admin/staffs': { title: 'Nhân viên', icon: 'badge', subtitle: 'Quản lý tài khoản nhân viên nội bộ' },
     '/admin/vouchers': { title: 'Mã giảm giá', icon: 'confirmation_number', subtitle: 'Tạo và quản lý chương trình khuyến mãi' },
-    '/admin/marketing': { title: 'Marketing', icon: 'campaign', subtitle: 'Quản lý subscriber và chiến dịch email' },
+    '/admin/marketing': { title: 'Tiếp thị', icon: 'campaign', subtitle: 'Quản lý người đăng ký và chiến dịch email' },
     '/admin/articles': { title: 'Bài viết', icon: 'article', subtitle: 'Quản lý nội dung & bài đăng blog' },
     '/admin/reviews': { title: 'Đánh giá', icon: 'reviews', subtitle: 'Kiểm duyệt nhận xét từ khách hàng' },
     '/admin/profile': { title: 'Hồ sơ cá nhân', icon: 'manage_accounts', subtitle: 'Quản lý thông tin tài khoản & bảo mật' },
@@ -114,7 +114,7 @@ export const TABS: { key: TabKey; label: string; types: NotifType[]; href: strin
     { key: 'booking',  label: 'Đặt tour',  types: ['booking_pending','booking_confirmed','booking_cancelled','booking_cancel_requested'], href: '/admin/bookings', roles: ALL_ADMIN_ROLES },
     { key: 'support',  label: 'Hỗ trợ',    types: ['support_new','support_in_progress'], href: '/admin/support', roles: ALL_ADMIN_ROLES },
     { key: 'review',   label: 'Đánh giá',  types: ['review_good','review_bad'], href: '/admin/reviews', roles: ADMIN_AND_SUPER_ROLES },
-    { key: 'customer', label: 'Khách hàng',types: ['customer_new'], href: '/admin/customers', roles: ADMIN_AND_SUPER_ROLES },
+    { key: 'customer', label: 'Khách hàng',types: ['customer_new'], href: '/admin/customers', roles: ALL_ADMIN_ROLES },
 ];
 
 export type { TabKey } from './types';

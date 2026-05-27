@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
@@ -51,6 +52,60 @@ type BookingDetail = {
         startDate?: string | null;
     } | null;
 };
+
+type PaymentIssueForm = {
+    amount: string;
+    transferredAt: string;
+    transactionRef: string;
+    senderBank: string;
+    senderAccountName: string;
+    note: string;
+};
+
+type PaymentIssueResult = {
+    message: string;
+    ticketId?: number;
+    accessCode?: string;
+};
+
+type BankOption = {
+    shortName: string;
+    name: string;
+    logo?: string;
+};
+
+const createEmptyPaymentIssueForm = (): PaymentIssueForm => ({
+    amount: '',
+    transferredAt: '',
+    transactionRef: '',
+    senderBank: '',
+    senderAccountName: '',
+    note: '',
+});
+
+const FALLBACK_BANK_OPTIONS: BankOption[] = [
+    { shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại thương Việt Nam' },
+    { shortName: 'BIDV', name: 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam' },
+    { shortName: 'VietinBank', name: 'Ngân hàng TMCP Công thương Việt Nam' },
+    { shortName: 'Agribank', name: 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam' },
+    { shortName: 'Techcombank', name: 'Ngân hàng TMCP Kỹ thương Việt Nam' },
+    { shortName: 'MB', name: 'Ngân hàng TMCP Quân đội' },
+    { shortName: 'ACB', name: 'Ngân hàng TMCP Á Châu' },
+    { shortName: 'VPBank', name: 'Ngân hàng TMCP Việt Nam Thịnh Vượng' },
+    { shortName: 'TPBank', name: 'Ngân hàng TMCP Tiên Phong' },
+    { shortName: 'Sacombank', name: 'Ngân hàng TMCP Sài Gòn Thương Tín' },
+    { shortName: 'HDBank', name: 'Ngân hàng TMCP Phát triển TP.HCM' },
+    { shortName: 'VIB', name: 'Ngân hàng TMCP Quốc tế Việt Nam' },
+    { shortName: 'MSB', name: 'Ngân hàng TMCP Hàng Hải Việt Nam' },
+    { shortName: 'OCB', name: 'Ngân hàng TMCP Phương Đông' },
+    { shortName: 'SHB', name: 'Ngân hàng TMCP Sài Gòn - Hà Nội' },
+    { shortName: 'Khác', name: 'Ngân hàng khác' },
+];
+
+function parseMoneyInput(value: string) {
+    const normalized = value.replace(/[^\d]/g, '');
+    return normalized ? Number(normalized) : 0;
+}
 
 function useCountdown(createdAt: string | undefined) {
     const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -105,6 +160,14 @@ function StatusBadge({ status, paymentStatus }: { status: string; paymentStatus:
             </div>
         );
     }
+    if (paymentStatus === 'PROCESSING') {
+        return (
+            <div className="bg-sky-50 px-3 py-1 rounded-full flex items-center gap-2 border border-sky-100">
+                <span className="material-symbols-outlined text-sky-600 text-sm">fact_check</span>
+                <span className="text-[10px] font-bold text-sky-700 uppercase">Đang Kiểm Tra</span>
+            </div>
+        );
+    }
     if (status === 'CANCEL_REQUESTED') {
         return (
             <div className="bg-orange-50 px-3 py-1 rounded-full flex items-center gap-2 border border-orange-200">
@@ -138,7 +201,7 @@ export default function BookingDetailPage() {
     const [payError, setPayError] = useState('');
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [cancelSuccess, setCancelSuccess] = useState(false);
-    const { t, formatPrice, language } = useLocale();
+    const { t, formatPrice, formatNumber, formatDate, formatDateTime, language } = useLocale();
 
     const secondsLeft = useCountdown(
         booking?.paymentStatus === 'UNPAID' && booking?.status === 'PENDING' && booking?.paymentMethod === 'PAYOS'
@@ -213,31 +276,160 @@ export default function BookingDetailPage() {
         fetchBooking(); // Reload để lấy status mới
     }, [fetchBooking]);
 
-    // Report payment issue
+    // Payment verification request
     const [showIssueForm, setShowIssueForm] = useState(false);
-    const [issueDesc, setIssueDesc] = useState('');
+    const [paymentIssueForm, setPaymentIssueForm] = useState<PaymentIssueForm>(() => createEmptyPaymentIssueForm());
     const [isReportingIssue, setIsReportingIssue] = useState(false);
-    const [issueSuccess, setIssueSuccess] = useState(false);
+    const [paymentIssueResult, setPaymentIssueResult] = useState<PaymentIssueResult | null>(null);
     const [issueError, setIssueError] = useState('');
+    const [banksList, setBanksList] = useState<BankOption[]>(FALLBACK_BANK_OPTIONS);
+    const [isBankListLoading, setIsBankListLoading] = useState(false);
+    const [isBankDropdownOpen, setIsBankDropdownOpen] = useState(false);
+    const [bankSearchQuery, setBankSearchQuery] = useState('');
+    const bankDropdownRef = useRef<HTMLDivElement>(null);
+    const paymentIssueDialogRef = useRef<HTMLDivElement>(null);
+    const paymentIssueErrorId = 'payment-issue-error';
+    const paymentBankLabelId = 'payment-issue-bank-label';
+    const paymentBankButtonId = 'payment-issue-bank-button';
+    const paymentBankListboxId = 'payment-issue-bank-listbox';
+    const paymentBankSearchId = 'payment-issue-bank-search';
+    const paymentAmountId = 'payment-issue-amount';
+    const paymentTransferredAtId = 'payment-issue-transferred-at';
+    const paymentTransactionRefId = 'payment-issue-transaction-ref';
+    const paymentSenderAccountId = 'payment-issue-sender-account';
+    const paymentNoteId = 'payment-issue-note';
+
+    const updatePaymentIssueForm = useCallback((patch: Partial<PaymentIssueForm>) => {
+        setPaymentIssueForm(previous => ({ ...previous, ...patch }));
+        if (issueError) setIssueError('');
+    }, [issueError]);
+
+    const selectedBank = useMemo(
+        () => banksList.find(bank => bank.shortName === paymentIssueForm.senderBank),
+        [banksList, paymentIssueForm.senderBank],
+    );
+
+    const filteredBanks = useMemo(() => {
+        const query = bankSearchQuery.trim().toLowerCase();
+        if (!query) return banksList;
+        return banksList.filter(bank =>
+            bank.shortName.toLowerCase().includes(query) ||
+            bank.name.toLowerCase().includes(query)
+        );
+    }, [bankSearchQuery, banksList]);
+
+    useEffect(() => {
+        if (!showIssueForm) return;
+
+        let ignore = false;
+        setIsBankListLoading(true);
+        fetch('https://api.vietqr.io/v2/banks')
+            .then(res => res.json())
+            .then((json: { code?: string; data?: BankOption[] }) => {
+                if (!ignore && json.code === '00' && Array.isArray(json.data) && json.data.length > 0) {
+                    setBanksList(json.data);
+                }
+            })
+            .catch(error => console.error('Lỗi lấy danh sách ngân hàng:', error))
+            .finally(() => {
+                if (!ignore) setIsBankListLoading(false);
+            });
+
+        return () => { ignore = true; };
+    }, [showIssueForm]);
+
+    useEffect(() => {
+        if (!showIssueForm || !isBankDropdownOpen) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (bankDropdownRef.current && !bankDropdownRef.current.contains(event.target as Node)) {
+                setIsBankDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isBankDropdownOpen, showIssueForm]);
+
+    useEffect(() => {
+        if (!showIssueForm) return;
+        paymentIssueDialogRef.current?.focus();
+    }, [showIssueForm]);
+
+    useEffect(() => {
+        if (!showIssueForm) return;
+
+        const handleKey = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (isBankDropdownOpen) {
+                setIsBankDropdownOpen(false);
+                return;
+            }
+            setShowIssueForm(false);
+            setIssueError('');
+        };
+
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, [isBankDropdownOpen, showIssueForm]);
 
     const handleReportIssue = async () => {
-        if (!issueDesc.trim() || issueDesc.trim().length < 10) {
-            setIssueError('Vui lòng mô tả vấn đề (ít nhất 10 ký tự)');
+        if (!booking || isReportingIssue) return;
+
+        const amount = parseMoneyInput(paymentIssueForm.amount);
+        const transactionRef = paymentIssueForm.transactionRef.trim();
+        const senderBank = paymentIssueForm.senderBank.trim();
+        const senderAccountName = paymentIssueForm.senderAccountName.trim();
+        const note = paymentIssueForm.note.trim();
+
+        if (amount <= 0) {
+            setIssueError('Vui lòng nhập số tiền bạn đã chuyển.');
+            return;
+        }
+        if (!paymentIssueForm.transferredAt) {
+            setIssueError('Vui lòng nhập thời gian chuyển khoản.');
+            return;
+        }
+        if (transactionRef.length < 4) {
+            setIssueError('Vui lòng nhập mã giao dịch hoặc nội dung chuyển khoản.');
+            return;
+        }
+        if (!senderBank) {
+            setIssueError('Vui lòng chọn ngân hàng chuyển khoản.');
+            return;
+        }
+        if (senderAccountName.length < 2) {
+            setIssueError('Vui lòng nhập tên chủ tài khoản chuyển.');
             return;
         }
         setIsReportingIssue(true); setIssueError('');
         try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking!.id}/payment-issue`, {
+            const senderBankLabel = selectedBank
+                ? `${selectedBank.shortName} - ${selectedBank.name}`
+                : senderBank;
+            const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/payment-issue`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ description: issueDesc.trim() }),
+                body: JSON.stringify({
+                    amount,
+                    transferredAt: paymentIssueForm.transferredAt,
+                    transactionRef,
+                    senderBank: senderBankLabel,
+                    senderAccountName,
+                    message: note || `Khách báo đã chuyển ${formatNumber(amount)}đ nhưng hệ thống chưa ghi nhận.`,
+                }),
             });
             const json = await res.json();
-            if (!res.ok) throw new Error(json?.message ?? 'Gửi không thành công');
-            setIssueSuccess(true); setShowIssueForm(false);
+            if (!res.ok) throw new Error(json?.message ?? 'Gửi yêu cầu không thành công');
+            const data = json?.data ?? json;
+            setPaymentIssueResult({
+                message: data?.message ?? 'Đã nhận yêu cầu kiểm tra thanh toán.',
+                ticketId: data?.ticketId,
+                accessCode: data?.accessCode,
+            });
+            setShowIssueForm(false);
             fetchBooking();
         } catch (e: unknown) {
-            setIssueError(e instanceof Error ? e.message : 'Lỗi kết nối');
+            setIssueError(e instanceof Error ? e.message : 'Lỗi kết nối. Vui lòng thử lại.');
         } finally { setIsReportingIssue(false); }
     };
 
@@ -255,6 +447,9 @@ export default function BookingDetailPage() {
 
     const isPaid = booking.paymentStatus === 'PAID' && booking.status === 'CONFIRMED';
     const isPending = booking.paymentStatus === 'UNPAID' && booking.status === 'PENDING';
+    const isPaymentReviewing =
+        (booking.paymentStatus === 'PROCESSING' && booking.status === 'PENDING') ||
+        Boolean(paymentIssueResult);
     const isCancelled = booking.status === 'CANCELLED';
     const isCancelRequested = booking.status === 'CANCEL_REQUESTED';
     const cancellationPolicy = booking.cancellationPolicy;
@@ -269,6 +464,10 @@ export default function BookingDetailPage() {
             : 'Không thể hủy online ở thời điểm này.');
     const totalPriceNumber = Number(booking.totalPrice);
     const refundAmountNumber = Number(booking.refundAmount ?? 0);
+    const paymentSupportTicket = booking.supportTickets?.find(ticket => {
+        const subject = ticket.subject?.toLowerCase() ?? '';
+        return subject.includes('thanh toán') || subject.includes('payment');
+    });
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
@@ -293,10 +492,13 @@ export default function BookingDetailPage() {
                 <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-slate-100">
                     {/* Hero Image */}
                     <div className="relative w-full h-64 md:h-80 lg:h-[400px] rounded-2xl overflow-hidden mb-8 md:mb-12 shadow-lg">
-                        <img
+                        <Image
                             src={booking.tour?.imageUrl || 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7'}
-                            alt={booking.tour?.name}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            alt={booking.tour?.name || 'Tour image'}
+                            fill
+                            priority
+                            sizes="100vw"
+                            className="object-cover"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                         <div className="absolute bottom-0 left-0 w-full p-6 md:p-8 lg:p-10">
@@ -328,7 +530,7 @@ export default function BookingDetailPage() {
                                                 <span className="material-symbols-outlined text-primary">calendar_today</span>
                                                 <span className="font-medium">{t('my_bookings.dateLbl')}</span>
                                             </div>
-                                            <span className="font-bold">{new Date(booking.createdAt).toLocaleDateString('vi-VN')}</span>
+                                            <span className="font-bold">{formatDate(booking.createdAt)}</span>
                                         </div>
                                         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                                             <div className="flex items-center gap-3 text-on-surface-variant">
@@ -350,7 +552,7 @@ export default function BookingDetailPage() {
                                                     <span className="material-symbols-outlined text-primary">flight_takeoff</span>
                                                     <span className="font-medium">Ngày khởi hành</span>
                                                 </div>
-                                                <span className="font-bold">{new Date(departureDate).toLocaleDateString('vi-VN')}</span>
+                                                <span className="font-bold">{formatDate(departureDate)}</span>
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -382,13 +584,13 @@ export default function BookingDetailPage() {
                                             {booking.cancelRequestedAt && (
                                                 <div className="flex justify-between">
                                                     <span className="text-slate-500">Yêu cầu lúc</span>
-                                                    <span className="font-medium">{new Date(booking.cancelRequestedAt).toLocaleString('vi-VN')}</span>
+                                                    <span className="font-medium">{formatDateTime(booking.cancelRequestedAt)}</span>
                                                 </div>
                                             )}
                                             {booking.cancelledAt && (
                                                 <div className="flex justify-between">
                                                     <span className="text-slate-500">Hủy lúc</span>
-                                                    <span className="font-medium">{new Date(booking.cancelledAt).toLocaleString('vi-VN')}</span>
+                                                    <span className="font-medium">{formatDateTime(booking.cancelledAt)}</span>
                                                 </div>
                                             )}
                                             {booking.refundAmount !== undefined && booking.refundAmount !== null && (
@@ -396,7 +598,7 @@ export default function BookingDetailPage() {
                                                     <span className="text-slate-500 font-semibold">Hoàn tiền</span>
                                                     <span className={`font-bold text-base ${refundAmountNumber > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                                         {refundAmountNumber > 0
-                                                            ? refundAmountNumber.toLocaleString('vi-VN') + 'đ'
+                                                            ? formatPrice(refundAmountNumber)
                                                             : 'Không hoàn tiền'}
                                                     </span>
                                                 </div>
@@ -415,7 +617,10 @@ export default function BookingDetailPage() {
                                 {/* Status badge */}
                                 <div className="flex justify-between items-center pb-5 border-b border-outline-variant/10">
                                     <span className="text-on-surface-variant font-medium">{t('my_bookings.detailStatus')}</span>
-                                    <StatusBadge status={booking.status} paymentStatus={booking.paymentStatus} />
+                                    <StatusBadge
+                                        status={booking.status}
+                                        paymentStatus={isPaymentReviewing ? 'PROCESSING' : booking.paymentStatus}
+                                    />
                                 </div>
 
                                 {/* Total */}
@@ -430,7 +635,7 @@ export default function BookingDetailPage() {
                                         <p className="text-xs font-bold text-orange-700 uppercase tracking-wider">Dự Kiến Hoàn Tiền</p>
                                         <p className="text-lg font-extrabold text-orange-600">
                                             {refundAmountNumber > 0
-                                                ? refundAmountNumber.toLocaleString('vi-VN') + 'đ'
+                                                ? formatPrice(refundAmountNumber)
                                                 : 'Không hoàn tiền'}
                                         </p>
                                         <p className="text-xs text-orange-600 opacity-80">{booking.refundNote}</p>
@@ -454,7 +659,7 @@ export default function BookingDetailPage() {
                                         <div className="pt-2 border-t border-amber-200/50 flex justify-between font-bold text-[10px] uppercase tracking-wider text-amber-800">
                                             <span>{language === 'vi' ? 'Hạn chót giữ chỗ:' : 'Holding Deadline:'}</span>
                                             <span>
-                                                {new Date(new Date(booking.createdAt).getTime() + 24 * 60 * 60 * 1000).toLocaleString(language === 'vi' ? 'vi-VN' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })}
+                                                {formatDateTime(new Date(new Date(booking.createdAt).getTime() + 24 * 60 * 60 * 1000))}
                                             </span>
                                         </div>
                                     </div>
@@ -571,6 +776,35 @@ export default function BookingDetailPage() {
                                                 <span className="material-symbols-outlined text-lg">info</span>
                                                 {language === 'vi' ? 'Xem Hướng Dẫn và Vé Giữ Chỗ' : 'View Instructions and Ticket'}
                                             </Link>
+                                        ) : isPaymentReviewing ? (
+                                            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="material-symbols-outlined text-sky-600 mt-0.5">fact_check</span>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-sky-900">Đang kiểm tra thanh toán</p>
+                                                        <p className="mt-1 text-xs leading-relaxed text-sky-700">
+                                                            Chúng tôi đã nhận yêu cầu đối soát. Nếu bạn đã chuyển khoản, không cần tạo thanh toán lại hoặc hủy tour trong lúc chờ kiểm tra.
+                                                        </p>
+                                                        {paymentIssueResult?.message && (
+                                                            <p className="mt-2 text-xs font-semibold text-sky-800">
+                                                                {paymentIssueResult.message}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {(paymentIssueResult?.ticketId || paymentSupportTicket?.id) && (
+                                                    <div className="rounded-xl border border-sky-200 bg-white/70 px-3 py-2 text-xs text-sky-800">
+                                                        Mã yêu cầu: #{paymentIssueResult?.ticketId ?? paymentSupportTicket?.id}
+                                                    </div>
+                                                )}
+                                                <Link
+                                                    href="/contact"
+                                                    className="w-full border border-sky-200 bg-white text-sky-700 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sky-100 transition-all text-sm"
+                                                >
+                                                    <span className="material-symbols-outlined text-base">support_agent</span>
+                                                    Liên hệ hỗ trợ
+                                                </Link>
+                                            </div>
                                         ) : (
                                             <>
                                             <button
@@ -584,53 +818,31 @@ export default function BookingDetailPage() {
                                                     <><span className="material-symbols-outlined text-lg">account_balance_wallet</span>{t('my_bookings.payNow')}</>
                                                 )}
                                             </button>
-                                            {/* Báo sự cố thanh toán */}
-                                            {issueSuccess ? (
-                                                <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 text-purple-700 rounded-xl px-4 py-3 text-sm font-medium">
-                                                    <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                                                    Đã ghi nhận! Chúng tôi sẽ liên hệ trong vòng 24h.
-                                                </div>
-                                            ) : !showIssueForm ? (
-                                                <button
-                                                    onClick={() => { setShowIssueForm(true); setIssueError(''); }}
-                                                    className="w-full border border-purple-200 text-purple-700 bg-purple-50 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-100 transition-all text-sm"
-                                                >
-                                                    <span className="material-symbols-outlined text-base">report_problem</span>
-                                                    Đã chuyển khoản nhưng chưa được ghi nhận?
-                                                </button>
-                                            ) : (
-                                                <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-3">
-                                                    <p className="text-sm font-bold text-purple-800">Mô tả sự cố thanh toán</p>
-                                                    <textarea
-                                                        value={issueDesc}
-                                                        onChange={e => setIssueDesc(e.target.value)}
-                                                        rows={3}
-                                                        placeholder="VD: Tôi đã chuyển khoản lúc 14:30 ngày 23/05, mã GD: VCB123456, nhưng hệ thống chưa ghi nhận..."
-                                                        className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-300 resize-none"
-                                                    />
-                                                    {issueError && <p className="text-xs text-red-600 font-medium">{issueError}</p>}
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => { setShowIssueForm(false); setIssueError(''); }}
-                                                            className="flex-1 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
-                                                            Hủy
-                                                        </button>
-                                                        <button onClick={handleReportIssue} disabled={isReportingIssue}
-                                                            className="flex-1 py-2 rounded-xl text-sm font-bold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
-                                                            {isReportingIssue ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Gửi…</> : <>Gửi báo lỗi</>}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            {/* Yêu cầu kiểm tra thanh toán */}
+                                            <button
+                                                onClick={() => { setShowIssueForm(true); setIssueError(''); setPaymentIssueResult(null); }}
+                                                className="w-full border border-sky-200 text-sky-700 bg-sky-50 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sky-100 transition-all text-sm"
+                                            >
+                                                <span className="material-symbols-outlined text-base">fact_check</span>
+                                                Tôi đã chuyển khoản, yêu cầu kiểm tra
+                                            </button>
                                             </>
                                         )}
                                         {canCancelBooking && (
-                                            <button
-                                                onClick={() => setShowCancelModal(true)}
-                                                className="w-full border-2 border-slate-200 text-slate-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
-                                            >
-                                                <span className="material-symbols-outlined text-base">cancel</span>
-                                                Hủy Đặt Tour
-                                            </button>
+                                            <div className="border-t border-slate-200/70 pt-3 space-y-2">
+                                                {(isPaymentReviewing || paymentIssueResult) && (
+                                                    <p className="text-xs leading-relaxed text-slate-500">
+                                                        Nếu bạn đã chuyển khoản, hãy chờ kết quả đối soát trước khi hủy để tránh nhầm trạng thái hoàn tiền.
+                                                    </p>
+                                                )}
+                                                <button
+                                                    onClick={() => setShowCancelModal(true)}
+                                                    className="w-full border-2 border-slate-200 text-slate-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
+                                                >
+                                                    <span className="material-symbols-outlined text-base">cancel</span>
+                                                    Hủy Đặt Tour
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 )}
@@ -640,6 +852,267 @@ export default function BookingDetailPage() {
                 </div>
             </main>
             <Footer />
+
+            {showIssueForm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/55 px-4 py-8 backdrop-blur-sm"
+                    onClick={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        setShowIssueForm(false);
+                        setIssueError('');
+                    }}
+                >
+                    <div
+                        ref={paymentIssueDialogRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="payment-issue-title"
+                        aria-describedby={issueError ? paymentIssueErrorId : undefined}
+                        tabIndex={-1}
+                        className="w-full max-w-2xl rounded-[1.75rem] bg-white shadow-2xl ring-1 ring-slate-900/10 focus:outline-none"
+                    >
+                        <div className="rounded-t-[1.75rem] bg-gradient-to-r from-sky-700 to-blue-600 px-5 py-5 text-white sm:px-7">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+                                        <span className="material-symbols-outlined text-2xl">fact_check</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-sky-100">
+                                            Đối soát thanh toán
+                                        </p>
+                                        <h2 id="payment-issue-title" className="mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">
+                                            Kiểm tra khoản chuyển của bạn
+                                        </h2>
+                                        <p className="mt-2 max-w-xl text-sm leading-relaxed text-sky-50/90">
+                                            Cung cấp thông tin trên biên lai để nhân viên kiểm tra nhanh hơn. Trong lúc chờ đối soát, bạn không cần tạo thanh toán lại.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowIssueForm(false); setIssueError(''); }}
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                                    aria-label="Đóng form kiểm tra thanh toán"
+                                >
+                                    <span className="material-symbols-outlined text-xl">close</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <form
+                            className="space-y-5 px-5 py-5 sm:px-7 sm:py-6"
+                            onSubmit={(event) => { event.preventDefault(); void handleReportIssue(); }}
+                        >
+                            <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-3">
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Mã đặt tour</p>
+                                    <p className="mt-1 font-extrabold text-slate-900">{booking.bookingCode}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Tổng cần thanh toán</p>
+                                    <p className="mt-1 font-extrabold text-sky-700">{formatPrice(totalPriceNumber)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái</p>
+                                    <p className="mt-1 font-extrabold text-amber-600">Chờ ghi nhận</p>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="block space-y-2 text-sm font-bold text-slate-700">
+                                    Số tiền đã chuyển
+                                    <input
+                                        id={paymentAmountId}
+                                        value={paymentIssueForm.amount}
+                                        onChange={e => updatePaymentIssueForm({ amount: e.target.value })}
+                                        inputMode="numeric"
+                                        required
+                                        placeholder="VD: 6120000"
+                                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                                    />
+                                </label>
+                                <label className="block space-y-2 text-sm font-bold text-slate-700">
+                                    Thời gian chuyển
+                                    <input
+                                        id={paymentTransferredAtId}
+                                        type="datetime-local"
+                                        value={paymentIssueForm.transferredAt}
+                                        onChange={e => updatePaymentIssueForm({ transferredAt: e.target.value })}
+                                        required
+                                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                                    />
+                                </label>
+                            </div>
+
+                            <label className="block space-y-2 text-sm font-bold text-slate-700">
+                                Mã giao dịch hoặc nội dung chuyển khoản
+                                <input
+                                    id={paymentTransactionRefId}
+                                    value={paymentIssueForm.transactionRef}
+                                    onChange={e => updatePaymentIssueForm({ transactionRef: e.target.value })}
+                                    required
+                                    placeholder="VD: FT260526XMZR hoặc BK-260526-XMZR"
+                                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                                />
+                            </label>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="block space-y-2 text-sm font-bold text-slate-700">
+                                    <span id={paymentBankLabelId}>Ngân hàng chuyển</span>
+                                    <div className="relative" ref={bankDropdownRef}>
+                                        <button
+                                            id={paymentBankButtonId}
+                                            type="button"
+                                            aria-haspopup="listbox"
+                                            aria-expanded={isBankDropdownOpen}
+                                            aria-controls={isBankDropdownOpen ? paymentBankListboxId : undefined}
+                                            aria-labelledby={`${paymentBankLabelId} ${paymentBankButtonId}`}
+                                            onClick={() => {
+                                                setIsBankDropdownOpen(previous => !previous);
+                                                setBankSearchQuery('');
+                                            }}
+                                            className={`flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-white px-4 text-left text-sm font-semibold outline-none transition hover:border-sky-300 focus:border-sky-400 focus:ring-4 focus:ring-sky-100 ${selectedBank ? 'text-slate-900' : 'text-slate-400'}`}
+                                        >
+                                            <span className="flex min-w-0 items-center gap-2">
+                                                <span className="material-symbols-outlined text-lg text-sky-700">account_balance</span>
+                                                <span className="truncate">
+                                                    {isBankListLoading && banksList.length === 0
+                                                        ? 'Đang tải danh sách ngân hàng...'
+                                                        : selectedBank
+                                                            ? `${selectedBank.shortName} - ${selectedBank.name}`
+                                                            : 'Tìm hoặc chọn ngân hàng...'}
+                                                </span>
+                                            </span>
+                                            <span
+                                                className="material-symbols-outlined shrink-0 text-lg text-slate-400 transition-transform duration-200"
+                                                style={{ transform: isBankDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                                            >
+                                                expand_more
+                                            </span>
+                                        </button>
+
+                                        {isBankDropdownOpen && (
+                                            <div className="absolute left-0 right-0 top-full z-[70] mt-2 flex max-h-72 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15">
+                                                <div className="border-b border-slate-100 bg-slate-50/80 p-2">
+                                                    <div className="relative">
+                                                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span>
+                                                        <input
+                                                            id={paymentBankSearchId}
+                                                            type="text"
+                                                            placeholder="Gõ để tìm tên hoặc mã ngân hàng..."
+                                                            aria-label="Tìm ngân hàng chuyển khoản"
+                                                            value={bankSearchQuery}
+                                                            onChange={e => setBankSearchQuery(e.target.value)}
+                                                            autoFocus
+                                                            className="h-10 w-full rounded-xl border border-sky-200 bg-white pl-9 pr-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div id={paymentBankListboxId} role="listbox" aria-labelledby={paymentBankLabelId} className="overflow-y-auto overflow-x-hidden">
+                                                    {filteredBanks.length > 0 ? (
+                                                        filteredBanks.map(bank => (
+                                                            <button
+                                                                key={`${bank.shortName}-${bank.name}`}
+                                                                type="button"
+                                                                role="option"
+                                                                aria-selected={paymentIssueForm.senderBank === bank.shortName}
+                                                                onClick={() => {
+                                                                    updatePaymentIssueForm({ senderBank: bank.shortName });
+                                                                    setIsBankDropdownOpen(false);
+                                                                    setBankSearchQuery('');
+                                                                }}
+                                                                className={`flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left text-sm text-slate-700 transition hover:bg-sky-50 ${paymentIssueForm.senderBank === bank.shortName ? 'bg-sky-50/80 font-bold text-sky-800' : 'font-medium'}`}
+                                                            >
+                                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white p-1">
+                                                                    {bank.logo ? (
+                                                                        <Image
+                                                                            src={bank.logo}
+                                                                            alt={bank.shortName}
+                                                                            width={32}
+                                                                            height={32}
+                                                                            sizes="32px"
+                                                                            className="max-h-full max-w-full object-contain"
+                                                                            unoptimized
+                                                                        />
+                                                                    ) : (
+                                                                        <span className="material-symbols-outlined text-sm text-slate-400">account_balance</span>
+                                                                    )}
+                                                                </span>
+                                                                <span className="min-w-0 flex-1 truncate">
+                                                                    {bank.shortName} - {bank.name}
+                                                                </span>
+                                                            </button>
+                                                        ))
+                                                    ) : (
+                                                        <div className="px-4 py-6 text-center text-sm font-medium text-slate-500">
+                                                            Không tìm thấy ngân hàng phù hợp
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <label className="block space-y-2 text-sm font-bold text-slate-700">
+                                    Tên chủ tài khoản chuyển
+                                    <input
+                                        id={paymentSenderAccountId}
+                                        value={paymentIssueForm.senderAccountName}
+                                        onChange={e => updatePaymentIssueForm({ senderAccountName: e.target.value })}
+                                        required
+                                        placeholder="VD: Dao Thanh Ha"
+                                        className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                                    />
+                                </label>
+                            </div>
+
+                            <label className="block space-y-2 text-sm font-bold text-slate-700">
+                                Ghi chú thêm
+                                <textarea
+                                    id={paymentNoteId}
+                                    value={paymentIssueForm.note}
+                                    onChange={e => updatePaymentIssueForm({ note: e.target.value })}
+                                    rows={4}
+                                    placeholder="VD: Tôi đã chuyển khoản nhưng hệ thống chưa ghi nhận sau khi quay lại trang."
+                                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                                />
+                            </label>
+
+                            {issueError && (
+                                <div id={paymentIssueErrorId} role="alert" className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                                    <span className="material-symbols-outlined text-base mt-0.5">error</span>
+                                    {issueError}
+                                </div>
+                            )}
+
+                            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowIssueForm(false); setIssueError(''); }}
+                                    className="h-11 rounded-2xl border border-slate-200 px-6 text-sm font-bold text-slate-500 transition hover:bg-slate-50 sm:min-w-32"
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isReportingIssue}
+                                    className="h-11 rounded-2xl bg-sky-600 px-6 text-sm font-extrabold text-white shadow-lg shadow-sky-600/20 transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-40"
+                                >
+                                    {isReportingIssue ? (
+                                        <span className="inline-flex items-center justify-center gap-2">
+                                            <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                            Đang gửi...
+                                        </span>
+                                    ) : (
+                                        'Gửi kiểm tra'
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Cancel Modal */}
             {showCancelModal && (

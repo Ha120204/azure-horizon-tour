@@ -2,6 +2,10 @@
   "checkout": {
     "continue": "Continue",
     "edit": "Edit",
+    "deletePassenger": "Delete passenger",
+    "editPassenger": "Edit passenger",
+    "updatePassenger": "Update passenger",
+    "editingPassenger": "Editing",
     "backToEdit": "Go back to edit information",
     "leadRepresentative": "Representative",
     "passengerN": "Passenger {number}",

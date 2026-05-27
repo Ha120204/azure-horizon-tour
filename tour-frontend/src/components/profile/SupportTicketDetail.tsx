@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { format } from 'date-fns';
-import { enUS, vi } from 'date-fns/locale';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/constants';
 import { useLocale } from '@/context/LocaleContext';
 import type { SupportTicket, TicketReply } from './SupportTicketList';
 
@@ -60,18 +59,13 @@ function resolveMessage(payload: unknown): string | undefined {
   return typeof message === 'string' ? message : undefined;
 }
 
-function formatSyncedAt(date: Date, language: 'en' | 'vi') {
-  return date.toLocaleTimeString(language === 'vi' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-}
-
 export default function SupportTicketDetail({
   ticket: initialTicket,
   lookupAccessCode,
   onClose,
   onTicketUpdate,
 }: Props) {
-  const { t, language } = useLocale();
-  const dateLocale = language === 'vi' ? vi : enUS;
+  const { t, formatDateTime } = useLocale();
   const [ticket, setTicket] = useState<SupportTicket>(initialTicket);
   const [replyContent, setReplyContent] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -81,7 +75,7 @@ export default function SupportTicketDetail({
   const [error, setError] = useState('');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+  const apiBase = API_BASE_URL;
   const cfg = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.NEW;
   const categoryKey = CATEGORY_LABEL_KEYS[ticket.category];
   const isGuestLookup = Boolean(lookupAccessCode);
@@ -222,7 +216,7 @@ export default function SupportTicketDetail({
             </span>
             <span className="flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm">calendar_today</span>
-              {format(new Date(ticket.createdAt), 'dd/MM/yyyy HH:mm', { locale: dateLocale })}
+              {formatDateTime(ticket.createdAt, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </span>
             {ticket.bookingRef && (
               <span className="flex items-center gap-1.5">
@@ -233,7 +227,7 @@ export default function SupportTicketDetail({
             {lastSyncedAt && (
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm">sync</span>
-                {t('profile.supportSyncedAt', { time: formatSyncedAt(lastSyncedAt, language) })}
+                {t('profile.supportSyncedAt', { time: formatDateTime(lastSyncedAt, { hour: '2-digit', minute: '2-digit' }) })}
               </span>
             )}
           </div>
@@ -352,8 +346,7 @@ function MessageBubble({
   senderName: string;
   senderType: 'staff' | 'customer';
 }) {
-  const { language } = useLocale();
-  const dateLocale = language === 'vi' ? vi : enUS;
+  const { formatDateTime } = useLocale();
   const isStaff = senderType === 'staff';
 
   return (
@@ -366,7 +359,7 @@ function MessageBubble({
       <div className={`max-w-[85%] ${isStaff ? '' : 'order-first'}`}>
         <div className={`mb-1 flex items-center gap-2 ${isStaff ? '' : 'justify-end'}`}>
           <span className={`text-xs ${isStaff ? 'font-semibold text-primary' : 'text-outline'}`}>{senderName}</span>
-          <span className="text-xs text-outline">{format(new Date(createdAt), 'HH:mm dd/MM', { locale: dateLocale })}</span>
+          <span className="text-xs text-outline">{formatDateTime(createdAt, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</span>
         </div>
         <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${isStaff ? 'rounded-tl-sm bg-surface-container text-on-surface' : 'rounded-tr-sm bg-primary/10 text-on-surface'}`}>
           {content}

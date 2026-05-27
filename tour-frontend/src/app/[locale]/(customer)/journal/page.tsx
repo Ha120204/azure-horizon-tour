@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
@@ -22,7 +23,7 @@ interface Article {
 const CATEGORIES = ["ALL", "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"];
 
 export default function JournalPage() {
-    const { t, language } = useLocale();
+    const { t, language, formatDate: formatLocaleDate } = useLocale();
     const [activeCategory, setActiveCategory] = useState("ALL");
     const [articles, setArticles] = useState<Article[]>([]);
     const [featured, setFeatured] = useState<Article | null>(null);
@@ -61,7 +62,7 @@ export default function JournalPage() {
             } else {
                 setSubscribeStatus('error');
             }
-        } catch (error) {
+        } catch {
             setSubscribeStatus('error');
         } finally {
             setTimeout(() => setSubscribeStatus('idle'), 4000);
@@ -74,8 +75,8 @@ export default function JournalPage() {
             setIsLoading(true);
             try {
                 const [articlesRes, featuredRes] = await Promise.all([
-                    fetch('http://localhost:3000/article'),
-                    fetch('http://localhost:3000/article/featured'),
+                    fetch(`${API_BASE_URL}/article`),
+                    fetch(`${API_BASE_URL}/article/featured`),
                 ]);
                 if (articlesRes.ok) {
                     const payload = await articlesRes.json();
@@ -115,10 +116,7 @@ export default function JournalPage() {
     }, [activeCategory]);
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString(
-            language === 'vi' ? 'vi-VN' : 'en-US',
-            { month: 'short', day: 'numeric', year: 'numeric' }
-        );
+        return formatLocaleDate(dateStr, { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
     return (
@@ -175,10 +173,13 @@ export default function JournalPage() {
                             <section className="mt-12 px-8 md:px-16 mb-24">
                                 <Link href={`/journal/${featured.slug}`}>
                                     <div className="relative group overflow-hidden rounded-2xl h-[500px] md:h-[716px] flex items-end shadow-sm cursor-pointer">
-                                        <img
+                                        <Image
                                             src={featured.imageUrl}
                                             alt={featured.title}
-                                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                                            fill
+                                            priority
+                                            sizes="100vw"
+                                            className="object-cover transition-transform duration-1000 group-hover:scale-105"
                                         />
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent"></div>
                                         <div className="relative z-10 p-8 md:p-16 lg:p-20 w-full max-w-4xl">
@@ -218,10 +219,12 @@ export default function JournalPage() {
                                         <Link key={article.id} href={`/journal/${article.slug}`}>
                                             <article className="flex flex-col group cursor-pointer">
                                                 <div className="relative aspect-[4/5] overflow-hidden rounded-xl mb-8 bg-slate-200">
-                                                    <img
+                                                    <Image
                                                         src={article.imageUrl}
                                                         alt={article.title}
-                                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                                        fill
+                                                        sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                                                        className="object-cover transition-transform duration-700 group-hover:scale-110"
                                                     />
                                                     <div className="absolute top-6 left-6">
                                                         <span className="bg-white/95 backdrop-blur px-3 py-1.5 text-[10px] font-bold tracking-widest rounded-full shadow-sm text-slate-800">

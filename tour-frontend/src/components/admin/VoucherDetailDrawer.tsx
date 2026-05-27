@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
@@ -151,8 +152,8 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
       const json = await res.json();
       const voucher = json?.data ?? json;
       setData(voucher);
-    } catch (e: any) {
-      setError(e.message ?? 'Lỗi không xác định');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lỗi không xác định');
     } finally {
       setIsLoading(false);
     }
@@ -160,17 +161,17 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
 
   useEffect(() => { fetchDetail(); }, [fetchDetail]);
 
+  const handleClose = useCallback(() => {
+    setVisible(false);
+    setTimeout(onClose, 250);
+  }, [onClose]);
+
   // Escape key
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, []);
-
-  const handleClose = () => {
-    setVisible(false);
-    setTimeout(onClose, 250);
-  };
+  }, [handleClose]);
 
   const handleCopy = () => {
     if (data?.code) {
@@ -354,7 +355,7 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
               className="px-7 py-3 text-xs font-medium italic"
               style={{ background: 'rgba(0,0,0,0.18)', color: 'rgba(255,255,255,0.75)' }}
             >
-              "{data.description}"
+              &quot;{data.description}&quot;
             </div>
           )}
         </div>
@@ -509,10 +510,13 @@ export default function VoucherDetailDrawer({ voucherId, onClose }: VoucherDetai
                       >
                         {/* Avatar */}
                         {uv.user?.avatarUrl ? (
-                          <img
+                          <Image
                             src={uv.user.avatarUrl}
                             alt={uv.user.fullName}
-                            className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm"
+                            width={36}
+                            height={36}
+                            sizes="36px"
+                            className="h-9 w-9 rounded-full object-cover shrink-0 ring-2 ring-white shadow-sm"
                           />
                         ) : (
                           <div

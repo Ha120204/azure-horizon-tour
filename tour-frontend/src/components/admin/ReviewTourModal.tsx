@@ -25,8 +25,8 @@ export default function ReviewTourModal({ tour, action, onConfirm, onClose }: Re
         setError('');
         try {
             await onConfirm(action, note.trim() || undefined);
-        } catch (e: any) {
-            setError(e.message || 'Có lỗi xảy ra');
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Có lỗi xảy ra');
             setIsLoading(false);
         }
     };
@@ -59,8 +59,8 @@ export default function ReviewTourModal({ tour, action, onConfirm, onClose }: Re
                         </h2>
                         <p className="text-sm text-on-surface-variant mt-1 leading-relaxed">
                             {isApprove
-                                ? <>Tour <strong className="text-on-surface">"{tour.name}"</strong> sẽ được phát hành công khai và khách hàng có thể đặt ngay.</>
-                                : <>Tour <strong className="text-on-surface">"{tour.name}"</strong> sẽ bị trả về cho Staff với lý do từ chối.</>
+                                ? <>Tour <strong className="text-on-surface">&quot;{tour.name}&quot;</strong> sẽ được phát hành công khai và khách hàng có thể đặt ngay.</>
+                                : <>Tour <strong className="text-on-surface">&quot;{tour.name}&quot;</strong> sẽ bị trả về cho Staff với lý do từ chối.</>
                             }
                         </p>
                     </div>

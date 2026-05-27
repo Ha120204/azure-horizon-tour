@@ -176,7 +176,7 @@ export default function PromotionsPage() {
     const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
-        fetch('http://localhost:3000/voucher')
+        fetch(`${API_BASE_URL}/voucher`)
             .then(res => res.json())
             .then((resData: ApiResponse<Voucher[]> | Voucher[]) => {
                 const arr = Array.isArray(resData) ? resData : resData.data ?? [];
@@ -187,7 +187,7 @@ export default function PromotionsPage() {
         // Fetch user's saved vouchers (if logged in)
         const token = localStorage.getItem('accessToken');
         if (token) {
-            fetchWithAuth('http://localhost:3000/voucher/my-wallet')
+            fetchWithAuth(`${API_BASE_URL}/voucher/my-wallet`)
                 .then(res => res.json())
                 .then((resData: ApiResponse<UserVoucher[]> | UserVoucher[]) => {
                     const arr = Array.isArray(resData) ? resData : resData.data ?? [];
@@ -241,7 +241,7 @@ export default function PromotionsPage() {
 
         setSavingId(voucherId);
         try {
-            const res = await fetchWithAuth('http://localhost:3000/voucher/save', {
+            const res = await fetchWithAuth(`${API_BASE_URL}/voucher/save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ voucherId }),

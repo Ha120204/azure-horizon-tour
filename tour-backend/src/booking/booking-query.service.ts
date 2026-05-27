@@ -37,6 +37,49 @@ export class BookingQueryService {
     private readonly cancellationService: BookingCancellationService,
   ) {}
 
+  private async replacePendingPayosTransaction(
+    bookingId: number,
+    transactionRef: string,
+    amount: number,
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      const reusablePending = await tx.paymentTransaction.findFirst({
+        where: {
+          bookingId,
+          gateway: 'PAYOS',
+          status: 'PENDING',
+          transactionRef,
+        },
+        select: { id: true },
+      });
+
+      await tx.paymentTransaction.updateMany({
+        where: {
+          bookingId,
+          gateway: 'PAYOS',
+          status: 'PENDING',
+          ...(reusablePending ? { id: { not: reusablePending.id } } : {}),
+        },
+        data: {
+          status: 'FAILED',
+          confirmedNote: 'Superseded by a newer PayOS payment link',
+        },
+      });
+
+      if (reusablePending) return;
+
+      await tx.paymentTransaction.create({
+        data: {
+          bookingId,
+          gateway: 'PAYOS',
+          transactionRef,
+          amount,
+          status: 'PENDING',
+        },
+      });
+    });
+  }
+
   // ─── Private formatting helpers ────────────────────────────────────────────
 
   private toCustomerBookingDetail(
@@ -192,7 +235,7 @@ export class BookingQueryService {
       checkoutUrl = await this.paymentService.createPaymentLink(orderCode, amountVND, description);
     } catch (payosError: unknown) {
       if (isPayosDuplicateError(payosError)) {
-        this.logger.warn(`[RETRY] PayOS order #${orderCode} da ton tai, lay lai checkout URL.`);
+        this.logger.warn('[RETRY] PayOS order already exists, reusing checkout URL.');
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) throw new BadRequestException('Khong the lay lien ket thanh toan. Vui long dat tour moi.');
         checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
@@ -201,7 +244,9 @@ export class BookingQueryService {
       }
     }
 
-    this.logger.log(`[RETRY] Tao lai link thanh toan cho booking #${booking.id} (${booking.bookingCode})`);
+    await this.replacePendingPayosTransaction(booking.id, String(orderCode), amountVND);
+
+    this.logger.log(`[RETRY] Payment link recreated for bookingId=${booking.id}`);
     return { checkoutUrl, expiresAt: expiryTime.toISOString() };
   }
 
@@ -281,7 +326,7 @@ export class BookingQueryService {
       checkoutUrl = await this.paymentService.createPaymentLink(orderCode, amountVND, description);
     } catch (payosError: unknown) {
       if (isPayosDuplicateError(payosError)) {
-        this.logger.warn(`[PUBLIC-RETRY] PayOS order #${orderCode} da ton tai, lay lai checkout URL.`);
+        this.logger.warn('[PUBLIC-RETRY] PayOS order already exists, reusing checkout URL.');
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) throw new BadRequestException('Khong the lay lien ket thanh toan. Vui long dat tour moi.');
         checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
@@ -290,7 +335,9 @@ export class BookingQueryService {
       }
     }
 
-    this.logger.log(`[PUBLIC-RETRY] Tao lai link thanh toan cho booking #${booking.id} (${booking.bookingCode})`);
+    await this.replacePendingPayosTransaction(booking.id, String(orderCode), amountVND);
+
+    this.logger.log(`[PUBLIC-RETRY] Payment link recreated for bookingId=${booking.id}`);
     return { checkoutUrl, expiresAt: expiryTime.toISOString() };
   }
 

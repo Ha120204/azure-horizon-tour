@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { PaymentService } from '../payment/payment.service';
 import type { CancellationPolicy, CancellationPolicyTier, TripLifecycle } from './types';
+import { getErrorMessage } from './helpers/booking-helpers';
 
 @Injectable()
 export class BookingCancellationService {
@@ -156,10 +157,10 @@ export class BookingCancellationService {
         });
       }
     } catch (emailError) {
-      this.logger.error('[EMAIL] Loi gui email yeu cau huy:', emailError);
+      this.logger.error('[EMAIL] Failed to send cancel request email:', getErrorMessage(emailError));
     }
 
-    this.logger.log(`[CANCEL] Booking #${bookingId} chuyen sang CANCEL_REQUESTED. Du kien hoan: ${refundAmount}d`);
+    this.logger.log(`[CANCEL] Booking moved to CANCEL_REQUESTED bookingId=${bookingId}`);
     return { message: 'Yeu cau huy da duoc ghi nhan, dang cho xu ly', refundAmount, refundNote };
   }
 
@@ -196,10 +197,10 @@ export class BookingCancellationService {
         });
       }
     } catch (emailError) {
-      this.logger.error('[EMAIL] Loi gui email duyet huy:', emailError);
+      this.logger.error('[EMAIL] Failed to send cancellation approval email:', getErrorMessage(emailError));
     }
 
-    this.logger.log(`[ADMIN] Da duyet huy booking #${bookingId}. Hoan tien: ${refundAmount}d`);
+    this.logger.log(`[ADMIN] Cancellation approved for bookingId=${bookingId}`);
     return { message: 'Da duyet huy booking va hoan tra ghe', refundAmount };
   }
 
@@ -224,10 +225,10 @@ export class BookingCancellationService {
         });
       }
     } catch (emailError) {
-      this.logger.error('[EMAIL] Loi gui email tu choi huy:', emailError);
+      this.logger.error('[EMAIL] Failed to send cancellation rejection email:', getErrorMessage(emailError));
     }
 
-    this.logger.log(`[ADMIN] Da tu choi huy booking #${bookingId}. Ly do: ${rejectReason}`);
+    this.logger.log(`[ADMIN] Cancellation rejected for bookingId=${bookingId}`);
     return { message: 'Da tu choi yeu cau huy, booking tiep tuc hieu luc' };
   }
 

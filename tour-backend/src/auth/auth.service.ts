@@ -86,18 +86,15 @@ export class AuthService {
     try {
       await this.mailService.sendPasswordResetEmail(email, resetToken);
       emailSent = true;
-    } catch (error) {
-      console.warn('⚠️ Could not send email (Resend free tier?):', error.message);
-      console.warn('📧 Reset link for dev testing: http://localhost:3001/reset-password?token=' + resetToken);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown mail error';
+      console.warn('Password reset email could not be sent:', message);
     }
 
     return {
       message: emailSent
         ? 'Password reset link sent to email'
-        : 'Email could not be sent (dev mode). Check server console for reset link.',
-      resetLink: !emailSent
-        ? `http://localhost:3001/reset-password?token=${resetToken}`
-        : undefined,
+        : 'Email could not be sent. Please try again later.',
     };
   }
 
@@ -106,7 +103,7 @@ export class AuthService {
     let payload: any;
     try {
       payload = this.jwtService.verify(token);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid or expired reset token. Please request a new password reset link.');
     }
 
@@ -135,7 +132,7 @@ export class AuthService {
     let payload: any;
     try {
       payload = this.jwtService.verify(refreshToken);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid or expired refresh token. Please log in again.');
     }
 

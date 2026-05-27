@@ -24,7 +24,7 @@ interface ConfirmBookingModalProps {
     contactInfo: ContactInfo;
     leadTraveler: LeadTraveler;
     passengers: Passenger[];
-    t: (key: string, params?: Record<string, unknown>) => string;
+    t: (key: string, params?: Record<string, string | number | Date>) => string;
 }
 
 export default function ConfirmBookingModal({

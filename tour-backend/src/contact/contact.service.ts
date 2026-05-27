@@ -20,6 +20,10 @@ const SUBJECTS_REQUIRING_REFERENCE = new Set([
   'complaint',
 ]);
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown support error';
+}
+
 @Injectable()
 export class ContactService {
   private readonly logger = new Logger(ContactService.name);
@@ -117,7 +121,7 @@ export class ContactService {
       html,
     });
 
-    this.logger.log(`✅ Contact email sent: ${dto.name} <${dto.email}>`);
+    this.logger.log('Contact email sent successfully.');
 
     // ── Lưu ticket vào DB để Staff theo dõi ──────────────────────────────────
     type TicketCat =
@@ -150,9 +154,7 @@ export class ContactService {
       });
       ticketId = ticket.id;
       accessCode = ticket.accessCode ?? undefined;
-      this.logger.log(
-        `📋 Support ticket #${ticketId} created for: ${dto.email}`,
-      );
+      this.logger.log(`Support ticket #${ticketId} created from contact form.`);
 
       // Gửi email xác nhận kèm mã yêu cầu để khách đối chiếu khi trao đổi với đội ngũ hỗ trợ.
 
@@ -218,7 +220,7 @@ export class ContactService {
       // Không để lỗi DB phá vỡ luồng gửi mail chính
       this.logger.error(
         'Failed to create support ticket or send ticket confirmation email',
-        err,
+        getErrorMessage(err),
       );
     }
 

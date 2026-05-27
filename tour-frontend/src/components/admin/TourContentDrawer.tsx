@@ -18,47 +18,95 @@ const HIGHLIGHT_ICONS = [
   { value: 'festival', label: 'Lễ hội' },
 ];
 
+const MEAL_OPTIONS = [
+  { key: 'mealsBreakfast', label: 'Sáng', icon: '☀️' },
+  { key: 'mealsLunch', label: 'Trưa', icon: '🌤️' },
+  { key: 'mealsDinner', label: 'Tối', icon: '🌙' },
+] as const;
+
 interface TourContentDrawerProps {
-  tour: any;
+  tour: TourContent;
   onClose: () => void;
   onSuccess: (msg: string) => void;
 }
+
+type HighlightForm = { content: string; contentEn: string; icon: string };
+type FaqForm = { question: string; questionEn: string; answer: string; answerEn: string };
+type TimelineEntry = { time: string; activity: string };
+type ItineraryFormDay = {
+  id: number;
+  dayNumber: number;
+  title: string;
+  titleEn?: string | null;
+  description: string;
+  descriptionEn?: string | null;
+  mealsBreakfast?: boolean;
+  mealsLunch?: boolean;
+  mealsDinner?: boolean;
+  accommodation?: string | null;
+  accommodationEn?: string | null;
+  transport?: string | null;
+  transportEn?: string | null;
+  activities?: string[];
+  activitiesEn?: string[];
+  timeline?: TimelineEntry[];
+  timelineEn?: TimelineEntry[];
+  activitiesText: string;
+  activitiesEnText: string;
+  timelineText: string;
+  timelineEnText: string;
+};
+type TourContent = {
+  id: number;
+  name?: string;
+  highlights?: Partial<HighlightForm>[];
+  faqs?: Partial<FaqForm>[];
+  itinerary?: Partial<ItineraryFormDay>[];
+};
 
 export default function TourContentDrawer({ tour, onClose, onSuccess }: TourContentDrawerProps) {
   const [tab, setTab] = useState<'highlights' | 'faqs' | 'itinerary'>('highlights');
   const [isSaving, setIsSaving] = useState(false);
 
   // ── Highlights state ──────────────────────────────────────────
-  const [highlights, setHighlights] = useState<{ content: string; contentEn: string; icon: string }[]>([]);
+  const [highlights, setHighlights] = useState<HighlightForm[]>([]);
 
   // ── FAQs state ────────────────────────────────────────────────
-  const [faqs, setFaqs] = useState<{ question: string; questionEn: string; answer: string; answerEn: string }[]>([]);
+  const [faqs, setFaqs] = useState<FaqForm[]>([]);
 
   // ── Itinerary state ───────────────────────────────────────────
-  const [itinerary, setItinerary] = useState<any[]>([]);
+  const [itinerary, setItinerary] = useState<ItineraryFormDay[]>([]);
   const [savingDayId, setSavingDayId] = useState<number | null>(null);
 
   // Pre-fill from tour data
   useEffect(() => {
     if (!tour) return;
-    setHighlights(tour.highlights?.length > 0
-      ? tour.highlights.map((h: any) => ({ content: h.content, contentEn: h.contentEn || '', icon: h.icon || 'auto_awesome' }))
+    const tourHighlights = tour.highlights ?? [];
+    const tourFaqs = tour.faqs ?? [];
+    const tourItinerary = tour.itinerary ?? [];
+
+    setHighlights(tourHighlights.length > 0
+      ? tourHighlights.map((h) => ({ content: h.content ?? '', contentEn: h.contentEn || '', icon: h.icon || 'auto_awesome' }))
       : [{ content: '', contentEn: '', icon: 'auto_awesome' }]
     );
-    setFaqs(tour.faqs?.length > 0
-      ? tour.faqs.map((f: any) => ({ question: f.question, questionEn: f.questionEn || '', answer: f.answer, answerEn: f.answerEn || '' }))
+    setFaqs(tourFaqs.length > 0
+      ? tourFaqs.map((f) => ({ question: f.question ?? '', questionEn: f.questionEn || '', answer: f.answer ?? '', answerEn: f.answerEn || '' }))
       : [{ question: '', questionEn: '', answer: '', answerEn: '' }]
     );
-    setItinerary(tour.itinerary?.length > 0
-      ? tour.itinerary.map((d: any) => ({
+    setItinerary(tourItinerary.length > 0
+      ? tourItinerary.map((d, index) => ({
           ...d,
+          id: d.id ?? index,
+          dayNumber: d.dayNumber ?? index + 1,
+          title: d.title ?? '',
+          description: d.description ?? '',
           activitiesText: Array.isArray(d.activities) ? d.activities.join('\n') : '',
           activitiesEnText: Array.isArray(d.activitiesEn) ? d.activitiesEn.join('\n') : '',
           timelineText: Array.isArray(d.timeline)
-            ? d.timeline.map((t: any) => `${t.time} - ${t.activity}`).join('\n')
+            ? d.timeline.map((t) => `${t.time} - ${t.activity}`).join('\n')
             : '',
           timelineEnText: Array.isArray(d.timelineEn)
-            ? d.timelineEn.map((t: any) => `${t.time} - ${t.activity}`).join('\n')
+            ? d.timelineEn.map((t) => `${t.time} - ${t.activity}`).join('\n')
             : '',
         }))
       : []
@@ -107,7 +155,7 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
   };
 
   // ── Save Itinerary Day ────────────────────────────────────────
-  const saveDay = async (day: any) => {
+  const saveDay = async (day: ItineraryFormDay) => {
     setSavingDayId(day.id);
     try {
       const activities = day.activitiesText.split('\n').map((s: string) => s.trim()).filter(Boolean);
@@ -115,11 +163,11 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
       const timeline = day.timelineText.split('\n').map((line: string) => {
         const [time, ...rest] = line.split('-');
         return { time: time?.trim() || '', activity: rest.join('-').trim() };
-      }).filter((t: any) => t.time && t.activity);
+      }).filter((entry) => entry.time && entry.activity);
       const timelineEn = (day.timelineEnText || '').split('\n').map((line: string) => {
         const [time, ...rest] = line.split('-');
         return { time: time?.trim() || '', activity: rest.join('-').trim() };
-      }).filter((t: any) => t.time && t.activity);
+      }).filter((entry) => entry.time && entry.activity);
       const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tour.id}/itinerary/${day.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -147,7 +195,7 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
     finally { setSavingDayId(null); }
   };
 
-  const updateDay = (id: number, field: string, value: any) => {
+  const updateDay = <K extends keyof ItineraryFormDay>(id: number, field: K, value: ItineraryFormDay[K]) => {
     setItinerary(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d));
   };
 
@@ -425,11 +473,7 @@ export default function TourContentDrawer({ tour, onClose, onSuccess }: TourCont
                   {/* Meals */}
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Bữa ăn:</span>
-                    {[
-                      { key: 'mealsBreakfast', label: 'Sáng', icon: '☀️' },
-                      { key: 'mealsLunch', label: 'Trưa', icon: '🌤️' },
-                      { key: 'mealsDinner', label: 'Tối', icon: '🌙' },
-                    ].map(m => (
+                    {MEAL_OPTIONS.map(m => (
                       <label key={m.key} className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"

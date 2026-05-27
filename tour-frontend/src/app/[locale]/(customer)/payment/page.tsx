@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
@@ -99,7 +100,7 @@ const dict = {
 export default function PaymentSelectorPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { t, formatPrice, language } = useLocale();
+    const { t, formatPrice, formatDate, language } = useLocale();
 
     const bookingCode = searchParams.get('bookingCode');
 
@@ -440,15 +441,18 @@ export default function PaymentSelectorPage() {
                                 {/* Tour details */}
                                 <div className="flex gap-3">
                                     {booking.tour.imageUrl && (
-                                        <img
+                                        <Image
                                             src={booking.tour.imageUrl}
                                             alt={booking.tour.name}
-                                            className="w-16 h-16 rounded-xl object-cover shrink-0"
+                                            width={64}
+                                            height={64}
+                                            sizes="64px"
+                                            className="h-16 w-16 rounded-xl object-cover shrink-0"
                                         />
                                     )}
                                     <div>
                                         <h4 className="font-bold text-on-surface line-clamp-2 leading-snug">{booking.tour.name}</h4>
-                                        <span className="text-xs text-outline block mt-1">{t('checkout.departure')}: {new Date(booking.tour.startDate).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-GB')}</span>
+                                        <span className="text-xs text-outline block mt-1">{t('checkout.departure')}: {formatDate(booking.tour.startDate)}</span>
                                     </div>
                                 </div>
 

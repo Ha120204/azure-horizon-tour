@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { useState } from 'react';
 import { useLocale } from '@/context/LocaleContext';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { useSearchParams } from 'next/navigation';
@@ -21,12 +22,11 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
     const [tempCur, setTempCur] = useState(currency);
 
     // Chỉ đồng bộ state tạm khi modal VỪA MỞ (isOpen chuyển từ false → true)
-    useEffect(() => {
-        if (isOpen) {
-            setTempLang(language);
-            setTempCur(currency);
-        }
-    }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+    const handleClose = () => {
+        setTempLang(language);
+        setTempCur(currency);
+        onClose();
+    };
 
     const handleConfirm = () => {
         setCurrency(tempCur);
@@ -36,7 +36,7 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
         const queryStr = searchParams.toString();
         const href = queryStr ? `${pathname}?${queryStr}` : pathname;
         
-        router.replace(href as any, { locale: tempLang });
+        router.replace(href as Parameters<typeof router.replace>[0], { locale: tempLang });
     };
 
     if (!isOpen) return null;
@@ -46,7 +46,7 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
             {/* Overlay mờ nền */}
             <div
                 className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[200] animate-fadeIn"
-                onClick={onClose}
+                onClick={handleClose}
             />
 
             {/* Modal chính */}
@@ -65,7 +65,7 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                         </div>
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleClose}
                             className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors"
                         >
                             <span className="material-symbols-outlined text-slate-500 text-xl">close</span>
@@ -142,7 +142,13 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                                             : 'border-slate-100 hover:border-slate-200 bg-white'
                                         }`}
                                 >
-                                    <span className="text-lg">🇻🇳</span>
+                                    <Image
+                                        src="https://flagcdn.com/w40/vn.png"
+                                        alt="Cờ Việt Nam"
+                                        width={28}
+                                        height={21}
+                                        className="h-5 w-7 rounded-[3px] border border-slate-200 object-cover shadow-sm"
+                                    />
                                     <div className="flex-1">
                                         <p className={`text-sm font-bold ${tempLang === 'vi' ? 'text-primary' : 'text-slate-800'}`}>Tiếng Việt</p>
                                         <p className="text-[11px] text-slate-500">Việt Nam</p>

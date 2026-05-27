@@ -42,6 +42,19 @@ import {
   PAYOS_HOLD_MINUTES,
 } from './helpers/booking-helpers';
 
+type AssistedDraftValidationSource = {
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerIdentityNo?: string | null;
+  confirmationChannel?: string | null;
+  emailForTicket?: string | null;
+  tourId?: number | null;
+  departureId?: number | null;
+  numberOfPeople?: number | null;
+  tour?: { departures?: Array<{ id: number }> | null } | null;
+};
+
 @Injectable()
 export class AssistedDraftService {
   private readonly logger = new Logger(AssistedDraftService.name);
@@ -78,6 +91,26 @@ export class AssistedDraftService {
       unitPriceAtDraft: draft.unitPriceAtDraft == null ? null : Number(draft.unitPriceAtDraft),
       discountAmount: Number(draft.discountAmount || 0),
     };
+  }
+
+  private assertAssistedDraftReadyForApproval(draft: AssistedDraftValidationSource) {
+    if (!draft.customerName?.trim()) throw new BadRequestException('Customer name is required before approval');
+    if (!draft.customerEmail?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.customerEmail))
+      throw new BadRequestException('Valid customer email is required');
+    if (!draft.customerPhone?.trim()) throw new BadRequestException('Customer phone is required');
+    if (!/^(0|\+84)(\d{9})$/.test(draft.customerPhone.trim().replace(/\s+/g, '')))
+      throw new BadRequestException('Valid Vietnamese customer phone is required');
+    if (!draft.customerIdentityNo?.trim()) throw new BadRequestException('Customer CCCD is required');
+    if (!/^\d{12}$/.test(draft.customerIdentityNo.trim())) throw new BadRequestException('Customer CCCD must be 12 digits');
+    const confirmationChannel = String(draft.confirmationChannel || 'ZALO').toUpperCase();
+    if (!['ZALO', 'EMAIL', 'PHONE', 'MANUAL'].includes(confirmationChannel))
+      throw new BadRequestException('Invalid confirmation channel');
+    if (confirmationChannel === 'EMAIL' && !draft.emailForTicket?.trim() && !draft.customerEmail?.trim())
+      throw new BadRequestException('Email is required when confirmation channel is email');
+    if (!draft.tourId) throw new BadRequestException('Tour is required before approval');
+    if (!draft.numberOfPeople || draft.numberOfPeople < 1) throw new BadRequestException('Number of people must be at least 1');
+    if ((draft.tour?.departures?.length ?? 0) > 0 && !draft.departureId)
+      throw new BadRequestException('Departure is required before approval');
   }
 
   async calculateAssistedQuote(tx: TransactionClient, dto: AssistedQuoteDto): Promise<AssistedQuote> {
@@ -172,6 +205,57 @@ export class AssistedDraftService {
     });
   }
 
+  private async replacePendingPayosTransaction(
+    bookingId: number,
+    transactionRef: string,
+    amount: number,
+    rawPayload?: string,
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      const reusablePending = await tx.paymentTransaction.findFirst({
+        where: {
+          bookingId,
+          gateway: 'PAYOS',
+          status: 'PENDING',
+          transactionRef,
+        },
+        select: { id: true },
+      });
+
+      await tx.paymentTransaction.updateMany({
+        where: {
+          bookingId,
+          gateway: 'PAYOS',
+          status: 'PENDING',
+          ...(reusablePending ? { id: { not: reusablePending.id } } : {}),
+        },
+        data: {
+          status: 'FAILED',
+          confirmedNote: 'Superseded by a newer PayOS payment request',
+        },
+      });
+
+      if (reusablePending) {
+        await tx.paymentTransaction.update({
+          where: { id: reusablePending.id },
+          data: { amount, rawPayload },
+        });
+        return;
+      }
+
+      await tx.paymentTransaction.create({
+        data: {
+          bookingId,
+          gateway: 'PAYOS',
+          transactionRef,
+          amount,
+          status: 'PENDING',
+          rawPayload,
+        },
+      });
+    });
+  }
+
   async createPaymentRequestForBooking(bookingId: number, actorUserId?: number, forceEmail = false) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
@@ -183,6 +267,9 @@ export class AssistedDraftService {
     });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.paymentStatus === 'PAID') throw new BadRequestException('Booking da thanh toan');
+    if (booking.paymentMethod !== 'PAYOS') {
+      throw new BadRequestException('Don tai quay khong tao link PayOS. Hay doi phuong thuc sang PayOS truoc khi gui lai yeu cau thanh toan.');
+    }
     const holdExpiresAt = booking.holdExpiresAt ?? new Date(Date.now() + PAYOS_HOLD_MINUTES * 60 * 1000);
     if (holdExpiresAt.getTime() <= Date.now()) {
       throw new BadRequestException('Booking da het han thanh toan. Vui long tao booking moi.');
@@ -225,14 +312,12 @@ export class AssistedDraftService {
       return { notification, paymentRequest: null };
     }
 
-    await this.prisma.paymentTransaction.create({
-      data: {
-        bookingId: booking.id, gateway: 'PAYOS',
-        transactionRef: String(paymentRequest.orderCode),
-        amount: amountVND, status: 'PENDING',
-        rawPayload: JSON.stringify({ ...paymentRequest, assistedDraftId: booking.assistedDraftId }),
-      },
-    });
+    await this.replacePendingPayosTransaction(
+      booking.id,
+      String(paymentRequest.orderCode),
+      amountVND,
+      JSON.stringify({ ...paymentRequest, assistedDraftId: booking.assistedDraftId }),
+    );
 
     const content = buildPaymentRequestContent(payload, paymentRequest.checkoutUrl);
     let notification = await this.prisma.bookingNotification.create({
@@ -406,33 +491,64 @@ export class AssistedDraftService {
     return drafts.map((d) => this.formatAssistedDraft(d));
   }
 
+  async deleteAssistedDraft(id: number, actorUserId: number, actorRole: string) {
+    const draft = await this.prisma.assistedBookingDraft.findUnique({
+      where: { id },
+      include: { convertedBooking: { select: { id: true, bookingCode: true } } },
+    });
+    if (!draft) throw new NotFoundException('Draft not found');
+    if (actorRole === 'STAFF' && draft.createdByStaffId !== actorUserId) {
+      throw new ForbiddenException('Ban khong co quyen xoa ban nhap nay');
+    }
+    if (draft.convertedBooking || draft.status === 'CONVERTED') {
+      throw new BadRequestException('Ban nhap da tao booking, khong the xoa');
+    }
+    if (!['DRAFT', 'NEEDS_REVISION', 'REJECTED'].includes(draft.status)) {
+      throw new BadRequestException('Chi co the xoa ban nhap, ban can sua hoac ban da tu choi');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.systemLog.create({
+        data: {
+          action: 'DELETE',
+          resource: 'AssistedBookingDraft',
+          resourceId: String(draft.id),
+          targetName: draft.draftCode,
+          description: `Deleted assisted draft ${draft.draftCode}`,
+          userId: actorUserId,
+          oldData: {
+            draftCode: draft.draftCode,
+            status: draft.status,
+            customerName: draft.customerName,
+            customerEmail: draft.customerEmail,
+            quotedPrice: draft.quotedPrice,
+          },
+        },
+      }),
+      this.prisma.assistedBookingDraft.delete({ where: { id } }),
+    ]);
+
+    return {
+      message: 'Da xoa ban nhap dat ho',
+      data: { id: draft.id, draftCode: draft.draftCode },
+    };
+  }
+
   async submitAssistedDraft(id: number, actorUserId: number, actorRole: string) {
     const draft = await this.prisma.assistedBookingDraft.findUnique({
       where: { id },
       include: { tour: { include: { departures: { where: { isActive: true }, select: { id: true } } } } },
     });
     if (!draft) throw new NotFoundException('Draft not found');
-    if (actorRole === 'STAFF' && draft.createdByStaffId !== actorUserId)
+    const normalizedRole = actorRole.toUpperCase();
+    if (normalizedRole === 'ADMIN' || normalizedRole === 'SUPER_ADMIN') {
+      return this.approveAssistedDraft(id, actorUserId, 'Admin duyet truc tiep tu thao tac submit');
+    }
+    if (normalizedRole === 'STAFF' && draft.createdByStaffId !== actorUserId)
       throw new ForbiddenException('Ban khong co quyen gui ban nhap nay');
     if (!['DRAFT', 'NEEDS_REVISION'].includes(draft.status))
       throw new BadRequestException('Chi co the gui ban nhap hoac ban can chinh sua');
-    if (!draft.customerName?.trim()) throw new BadRequestException('Customer name is required before submitting');
-    if (!draft.customerEmail?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.customerEmail))
-      throw new BadRequestException('Valid customer email is required');
-    if (!draft.customerPhone?.trim()) throw new BadRequestException('Customer phone is required');
-    if (!/^(0|\+84)(\d{9})$/.test(draft.customerPhone.trim().replace(/\s+/g, '')))
-      throw new BadRequestException('Valid Vietnamese customer phone is required');
-    if (!draft.customerIdentityNo?.trim()) throw new BadRequestException('Customer CCCD is required');
-    if (!/^\d{12}$/.test(draft.customerIdentityNo.trim())) throw new BadRequestException('Customer CCCD must be 12 digits');
-    const confirmationChannel = String(draft.confirmationChannel || 'ZALO').toUpperCase();
-    if (!['ZALO', 'EMAIL', 'PHONE', 'MANUAL'].includes(confirmationChannel))
-      throw new BadRequestException('Invalid confirmation channel');
-    if (confirmationChannel === 'EMAIL' && !draft.emailForTicket?.trim() && !draft.customerEmail?.trim())
-      throw new BadRequestException('Email is required when confirmation channel is email');
-    if (!draft.tourId) throw new BadRequestException('Tour is required before submitting');
-    if (!draft.numberOfPeople || draft.numberOfPeople < 1) throw new BadRequestException('Number of people must be at least 1');
-    if ((draft.tour?.departures?.length ?? 0) > 0 && !draft.departureId)
-      throw new BadRequestException('Departure is required before submitting');
+    this.assertAssistedDraftReadyForApproval(draft);
 
     const quote = await this.prisma.$transaction((tx) =>
       this.calculateAssistedQuote(tx, {
@@ -483,14 +599,20 @@ export class AssistedDraftService {
 
   async approveAssistedDraft(id: number, adminId: number, note?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const draft = await tx.assistedBookingDraft.findUnique({ where: { id }, include: { convertedBooking: true } });
+      const draft = await tx.assistedBookingDraft.findUnique({
+        where: { id },
+        include: {
+          convertedBooking: true,
+          tour: { include: { departures: { where: { isActive: true }, select: { id: true } } } },
+        },
+      });
       if (!draft) throw new NotFoundException('Draft not found');
-      if (draft.status !== 'PENDING_APPROVAL') throw new BadRequestException('Chi ban nhap dang cho duyet moi co the duyet');
+      if (!['DRAFT', 'PENDING_APPROVAL', 'NEEDS_REVISION'].includes(draft.status))
+        throw new BadRequestException('Chi ban nhap, ban can sua hoac ban dang cho duyet moi co the duyet');
       if (draft.convertedBooking) throw new BadRequestException('Ban nhap nay da tao booking');
-      if (!draft.tourId || !draft.customerName?.trim() || !draft.customerEmail?.trim() || !draft.customerPhone?.trim() || !draft.customerIdentityNo?.trim())
-        throw new BadRequestException('Ban nhap chua du thong tin de tao booking');
+      this.assertAssistedDraftReadyForApproval(draft);
 
-      const tourId = draft.tourId;
+      const tourId = draft.tourId!;
       const quote = await this.calculateAssistedQuote(tx, {
         tourId, departureId: draft.departureId || undefined, packageId: draft.packageId || undefined,
         numberOfPeople: draft.numberOfPeople, passengers: asPassengerInputs(draft.passengers),

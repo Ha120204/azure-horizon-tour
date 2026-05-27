@@ -3,6 +3,11 @@
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE_URL } from '@/lib/constants';
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
 
 function ResetPasswordForm() {
     const searchParams = useSearchParams();
@@ -38,7 +43,7 @@ function ResetPasswordForm() {
         setIsLoading(true);
 
         try {
-            const res = await fetch('http://localhost:3000/auth/reset-password', {
+            const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, newPassword }),
@@ -51,8 +56,8 @@ function ResetPasswordForm() {
             }
 
             setIsSuccess(true);
-        } catch (err: any) {
-            setError(err.message || 'An error occurred. Please try again.');
+        } catch (err) {
+            setError(getErrorMessage(err, 'An error occurred. Please try again.'));
         } finally {
             setIsLoading(false);
         }

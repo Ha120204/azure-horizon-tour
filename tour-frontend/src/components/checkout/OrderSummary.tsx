@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useLocale } from '@/context/LocaleContext';
-import { getTranslatedVoucher } from '@/lib/dev/mockTranslations';
+import { getLocalizedVoucher } from '@/lib/i18n/vouchers';
 
 interface AppliedVoucher {
     code: string;
@@ -63,7 +63,7 @@ interface OrderSummaryProps {
     // Payment
     isPaymentLoading: boolean;
     onPayment: () => void;
-    t: (key: string, params?: Record<string, unknown>) => string;
+    t: (key: string, params?: Record<string, string | number | Date>) => string;
     formatPrice: (price: number) => string;
 }
 
@@ -95,7 +95,7 @@ export default function OrderSummary({
     t,
     formatPrice,
 }: OrderSummaryProps) {
-    const { language } = useLocale();
+    const { language, formatDate } = useLocale();
 
     return (
         <div className="lg:col-span-4 sticky top-28">
@@ -122,7 +122,7 @@ export default function OrderSummary({
                             <h3 className="font-headline font-bold text-base leading-tight mb-2 text-on-surface line-clamp-2">{tourData.name}</h3>
                             <div className="flex items-center gap-1.5 text-on-surface-variant text-xs font-medium mt-2">
                                 <span className="material-symbols-outlined text-[14px]">calendar_month</span>
-                                <span>{t('checkout.departure')}: {new Date(tourData.startDate).toLocaleDateString('vi-VN')}</span>
+                                <span>{t('checkout.departure')}: {formatDate(tourData.startDate)}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-on-surface-variant text-xs font-medium mt-1">
                                 <span className="material-symbols-outlined text-[14px]">schedule</span>
@@ -189,7 +189,7 @@ export default function OrderSummary({
                             <div className="bg-tertiary/5 border border-tertiary/20 rounded-xl p-4">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="text-sm font-bold text-tertiary">{getTranslatedVoucher(appliedVoucher, language).label}</p>
+                                        <p className="text-sm font-bold text-tertiary">{getLocalizedVoucher(appliedVoucher, language)?.label ?? appliedVoucher.label}</p>
                                         <p className="font-mono text-xs text-on-surface-variant mt-0.5">{appliedVoucher.code}</p>
                                     </div>
                                     <button onClick={onRemoveVoucher} className="text-outline hover:text-error transition-colors p-1">
@@ -294,7 +294,7 @@ export default function OrderSummary({
                                                             </div>
                                                             <div className="divide-y divide-outline-variant/10">
                                                                 {applicable.map((uv) => {
-                                                                    const v = getTranslatedVoucher(uv.voucher, language);
+                                                                    const v = getLocalizedVoucher(uv.voucher, language);
                                                                     return (
                                                                         <button
                                                                             key={uv.id}
@@ -333,7 +333,7 @@ export default function OrderSummary({
                                                             </div>
                                                             <div className="divide-y divide-outline-variant/10">
                                                                 {notApplicable.map(({ uv, reason }) => {
-                                                                    const v = getTranslatedVoucher(uv.voucher, language);
+                                                                    const v = getLocalizedVoucher(uv.voucher, language);
                                                                     return (
                                                                         <div
                                                                             key={uv.id}

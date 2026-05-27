@@ -5,6 +5,13 @@ import { usePathname } from 'next/navigation';
 import { useRouter } from '@/i18n/routing';
 import SideNavBar from '@/components/admin/SideNavBar';
 import TopAppBar from '@/components/admin/TopAppBar';
+import {
+    canAccessAdminPath,
+    getCleanAdminPath,
+    getDefaultAdminPathForRole,
+    isAdminRole,
+    type AdminRole,
+} from '@/lib/adminAccess';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
@@ -12,18 +19,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const router = useRouter();
     const pathname = usePathname();
     const [authState, setAuthState] = useState<'loading' | 'authorized' | 'unauthorized'>('loading');
+    const [currentUserRole, setCurrentUserRole] = useState<AdminRole | ''>('');
 
     // Kiểm tra xem đường dẫn hiện tại có phải trang login admin không
-    const isLoginPage = pathname?.replace(/^\/(en|vi)/, '').startsWith('/admin/login');
-    const cleanPath = pathname?.replace(/^\/(en|vi)/, '') || '';
-    const isSuperAdminArea = cleanPath.startsWith('/admin/super');
+    const cleanPath = getCleanAdminPath(pathname);
+    const isLoginPage = cleanPath.startsWith('/admin/login');
+    const effectiveAuthState = isLoginPage ? 'authorized' : authState;
 
     useEffect(() => {
         // Nếu đang ở trang login admin → bỏ qua kiểm tra xác thực, để trang login tự xử lý
-        if (isLoginPage) {
-            setAuthState('authorized');
-            return;
-        }
+        if (isLoginPage) return;
 
         const checkAccess = async () => {
             const token = localStorage.getItem('accessToken');
@@ -42,19 +47,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }
 
                 const user = await res.json();
-                const role = user.role || user.data?.role;
+                const profile = user.data ?? user;
+                const role = profile.role;
 
-                if (role !== 'ADMIN' && role !== 'SUPER_ADMIN' && role !== 'STAFF') {
+                if (!isAdminRole(role)) {
                     setAuthState('unauthorized');
                     router.replace('/');
                     return;
                 }
 
-                if (isSuperAdminArea && role !== 'SUPER_ADMIN') {
+                if (!canAccessAdminPath(cleanPath, role)) {
                     setAuthState('unauthorized');
-                    router.replace('/admin');
+                    router.replace(getDefaultAdminPathForRole(role));
                     return;
                 }
+
+                setCurrentUserRole(role);
+                localStorage.setItem('userRole', role);
+                if (profile.fullName) localStorage.setItem('userName', profile.fullName);
+                if (profile.email) localStorage.setItem('userEmail', profile.email);
+                if (profile.avatarUrl) localStorage.setItem('userAvatarUrl', profile.avatarUrl);
+                else localStorage.removeItem('userAvatarUrl');
 
                 setAuthState('authorized');
             } catch {
@@ -64,10 +77,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         };
 
         checkAccess();
-    }, [router, isLoginPage, isSuperAdminArea]);
+    }, [router, isLoginPage, cleanPath]);
 
     // Loading state — hiển thị khi đang kiểm tra quyền
-    if (authState === 'loading') {
+    if (effectiveAuthState === 'loading') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#060B18]">
                 <div className="flex flex-col items-center gap-5">
@@ -91,7 +104,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     // Unauthorized — sẽ redirect, hiển thị blank tạm
-    if (authState === 'unauthorized') {
+    if (effectiveAuthState === 'unauthorized') {
         return null;
     }
 
@@ -102,9 +115,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     return (
         <div className="bg-surface text-on-surface font-body antialiased min-h-screen flex w-full">
-            <SideNavBar />
+            <SideNavBar currentUserRole={currentUserRole} />
             <div className="flex-1 ml-64 flex flex-col min-h-screen relative">
-                <TopAppBar />
+                <TopAppBar currentUserRole={currentUserRole} />
                 {children}
             </div>
         </div>

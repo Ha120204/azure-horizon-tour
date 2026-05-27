@@ -1,9 +1,119 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import {
+    CallHandler,
+    ExecutionContext,
+    Injectable,
+    NestInterceptor,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { ActivityLogService } from '../../activity-log/activity-log.service';
 import { AUDIT_LOG_KEY, AuditLogMetadata } from '../decorators/audit-log.decorator';
+
+type AuditUser = {
+    userId?: number;
+    id?: number;
+};
+
+type AuditRequest = Request & {
+    user?: AuditUser;
+};
+
+type UnknownRecord = Record<string, unknown>;
+
+const REDACTED_VALUE = '[REDACTED]';
+const SENSITIVE_AUDIT_KEYS = new Set([
+    'accesscode',
+    'accesstoken',
+    'accountnumber',
+    'authorization',
+    'bankaccount',
+    'bankaccountname',
+    'bankaccountnumber',
+    'cancelreason',
+    'cookie',
+    'currentpassword',
+    'customeremail',
+    'customername',
+    'customerphone',
+    'email',
+    'emailforticket',
+    'evidenceurl',
+    'fullname',
+    'identityno',
+    'message',
+    'newpassword',
+    'note',
+    'password',
+    'phone',
+    'receiptref',
+    'reason',
+    'refundbankdetails',
+    'rejectreason',
+    'refreshtoken',
+    'senderaccountname',
+    'senderbank',
+    'token',
+    'transactionref',
+]);
+
+function asRecord(value: unknown): UnknownRecord | null {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as UnknownRecord)
+        : null;
+}
+
+function readStringField(record: UnknownRecord, key: string) {
+    const value = record[key];
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    return undefined;
+}
+
+function firstStringField(record: UnknownRecord, keys: string[]) {
+    for (const key of keys) {
+        const value = readStringField(record, key);
+        if (value) return value;
+    }
+    return undefined;
+}
+
+function readRouteParamId(request: AuditRequest) {
+    const id = request.params?.id;
+    return Array.isArray(id) ? id[0] : id;
+}
+
+function getErrorMessage(error: unknown) {
+    return error instanceof Error ? error.message : 'Unknown audit log error';
+}
+
+function sanitizeAuditData(value: unknown, depth = 0): unknown {
+    if (value == null || typeof value !== 'object') {
+        return value;
+    }
+
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+
+    if (depth > 6) {
+        return REDACTED_VALUE;
+    }
+
+    if (Array.isArray(value)) {
+        return value.map(item => sanitizeAuditData(item, depth + 1));
+    }
+
+    return Object.fromEntries(
+        Object.entries(value as UnknownRecord).map(([key, entry]) => [
+            key,
+            SENSITIVE_AUDIT_KEYS.has(key.toLowerCase())
+                ? REDACTED_VALUE
+                : sanitizeAuditData(entry, depth + 1),
+        ]),
+    );
+}
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
@@ -12,7 +122,7 @@ export class AuditLogInterceptor implements NestInterceptor {
         private logService: ActivityLogService,
     ) {}
 
-    intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
         const metadata = this.reflector.get<AuditLogMetadata>(
             AUDIT_LOG_KEY,
             context.getHandler(),
@@ -22,69 +132,64 @@ export class AuditLogInterceptor implements NestInterceptor {
             return next.handle();
         }
 
-        const request = context.switchToHttp().getRequest();
-        const user = request.user;
-        const ip = request.ip || request.connection?.remoteAddress;
-        const userAgent = request.headers['user-agent'];
+        const request = context.switchToHttp().getRequest<AuditRequest>();
 
         return next.handle().pipe(
-            tap(async (response) => {
-                try {
-                    // Cố gắng trích xuất tên/thông tin từ response hoặc body để log
-                    let targetName: string | undefined = undefined;
-                    let resourceId: string | undefined = undefined;
-
-                    // Nếu endpoint trả về 1 object (thường là cái vừa bị tác động)
-                    // Unwrap TransformInterceptor nếu có
-                    const data = response?.data ?? response;
-                    
-                    if (data && typeof data === 'object' && !Array.isArray(data)) {
-                        // resourceId: ưu tiên id, rồi code, rồi params
-                        resourceId = data.id?.toString()
-                            || data.tourCode?.toString()
-                            || data.bookingCode?.toString()
-                            || request.params?.id?.toString();
-
-                        // targetName: lấy field tên đại diện tốt nhất
-                        targetName = data.name
-                            || data.title
-                            || data.label
-                            || data.code
-                            || data.fullName
-                            || data.bookingCode
-                            || data.email
-                            || data.slug
-                            || undefined;
-                    } else {
-                        resourceId = request.params?.id?.toString();
-                    }
-
-                    // Nếu hành động là DELETE, lấy tên từ oldData (nếu controller trả về)
-                    const oldData: any = undefined;
-                    let newData: any = undefined;
-
-                    if (metadata.action === 'UPDATE') {
-                        newData = request.body;
-                    } else if (metadata.action === 'CREATE') {
-                        newData = data;
-                    }
-
-                    await this.logService.create({
-                        action: metadata.action,
-                        resource: metadata.resource,
-                        resourceId: resourceId,
-                        targetName: targetName || `Resource ID: ${resourceId || 'Unknown'}`,
-                        description: `[${metadata.action}] on ${metadata.resource} ${targetName ? `(${targetName})` : ''}`,
-                        userId: user?.userId ?? user?.id,
-                        ipAddress: ip,
-                        userAgent: userAgent,
-                        newData: newData,
-                        oldData: oldData,
-                    });
-                } catch (error) {
-                    console.error('AuditLogInterceptor Error:', error);
-                }
+            tap((response: unknown) => {
+                void this.createAuditLog(request, metadata, response);
             }),
         );
+    }
+
+    private async createAuditLog(
+        request: AuditRequest,
+        metadata: AuditLogMetadata,
+        response: unknown,
+    ) {
+        try {
+            const responseRecord = asRecord(response);
+            const data = responseRecord && 'data' in responseRecord
+                ? responseRecord.data
+                : response;
+            const dataRecord = asRecord(data);
+
+            const resourceId = dataRecord
+                ? firstStringField(dataRecord, ['id', 'tourCode', 'bookingCode'])
+                    ?? readRouteParamId(request)
+                : readRouteParamId(request);
+
+            const targetName = dataRecord
+                ? firstStringField(dataRecord, [
+                    'name',
+                    'title',
+                    'label',
+                    'code',
+                    'bookingCode',
+                    'slug',
+                ])
+                : undefined;
+
+            const newData =
+                metadata.action === 'UPDATE'
+                    ? sanitizeAuditData(request.body)
+                    : metadata.action === 'CREATE'
+                        ? sanitizeAuditData(data)
+                        : undefined;
+
+            await this.logService.create({
+                action: metadata.action,
+                resource: metadata.resource,
+                resourceId,
+                targetName: targetName || `Resource ID: ${resourceId || 'Unknown'}`,
+                description: `[${metadata.action}] on ${metadata.resource} ${targetName ? `(${targetName})` : ''}`,
+                userId: request.user?.userId ?? request.user?.id,
+                ipAddress: request.ip || request.socket.remoteAddress,
+                userAgent: request.headers['user-agent'],
+                newData,
+                oldData: undefined,
+            });
+        } catch (error) {
+            console.error('AuditLogInterceptor Error:', getErrorMessage(error));
+        }
     }
 }

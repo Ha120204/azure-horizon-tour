@@ -4,6 +4,47 @@
  */
 
 // ── Tour ──────────────────────────────────────────────────────────
+export interface TourHighlight {
+    id: number;
+    content: string;
+    contentEn?: string | null;
+    icon: string;
+}
+
+export interface TourTimelineEntry {
+    time: string;
+    activity: string;
+}
+
+export interface TourItineraryDay {
+    id: number;
+    dayNumber: number;
+    title: string;
+    titleEn?: string | null;
+    description: string;
+    descriptionEn?: string | null;
+    mealsBreakfast?: boolean;
+    mealsLunch?: boolean;
+    mealsDinner?: boolean;
+    accommodation?: string | null;
+    accommodationEn?: string | null;
+    transport?: string | null;
+    transportEn?: string | null;
+    activities?: string[];
+    activitiesEn?: string[];
+    imageUrl?: string | null;
+    timeline?: TourTimelineEntry[];
+    timelineEn?: TourTimelineEntry[];
+}
+
+export interface TourFAQ {
+    id: number;
+    question: string;
+    questionEn?: string | null;
+    answer: string;
+    answerEn?: string | null;
+}
+
 export interface Tour {
     id: number;
     name: string;
@@ -21,9 +62,9 @@ export interface Tour {
     destination?: Destination;
     packages?: TourPackage[];
     departures?: TourDeparture[];
-    highlights?: any[];
-    itinerary?: any[];
-    faqs?: any[];
+    highlights?: TourHighlight[];
+    itinerary?: TourItineraryDay[];
+    faqs?: TourFAQ[];
     departurePoint?: string;
     departurePointEn?: string | null;
 }

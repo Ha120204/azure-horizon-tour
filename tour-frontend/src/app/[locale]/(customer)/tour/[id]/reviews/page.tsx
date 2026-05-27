@@ -1,24 +1,52 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import ReviewModal from '@/components/review/ReviewModal';
 import { useParams } from 'next/navigation';
 import { useLocale } from '@/context/LocaleContext';
+import { API_BASE_URL } from '@/lib/constants';
+
+type ReviewListItem = {
+    id: number | string;
+    rating: number;
+    content: string;
+    createdAt: string;
+    adminReply?: string | null;
+    imageUrls?: string[];
+    user?: {
+        fullName?: string | null;
+        avatarUrl?: string | null;
+    };
+};
+
+type ReviewListStats = {
+    averageRating: number;
+    totalReviews: number;
+    breakdown?: Record<number, number>;
+};
+
+type ReviewListResponse = {
+    data?: ReviewListItem[];
+    stats?: ReviewListStats;
+    meta?: {
+        totalPages?: number;
+    };
+};
 
 export default function ReviewsPage() {
-    const params = useParams();
-    const { t } = useLocale();
+    const params = useParams<{ id: string }>();
+    const { t, formatDate, formatDateTime } = useLocale();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [activeFilter, setActiveFilter] = useState('all');
     const [isSortOpen, setIsSortOpen] = useState(false);
     const [sortOption, setSortOption] = useState('newest');
     const sortRef = useRef<HTMLDivElement>(null);
     const reviewsListRef = useRef<HTMLElement>(null);
-    const [reviews, setReviews] = useState<any[]>([]);
-    const [stats, setStats] = useState<any>(null);
+    const [reviews, setReviews] = useState<ReviewListItem[]>([]);
+    const [stats, setStats] = useState<ReviewListStats | null>(null);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
@@ -39,11 +67,11 @@ export default function ReviewsPage() {
             const limit = 5;
             const sort = sortOption === 'highest' ? 'rating_desc' : sortOption === 'lowest' ? 'rating_asc' : 'newest';
             const filter = activeFilter === 'all' ? '' : activeFilter === 'photos' ? 'photos' : activeFilter;
-            const res = await fetch(`http://localhost:3000/tour/${params.id}/reviews?page=${page}&limit=${limit}&sortBy=${sort}&filter=${filter}`);
-            const json = await res.json();
+            const res = await fetch(`${API_BASE_URL}/tour/${params.id}/reviews?page=${page}&limit=${limit}&sortBy=${sort}&filter=${filter}`);
+            const json = (await res.json()) as ReviewListResponse;
             if (json.data) {
                 setReviews(json.data);
-                setStats(json.stats);
+                setStats(json.stats ?? null);
                 setTotalPages(json.meta?.totalPages || 1);
             }
         } catch (error) {
@@ -233,7 +261,14 @@ export default function ReviewsPage() {
                                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                                     <div className="flex items-center space-x-4">
                                         {review.user?.avatarUrl ? (
-                                            <img className="w-14 h-14 rounded-full object-cover" alt={review.user?.fullName} src={review.user.avatarUrl} />
+                                            <Image
+                                                className="h-14 w-14 rounded-full object-cover"
+                                                alt={review.user?.fullName ?? 'Reviewer'}
+                                                src={review.user.avatarUrl}
+                                                width={56}
+                                                height={56}
+                                                sizes="56px"
+                                            />
                                         ) : (
                                             <div className="w-14 h-14 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-xl uppercase">
                                                 {review.user?.fullName?.substring(0, 2) || 'U'}
@@ -254,10 +289,10 @@ export default function ReviewsPage() {
                                             ))}
                                         </div>
                                         <span className="text-xs text-on-surface-variant font-label">
-                                            {new Date(review.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                            {formatDate(review.createdAt)}
                                             {' '}
                                             <span className="text-outline">
-                                                {new Date(review.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                {formatDateTime(review.createdAt, { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </span>
                                     </div>
@@ -271,7 +306,13 @@ export default function ReviewsPage() {
                                         <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
                                             {review.imageUrls.map((url: string, index: number) => (
                                                 <div key={index} className="relative aspect-square overflow-hidden rounded-lg group cursor-zoom-in">
-                                                    <img className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Review photo" src={url} />
+                                                    <Image
+                                                        className="object-cover transition-transform duration-500 group-hover:scale-110"
+                                                        alt="Review photo"
+                                                        src={url}
+                                                        fill
+                                                        sizes="(min-width: 640px) 25vw, 50vw"
+                                                    />
                                                 </div>
                                             ))}
                                         </div>

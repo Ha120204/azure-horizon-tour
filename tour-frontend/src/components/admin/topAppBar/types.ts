@@ -1,5 +1,7 @@
 // ── Types ────────────────────────────────────────────────────────────────────
-export type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'STAFF';
+import type { AdminRole } from '@/lib/adminAccess';
+
+export type { AdminRole };
 
 export type RoleAction = {
     label: string;

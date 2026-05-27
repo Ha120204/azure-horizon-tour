@@ -20,6 +20,7 @@ import {
 import PackageCard from '@/components/tour/PackageCard';
 import BookingSidebarNew from '@/components/tour/BookingSidebar';
 import { Tour, TourPackage, Review, ReviewStats } from '@/types';
+import { API_BASE_URL } from '@/lib/constants';
 
 interface RatingBreakdownStats {
     averageRating: number;
@@ -31,7 +32,7 @@ interface RatingBreakdownStats {
 export default function TourDetailPage() {
     const params = useParams();
     const searchParams = useSearchParams();
-    const { t, formatPrice, language } = useLocale();
+    const { t, formatPrice, formatDate, language } = useLocale();
     const initialDepartureIdParam = searchParams.get('departureId');
     const initialDepartureId = initialDepartureIdParam ? Number(initialDepartureIdParam) : null;
 
@@ -46,8 +47,7 @@ export default function TourDetailPage() {
 
     const fetchReviews = async () => {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-            const res = await fetch(`${apiUrl}/tour/${params.id}/reviews?limit=2`);
+            const res = await fetch(`${API_BASE_URL}/tour/${params.id}/reviews?limit=2`);
             if (res.ok) {
                 const data = await res.json();
                 setReviews(data.data || []);
@@ -62,13 +62,11 @@ export default function TourDetailPage() {
         const fetchAllData = async () => {
             setIsLoading(true);
             try {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-                
                 // Parallel data fetching for performance
                 const [tourRes, reviewsRes, ratingStatsRes] = await Promise.allSettled([
-                    fetch(`${apiUrl}/tour/${params.id}?locale=${language}`),
-                    fetch(`${apiUrl}/tour/${params.id}/reviews?limit=2`),
-                    fetch(`${apiUrl}/tour/${params.id}/rating-stats`)
+                    fetch(`${API_BASE_URL}/tour/${params.id}?locale=${language}`),
+                    fetch(`${API_BASE_URL}/tour/${params.id}/reviews?limit=2`),
+                    fetch(`${API_BASE_URL}/tour/${params.id}/rating-stats`)
                 ]);
 
                 let fetchedTour = null;
@@ -91,7 +89,7 @@ export default function TourDetailPage() {
                 // Fetch similar tours after tour data is available
                 if (fetchedTour) {
                     const dest = fetchedTour.destination?.name ? `&dest=${encodeURIComponent(fetchedTour.destination.name)}` : '';
-                    const similarRes = await fetch(`${apiUrl}/tour?limit=3&locale=${language}${dest}`);
+                    const similarRes = await fetch(`${API_BASE_URL}/tour?limit=3&locale=${language}${dest}`);
                     if (similarRes.ok) {
                         const json = await similarRes.json();
                         const all: Tour[] = json.data || [];
@@ -232,11 +230,6 @@ export default function TourDetailPage() {
                         <ItinerarySection
                             itinerary={tour.itinerary ?? []}
                             t={t}
-                            fallback={[
-                                { day: 1, title: t('tour_detail.day1Title'), desc: t('tour_detail.day1Desc') },
-                                { day: 2, title: t('tour_detail.day2Title'), desc: t('tour_detail.day2Desc') },
-                                { day: 3, title: t('tour_detail.day3Title'), desc: t('tour_detail.day3Desc') },
-                            ]}
                         />
 
                         {/* ── Thông tin cần biết ── */}
@@ -396,7 +389,7 @@ export default function TourDetailPage() {
                                             </div>
                                             <div>
                                                 <p className="font-bold text-sm text-on-surface">{r.user?.fullName}</p>
-                                                <p className="text-[10px] uppercase tracking-wider text-outline">{new Date(r.createdAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US')}</p>
+                                                <p className="text-[10px] uppercase tracking-wider text-outline">{formatDate(r.createdAt)}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -420,6 +413,7 @@ export default function TourDetailPage() {
                         initialDepartureId={initialDepartureId}
                         selectedPackage={selectedPackage}
                         formatPrice={formatPrice}
+                        formatDate={formatDate}
                         t={t}
                         language={language}
                     />

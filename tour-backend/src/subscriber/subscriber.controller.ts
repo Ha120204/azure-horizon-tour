@@ -21,10 +21,10 @@ export class SubscriberController {
     return this.subscriberService.subscribe(body.email.trim().toLowerCase());
   }
 
-  // Admin/Staff: GET /subscriber — danh sách subscribers
+  // Admin/Super Admin: GET /subscriber — danh sách subscribers
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async getAll(
     @Query('page')   page?:   string,
     @Query('limit')  limit?:  string,
@@ -39,37 +39,37 @@ export class SubscriberController {
     });
   }
 
-  // Admin/Staff: GET /subscriber/stats
+  // Admin/Super Admin: GET /subscriber/stats
   @Get('stats')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async getStats() {
     return this.subscriberService.getStats();
   }
 
   @Get('campaigns')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async getCampaigns() {
     return this.subscriberService.getCampaigns();
   }
 
   @Patch(':id/status')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async setStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { isActive?: boolean },
   ) {
     if (typeof body.isActive !== 'boolean') {
-      throw new BadRequestException('isActive must be boolean');
+      throw new BadRequestException('isActive phải là boolean');
     }
     return this.subscriberService.setActive(id, body.isActive);
   }
 
   @Post('campaign/test')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async sendCampaignTest(@Body() body: {
     to?: string;
     subject?: string;
@@ -78,10 +78,10 @@ export class SubscriberController {
     campaignName?: string;
   }) {
     if (!body.to || !body.to.includes('@')) {
-      throw new BadRequestException('Email nhận test không hợp lệ');
+      throw new BadRequestException('Email gửi thử không hợp lệ');
     }
     if (!body.subject?.trim() || !body.body?.trim()) {
-      throw new BadRequestException('Subject và nội dung email là bắt buộc');
+      throw new BadRequestException('Tiêu đề và nội dung email là bắt buộc');
     }
     return this.subscriberService.sendCampaignTest({
       to: body.to.trim().toLowerCase(),
@@ -94,22 +94,23 @@ export class SubscriberController {
 
   @Post('campaign/schedule')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   async scheduleCampaign(@Body() body: {
     campaignName?: string;
     type?: string;
     subject?: string;
     previewText?: string;
     body?: string;
-    audience?: 'ALL_ACTIVE' | 'CURRENT_FILTER';
-    audienceFilter?: { status?: 'active' | 'inactive' | 'all'; search?: string };
+    audience?: 'ALL_ACTIVE' | 'CURRENT_FILTER' | 'MANUAL_SELECTION';
+    audienceFilter?: { status?: 'active' | 'inactive' | 'all'; search?: string; recipientIds?: number[] };
+    recipientIds?: number[];
     scheduledAt?: string;
   }) {
     if (!body.campaignName?.trim() || !body.subject?.trim() || !body.body?.trim()) {
-      throw new BadRequestException('Campaign name, subject và nội dung email là bắt buộc');
+      throw new BadRequestException('Tên chiến dịch, tiêu đề và nội dung email là bắt buộc');
     }
     if (!body.scheduledAt) {
-      throw new BadRequestException('scheduledAt là bắt buộc');
+      throw new BadRequestException('Thời gian gửi là bắt buộc');
     }
     const scheduledDate = new Date(body.scheduledAt);
     if (Number.isNaN(scheduledDate.getTime())) {
@@ -126,6 +127,7 @@ export class SubscriberController {
       body: body.body.trim(),
       audience: body.audience ?? 'ALL_ACTIVE',
       audienceFilter: body.audienceFilter,
+      recipientIds: body.recipientIds,
       scheduledAt: scheduledDate.toISOString(),
     });
   }

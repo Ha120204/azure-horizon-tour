@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/constants';
 import { useLocale } from '@/context/LocaleContext';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import PersonalInfoForm from '@/components/profile/PersonalInfoForm';
@@ -14,6 +15,7 @@ import ChangePasswordForm from '@/components/profile/ChangePasswordForm';
 import VoucherWallet from '@/components/profile/VoucherWallet';
 import SupportTicketList, { type SupportTicket } from '@/components/profile/SupportTicketList';
 import SupportTicketDetail from '@/components/profile/SupportTicketDetail';
+import type { UserVoucher } from '@/types';
 
 type ProfileUser = {
     fullName?: string;
@@ -24,11 +26,11 @@ type ProfileUser = {
     identityType?: string;
     identityNo?: string;
     avatarUrl?: string;
-    mock?: boolean;
 };
 
 type RecentBooking = {
     id: number | string;
+    status?: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'CANCEL_REQUESTED' | string;
     paymentStatus?: string;
     totalPrice: number;
     createdAt: string;
@@ -41,11 +43,12 @@ type RecentBooking = {
 export default function ProfilePage() {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { t, formatPrice } = useLocale();
+    const { t, formatPrice, formatDate } = useLocale();
 
     // --- 1. STATE QUẢN LÝ DỮ LIỆU ĐỘNG ---
     const [userData, setUserData] = useState<ProfileUser | null>(null);
     const [loading, setLoading] = useState(true);
+    const [profileLoadError, setProfileLoadError] = useState('');
 
     // State cho Form Thông tin cá nhân
     const [name, setName] = useState('');
@@ -61,7 +64,7 @@ export default function ProfilePage() {
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
     const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
-    const [myVouchers, setMyVouchers] = useState<unknown[]>([]);
+    const [myVouchers, setMyVouchers] = useState<UserVoucher[]>([]);
     const [showAllVouchers, setShowAllVouchers] = useState(false);
     const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
     const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
@@ -86,61 +89,62 @@ export default function ProfilePage() {
             }
 
             try {
-                const resProfile = await fetchWithAuth('http://localhost:3000/auth/profile');
+                setProfileLoadError('');
+                const resProfile = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
 
-                if (resProfile.ok) {
-                    const payload = await resProfile.json();
-                    const data = payload.data !== undefined ? payload.data : payload;
-                    setUserData(data);
-                    setName(data.fullName || '');
-                    setPhone(data.phone || '');
-                    setEmail(data.email || '');
-                    setDob(data.dob || '');
-                    setGender(data.gender || '');
-                    setIdentityType(data.identityType || 'CCCD');
-                    setIdentityNo(data.identityNo || '');
-                    const nextAvatarUrl = data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
-                    setAvatarUrl(nextAvatarUrl);
-                    localStorage.setItem('userName', data.fullName || '');
-                    if (data.avatarUrl) localStorage.setItem('userAvatarUrl', data.avatarUrl);
-                    else localStorage.removeItem('userAvatarUrl');
-                    window.dispatchEvent(new Event('auth-change'));
+                if (!resProfile.ok) {
+                    setProfileLoadError(t('profile.loadError'));
+                    return;
                 }
 
-                const resBookings = await fetchWithAuth('http://localhost:3000/booking/history/my-bookings');
+                const payload = await resProfile.json();
+                const data = payload.data !== undefined ? payload.data : payload;
+                setUserData(data);
+                setName(data.fullName || '');
+                setPhone(data.phone || '');
+                setEmail(data.email || '');
+                setDob(data.dob || '');
+                setGender(data.gender || '');
+                setIdentityType(data.identityType || 'CCCD');
+                setIdentityNo(data.identityNo || '');
+                const nextAvatarUrl = data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
+                setAvatarUrl(nextAvatarUrl);
+                localStorage.setItem('userName', data.fullName || '');
+                if (data.avatarUrl) localStorage.setItem('userAvatarUrl', data.avatarUrl);
+                else localStorage.removeItem('userAvatarUrl');
+                window.dispatchEvent(new Event('auth-change'));
 
-                if (resBookings.ok) {
-                    const bookingResult = await resBookings.json();
+                const loadOptionalJson = async (url: string) => {
+                    const response = await fetchWithAuth(url);
+                    return response.ok ? response.json() : null;
+                };
+
+                const [bookingsResult, vouchersResult, ticketsResult] = await Promise.allSettled([
+                    loadOptionalJson(`${API_BASE_URL}/booking/history/my-bookings`),
+                    loadOptionalJson(`${API_BASE_URL}/voucher/my-wallet`),
+                    loadOptionalJson(`${API_BASE_URL}/support/customer/my-tickets`),
+                ]);
+
+                if (bookingsResult.status === 'fulfilled' && bookingsResult.value) {
+                    const bookingResult = bookingsResult.value;
                     setRecentBookings(Array.isArray(bookingResult.data) ? bookingResult.data as RecentBooking[] : []);
                 }
 
-                // Fetch voucher wallet
-                const resVouchers = await fetchWithAuth('http://localhost:3000/voucher/my-wallet');
-                if (resVouchers.ok) {
-                    const voucherData = await resVouchers.json();
+                if (vouchersResult.status === 'fulfilled' && vouchersResult.value) {
+                    const voucherData = vouchersResult.value;
                     const arr = voucherData.data || voucherData || [];
-                    setMyVouchers(Array.isArray(arr) ? arr : []);
+                    setMyVouchers(Array.isArray(arr) ? arr as UserVoucher[] : []);
                 }
 
-                // Fetch support tickets
-                const resTickets = await fetchWithAuth('http://localhost:3000/support/customer/my-tickets');
-                if (resTickets.ok) {
-                    const ticketData = await resTickets.json();
-                    // API trả về { data: [...] } hoặc trực tiếp array
+                if (ticketsResult.status === 'fulfilled' && ticketsResult.value) {
+                    const ticketData = ticketsResult.value;
                     const tickets = ticketData?.data ?? ticketData;
                     setMyTickets(Array.isArray(tickets) ? tickets : []);
                 }
 
             } catch {
-                console.warn('API lỗi, đang sử dụng dữ liệu mẫu (Mock Data).');
-                setUserData({ mock: true });
-                setName('Đào Thanh Hà (Bản Demo)');
-                setPhone('+84 90 123 4567');
-                setEmail('ha.dt@azurehorizon.com');
-                setDob('1990-01-01');
-                setGender('Female');
-                setAvatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200");
-                setToast({ msg: t('profile.mockWarning'), type: 'error' });
+                setProfileLoadError(t('profile.loadError'));
+                setToast({ msg: t('profile.loadError'), type: 'error' });
             } finally {
                 setLoading(false);
             }
@@ -153,16 +157,14 @@ export default function ProfilePage() {
         e.preventDefault();
         try {
             const payload = { fullName: name, phone: phone, dob, gender, identityType, identityNo };
-            console.log('[Profile] Sending PATCH payload:', payload);
 
-            const res = await fetchWithAuth('http://localhost:3000/auth/profile', {
+            const res = await fetchWithAuth(`${API_BASE_URL}/auth/profile`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             const result = await res.json();
-            console.log('[Profile] PATCH response status:', res.status, 'body:', result);
 
             if (res.ok) {
                 // Đồng bộ tên mới lên localStorage → Header cập nhật ngay
@@ -175,8 +177,8 @@ export default function ProfilePage() {
                     : (result?.message || t('profile.updateFail'));
                 setToast({ msg: errorMsg, type: 'error' });
             }
-        } catch (err) {
-            console.error('[Profile] Update error:', err);
+        } catch {
+            console.error('[Profile] Update failed');
             setToast({ msg: t('profile.serverError'), type: 'error' });
         } finally {
             setTimeout(() => setToast(null), 3000);
@@ -191,7 +193,7 @@ export default function ProfilePage() {
         }
         setIsChangingPassword(true);
         try {
-            const res = await fetchWithAuth('http://localhost:3000/auth/change-password', {
+            const res = await fetchWithAuth(`${API_BASE_URL}/auth/change-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ currentPassword, newPassword })
@@ -228,7 +230,7 @@ export default function ProfilePage() {
         formData.append('file', file);
 
         try {
-            const res = await fetchWithAuth('http://localhost:3000/auth/avatar', {
+            const res = await fetchWithAuth(`${API_BASE_URL}/auth/avatar`, {
                 method: 'POST',
                 body: formData
             });
@@ -246,8 +248,8 @@ export default function ProfilePage() {
             } else {
                 setToast({ msg: result.message || t('profile.avatarFail'), type: 'error' });
             }
-        } catch (error) {
-            console.error("Lỗi tải ảnh:", error);
+        } catch {
+            console.error("Avatar upload failed");
             setToast({ msg: t('profile.serverError'), type: 'error' });
         } finally {
             setIsAvatarUploading(false);
@@ -256,10 +258,40 @@ export default function ProfilePage() {
     };
 
     if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-primary">{t('profile.loading')}</div>;
-    if (!userData) return null;
+    if (!userData) {
+        return (
+            <div className="bg-background text-on-background min-h-screen font-body flex flex-col">
+                <Header />
+                <main className="flex-grow px-6 py-32">
+                    <div className="mx-auto max-w-xl rounded-2xl border border-error/20 bg-white p-8 text-center shadow-sm">
+                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-error/10 text-error">
+                            <span className="material-symbols-outlined">error</span>
+                        </div>
+                        <h1 className="font-headline text-2xl font-bold text-on-surface">{t('profile.loadErrorTitle')}</h1>
+                        <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+                            {profileLoadError || t('profile.loadError')}
+                        </p>
+                        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                            <button
+                                type="button"
+                                onClick={() => window.location.reload()}
+                                className="rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+                            >
+                                {t('profile.retry')}
+                            </button>
+                            <Link href="/" className="rounded-full border border-outline-variant px-5 py-2.5 text-sm font-bold text-on-surface transition hover:bg-surface-container-low">
+                                {t('profile.backHome')}
+                            </Link>
+                        </div>
+                    </div>
+                </main>
+                <Footer />
+            </div>
+        );
+    }
 
-    const totalTrips = recentBookings.length;
-    const confirmedTrips = recentBookings.filter(b => b.paymentStatus === 'PAID').length;
+    const totalTrips = recentBookings.filter(b => b.status !== 'CANCELLED' && b.status !== 'CANCEL_REQUESTED').length;
+    const confirmedTrips = recentBookings.filter(b => b.status === 'CONFIRMED' && b.paymentStatus === 'PAID').length;
 
     return (
         <div className="bg-background text-on-background min-h-screen font-body flex flex-col relative">
@@ -387,7 +419,37 @@ export default function ProfilePage() {
                                     </div>
                                 ) : (
                                     recentBookings.slice(0, 4).map((booking) => {
-                                        const isPaid = booking.paymentStatus === 'PAID';
+                                        const isCancelled = booking.status === 'CANCELLED';
+                                        const isCancelRequested = booking.status === 'CANCEL_REQUESTED';
+                                        const isPaid = booking.paymentStatus === 'PAID' && !isCancelled && !isCancelRequested;
+                                        const badgeLabel = isCancelled
+                                            ? t('profile.cancelledBadge')
+                                            : isCancelRequested
+                                                ? t('profile.cancelRequestedBadge')
+                                                : isPaid
+                                                    ? t('profile.confirmedBadge')
+                                                    : t('profile.unpaidBadge');
+                                        const badgeClass = isCancelled
+                                            ? 'bg-red-50 text-red-600 border border-red-200'
+                                            : isCancelRequested
+                                                ? 'bg-orange-50 text-orange-600 border border-orange-200'
+                                                : isPaid
+                                                    ? 'bg-tertiary-container text-white'
+                                                    : 'bg-secondary-container text-on-secondary-container';
+                                        const statusLabel = isCancelled
+                                            ? t('profile.cancelledLbl')
+                                            : isCancelRequested
+                                                ? t('profile.cancelRequestedLbl')
+                                                : isPaid
+                                                    ? t('profile.paidLbl')
+                                                    : t('profile.incompleteLbl');
+                                        const statusClass = isCancelled
+                                            ? 'text-red-600 bg-red-50'
+                                            : isCancelRequested
+                                                ? 'text-orange-600 bg-orange-50'
+                                                : isPaid
+                                                    ? 'text-tertiary-container bg-tertiary-container/10'
+                                                    : 'text-amber-600 bg-amber-50';
                                         return (
                                             <div key={booking.id} className="group bg-surface-container-lowest rounded-xl overflow-hidden ambient-shadow transition-all duration-300 hover:-translate-y-1">
                                                 <div className="relative h-48 overflow-hidden">
@@ -399,8 +461,8 @@ export default function ProfilePage() {
                                                         src={booking.tour?.imageUrl || "https://images.unsplash.com/photo-1610574138412-7bf28ade0222?w=600&auto=format&fit=crop&q=60"}
                                                     />
                                                     <div className="absolute top-4 left-4">
-                                                        <span className={`px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-full shadow-lg ${isPaid ? 'bg-tertiary-container text-white' : 'bg-secondary-container text-on-secondary-container'}`}>
-                                                            {isPaid ? t('profile.confirmedBadge') : t('profile.unpaidBadge')}
+                                                        <span className={`px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-full shadow-lg ${badgeClass}`}>
+                                                            {badgeLabel}
                                                         </span>
                                                     </div>
                                                     <div className="absolute -bottom-4 right-4 bg-white px-4 py-2 rounded-lg shadow-xl border border-surface-container">
@@ -412,12 +474,12 @@ export default function ProfilePage() {
                                                         <h3 className="text-lg font-headline font-bold text-on-surface line-clamp-1" title={booking.tour?.name}>{booking.tour?.name}</h3>
                                                         <p className="text-xs text-outline font-medium flex items-center gap-1 mt-1">
                                                             <span className="material-symbols-outlined text-sm">calendar_today</span>
-                                                            {t('profile.bookingDate')}: {new Date(booking.createdAt).toLocaleDateString('vi-VN')}
+                                                            {t('profile.bookingDate')}: {formatDate(booking.createdAt)}
                                                         </p>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <span className={`text-xs font-semibold px-2 py-1 rounded ${isPaid ? 'text-tertiary-container bg-tertiary-container/10' : 'text-amber-600 bg-amber-50'}`}>
-                                                            {isPaid ? t('profile.paidLbl') : t('profile.incompleteLbl')}
+                                                        <span className={`text-xs font-semibold px-2 py-1 rounded ${statusClass}`}>
+                                                            {statusLabel}
                                                         </span>
                                                         <Link href={`/my-bookings/${booking.id}`} className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
                                                             <span className="material-symbols-outlined">arrow_forward</span>

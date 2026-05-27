@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
@@ -261,10 +262,12 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                   <label htmlFor="cover-upload" className={`cursor-pointer block relative aspect-video rounded-xl overflow-hidden bg-surface-container border transition-all ${isUploadingImage ? 'opacity-70 pointer-events-none border-primary' : 'border-outline-variant/30 hover:border-primary border-dashed group'} ${errors.imageUrl ? 'border-error' : ''}`}>
                     {form.imageUrl && !imgError && !isUploadingImage ? (
                       <div className="w-full h-full relative">
-                        <img
+                        <Image
                           src={form.imageUrl}
                           alt="Cover preview"
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          fill
+                          sizes="288px"
+                          className="object-cover transition-transform duration-300 group-hover:scale-105"
                           onError={() => setImgError(true)}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

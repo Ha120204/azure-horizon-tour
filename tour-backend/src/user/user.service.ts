@@ -6,6 +6,10 @@ import * as bcrypt from 'bcrypt';
 
 const ADMIN_VISIBLE_USER_ROLES: Role[] = [Role.CUSTOMER, Role.STAFF];
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown email error';
+}
+
 @Injectable()
 export class UserService {
   constructor(
@@ -64,7 +68,7 @@ export class UserService {
       try {
         await this.mailService.sendWelcomeEmail(user.email, user.fullName, data.password);
       } catch (err) {
-        console.error('Failed to send email:', err);
+        console.error('Failed to send welcome email:', getErrorMessage(err));
       }
     }
 

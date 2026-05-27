@@ -140,7 +140,7 @@ export function isPaymentStatus(value: string): boolean {
 }
 
 export function isAssistedDraftStatus(value: string): boolean {
-  const AssistedDraftStatus = ['DRAFT', 'PENDING_APPROVAL', 'NEEDS_REVISION', 'APPROVED', 'REJECTED', 'CONVERTED'];
+  const AssistedDraftStatus = ['DRAFT', 'PENDING_APPROVAL', 'NEEDS_REVISION', 'REJECTED', 'CONVERTED'];
   return AssistedDraftStatus.includes(value);
 }
 

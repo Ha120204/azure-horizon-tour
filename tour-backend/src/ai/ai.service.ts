@@ -10,6 +10,10 @@ const LLMGATE_LEGACY_BASE_URLS = new Set([
   'https://api.llmgate.app/v1',
 ]);
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown AI error';
+}
+
 // Tool definitions in OpenAI-compatible format for LLMGate.
 const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -17,18 +21,18 @@ const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'search_tours',
       description:
-        'TÃ¬m kiáº¿m cÃ¡c tour du lá»‹ch trong há»‡ thá»‘ng dá»±a trÃªn yÃªu cáº§u cá»§a khÃ¡ch.',
+        'Tìm kiếm các tour du lịch trong hệ thống dựa trên yêu cầu của khách.',
       parameters: {
         type: 'object',
         properties: {
           destination: {
             type: 'string',
             description:
-              'TÃªn Ä‘iá»ƒm Ä‘áº¿n, Ä‘á»‹a danh, hoáº·c tá»« khÃ³a (vÃ­ dá»¥: london, Ä‘Ã  láº¡t, biá»ƒn, chÃ¢u Ã¢u).',
+              'Tên điểm đến, địa danh, hoặc từ khóa (ví dụ: london, đà lạt, biển, châu âu).',
           },
           maxPrice: {
             type: 'number',
-            description: 'NgÃ¢n sÃ¡ch tá»‘i Ä‘a cá»§a khÃ¡ch (tÃ­nh báº±ng USD).',
+            description: 'Ngân sách tối đa của khách (tính bằng USD).',
           },
         },
       },
@@ -39,14 +43,14 @@ const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'check_my_bookings',
       description:
-        'TÃ¬m kiáº¿m vÃ  láº¥y thÃ´ng tin cÃ¡c Ä‘Æ¡n Ä‘áº·t tour (booking) cá»§a ngÆ°á»i dÃ¹ng hiá»‡n táº¡i Ä‘ang chat vá»›i báº¡n.',
+        'Tìm kiếm và lấy thông tin các đơn đặt tour (booking) của người dùng hiện tại đang chat với bạn.',
       parameters: {
         type: 'object',
         properties: {
           status: {
             type: 'string',
             description:
-              "Lá»c theo tráº¡ng thÃ¡i Ä‘Æ¡n hÃ ng (vÃ­ dá»¥: 'CONFIRMED', 'PENDING', 'CANCELLED', hoáº·c 'ALL'). Máº·c Ä‘á»‹nh lÃ  'ALL'.",
+              "Lọc theo trạng thái đơn hàng (ví dụ: 'CONFIRMED', 'PENDING', 'CANCELLED', hoặc 'ALL'). Mặc định là 'ALL'.",
           },
         },
       },
@@ -57,13 +61,13 @@ const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'get_tour_details',
       description:
-        'Láº¥y thÃ´ng tin chi tiáº¿t cá»§a má»™t tour cá»¥ thá»ƒ theo ID, bao gá»“m lá»‹ch trÃ¬nh, gÃ³i tour vÃ  FAQ.',
+        'Lấy thông tin chi tiết của một tour cụ thể theo ID, bao gồm lịch trình, gói tour và FAQ.',
       parameters: {
         type: 'object',
         properties: {
           tourId: {
             type: 'number',
-            description: 'ID cá»§a tour cáº§n tra cá»©u.',
+            description: 'ID của tour cần tra cứu.',
           },
         },
         required: ['tourId'],
@@ -201,7 +205,7 @@ export class AiService {
             tourCard = JSON.parse(cardMatch[1].trim());
             text = text.replace(cardMatch[0], '').trim();
           } catch (e) {
-            console.error('[AI] Failed to parse TOUR_CARD in history:', e);
+            console.error('[AI] Failed to parse TOUR_CARD in history:', getErrorMessage(e));
           }
         }
       }
@@ -275,7 +279,7 @@ export class AiService {
         tourCard = JSON.parse(cardMatch[1].trim());
         reply = rawText.replace(cardMatch[0], '').trim();
       } catch (e) {
-        console.error('[AI] Lá»—i parse JSON TourCard:', e);
+        console.error('[AI] Failed to parse JSON TourCard:', getErrorMessage(e));
       }
     }
 
@@ -286,7 +290,7 @@ export class AiService {
     await this.touchChatSession(sessionId);
 
     return {
-      reply: reply || 'Xin lá»—i, tÃ´i khÃ´ng thá»ƒ tráº£ lá»i lÃºc nÃ y.',
+      reply: reply || 'Xin lỗi, tôi không thể trả lời lúc này.',
       tourCard,
       sessionId,
     };
@@ -327,14 +331,14 @@ export class AiService {
 
     if (tours.length === 0) {
       return {
-        message: 'KhÃ´ng tÃ¬m tháº¥y tour nÃ o phÃ¹ há»£p vá»›i yÃªu cáº§u nÃ y.',
+        message: 'Không tìm thấy tour nào phù hợp với yêu cầu này.',
       };
     }
 
     return tours.map((t) => ({
       id: t.id,
       name: t.name,
-      destination: t.destination?.name || 'VÃ´ Ä‘á»‹nh',
+      destination: t.destination?.name || 'Vô định',
       region: t.destination?.region || '',
       price: t.price,
       duration: t.duration,
@@ -348,7 +352,7 @@ export class AiService {
   // Tool: get tour details by ID.
   private async executeGetTourDetails(args: any) {
     const { tourId } = args;
-    if (!tourId) return { message: 'Thiáº¿u Tour ID.' };
+    if (!tourId) return { message: 'Thiếu Tour ID.' };
 
     const tour = await this.prisma.tour.findFirst({
       where: { id: Number(tourId), deletedAt: null },
@@ -365,7 +369,7 @@ export class AiService {
       },
     });
 
-    if (!tour) return { message: `KhÃ´ng tÃ¬m tháº¥y tour vá»›i ID ${tourId}.` };
+    if (!tour) return { message: `Không tìm thấy tour với ID ${tourId}.` };
 
     return {
       id: tour.id,
@@ -399,7 +403,7 @@ export class AiService {
     if (!userId) {
       return {
         message:
-          'KhÃ¡ch hÃ ng chÆ°a Ä‘Äƒng nháº­p. Vui lÃ²ng nháº¯c há» Ä‘Äƒng nháº­p Ä‘á»ƒ kiá»ƒm tra Ä‘Æ¡n Ä‘áº·t tour cÃ¡ nhÃ¢n.',
+          'Khách hàng chưa đăng nhập. Vui lòng nhắc họ đăng nhập để kiểm tra đơn đặt tour cá nhân.',
       };
     }
 
@@ -418,7 +422,7 @@ export class AiService {
 
     if (bookings.length === 0) {
       return {
-        message: 'KhÃ´ng tÃ¬m tháº¥y chuyáº¿n Ä‘i nÃ o cá»§a báº¡n trong há»‡ thá»‘ng.',
+        message: 'Không tìm thấy chuyến đi nào của bạn trong hệ thống.',
       };
     }
 
@@ -512,20 +516,19 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
   private buildUserFacingErrorMessage(error: any): string {
     const type = this.classifyAiError(error);
     if (type === 'rate_limit')
-      return 'Trá»£ lÃ½ AI hiá»‡n Ä‘ang báº­n phá»¥c vá»¥ nhiá»u khÃ¡ch. Vui lÃ²ng thá»­ láº¡i sau vÃ i giÃ¢y nhÃ©!';
+      return 'Trợ lý AI hiện đang bận phục vụ nhiều khách. Vui lòng thử lại sau vài giây nhé!';
     if (type === 'auth')
-      return 'Dá»‹ch vá»¥ AI chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh quyá»n truy cáº­p há»£p lá»‡. Vui lÃ²ng liÃªn há»‡ quáº£n trá»‹ viÃªn.';
+      return 'Dịch vụ AI chưa được cấu hình quyền truy cập hợp lệ. Vui lòng liên hệ quản trị viên.';
     if (type === 'network')
-      return 'KhÃ´ng thá»ƒ káº¿t ná»‘i Ä‘áº¿n Trá»£ lÃ½ AI. Vui lÃ²ng kiá»ƒm tra cáº¥u hÃ¬nh endpoint AI vÃ  thá»­ láº¡i.';
-    return 'KhÃ´ng thá»ƒ káº¿t ná»‘i Ä‘áº¿n Trá»£ lÃ½ AI. Vui lÃ²ng thá»­ láº¡i sau.';
+      return 'Không thể kết nối đến Trợ lý AI. Vui lòng kiểm tra cấu hình endpoint AI và thử lại.';
+    return 'Không thể kết nối đến Trợ lý AI. Vui lòng thử lại sau.';
   }
 
   private logAiErrorContext(stage: string, model: string, error: any) {
     const type = this.classifyAiError(error);
-    const message = error?.message || String(error);
     const status = error?.status || error?.code || 'unknown';
     this.logger.error(
-      `[AI] ${stage} failed (type=${type}, status=${status}, provider=${this.provider}, model=${model}, baseURL=${this.baseURL || 'default'}): ${message}`,
+      `[AI] ${stage} failed (type=${type}, status=${status}, provider=${this.provider}, model=${model}, baseURL=${this.baseURL || 'default'})`,
     );
   }
 
@@ -560,9 +563,7 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
         ? (parsed as Record<string, unknown>)
         : {};
     } catch {
-      this.logger.warn(
-        `[AI] Invalid tool arguments for ${functionCall?.name}: ${rawArguments}`,
-      );
+      this.logger.warn(`[AI] Invalid tool arguments for ${functionCall?.name || 'unknown'}`);
       return {};
     }
   }

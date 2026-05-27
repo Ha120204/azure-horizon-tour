@@ -1,6 +1,6 @@
 // Nạp các biến môi trường từ file .env vào đối tượng process.env
 import 'dotenv/config';
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 // Import module Pool từ thư viện 'pg' để quản lý kết nối PostgreSQL
 import { Pool } from 'pg';
@@ -10,7 +10,9 @@ import { PrismaPg } from '@prisma/adapter-pg';
 // @Injectable() đánh dấu class này là một Provider trong NestJS, 
 // cho phép nó được inject (tiêm) vào các Controller hoặc Service khác thông qua Dependency Injection.
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+    private readonly pool: Pool;
+
     constructor() {
         // Lấy chuỗi kết nối database từ biến môi trường. 
         // Nếu không tìm thấy, fallback về chuỗi kết nối mặc định (thường dùng cho môi trường dev local).
@@ -27,6 +29,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
         // Gọi constructor của class cha (PrismaClient) và truyền cấu hình adapter vào 
         // để Prisma biết cách giao tiếp với database thông qua thư viện 'pg'.
         super({ adapter });
+        this.pool = pool;
     }
 
     // Đây là một lifecycle hook của NestJS. 
@@ -34,5 +37,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     async onModuleInit() {
         // Chủ động thiết lập kết nối tới database ngay khi app vừa khởi động.
         await this.$connect();
+    }
+
+    async onModuleDestroy() {
+        await this.$disconnect();
+        await this.pool.end();
     }
 }

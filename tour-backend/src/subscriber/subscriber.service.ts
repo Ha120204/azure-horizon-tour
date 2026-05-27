@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { randomUUID } from 'crypto';
 
 type SubscriberStatusFilter = 'active' | 'inactive' | 'all';
-type CampaignAudience = 'ALL_ACTIVE' | 'CURRENT_FILTER';
+type CampaignAudience = 'ALL_ACTIVE' | 'CURRENT_FILTER' | 'MANUAL_SELECTION';
 type MarketingCampaignStatus = 'SCHEDULED' | 'SENDING' | 'SENT' | 'FAILED';
 
 export interface StoredMarketingCampaign {
@@ -15,7 +15,8 @@ export interface StoredMarketingCampaign {
   previewText?: string;
   body: string;
   audience: CampaignAudience;
-  audienceFilter?: { status?: SubscriberStatusFilter; search?: string };
+  audienceFilter?: { status?: SubscriberStatusFilter; search?: string; recipientIds?: number[] };
+  recipientIds?: number[];
   scheduledAt: string;
   status: MarketingCampaignStatus;
   recipientEstimate: number;
@@ -53,7 +54,7 @@ export class SubscriberService {
     return { success: true, message: 'created', data: newSubscriber };
   }
 
-  // Admin/Staff: danh sách subscribers có phân trang
+  // Admin/Super Admin: danh sách subscribers có phân trang
   async getAll(query: { page: number; limit: number; search?: string; status?: SubscriberStatusFilter }) {
     const { page, limit, search, status = 'all' } = query;
     const skip = (page - 1) * limit;
@@ -79,7 +80,7 @@ export class SubscriberService {
     };
   }
 
-  // Admin/Staff: thống kê subscriber
+  // Admin/Super Admin: thống kê subscriber
   async getStats() {
     const [total, active, thisMonth] = await Promise.all([
       this.prisma.subscriber.count(),
@@ -131,15 +132,29 @@ export class SubscriberService {
       create: {
         key: CAMPAIGN_STORE_KEY,
         value: JSON.stringify(campaigns),
-        label: 'Marketing campaign queue',
-        description: 'Scheduled newsletter and promotion campaigns',
+        label: 'Hàng đợi chiến dịch tiếp thị',
+        description: 'Lịch gửi bản tin và chiến dịch khuyến mãi',
         group: 'marketing',
       },
       update: { value: JSON.stringify(campaigns) },
     });
   }
 
-  private getAudienceWhere(campaign: Pick<StoredMarketingCampaign, 'audience' | 'audienceFilter'>) {
+  private getManualRecipientIds(campaign: Pick<StoredMarketingCampaign, 'audienceFilter' | 'recipientIds'>) {
+    const ids = campaign.recipientIds ?? campaign.audienceFilter?.recipientIds ?? [];
+    return ids
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+  }
+
+  private getAudienceWhere(campaign: Pick<StoredMarketingCampaign, 'audience' | 'audienceFilter' | 'recipientIds'>) {
+    if (campaign.audience === 'MANUAL_SELECTION') {
+      const ids = this.getManualRecipientIds(campaign);
+      return {
+        isActive: true,
+        id: { in: ids.length > 0 ? ids : [-1] },
+      };
+    }
     const search = campaign.audience === 'CURRENT_FILTER'
       ? campaign.audienceFilter?.search?.trim()
       : '';
@@ -161,15 +176,21 @@ export class SubscriberService {
     previewText?: string;
     body: string;
     audience: CampaignAudience;
-    audienceFilter?: { status?: SubscriberStatusFilter; search?: string };
+    audienceFilter?: { status?: SubscriberStatusFilter; search?: string; recipientIds?: number[] };
+    recipientIds?: number[];
     scheduledAt: string;
   }) {
     const scheduledDate = new Date(data.scheduledAt);
     if (Number.isNaN(scheduledDate.getTime())) {
-      throw new Error('Invalid scheduledAt');
+      throw new Error('Thời gian gửi không hợp lệ');
     }
 
     const now = new Date().toISOString();
+    const manualRecipientIds = this.getManualRecipientIds(data);
+    if (data.audience === 'MANUAL_SELECTION' && manualRecipientIds.length === 0) {
+      throw new BadRequestException('Vui lòng chọn ít nhất một người đăng ký để gửi');
+    }
+
     const recipientEstimate = data.audience === 'CURRENT_FILTER' && data.audienceFilter?.status === 'inactive'
       ? 0
       : await this.prisma.subscriber.count({ where: this.getAudienceWhere(data) });
@@ -182,7 +203,10 @@ export class SubscriberService {
       previewText: data.previewText,
       body: data.body,
       audience: data.audience,
-      audienceFilter: data.audienceFilter,
+      audienceFilter: data.audience === 'MANUAL_SELECTION'
+        ? { ...data.audienceFilter, recipientIds: manualRecipientIds }
+        : data.audienceFilter,
+      recipientIds: data.audience === 'MANUAL_SELECTION' ? manualRecipientIds : undefined,
       scheduledAt: scheduledDate.toISOString(),
       status: 'SCHEDULED',
       recipientEstimate,
@@ -246,7 +270,7 @@ export class SubscriberService {
         changed = true;
       } catch (error) {
         campaign.status = 'FAILED';
-        campaign.errorMessage = error instanceof Error ? error.message : 'Unknown campaign send error';
+        campaign.errorMessage = error instanceof Error ? error.message : 'Lỗi gửi chiến dịch không xác định';
         campaign.updatedAt = new Date().toISOString();
         changed = true;
       }

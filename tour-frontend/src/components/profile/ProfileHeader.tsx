@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import Image from 'next/image';
 
 interface ProfileHeaderProps {
     name: string;
@@ -31,7 +31,7 @@ export default function ProfileHeader({
         <section className="flex flex-col md:flex-row items-center md:items-end gap-8 bg-surface-container-lowest p-8 rounded-xl ambient-shadow">
             <div className="relative group">
                 <div className={`w-32 h-32 md:w-44 md:h-44 rounded-full overflow-hidden border-4 border-surface-container relative ${isAvatarUploading ? 'opacity-70' : ''}`}>
-                    <img alt={name} className="w-full h-full object-cover" src={avatarUrl} />
+                    <Image alt={name} className="object-cover" src={avatarUrl} fill sizes="(min-width: 768px) 176px, 128px" />
                     {isAvatarUploading && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                             <span className="material-symbols-outlined text-white animate-spin text-4xl">progress_activity</span>

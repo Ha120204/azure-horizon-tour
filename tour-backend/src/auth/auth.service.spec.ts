@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -14,6 +15,7 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: {} },
         { provide: JwtService, useValue: {} },
         { provide: MailService, useValue: {} },
+        { provide: AdminNotificationService, useValue: {} },
       ],
     }).compile();
 

@@ -31,32 +31,58 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
+type HttpRequestHeaders = {
+  headers?: Record<string, string | string[] | undefined>;
+};
+
+type HttpResponseStatus = {
+  statusCode: number;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 @Injectable()
-export class TransformInterceptor<T>
-  implements NestInterceptor<T, ApiResponse<T>>
+export class TransformInterceptor
+  implements NestInterceptor<unknown, unknown>
 {
   intercept(
     context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<ApiResponse<T>> {
-    const response = context.switchToHttp().getResponse();
+    next: CallHandler<unknown>,
+  ): Observable<unknown> {
+    const request = context.switchToHttp().getRequest<HttpRequestHeaders>();
+    const response = context.switchToHttp().getResponse<HttpResponseStatus>();
+    const acceptHeader = request.headers?.accept;
+    const acceptsEventStream = Array.isArray(acceptHeader)
+      ? acceptHeader.some((value) => value.includes('text/event-stream'))
+      : acceptHeader?.includes('text/event-stream');
+
+    if (acceptsEventStream) {
+      return next.handle();
+    }
 
     return next.handle().pipe(
       map((data) => {
+        const payload = isRecord(data) ? data : {};
         // Nếu response đã có cấu trúc { message, data } → giữ nguyên message
-        const message = data?.message || 'Success';
-        const responseData = data?.data !== undefined ? data.data : data;
+        const message = typeof payload.message === 'string' && payload.message
+          ? payload.message
+          : 'Success';
+        const responseData = Object.prototype.hasOwnProperty.call(payload, 'data')
+          ? payload.data
+          : data;
 
         // Nếu response có meta (pagination) → giữ lại
-        const meta = data?.meta;
-        const stats = data?.stats;
+        const meta = payload.meta;
+        const stats = payload.stats;
 
         return {
           statusCode: response.statusCode,
           message,
           data: responseData,
-          ...(meta && { meta }),
-          ...(stats && { stats }),
+          ...(meta !== undefined && { meta }),
+          ...(stats !== undefined && { stats }),
           timestamp: new Date().toISOString(),
         };
       }),

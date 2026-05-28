@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/constants';
+import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import type { AdminRole } from '@/lib/adminAccess';
 import type { SearchTourResult, SearchDestinationResult } from './topAppBar/types';
 import {
@@ -15,6 +16,7 @@ import { fetchAllNotifs, asObject, unwrapPayload, getText, getNumber } from './t
 import type { Notif } from './topAppBar/types';
 import LiveClock from './topAppBar/LiveClock';
 import NotificationPanel from './topAppBar/NotificationPanel';
+import { useAdminNotificationStream } from './topAppBar/useAdminNotificationStream';
 
 type TopAppBarProps = {
     currentUserRole?: AdminRole | '';
@@ -91,12 +93,26 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
         }
         if (!silent) setNotifLoading(true);
         setNotifError(false);
-        try { setNotifs(await fetchAllNotifs(userRole)); }
+        try {
+            const nextNotifs = await fetchAllNotifs(userRole);
+            setNotifs(nextNotifs);
+            if (nextNotifs.some(notif => notif.readAt !== undefined)) {
+                setReadIds(new Set(nextNotifs.filter(notif => notif.readAt).map(notif => notif.id)));
+            }
+        }
         catch { setNotifError(true); }
         finally {
             if (!silent) setNotifLoading(false);
         }
     }, [userRole]);
+    const handleRealtimeNotification = useCallback(() => {
+        void refreshNotifs(true);
+    }, [refreshNotifs]);
+
+    useAdminNotificationStream({
+        enabled: Boolean(userRole),
+        onNotification: handleRealtimeNotification,
+    });
 
     useEffect(() => {
         refreshNotifs();
@@ -126,10 +142,16 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
 
     const handleMarkRead = (id: string) => {
         setReadIds(prev => { const next = new Set(prev).add(id); saveReadIds(next); return next; });
+        if (/^\d+$/.test(id)) {
+            void fetchWithAuth(`${API_BASE_URL}/admin/notifications/${id}/read`, { method: 'PATCH' }).catch(() => {});
+        }
     };
     const handleMarkAllRead = () => {
         const next = new Set(notifs.map(n => n.id));
         saveReadIds(next); setReadIds(next);
+        if (notifs.some(n => /^\d+$/.test(n.id))) {
+            void fetchWithAuth(`${API_BASE_URL}/admin/notifications/read-all`, { method: 'PATCH' }).catch(() => {});
+        }
     };
     const handleLogout = async () => {
         try { await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' }); } catch { }

@@ -3,6 +3,18 @@ import { API_BASE_URL } from '@/lib/constants';
 import { ADMIN_AND_SUPER_ROLES, ALL_ADMIN_ROLES, canAccessRole } from '@/lib/adminAccess';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
+const NOTIF_TYPES = new Set<Notif['type']>([
+    'booking_pending',
+    'booking_confirmed',
+    'booking_cancelled',
+    'booking_cancel_requested',
+    'support_new',
+    'support_in_progress',
+    'review_good',
+    'review_bad',
+    'customer_new',
+]);
+
 // ── API utilities ─────────────────────────────────────────────────────────────
 type ApiObject = Record<string, unknown>;
 
@@ -45,8 +57,82 @@ function getNumber(value: unknown, fallback = 0) {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+const VI_NOTIFICATION_REPLACEMENTS: Array<[RegExp, string]> = [
+    [/Thong bao moi/g, 'Thông báo mới'],
+    [/Don dat tour moi can xu ly/g, 'Đơn đặt tour mới cần xử lý'],
+    [/Booking da thanh toan thanh cong/g, 'Booking đã thanh toán thành công'],
+    [/Khach hang da huy booking/g, 'Khách hàng đã hủy booking'],
+    [/Yeu cau huy booking moi/g, 'Yêu cầu hủy booking mới'],
+    [/Khach bao su co thanh toan/g, 'Khách báo sự cố thanh toán'],
+    [/Danh gia thap can kiem tra/g, 'Đánh giá thấp cần kiểm tra'],
+    [/Danh gia moi tu khach hang/g, 'Đánh giá mới từ khách hàng'],
+    [/Khach hang moi dang ky/g, 'Khách hàng mới đăng ký'],
+    [/Ticket ho tro moi/g, 'Ticket hỗ trợ mới'],
+    [/Khach hang phan hoi ticket/g, 'Khách hàng phản hồi ticket'],
+    [/Ticket da duoc mo lai/g, 'Ticket đã được mở lại'],
+    [/Khach hang/g, 'Khách hàng'],
+    [/khach hang/g, 'khách hàng'],
+    [/vua tao booking/g, 'vừa tạo booking'],
+    [/vua tao tai khoan khách hàng/g, 'vừa tạo tài khoản khách hàng'],
+    [/da duoc PayOS xac nhan thanh toan/g, 'đã được PayOS xác nhận thanh toán'],
+    [/da duoc khách huy truoc khi thanh toan/g, 'đã được khách hủy trước khi thanh toán'],
+    [/da gui yeu cau huy booking/g, 'đã gửi yêu cầu hủy booking'],
+    [/bao can doi soat booking/g, 'báo cần đối soát booking'],
+    [/danh gia/g, 'đánh giá'],
+    [/gui yeu cau/g, 'gửi yêu cầu'],
+    [/vua bo sung thong tin/g, 'vừa bổ sung thông tin'],
+    [/mo lai ticket/g, 'mở lại ticket'],
+];
+
+function normalizeNotificationText(value: string) {
+    return VI_NOTIFICATION_REPLACEMENTS.reduce(
+        (text, [pattern, replacement]) => text.replace(pattern, replacement),
+        value,
+    );
+}
+
+function mapAdminNotification(item: ApiObject): Notif | null {
+    const type = getText(item.type) as Notif['type'];
+    if (!NOTIF_TYPES.has(type)) return null;
+
+    const id = getText(item.id, String(item.id ?? ''));
+    if (!id) return null;
+
+    const severity = getText(item.severity);
+    return {
+        id,
+        type,
+        title: normalizeNotificationText(getText(item.title, 'Thông báo mới')),
+        body: normalizeNotificationText(getText(item.body)),
+        time: getText(item.createdAt, new Date().toISOString()),
+        href: getText(item.href, ''),
+        urgent: severity === 'urgent' || type === 'booking_pending' || type === 'booking_cancel_requested' || type === 'support_new' || type === 'review_bad',
+        readAt: getText(item.readAt) || null,
+    };
+}
+
+async function fetchNotificationApiFeed(): Promise<Notif[] | null> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/admin/notifications?limit=25`);
+    if (!res.ok) return null;
+
+    const json = await res.json();
+    const payload = asObject(unwrapPayload(json));
+    const notifications = pickArray(payload.notifications);
+
+    return notifications
+        .map(mapAdminNotification)
+        .filter((item): item is Notif => Boolean(item));
+}
+
 // ── Fetch all notification sources ───────────────────────────────────────────
 export async function fetchAllNotifs(userRole: string): Promise<Notif[]> {
+    try {
+        const apiNotifs = await fetchNotificationApiFeed();
+        if (apiNotifs) return apiNotifs;
+    } catch {
+        // Fall back to the legacy multi-source feed while backend notifications are unavailable.
+    }
+
     const canSeeReviewNotifs = canAccessRole(userRole, ADMIN_AND_SUPER_ROLES);
     const canSeeCustomerNotifs = canAccessRole(userRole, ALL_ADMIN_ROLES);
     const [bookingRes, reviewRes, userRes, supportRes] = await Promise.allSettled([

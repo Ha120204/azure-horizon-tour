@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { exportBookingsCsv } from '../_lib/exportCsv';
@@ -209,6 +210,14 @@ export function useBookingManagement() {
       fetchPaymentStats(),
     ]);
   }, [fetchBookings, fetchPaymentStats]);
+  const shouldRefreshFromRealtime = useCallback((detail: { resourceType: string; href?: string | null }) => (
+    detail.resourceType === 'Booking' || detail.href?.startsWith('/admin/bookings') === true
+  ), []);
+
+  useAdminRealtime({
+    onRefresh: refreshBookingsAndPaymentStats,
+    shouldRefresh: shouldRefreshFromRealtime,
+  });
 
   const handleConfirmSuccess = useCallback(async (updated: Booking) => {
     try {

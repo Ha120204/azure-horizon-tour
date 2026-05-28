@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import {
@@ -179,6 +180,17 @@ export function useCustomerManagement() {
         await fetchUsers();
         await fetchStats();
     }, [fetchStats, fetchUsers]);
+    const shouldRefreshFromRealtime = useCallback((detail: { resourceType: string; type: string; href?: string | null }) => (
+        detail.resourceType === 'User' ||
+        detail.type === 'customer_new' ||
+        detail.href?.startsWith('/admin/customers') === true
+    ), []);
+
+    useAdminRealtime({
+        onRefresh: refreshCustomers,
+        shouldRefresh: shouldRefreshFromRealtime,
+        pause: isSaving || isToggling,
+    });
 
     const startEditing = useCallback((user: User) => {
         setEditForm({

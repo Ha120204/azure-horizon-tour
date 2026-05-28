@@ -36,6 +36,7 @@ export interface Notif {
     time: string;
     href: string;
     urgent?: boolean;
+    readAt?: string | null;
 }
 
 export type SearchTourResult = {

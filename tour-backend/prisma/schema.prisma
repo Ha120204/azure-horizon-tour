@@ -66,6 +66,7 @@ model User {
   chatSessions    ChatSession[]
   reviews         Review[]
   systemLogs      SystemLog[]
+  adminNotificationReads AdminNotificationRead[]
   supportTickets  SupportTicket[]
   createdTours    Tour[]    @relation("TourCreatedBy")
   reviewedTours   Tour[]    @relation("TourReviewedBy")
@@ -501,6 +502,39 @@ model SystemLog {
   @@index([userId, createdAt])
   @@index([resource, resourceId])
   @@index([createdAt])
+}
+
+model AdminNotification {
+  id           Int      @id @default(autoincrement())
+  type         String
+  resourceType String
+  resourceId   String?
+  title        String
+  body         String   @db.Text
+  href         String?
+  severity     String   @default("info") // info | warning | urgent
+  targetRoles  String[]
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  reads        AdminNotificationRead[]
+
+  @@index([type, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+}
+
+model AdminNotificationRead {
+  id             Int      @id @default(autoincrement())
+  notificationId Int
+  userId         Int
+  readAt         DateTime @default(now())
+
+  notification   AdminNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([userId, readAt])
 }
 
 model SuperRiskReview {

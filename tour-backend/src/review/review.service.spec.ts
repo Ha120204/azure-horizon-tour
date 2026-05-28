@@ -3,6 +3,10 @@ import { TourStatus } from '@prisma/client';
 import { ReviewService } from './review.service';
 
 describe('ReviewService review eligibility', () => {
+  const adminNotifications = {
+    createSafe: jest.fn(),
+  };
+
   const prisma = {
     tour: {
       findFirst: jest.fn(),
@@ -38,7 +42,7 @@ describe('ReviewService review eligibility', () => {
     });
     prisma.review.aggregate.mockResolvedValue({ _avg: { rating: 5 } });
     prisma.tour.update.mockResolvedValue({});
-    service = new ReviewService(prisma as any);
+    service = new ReviewService(prisma as any, adminNotifications as any);
   });
 
   afterEach(() => {

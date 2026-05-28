@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { API_BASE_URL } from '@/lib/constants';
 import { SupportConversationPanel } from './_components/SupportConversationPanel';
@@ -132,6 +133,23 @@ export default function SupportPage() {
             // Polling is best-effort; keep the current admin thread visible.
         }
     }, []);
+    const shouldRefreshFromRealtime = useCallback((detail: { resourceType: string; type: string; href?: string | null }) => (
+        detail.resourceType === 'SupportTicket' ||
+        detail.type.startsWith('support_') ||
+        detail.href?.startsWith('/admin/support') === true
+    ), []);
+    const refreshSupportFromRealtime = useCallback(async () => {
+        await fetchTickets({ silent: true });
+        if (selectedTicketId && isOpenTicket(selectedTicketStatus)) {
+            await fetchSelectedDetail(selectedTicketId);
+        }
+    }, [fetchSelectedDetail, fetchTickets, selectedTicketId, selectedTicketStatus]);
+
+    useAdminRealtime({
+        onRefresh: refreshSupportFromRealtime,
+        shouldRefresh: shouldRefreshFromRealtime,
+        pause: sending || statusUpdatingId !== null,
+    });
 
     useEffect(() => {
         void fetchTickets();

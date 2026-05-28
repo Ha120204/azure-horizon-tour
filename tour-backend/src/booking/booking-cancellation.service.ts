@@ -11,6 +11,7 @@ import { MailService } from '../mail/mail.service';
 import { PaymentService } from '../payment/payment.service';
 import type { CancellationPolicy, CancellationPolicyTier, TripLifecycle } from './types';
 import { getErrorMessage } from './helpers/booking-helpers';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 @Injectable()
 export class BookingCancellationService {
@@ -20,6 +21,7 @@ export class BookingCancellationService {
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly paymentService: PaymentService,
+    private readonly adminNotifications: AdminNotificationService,
   ) {}
 
   // ─── Policy calculation ────────────────────────────────────────────────────
@@ -135,6 +137,18 @@ export class BookingCancellationService {
         this.logger.warn(`[PAYOS] Khong the huy link PayOS cho booking #${bookingId}.`);
       }
 
+      await this.adminNotifications.createSafe({
+        type: 'booking_cancelled',
+        resourceType: 'Booking',
+        resourceId: bookingId,
+        title: 'Khách hàng đã hủy booking',
+        body: `Booking ${booking.bookingCode} đã được khách hủy trước khi thanh toán.`,
+        href: '/admin/bookings?status=CANCELLED',
+        severity: 'warning',
+        targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+        metadata: { bookingCode: booking.bookingCode, reason },
+      });
+
       this.logger.log(`[CANCEL] Khach huy booking PENDING #${bookingId} truoc khi thanh toan`);
       return { message: 'Da huy dat tour thanh cong', refundAmount: 0, refundNote: 'Chua thanh toan - khong co hoan tien' };
     }
@@ -161,6 +175,21 @@ export class BookingCancellationService {
     }
 
     this.logger.log(`[CANCEL] Booking moved to CANCEL_REQUESTED bookingId=${bookingId}`);
+    await this.adminNotifications.createSafe({
+      type: 'booking_cancel_requested',
+      resourceType: 'Booking',
+      resourceId: bookingId,
+      title: 'Yêu cầu hủy booking mới',
+      body: `${booking.user?.fullName ?? 'Khách hàng'} đã gửi yêu cầu hủy booking ${booking.bookingCode}.`,
+      href: '/admin/bookings?status=CANCEL_REQUESTED',
+      severity: 'urgent',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: {
+        bookingCode: booking.bookingCode,
+        reason,
+        refundAmount,
+      },
+    });
     return { message: 'Yeu cau huy da duoc ghi nhan, dang cho xu ly', refundAmount, refundNote };
   }
 

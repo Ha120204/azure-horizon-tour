@@ -37,6 +37,7 @@ import { StatisticsModule } from './statistics/statistics.module';
 import { SettingsModule } from './settings/settings.module';
 import { ActivityLogModule } from './activity-log/activity-log.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
+import { AdminNotificationModule } from './admin-notification/admin-notification.module';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 
 @Module({
@@ -75,6 +76,7 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
     StatisticsModule,
     SettingsModule,
     ActivityLogModule,
+    AdminNotificationModule,
     SuperAdminModule,
   ],
 

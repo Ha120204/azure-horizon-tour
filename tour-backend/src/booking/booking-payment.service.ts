@@ -11,6 +11,7 @@ import { MailService } from '../mail/mail.service';
 import { AssistedDraftService } from './assisted-draft.service';
 import type { TransactionClient } from './types';
 import { getErrorMessage } from './helpers/booking-helpers';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ export class BookingPaymentService {
     private readonly paymentService: PaymentService,
     private readonly mailService: MailService,
     private readonly assistedDraftService: AssistedDraftService,
+    private readonly adminNotifications: AdminNotificationService,
   ) {}
 
   // ─── Shared helpers ───────────────────────────────────────────────────────
@@ -499,6 +501,23 @@ export class BookingPaymentService {
     this.logger.log(
       `[PAYMENT_ISSUE] Ticket #${ticket.id} created for bookingId=${bookingId} userId=${userId}`,
     );
+
+    await this.adminNotifications.createSafe({
+      type: 'support_new',
+      resourceType: 'SupportTicket',
+      resourceId: ticket.id,
+      title: 'Khách báo sự cố thanh toán',
+      body: `${booking.user.fullName} báo cần đối soát booking ${booking.bookingCode}.`,
+      href: '/admin/bookings?needsReconciliation=true',
+      severity: 'urgent',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: {
+        bookingId,
+        bookingCode: booking.bookingCode,
+        ticketId: ticket.id,
+        category: 'payment',
+      },
+    });
 
     return {
       message:

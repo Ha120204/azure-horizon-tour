@@ -24,6 +24,7 @@ import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-dra
 import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingQueryService } from './booking-query.service';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 import {
   asPassengerInputs,
   assertVoucherAllowedForDeparture,
@@ -50,6 +51,7 @@ export class BookingService {
     private readonly assistedDraftService: AssistedDraftService,
     private readonly cancellationService: BookingCancellationService,
     private readonly queryService: BookingQueryService,
+    private readonly adminNotifications: AdminNotificationService,
   ) {}
 
   // Cleaned comment
@@ -265,6 +267,8 @@ export class BookingService {
         },
       });
 
+      await this.notifyBookingCreated(booking.id, booking.bookingCode, dto);
+
       return {
         message: 'Booking successful, please pay at the store',
         booking,
@@ -320,6 +324,8 @@ export class BookingService {
         status: 'PENDING',
       },
     });
+
+    await this.notifyBookingCreated(booking.id, booking.bookingCode, dto);
 
     return {
       message: 'Booking successful, please proceed to payment',
@@ -386,6 +392,22 @@ export class BookingService {
           confirmedSource: 'PAYOS_RETURN_SYNC',
           confirmedAt: new Date(),
           confirmedNote: 'PayOS xac nhan qua return URL / webhook',
+        },
+      });
+
+      await this.adminNotifications.createSafe({
+        type: 'booking_confirmed',
+        resourceType: 'Booking',
+        resourceId: bookingId,
+        title: 'Booking đã thanh toán thành công',
+        body: `Booking ${booking.bookingCode} đã được PayOS xác nhận thanh toán.`,
+        href: '/admin/bookings?status=CONFIRMED',
+        severity: 'info',
+        targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+        metadata: {
+          bookingCode: booking.bookingCode,
+          orderCode,
+          transactionRef: txnRef,
         },
       });
 
@@ -505,6 +527,32 @@ export class BookingService {
     }
 
     await this.prisma.$transaction(updates);
+  }
+
+  private async notifyBookingCreated(
+    bookingId: number,
+    bookingCode: string,
+    dto: CreateBookingDto,
+  ) {
+    const contactInfo = dto.contactInfo as { fullName?: string; email?: string } | undefined;
+    const customerName = contactInfo?.fullName?.trim() || contactInfo?.email?.trim() || 'Khách hàng';
+
+    await this.adminNotifications.createSafe({
+      type: 'booking_pending',
+      resourceType: 'Booking',
+      resourceId: bookingId,
+      title: 'Đơn đặt tour mới cần xử lý',
+      body: `${customerName} vừa tạo booking ${bookingCode}.`,
+      href: '/admin/bookings?status=PENDING',
+      severity: 'urgent',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: {
+        bookingCode,
+        tourId: dto.tourId,
+        departureId: dto.departureId ?? null,
+        paymentMethod: dto.paymentMethod ?? 'PAYOS',
+      },
+    });
   }
 
   /**

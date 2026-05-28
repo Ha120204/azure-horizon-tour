@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 type TicketStatus   = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
@@ -24,7 +25,10 @@ type BookingSummary = {
 
 @Injectable()
 export class SupportService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly adminNotifications: AdminNotificationService,
+  ) {}
 
   private normalizeBookingRef(bookingRef?: string | null) {
     const trimmed = bookingRef?.trim();
@@ -313,7 +317,7 @@ export class SupportService {
     category:      TicketCategory;
     userId?:       number;  // Optional — chỉ có khi user đã đăng nhập
   }) {
-    return this.prisma.supportTicket.create({
+    const ticket = await this.prisma.supportTicket.create({
       data: {
         customerName:  data.customerName,
         customerEmail: data.customerEmail,
@@ -326,6 +330,24 @@ export class SupportService {
         userId:        data.userId ?? null,
       },
     });
+
+    await this.adminNotifications.createSafe({
+      type: 'support_new',
+      resourceType: 'SupportTicket',
+      resourceId: ticket.id,
+      title: 'Ticket hỗ trợ mới',
+      body: `${ticket.customerName} gửi yêu cầu: ${ticket.subject}.`,
+      href: '/admin/support?status=NEW',
+      severity: 'urgent',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: {
+        ticketId: ticket.id,
+        category: ticket.category,
+        bookingRef: ticket.bookingRef,
+      },
+    });
+
+    return ticket;
   }
 
   // ─── [CUSTOMER] Lấy danh sách ticket của mình ────────────────────────────────────────────
@@ -386,7 +408,7 @@ export class SupportService {
       );
     }
 
-    return this.prisma.ticketReply.create({
+    const reply = await this.prisma.ticketReply.create({
       data: {
         ticketId:   id,
         senderType: 'customer',
@@ -394,6 +416,24 @@ export class SupportService {
         content,
       },
     });
+
+    await this.adminNotifications.createSafe({
+      type: 'support_in_progress',
+      resourceType: 'SupportTicket',
+      resourceId: ticket.id,
+      title: 'Khách hàng phản hồi ticket',
+      body: `${identifier.name} vừa bổ sung thông tin cho ticket #${ticket.id}.`,
+      href: '/admin/support?status=IN_PROGRESS',
+      severity: 'warning',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: {
+        ticketId: ticket.id,
+        category: ticket.category,
+        bookingRef: ticket.bookingRef,
+      },
+    });
+
+    return reply;
   }
 
   // ─── [CUSTOMER] Đánh giá sau khi RESOLVED ───────────────────────────────────
@@ -432,9 +472,27 @@ export class SupportService {
       throw new ForbiddenException('Chỉ có thể mở lại yêu cầu đã được giải quyết');
     }
 
-    return this.prisma.supportTicket.update({
+    const updated = await this.prisma.supportTicket.update({
       where: { id },
       data:  { status: 'NEW', rating: null },
     });
+
+    await this.adminNotifications.createSafe({
+      type: 'support_new',
+      resourceType: 'SupportTicket',
+      resourceId: updated.id,
+      title: 'Ticket đã được mở lại',
+      body: `${updated.customerName} mở lại ticket #${updated.id}.`,
+      href: '/admin/support?status=NEW',
+      severity: 'urgent',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: {
+        ticketId: updated.id,
+        category: updated.category,
+        bookingRef: updated.bookingRef,
+      },
+    });
+
+    return updated;
   }
 }

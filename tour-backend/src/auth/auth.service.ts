@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service'
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 @Injectable()
 export class AuthService {
@@ -11,6 +12,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly adminNotifications: AdminNotificationService,
   ) { }
 
   async register(email: string, password: string, fullName: string) {
@@ -34,6 +36,20 @@ export class AuthService {
     });
 
     const { password: _, ...result } = user;
+    await this.adminNotifications.createSafe({
+      type: 'customer_new',
+      resourceType: 'User',
+      resourceId: user.id,
+      title: 'Khách hàng mới đăng ký',
+      body: `${user.fullName} vừa tạo tài khoản khách hàng.`,
+      href: '/admin/customers',
+      severity: 'info',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: {
+        userId: user.id,
+        email: user.email,
+      },
+    });
     return result;
   }
 

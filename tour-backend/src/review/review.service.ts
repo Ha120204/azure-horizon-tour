@@ -7,10 +7,14 @@ import { Prisma, TourStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { AdminQueryReviewDto } from './dto/admin-query-review.dto';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 @Injectable()
 export class ReviewService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adminNotifications: AdminNotificationService,
+  ) {}
 
   private getDurationDays(duration?: string | null): number {
     const match = duration?.match(/\d+/);
@@ -94,6 +98,21 @@ export class ReviewService {
     });
 
     await this._recalcTourRating(tourId);
+    await this.adminNotifications.createSafe({
+      type: dto.rating <= 3 ? 'review_bad' : 'review_good',
+      resourceType: 'Review',
+      resourceId: newReview.id,
+      title: dto.rating <= 3 ? 'Đánh giá thấp cần kiểm tra' : 'Đánh giá mới từ khách hàng',
+      body: `${newReview.user?.fullName ?? 'Khách hàng'} đánh giá ${dto.rating}/5 cho tour "${tour.name}".`,
+      href: '/admin/reviews',
+      severity: dto.rating <= 3 ? 'urgent' : 'info',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN'],
+      metadata: {
+        reviewId: newReview.id,
+        tourId,
+        rating: dto.rating,
+      },
+    });
     return newReview;
   }
 

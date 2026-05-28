@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
+import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { EMPTY_ADMIN_STATS } from '../_lib/config';
 import type { AdminStats, Meta, Review, ReviewKpiItem } from '../_lib/types';
+
+const REVIEW_REALTIME_TYPES = ['review_good', 'review_bad'] as const;
 
 export function useReviewManagement() {
     const params = useParams<{ locale?: string }>();
@@ -108,6 +111,12 @@ export function useReviewManagement() {
     const refreshReviewData = useCallback(async () => {
         await Promise.all([fetchReviews(), fetchStats()]);
     }, [fetchReviews, fetchStats]);
+
+    useAdminRealtime({
+        notificationTypes: REVIEW_REALTIME_TYPES,
+        onRefresh: refreshReviewData,
+        pause: Boolean(deleteTarget || replyTarget || lightbox || loadingId || bulkLoading || isDeleting),
+    });
 
     useAdminAutoRefresh({
         intervalMs: 60 * 1000,

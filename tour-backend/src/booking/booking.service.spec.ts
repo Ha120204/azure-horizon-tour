@@ -9,6 +9,7 @@ import { MailService } from '../mail/mail.service';
 import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingQueryService } from './booking-query.service';
+import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 describe('BookingService', () => {
   let service: BookingService;
@@ -27,6 +28,7 @@ describe('BookingService', () => {
         { provide: AssistedDraftService, useValue: mockValue },
         { provide: BookingCancellationService, useValue: mockValue },
         { provide: BookingQueryService, useValue: mockValue },
+        { provide: AdminNotificationService, useValue: mockValue },
       ],
     }).compile();
 

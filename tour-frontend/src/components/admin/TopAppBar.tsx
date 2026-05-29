@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { clearClientUserStorage } from '@/lib/authSession';
 import type { AdminRole } from '@/lib/adminAccess';
 import type { SearchTourResult, SearchDestinationResult } from './topAppBar/types';
 import {
@@ -156,7 +157,7 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
     const handleLogout = async () => {
         try { await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' }); } catch { }
         finally {
-            ['accessToken','userName','userEmail','userRole','userAvatarUrl'].forEach(k => localStorage.removeItem(k));
+            clearClientUserStorage();
             window.dispatchEvent(new Event('auth-change'));
             router.replace('/admin/login');
         }

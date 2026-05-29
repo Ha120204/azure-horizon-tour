@@ -9,6 +9,7 @@ import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/constants';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/publicSettings';
+import { AuthProfile, fetchAuthProfile } from '@/lib/authSession';
 
 const COUNTRY_CODES = [
     { code: '+1', country: 'US', iso: 'us' },
@@ -64,6 +65,7 @@ export default function ContactPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
     const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
     const [submittedAccessCode, setSubmittedAccessCode] = useState('');
     const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
@@ -73,7 +75,15 @@ export default function ContactPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        setIsLoggedIn(Boolean(localStorage.getItem('accessToken')));
+        fetchAuthProfile()
+            .then((profile) => {
+                setAuthProfile(profile);
+                setIsLoggedIn(Boolean(profile));
+            })
+            .catch(() => {
+                setAuthProfile(null);
+                setIsLoggedIn(false);
+            });
     }, []);
 
     useEffect(() => {
@@ -185,15 +195,9 @@ export default function ContactPage() {
             Object.entries(formData).forEach(([key, value]) => body.append(key, value));
             if (selectedFile) body.append('attachment', selectedFile);
 
-            const token = localStorage.getItem('accessToken');
-            if (token) {
-                try {
-                    const payload = JSON.parse(atob(token.split('.')[1]));
-                    const userId = payload.sub ?? payload.id;
-                    if (userId) body.append('userId', String(userId));
-                } catch {
-                    // Token decoding is only used to associate an optional support ticket.
-                }
+            const userId = authProfile?.id ?? authProfile?.userId;
+            if (userId) {
+                body.append('userId', String(userId));
             }
 
             const response = await fetch(`${API_BASE_URL}/contact/send`, {

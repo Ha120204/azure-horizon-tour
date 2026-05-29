@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
   ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -19,7 +20,6 @@ import { VoucherService } from '../voucher/voucher.service';
 import { MailService } from '../mail/mail.service';
 import { HttpService } from '@nestjs/axios';
 import type { Response } from 'express';
-import * as bcrypt from 'bcrypt';
 import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-draft.dto';
 import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
@@ -35,11 +35,35 @@ import {
   IN_STORE_MAX_HOLD_HOURS,
   isPayosDuplicateError,
   PAYOS_HOLD_MINUTES,
+  reserveSeatsAtomically,
 } from './helpers/booking-helpers';
 
 @Injectable()
 export class BookingService {
   private readonly logger = new Logger(BookingService.name);
+
+  // --- In-memory TTL cache --------------------------------------------------
+  // Kh�ng c?n Redis: dashboard stats acceptable stale 30s,
+  // v� project chua bundle @nestjs/cache-manager.
+  private readonly _statsCache = new Map<string, { data: unknown; expiresAt: number }>();
+
+  private cacheGet<T>(key: string): T | null {
+    const entry = this._statsCache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) { this._statsCache.delete(key); return null; }
+    return entry.data as T;
+  }
+
+  private cacheSet(key: string, data: unknown, ttlMs: number): void {
+    this._statsCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+  }
+
+  /** X�a cache th? c�ng khi c� mutation quan tr?ng n?u c?n */
+  invalidateDashboardCache(): void {
+    this._statsCache.delete('quickStats');
+    this._statsCache.delete('operationalStats');
+  }
+  // --------------------------------------------------------------------------
 
   constructor(
     private readonly prisma: PrismaService,
@@ -100,47 +124,15 @@ export class BookingService {
 
   async create(userId: number | null, dto: CreateBookingDto, ip: string) {
     void ip;
+    const finalUserId = Number(userId);
+    if (!Number.isInteger(finalUserId) || finalUserId <= 0) {
+      throw new UnauthorizedException('Bạn cần đăng nhập để đặt tour');
+    }
+
     // ============== INTERACTIVE TRANSACTION ==============
     // Wrap everything in a transaction to guarantee atomicity:
     // If ANY step inside fails -> rollback EVERYTHING, no seats are lost.
     const booking = await this.prisma.$transaction(async (tx) => {
-      let finalUserId = userId;
-      if (!finalUserId || isNaN(finalUserId)) {
-        const contactEmail = typeof dto.contactInfo?.email === 'string' ? dto.contactInfo.email : null;
-        if (!contactEmail) {
-          throw new BadRequestException('Email lien he la bat buoc khi dat tour vang lai');
-        }
-
-        let guestUser = await tx.user.findUnique({
-          where: { email: contactEmail },
-        });
-        if (!guestUser) {
-          const contactName = typeof dto.contactInfo?.fullName === 'string' ? dto.contactInfo.fullName : 'Guest';
-          const contactPhone = typeof dto.contactInfo?.phone === 'string' ? dto.contactInfo.phone : (typeof dto.contactInfo?.phone === 'number' ? String(dto.contactInfo.phone) : null);
-          const contactGender = typeof dto.contactInfo?.gender === 'string' ? dto.contactInfo.gender : null;
-          const contactDob = typeof dto.contactInfo?.dob === 'string' ? dto.contactInfo.dob : null;
-          const contactIdentityType = typeof dto.contactInfo?.identityType === 'string' ? dto.contactInfo.identityType : null;
-          const contactIdentityNo = typeof dto.contactInfo?.identityNo === 'string' ? dto.contactInfo.identityNo : (typeof dto.contactInfo?.identityNo === 'number' ? String(dto.contactInfo.identityNo) : null);
-
-          const randomPassword = Math.random().toString(36).slice(-8) + Date.now().toString().slice(-4);
-          const hashedPassword = await bcrypt.hash(randomPassword, 10);
-
-          guestUser = await tx.user.create({
-            data: {
-              email: contactEmail,
-              password: hashedPassword,
-              fullName: contactName,
-              phone: contactPhone,
-              gender: contactGender,
-              dob: contactDob,
-              identityType: contactIdentityType,
-              identityNo: contactIdentityNo,
-              role: 'CUSTOMER',
-            },
-          });
-        }
-        finalUserId = guestUser.id;
-      }
       // Cleaned comment
       const tour = await tx.tour.findUnique({
         where: { id: dto.tourId, deletedAt: null }, // Cleaned comment
@@ -161,7 +153,7 @@ export class BookingService {
         selectedDeparture = await tx.tourDeparture.findUnique({
           where: { id: dto.departureId },
         });
-        if (!selectedDeparture || selectedDeparture.tourId !== tour.id) {
+        if (!selectedDeparture || selectedDeparture.tourId !== tour.id || !selectedDeparture.isActive) {
           throw new BadRequestException('Invalid departure');
         }
         if (selectedDeparture.availableSeats < dto.numberOfPeople) {
@@ -210,19 +202,11 @@ export class BookingService {
         voucherCode = dto.voucherCode.trim().toUpperCase();
       }
 
-      // Cleaned comment
-      await tx.tour.update({
-        where: { id: tour.id },
-        data: { availableSeats: { decrement: dto.numberOfPeople } },
+      await reserveSeatsAtomically(tx, {
+        tourId: tour.id,
+        departureId: dto.departureId,
+        seats: dto.numberOfPeople,
       });
-
-      // Cleaned comment
-      if (dto.departureId) {
-        await tx.tourDeparture.update({
-          where: { id: dto.departureId },
-          data: { availableSeats: { decrement: dto.numberOfPeople } },
-        });
-      }
 
       // Cleaned comment
       const newBookingCode = generateBookingCode();
@@ -373,7 +357,7 @@ export class BookingService {
             paymentStatus: 'PAID',
             status: 'CONFIRMED',
             // Cleaned comment
-            vnpayTxnRef: txnRef,
+            paymentGatewayTxnRef: txnRef,
           },
         });
 
@@ -791,6 +775,15 @@ export class BookingService {
   }
 
   async getAdminQuickStats() {
+    const CACHE_TTL_MS = 30_000;
+    const cached = this.cacheGet<Awaited<ReturnType<typeof this._computeQuickStats>>>('quickStats');
+    if (cached) return cached;
+    const result = await this._computeQuickStats();
+    this.cacheSet('quickStats', result, CACHE_TTL_MS);
+    return result;
+  }
+
+  private async _computeQuickStats() {
     const [grouped, paymentGrouped, myToursCount, assistedDraftGrouped] = await Promise.all([
       this.prisma.booking.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { status: true } }),
       this.prisma.booking.groupBy({ by: ['paymentStatus'], where: { deletedAt: null }, _count: { paymentStatus: true } }),
@@ -813,6 +806,40 @@ export class BookingService {
       assistedDraftPending: assistedDraftMap['PENDING_APPROVAL'] || 0,
       assistedDraftNeedsRevision: assistedDraftMap['NEEDS_REVISION'] || 0,
     };
+  }
+
+  /**
+   * Operational Stats — gộm 5 module stats vào 1 call duy nhất.
+   *
+   * Trước đây frontend phải gọi 4 endpoint riêng (độc lập):
+   *   GET /booking/admin/stats          → booking.pending, cancelRequested
+   *   GET /tour/admin/stats             → tour.pending
+   *   GET /article/admin/stats          → article.pending
+   *   GET /support/stats               → support.open
+   * Giờ chỉ cần 1 call: GET /booking/admin/operational-stats, cache 30s.
+   *
+   * Query Prisma trực tiếp để giữ BookingModule độc lập với
+   * Tour/Article/SupportModule — không tạo circular dependency.
+   */
+  async getOperationalStats() {
+    const CACHE_TTL_MS = 30_000;
+    const cached = this.cacheGet<Awaited<ReturnType<typeof this._computeOperationalStats>>>('operationalStats');
+    if (cached) return cached;
+    const result = await this._computeOperationalStats();
+    this.cacheSet('operationalStats', result, CACHE_TTL_MS);
+    return result;
+  }
+
+  private async _computeOperationalStats() {
+    // 5 queries chạy song song — không có dependency giữa chúng
+    const [bookingPending, cancelRequested, tourPending, articlePending, supportOpen] = await Promise.all([
+      this.prisma.booking.count({ where: { deletedAt: null, status: 'PENDING' } }),
+      this.prisma.booking.count({ where: { deletedAt: null, status: 'CANCEL_REQUESTED' } }),
+      this.prisma.tour.count({ where: { deletedAt: null, status: 'PENDING_REVIEW' } }),
+      this.prisma.article.count({ where: { deletedAt: null, status: 'PENDING_REVIEW' } }),
+      this.prisma.supportTicket.count({ where: { status: { in: ['NEW', 'IN_PROGRESS'] } } }),
+    ]);
+    return { bookingPending, cancelRequested, tourPending, articlePending, supportOpen };
   }
 
   findAll() { return `This action returns all booking`; }

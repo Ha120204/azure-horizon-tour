@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Link } from '@/i18n/routing';
 
 interface ContactInfo {
     fullName: string;
@@ -52,18 +51,6 @@ export default function ContactInfoForm({
                     <span className="material-symbols-outlined text-primary text-3xl">contact_mail</span>
                     <h2 className="font-headline text-xl md:text-2xl font-bold tracking-tight">{t('checkout.contactInfoTitle')}</h2>
                 </div>
-
-                {!isLoggedIn && (
-                    <div className="mb-6 bg-primary/5 rounded-lg p-4 border border-primary/10 flex items-start gap-3 text-xs md:text-sm text-primary">
-                        <span className="material-symbols-outlined text-base mt-0.5" aria-hidden="true">info</span>
-                        <span>
-                            {t('checkout.loginPromoText') || 'Đăng nhập để nhận các ưu đãi và quản lý đơn hàng dễ dàng hơn.'}{' '}
-                            <Link href="/login" className="underline font-bold hover:text-primary-container">
-                                {t('checkout.loginNow') || 'Đăng nhập ngay'}
-                            </Link>
-                        </span>
-                    </div>
-                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     {/* Full Name — spans 2 cols */}

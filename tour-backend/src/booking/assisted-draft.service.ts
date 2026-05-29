@@ -40,6 +40,7 @@ import {
   assertVoucherAllowedForDeparture,
   getErrorMessage,
   PAYOS_HOLD_MINUTES,
+  reserveSeatsAtomically,
 } from './helpers/booking-helpers';
 
 type AssistedDraftValidationSource = {
@@ -154,7 +155,40 @@ export class AssistedDraftService {
     return { tour, basePrice, totalPrice, discountAmount, voucherCode };
   }
 
-  private async findOrCreateAssistedCustomer(tx: TransactionClient, draft: AssistedCustomerDraft) {
+  /**
+   * Chạy TRƯỚC transaction — kiểm tra xem có cần tạo guest user mới không.
+   * Nếu cần, hash password ngay ở đây để bcrypt.hash() không chiếm giờ DB transaction.
+   *
+   * @returns hash chuẩn bị sẵn nếu cần tạo user mới, hoặc `null` nếu không cần.
+   */
+  private async prepareGuestPassword(
+    draft: Pick<AssistedCustomerDraft, 'customerId' | 'customerEmail'>,
+  ): Promise<string | null> {
+    // Trường hợp 1: đã có customerId — không tạo user mới
+    if (draft.customerId) return null;
+
+    const email = String(draft.customerEmail || '').trim().toLowerCase();
+
+    // Trường hợp 2: email đã tồn tại — sẽ update, không tạo mới
+    const existing = await this.prisma.user.findFirst({ where: { email } });
+    if (existing) return null;
+
+    // Trường hợp 3: cần tạo guest user mới — hash người gưới NGOÀI transaction
+    const password = randomBytes(24).toString('hex');
+    return bcrypt.hash(password, 10);
+  }
+
+  /**
+   * Tìm hoặc tạo customer cho assisted booking — CHẠY TRONG transaction.
+   *
+   * Nhận `prehashedPassword` đã được tính sẵn từ trước để tránh gọi bcrypt
+   * bên trong transaction (bcrypt là CPU-intensive, giữ DB connection lâu không cần thiết).
+   */
+  private async findOrCreateAssistedCustomer(
+    tx: TransactionClient,
+    draft: AssistedCustomerDraft,
+    prehashedPassword: string | null,
+  ) {
     if (draft.customerId) {
       const user = await tx.user.findUnique({ where: { id: draft.customerId } });
       if (!user) throw new NotFoundException('Customer not found');
@@ -172,8 +206,12 @@ export class AssistedDraftService {
         },
       });
     }
-    const password = randomBytes(24).toString('hex');
-    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Tại đây prehashedPassword được đảm bảo không null vì prepareGuestPassword()
+    // đã được gọi trước với cùng điều kiện. Nếu vì lý do bất thường null được truyền vào,
+    // fallback về tạo hash tại chỗ để không crash.
+    const hashedPassword = prehashedPassword ?? await bcrypt.hash(randomBytes(24).toString('hex'), 10);
+
     return tx.user.create({
       data: {
         email, password: hashedPassword,
@@ -598,6 +636,19 @@ export class AssistedDraftService {
   }
 
   async approveAssistedDraft(id: number, adminId: number, note?: string) {
+    // ── Phần chuẩn bị TRƯỚC transaction ──────────────────────────────────
+    // Đọc draft sơ bộ chỉ để xác định có cần hash password hay không.
+    // Thiếu một lần read này đổi lấy việc giải phóng DB connection khỏi bị giữ
+    // trong suốt ~100ms bcrypt.hash() — xứng đáng với transaction có nhiều bước.
+    const draftPreview = await this.prisma.assistedBookingDraft.findUnique({
+      where: { id },
+      select: { customerId: true, customerEmail: true },
+    });
+    const prehashedPassword = draftPreview
+      ? await this.prepareGuestPassword(draftPreview)
+      : null;
+    // ─────────────────────────────────────────────────────────────────────────
+
     const result = await this.prisma.$transaction(async (tx) => {
       const draft = await tx.assistedBookingDraft.findUnique({
         where: { id },
@@ -618,12 +669,13 @@ export class AssistedDraftService {
         numberOfPeople: draft.numberOfPeople, passengers: asPassengerInputs(draft.passengers),
         voucherCode: draft.voucherCode || undefined,
       });
-      const customer = await this.findOrCreateAssistedCustomer(tx, draft);
+      const customer = await this.findOrCreateAssistedCustomer(tx, draft, prehashedPassword);
 
-      await tx.tour.update({ where: { id: tourId }, data: { availableSeats: { decrement: draft.numberOfPeople } } });
-      if (draft.departureId) {
-        await tx.tourDeparture.update({ where: { id: draft.departureId }, data: { availableSeats: { decrement: draft.numberOfPeople } } });
-      }
+      await reserveSeatsAtomically(tx, {
+        tourId,
+        departureId: draft.departureId,
+        seats: draft.numberOfPeople,
+      });
 
       const departure = draft.departureId
         ? await tx.tourDeparture.findUnique({

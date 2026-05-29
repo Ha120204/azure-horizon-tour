@@ -338,7 +338,7 @@ model Booking {
   holdExpiresAt    DateTime?
   confirmedById    Int?
   confirmedBy      User?         @relation("BookingConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
-  vnpayTxnRef      String?       // Mã giao dịch từ cổng thanh toán để đối soát
+  paymentGatewayTxnRef String?   // Mã giao dịch từ cổng thanh toán để đối soát
   isAssistedBooking Boolean      @default(false)
   assistedDraftId  Int?          @unique
   

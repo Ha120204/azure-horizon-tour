@@ -27,8 +27,8 @@ interface FilterSidebarProps {
     setDate: (v: string) => void;
     sidebarBudget: string;
     setSidebarBudget: (v: string) => void;
-    selectedRatings: number[];
-    toggleRating: (r: number) => void;
+    selectedRating: number;
+    setRating: (r: number) => void;
     selectedTypes: string[];
     toggleType: (t: string) => void;
     onClearAll: () => void;
@@ -47,7 +47,7 @@ export default function FilterSidebar({
     isAllDestinationsSelected, setIsAllDestinationsSelected,
     date, setDate,
     sidebarBudget, setSidebarBudget,
-    selectedRatings, toggleRating,
+    selectedRating, setRating,
     selectedTypes, toggleType,
     onClearAll, onApplyFilters,
     activeFilterCount,
@@ -334,35 +334,55 @@ export default function FilterSidebar({
                     {language === 'vi' ? 'Đánh giá' : 'Rating'}
                 </h3>
                 <div className="space-y-2">
-                    {[5, 4, 3, 2, 1].map((rating) => {
-                        const isActive = selectedRatings.includes(rating);
+                    {([
+                        { threshold: 4.5, filledStars: 5, label: language === 'vi' ? 'Xuất sắc' : 'Excellent', sublabel: '4.5+' },
+                        { threshold: 4.0, filledStars: 4, label: language === 'vi' ? 'Rất tốt'  : 'Very Good', sublabel: '4.0+' },
+                        { threshold: 3.0, filledStars: 3, label: language === 'vi' ? 'Tốt'      : 'Good',      sublabel: '3.0+' },
+                    ] as { threshold: number; filledStars: number; label: string; sublabel: string }[]).map((opt) => {
+                        const isActive = selectedRating === opt.threshold;
                         return (
                             <button
-                                key={rating}
-                                onClick={() => toggleRating(rating)}
+                                key={opt.threshold}
+                                onClick={() => setRating(isActive ? 0 : opt.threshold)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all duration-200 group active:scale-[0.98]
                                     ${isActive
                                         ? 'bg-primary/5 border-primary/25'
                                         : 'border-outline-variant/15 bg-white hover:border-primary/15'
                                     }`}
                             >
-                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all
-                                    ${isActive ? 'bg-primary border-primary' : 'border-outline-variant/30'}`}>
-                                    {isActive && (
-                                        <span className="material-symbols-outlined text-white text-xs font-bold">check</span>
-                                    )}
+                                {/* Radio indicator */}
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all
+                                    ${isActive ? 'border-primary' : 'border-outline-variant/30 group-hover:border-primary/50'}`}>
+                                    {isActive && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
                                 </div>
-                                <div className="flex items-center gap-1">
+
+                                {/* Stars */}
+                                <div className="flex items-center gap-0.5">
                                     {Array.from({ length: 5 }).map((_, i) => (
                                         <span
                                             key={i}
-                                            className={`material-symbols-outlined text-base ${i < rating ? 'text-amber-400' : 'text-outline-variant/30'}`}
-                                            style={{ fontVariationSettings: "'FILL' 1" }}
+                                            className={`material-symbols-outlined text-[15px] ${
+                                                i < opt.filledStars ? 'text-amber-400' : 'text-outline-variant/25'
+                                            }`}
+                                            style={{ fontVariationSettings: i < opt.filledStars ? "'FILL' 1" : "'FILL' 0" }}
                                         >star</span>
                                     ))}
                                 </div>
-                                <span className={`text-xs font-semibold ml-auto ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}>
-                                    {rating}.0
+
+                                {/* Label */}
+                                <span className={`text-sm font-semibold leading-tight ${
+                                    isActive ? 'text-primary' : 'text-on-surface'
+                                }`}>
+                                    {opt.label}
+                                </span>
+
+                                {/* Badge threshold */}
+                                <span className={`ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                                    isActive
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-surface-container text-on-surface-variant'
+                                }`}>
+                                    {opt.sublabel}
                                 </span>
                             </button>
                         );

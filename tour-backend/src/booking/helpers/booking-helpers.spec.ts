@@ -2,7 +2,33 @@ import { BadRequestException } from '@nestjs/common';
 import {
   calculateBookingHoldExpiresAt,
   IN_STORE_OPERATIONAL_CUTOFF_HOURS,
+  releaseSeats,
+  reserveSeatsAtomically,
 } from './booking-helpers';
+import type { Prisma } from '@prisma/client';
+
+function createSeatReservationTx({
+  tourCount = 1,
+  departureCount = 1,
+}: {
+  tourCount?: number;
+  departureCount?: number;
+}) {
+  const tourUpdate = jest.fn().mockResolvedValue({});
+  const tourUpdateMany = jest.fn().mockResolvedValue({ count: tourCount });
+  const departureUpdateMany = jest.fn().mockResolvedValue({ count: departureCount });
+  const tx = {
+    tour: {
+      update: tourUpdate,
+      updateMany: tourUpdateMany,
+    },
+    tourDeparture: {
+      updateMany: departureUpdateMany,
+    },
+  } as unknown as Pick<Prisma.TransactionClient, 'tour' | 'tourDeparture'>;
+
+  return { tx, tourUpdate, tourUpdateMany, departureUpdateMany };
+}
 
 describe('calculateBookingHoldExpiresAt', () => {
   const now = new Date('2026-05-23T10:00:00.000Z');
@@ -40,5 +66,114 @@ describe('calculateBookingHoldExpiresAt', () => {
     expect(() =>
       calculateBookingHoldExpiresAt({ paymentMethod: 'IN_STORE', departureDate, now }),
     ).toThrow(BadRequestException);
+  });
+});
+
+describe('releaseSeats', () => {
+  it('restores only tour aggregate seats when booking has no departure', async () => {
+    const { tx, tourUpdate, departureUpdateMany } = createSeatReservationTx({});
+
+    await releaseSeats(tx, { tourId: 10, seats: 2 });
+
+    expect(tourUpdate).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: {
+        availableSeats: { increment: 2 },
+      },
+    });
+    expect(departureUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('restores both tour aggregate seats and selected departure seats', async () => {
+    const { tx, tourUpdate, departureUpdateMany } = createSeatReservationTx({});
+
+    await releaseSeats(tx, { tourId: 10, departureId: 20, seats: 2 });
+
+    expect(tourUpdate).toHaveBeenCalledWith({
+      where: { id: 10 },
+      data: {
+        availableSeats: { increment: 2 },
+      },
+    });
+    expect(departureUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 20,
+        tourId: 10,
+      },
+      data: {
+        availableSeats: { increment: 2 },
+      },
+    });
+  });
+});
+
+describe('reserveSeatsAtomically', () => {
+  it('decrements tour seats with an atomic availability condition', async () => {
+    const { tx, tourUpdateMany, departureUpdateMany } = createSeatReservationTx({});
+
+    await reserveSeatsAtomically(tx, { tourId: 10, seats: 2 });
+
+    expect(departureUpdateMany).not.toHaveBeenCalled();
+    expect(tourUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 10,
+        deletedAt: null,
+        availableSeats: { gte: 2 },
+      },
+      data: {
+        availableSeats: { decrement: 2 },
+      },
+    });
+  });
+
+  it('decrements departure seats before tour aggregate seats', async () => {
+    const { tx, tourUpdateMany, departureUpdateMany } = createSeatReservationTx({});
+
+    await reserveSeatsAtomically(tx, { tourId: 10, departureId: 20, seats: 2 });
+
+    expect(departureUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 20,
+        tourId: 10,
+        isActive: true,
+        availableSeats: { gte: 2 },
+      },
+      data: {
+        availableSeats: { decrement: 2 },
+      },
+    });
+    expect(tourUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 10,
+        deletedAt: null,
+        availableSeats: { gte: 2 },
+      },
+      data: {
+        availableSeats: { decrement: 2 },
+      },
+    });
+    expect(departureUpdateMany.mock.invocationCallOrder[0])
+      .toBeLessThan(tourUpdateMany.mock.invocationCallOrder[0]);
+  });
+
+  it('rejects when the selected departure no longer has enough seats', async () => {
+    const { tx, tourUpdateMany, departureUpdateMany } = createSeatReservationTx({ departureCount: 0 });
+
+    await expect(
+      reserveSeatsAtomically(tx, { tourId: 10, departureId: 20, seats: 2 }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(departureUpdateMany).toHaveBeenCalled();
+    expect(tourUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the tour aggregate no longer has enough seats', async () => {
+    const { tx, tourUpdateMany } = createSeatReservationTx({ tourCount: 0 });
+
+    await expect(
+      reserveSeatsAtomically(tx, { tourId: 10, seats: 2 }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(tourUpdateMany).toHaveBeenCalled();
   });
 });

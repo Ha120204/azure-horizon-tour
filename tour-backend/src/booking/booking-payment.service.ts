@@ -12,6 +12,11 @@ import { AssistedDraftService } from './assisted-draft.service';
 import type { TransactionClient } from './types';
 import { getErrorMessage } from './helpers/booking-helpers';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
+import type {
+  ConfirmInStoreDto,
+  ReconcilePayosDto,
+  ReportPaymentIssueDto,
+} from './dto/payment-booking.dto';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -23,46 +28,8 @@ const IN_STORE_SOURCE_MAP: Record<InStoreCollectionMethod, string> = {
   CARD_POS: 'IN_STORE_CARD_POS',
 };
 
-// ─── DTOs ─────────────────────────────────────────────────────────────────────
-
-export interface ConfirmInStoreDto {
-  /** Cách thu tiền tại quầy */
-  collectionMethod: InStoreCollectionMethod;
-  /** Số tiền thực nhận (dùng để kiểm tra khớp với đơn) */
-  amount?: number;
-  /** Mã biên nhận, mã giao dịch POS, hoặc số tham chiếu */
-  receiptRef?: string;
-  /** Ghi chú tùy chọn */
-  note?: string;
-}
-
-export interface ReconcilePayosDto {
-  /** Mã tham chiếu giao dịch ngân hàng — BẮT BUỘC */
-  transactionRef: string;
-  /** Số tiền trong ảnh CK */
-  amount: number;
-  /** Ghi chú xác nhận — BẮT BUỘC */
-  note: string;
-  /** URL ảnh giao dịch đã upload (Cloudinary) */
-  evidenceUrl?: string;
-}
-
-export interface ReportPaymentIssueDto {
-  /** Mô tả sự cố từ khách */
-  message?: string;
-  /** Số tiền khách báo đã chuyển */
-  amount?: number;
-  /** Thời điểm khách chuyển khoản, dạng ISO hoặc datetime-local */
-  transferredAt?: string;
-  /** Mã giao dịch nếu khách có */
-  transactionRef?: string;
-  /** Ngân hàng hoặc tài khoản chuyển nếu khách cung cấp */
-  senderBank?: string;
-  /** Tên chủ tài khoản chuyển nếu khách cung cấp */
-  senderAccountName?: string;
-  /** URL ảnh giao dịch khách upload */
-  evidenceUrl?: string;
-}
+// ─── Re-export DTO types for controller imports ────────────────────────────────
+export type { ConfirmInStoreDto, ReconcilePayosDto, ReportPaymentIssueDto };
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
@@ -527,36 +494,6 @@ export class BookingPaymentService {
     };
   }
 
-  // ─── Backward compat wrapper ──────────────────────────────────────────────
-
-  /**
-   * @deprecated Sử dụng confirmInStore hoặc reconcilePayosManual tùy theo paymentMethod.
-   * Giữ lại để backward compat với endpoint /confirm-manual cũ.
-   * Sẽ bị xóa sau khi frontend chuyển hoàn toàn sang endpoint mới.
-   */
-  async legacyConfirmManual(bookingId: number, actorId: number) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
-    });
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-
-    if (booking.paymentMethod === 'IN_STORE') {
-      return this.confirmInStore(
-        bookingId,
-        { collectionMethod: 'CASH', note: '[Legacy] Xác nhận từ endpoint cũ' },
-        actorId,
-      );
-    } else {
-      // PayOS — không có txRef nên dùng ADMIN_OVERRIDE
-      await this.confirmBookingAsPaid(bookingId, 'ADMIN_OVERRIDE', actorId, {
-        gateway: 'PAYOS',
-        amount: Number(booking.totalPrice),
-        confirmedNote: '[Legacy] Xác nhận từ endpoint confirm-manual cũ',
-      });
-      await this.sendConfirmationEmail(bookingId);
-      return { message: 'Đã xác nhận (legacy)' };
-    }
-  }
   // ─── Phase 3: Payment Stats ───────────────────────────────────────────────
 
   /**

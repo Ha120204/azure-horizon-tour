@@ -27,6 +27,10 @@ export class FilterTourDto {
 
   @IsOptional()
   @IsString()
+  minRating?: string; // threshold: lọc tour có averageRating >= giá trị này (vd: 4.5, 4.0, 3.0)
+
+  @IsOptional()
+  @IsString()
   types?: string;
 
   @IsOptional()

@@ -7,6 +7,7 @@ import { seedDomesticTours } from './seeds/domestic-tours.seed';
 import { seedInternationalTours } from './seeds/international-tours.seed';
 import { seedPromotionDepartures } from './seeds/promotion-departures.seed';
 import { seedVouchers } from './seeds/vouchers.seed';
+import { seedReviews } from './seeds/reviews.seed';
 
 const connectionString =
   process.env.DATABASE_URL ??
@@ -39,6 +40,10 @@ async function main() {
   console.log('Seeding promotion departures...');
   await seedPromotionDepartures(prisma);
   console.log('Promotion departure seed completed.');
+
+  console.log('Seeding reviews...');
+  await seedReviews(prisma);
+  console.log('Review seed completed.');
 }
 
 main()

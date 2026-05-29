@@ -4,6 +4,7 @@ import { LocaleProvider } from "@/context/LocaleContext";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import ConciergeWidget from '@/components/concierge/ConciergeWidget';
+import GlobalToast from '@/components/ui/GlobalToast';
 
 export const metadata: Metadata = {
   title: "Azure Horizon",
@@ -32,10 +33,10 @@ export default async function RootLayout({
           <LocaleProvider>
             {children}
             <ConciergeWidget />
+            <GlobalToast />
           </LocaleProvider>
         </NextIntlClientProvider>
       </body>
     </html>
   );
 }
-

@@ -6,6 +6,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { fetchAuthProfile } from '@/lib/authSession';
 import { API_BASE_URL } from '@/lib/constants';
 import { useTranslations } from 'next-intl';
 import HeroBanner from '@/components/promotions/HeroBanner';
@@ -185,8 +186,8 @@ export default function PromotionsPage() {
             .catch(console.error);
 
         // Fetch user's saved vouchers (if logged in)
-        const token = localStorage.getItem('accessToken');
-        if (token) {
+        fetchAuthProfile().then((profile) => {
+            if (!profile) return;
             fetchWithAuth(`${API_BASE_URL}/voucher/my-wallet`)
                 .then(res => res.json())
                 .then((resData: ApiResponse<UserVoucher[]> | UserVoucher[]) => {
@@ -196,7 +197,7 @@ export default function PromotionsPage() {
                     setSavedIds(ids);
                 })
                 .catch(() => { });
-        }
+        });
     }, []);
 
     // ── Countdown ─────────────────
@@ -233,8 +234,8 @@ export default function PromotionsPage() {
     const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
     const handleSaveToWallet = async (voucherId: number) => {
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
+        const profile = await fetchAuthProfile();
+        if (!profile) {
             router.push('/login');
             return;
         }

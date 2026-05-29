@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
@@ -28,6 +28,7 @@ interface EBooking {
     totalPrice: number;
     leadTravelerName: string;
     tour: EBookedTour;
+    departureId?: number | null;
 }
 
 const dict = {
@@ -97,7 +98,7 @@ const dict = {
     }
 };
 
-export default function PaymentSelectorPage() {
+function PaymentSelectorContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { t, formatPrice, formatDate, language } = useLocale();
@@ -110,6 +111,66 @@ export default function PaymentSelectorPage() {
     const [selectedMethod, setSelectedMethod] = useState<'PAYOS' | 'IN_STORE'>('PAYOS');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+    // Cuộn lên đầu trang khi component mount (kể cả khi bấm back/forward)
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            if ('scrollRestoration' in window.history) {
+                window.history.scrollRestoration = 'manual';
+            }
+            window.scrollTo(0, 0);
+        }
+    }, []);
+
+    const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+
+    // Chặn nút Back của trình duyệt (popstate)
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            window.history.pushState(null, '', window.location.href);
+
+            const handlePopState = (e: PopStateEvent) => {
+                e.preventDefault();
+                setIsCancelConfirmOpen(true);
+                window.history.pushState(null, '', window.location.href);
+            };
+
+            window.addEventListener('popstate', handlePopState);
+            return () => {
+                window.removeEventListener('popstate', handlePopState);
+            };
+        }
+    }, []);
+
+    // Xử lý hủy đơn chủ động (giải phóng ghế trống và chuyển trang về checkout)
+    const handleActiveCancel = async () => {
+        if (!booking) {
+            router.push(`/${language}/destinations`);
+            return;
+        }
+        try {
+            setIsSubmitting(true);
+            await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/cancel-request`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ reason: 'Khách hàng chủ động hủy để sửa thông tin' })
+            });
+
+            // Điều hướng khách hàng quay lại checkout kèm theo tourId & departureId
+            const depQuery = booking.departureId ? `&departureId=${booking.departureId}` : '';
+            router.push(`/${language}/checkout?tourId=${booking.tour.id}${depQuery}`);
+        } catch (error) {
+            console.error('Lỗi khi hủy đơn chủ động:', error);
+            // Dù lỗi mạng vẫn cho khách về checkout để họ không bị kẹt
+            const depQuery = booking.departureId ? `&departureId=${booking.departureId}` : '';
+            router.push(`/${language}/checkout?tourId=${booking.tour.id}${depQuery}`);
+        } finally {
+            setIsSubmitting(false);
+            setIsCancelConfirmOpen(false);
+        }
+    };
 
     const lang = (language === 'vi' || language === 'en') ? language : 'vi';
     const d = dict[lang];
@@ -214,50 +275,41 @@ export default function PaymentSelectorPage() {
 
     if (isLoading) {
         return (
-            <div className="bg-slate-50 min-h-screen flex flex-col">
-                <Header />
-                <main className="flex-grow flex items-center justify-center pt-28">
-                    <div className="flex flex-col items-center gap-3">
-                        <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                        <span className="text-sm font-bold text-primary">{d.loading}</span>
-                    </div>
-                </main>
-                <Footer />
-            </div>
+            <main className="flex-grow flex items-center justify-center pt-28">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                    <span className="text-sm font-bold text-primary">{d.loading}</span>
+                </div>
+            </main>
         );
     }
 
     if (error || !booking) {
         return (
-            <div className="bg-slate-50 min-h-screen flex flex-col">
-                <Header />
-                <main className="flex-grow flex flex-col items-center justify-center pt-28 px-4 text-center">
-                    <span className="material-symbols-outlined text-6xl text-error mb-4">error</span>
-                    <h2 className="text-2xl font-bold mb-2">{d.errorTitle}</h2>
-                    <p className="text-outline mb-6">{error || d.invalidCode}</p>
-                    <button
-                        onClick={() => router.push('/destinations')}
-                        className="bg-primary text-white px-8 py-3 rounded-full font-bold shadow-md hover:opacity-90 active:scale-95 transition-all"
-                    >
-                        {d.backBtn}
-                    </button>
-                </main>
-                <Footer />
-            </div>
+            <main className="flex-grow flex flex-col items-center justify-center pt-28 px-4 text-center">
+                <span className="material-symbols-outlined text-6xl text-error mb-4">error</span>
+                <h2 className="text-2xl font-bold mb-2">{d.errorTitle}</h2>
+                <p className="text-outline mb-6">{error || d.invalidCode}</p>
+                <button
+                    onClick={() => router.push('/destinations')}
+                    className="bg-primary text-white px-8 py-3 rounded-full font-bold shadow-md hover:opacity-90 active:scale-95 transition-all"
+                >
+                    {d.backBtn}
+                </button>
+            </main>
         );
     }
 
     const isPayosExpired = timeLeft === 0;
 
     return (
-        <div className="bg-slate-50 font-body text-on-surface flex flex-col min-h-screen">
+        <>
             <style dangerouslySetInnerHTML={{
                 __html: `
                 .ambient-shadow { box-shadow: 0 8px 32px rgba(25, 28, 33, 0.03); }
                 .option-active { border-color: #003f87; background: rgba(0, 63, 135, 0.02); }
                 `
             }} />
-            <Header />
 
             <main className="flex-grow pt-28 pb-20 px-4 md:px-8 max-w-screen-xl mx-auto w-full">
                 {/* 1. Step Indicator */}
@@ -397,7 +449,7 @@ export default function PaymentSelectorPage() {
                         {/* CTA Action button */}
                         <div className="flex items-center justify-end gap-4">
                             <button
-                                onClick={() => router.push(`/my-bookings`)}
+                                onClick={() => setIsCancelConfirmOpen(true)}
                                 className="px-6 py-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 font-bold text-sm transition-all active:scale-95 text-on-surface-variant"
                             >
                                 {d.cancelBtn}
@@ -480,6 +532,87 @@ export default function PaymentSelectorPage() {
                 </div>
             </main>
 
+            <ConfirmCancelModal
+                isOpen={isCancelConfirmOpen}
+                onClose={() => setIsCancelConfirmOpen(false)}
+                onConfirm={handleActiveCancel}
+                isSubmitting={isSubmitting}
+                t={t}
+            />
+        </>
+    );
+}
+
+interface ConfirmCancelModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    isSubmitting: boolean;
+    t: any;
+}
+
+function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting, t }: ConfirmCancelModalProps) {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+            
+            {/* Modal Box */}
+            <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full relative z-10 shadow-2xl border border-slate-100 transform transition-all scale-100 flex flex-col items-center text-center animate-fade-in-up">
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6 border border-red-100">
+                    <span className="material-symbols-outlined text-red-600 text-3xl">warning</span>
+                </div>
+                
+                <h3 className="font-headline font-bold text-xl text-on-surface mb-3">
+                    Xác nhận hủy giao dịch?
+                </h3>
+                
+                <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                    Đơn đặt chỗ của bạn hiện đang chờ thanh toán. Nếu bạn rời khỏi trang này, đơn hàng sẽ bị **hủy bỏ hoàn toàn** và chỗ ngồi sẽ được trả về hệ thống. Bạn có chắc chắn muốn quay lại để thay đổi thông tin?
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-3 w-full mt-auto">
+                    <button
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="flex-1 px-5 py-3.5 border border-slate-200 hover:bg-slate-50 font-bold text-sm rounded-xl text-on-surface transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        Không, tiếp tục thanh toán
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        disabled={isSubmitting}
+                        className="flex-1 px-5 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-red-600/20 disabled:opacity-50"
+                    >
+                        {isSubmitting ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <span className="material-symbols-outlined text-base">close</span>
+                        )}
+                        Xác nhận hủy đơn
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default function PaymentSelectorPage() {
+    return (
+        <div className="bg-slate-50 font-body text-on-surface flex flex-col min-h-screen">
+            <Header />
+            <Suspense fallback={
+                <main className="flex-grow flex items-center justify-center pt-28">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                        <span className="text-sm font-bold text-primary">Đang tải thông tin thanh toán...</span>
+                    </div>
+                </main>
+            }>
+                <PaymentSelectorContent />
+            </Suspense>
             <Footer />
         </div>
     );

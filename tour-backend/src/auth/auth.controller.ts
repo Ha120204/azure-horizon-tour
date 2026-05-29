@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Get, UseGuards, Request, Patch, UseInterceptors, UploadedFile, BadRequestException, Res, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Response, Request as ExpressRequest } from 'express';
+import type { CookieOptions, Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -8,6 +8,30 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+
+const ACCESS_TOKEN_COOKIE = 'accessToken';
+const REFRESH_TOKEN_COOKIE = 'refreshToken';
+
+type JwtRequestUser = {
+  userId: number;
+  id?: number;
+  role?: string;
+  email?: string;
+};
+
+type AuthenticatedRequest = ExpressRequest & {
+  user: JwtRequestUser;
+};
+
+function authCookieOptions(maxAge: number): CookieOptions {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge,
+  };
+}
 
 @Controller('auth')
 export class AuthController {
@@ -34,16 +58,10 @@ export class AuthController {
       loginDto.password,
     );
 
-    res.cookie('refreshToken', data.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    res.cookie(ACCESS_TOKEN_COOKIE, data.access_token, authCookieOptions(60 * 60 * 1000));
+    res.cookie(REFRESH_TOKEN_COOKIE, data.refresh_token, authCookieOptions(7 * 24 * 60 * 60 * 1000));
 
-    const { refresh_token, ...result } = data;
-    return result;
+    return { user: data.user };
   }
 
   @Post('forgot-password')
@@ -57,23 +75,27 @@ export class AuthController {
   }
 
   @Post('refresh')
-  async refresh(@Req() req: ExpressRequest) {
-    const refreshToken = req.cookies?.refreshToken;
+  async refresh(@Req() req: ExpressRequest, @Res({ passthrough: true }) res: Response) {
+    const cookies = req.cookies as Partial<Record<string, string>> | undefined;
+    const refreshToken = cookies?.[REFRESH_TOKEN_COOKIE];
     if (!refreshToken) {
       throw new BadRequestException('Refresh token missing from cookies');
     }
-    return this.authService.refreshToken(refreshToken);
+    const data = await this.authService.refreshToken(refreshToken);
+    res.cookie(ACCESS_TOKEN_COOKIE, data.access_token, authCookieOptions(60 * 60 * 1000));
+    return { message: 'Access token refreshed' };
   }
 
   @Post('logout')
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('refreshToken', { path: '/' });
+    res.clearCookie(ACCESS_TOKEN_COOKIE, { path: '/' });
+    res.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/' });
     return { message: 'Logged out successfully' };
   }
 
   @UseGuards(AuthGuard('jwt'))
   @Get('profile')
-  async getProfile(@Request() req) {
+  async getProfile(@Request() req: AuthenticatedRequest) {
     const userId = req.user.userId;
     return this.authService.getProfile(userId);
   }
@@ -81,7 +103,7 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Patch('profile')
   async updateProfile(
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
     @Body() body: UpdateProfileDto
   ) {
     const userId = req.user.userId;
@@ -94,7 +116,7 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Post('avatar')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Request() req) {
+  async uploadAvatar(@UploadedFile() file: Express.Multer.File, @Request() req: AuthenticatedRequest) {
     if (!file) {
       throw new BadRequestException('Please select an image');
     }
@@ -126,10 +148,14 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Post('change-password')
   async changePassword(
-    @Request() req,
-    @Body() body: { currentPassword: string; newPassword: string }
+    @Request() req: AuthenticatedRequest,
+    @Body() body: { currentPassword: string; newPassword: string },
+    @Res({ passthrough: true }) res: Response,
   ) {
     const userId = req.user.userId;
-    return this.authService.changePassword(userId, body.currentPassword, body.newPassword);
+    const result = await this.authService.changePassword(userId, body.currentPassword, body.newPassword);
+    res.clearCookie(ACCESS_TOKEN_COOKIE, { path: '/' });
+    res.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/' });
+    return result;
   }
 }

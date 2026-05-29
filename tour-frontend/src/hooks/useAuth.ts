@@ -11,19 +11,22 @@
 
 import { useCallback } from 'react';
 import { API_BASE_URL } from '@/lib/constants';
+import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
 
 export function useAuth() {
     /** Kiểm tra user đã đăng nhập chưa */
     const isLoggedIn = (): boolean => {
         if (typeof window === 'undefined') return false;
-        return !!localStorage.getItem('accessToken');
+        return !!localStorage.getItem('userName');
     };
 
     /** Lấy access token */
     const getToken = (): string | null => {
         if (typeof window === 'undefined') return null;
-        return localStorage.getItem('accessToken');
+        return null;
     };
+
+    const getSession = async () => fetchAuthProfile();
 
     /** Lấy tên user */
     const getUserName = (): string | null => {
@@ -33,8 +36,7 @@ export function useAuth() {
 
     /** Đăng xuất: xóa token, gọi API logout, phát event */
     const logout = useCallback(async () => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userName');
+        clearClientUserStorage();
 
         // Gọi API logout để xóa HttpOnly cookie
         try {
@@ -53,6 +55,7 @@ export function useAuth() {
     return {
         isLoggedIn,
         getToken,
+        getSession,
         getUserName,
         logout,
     };

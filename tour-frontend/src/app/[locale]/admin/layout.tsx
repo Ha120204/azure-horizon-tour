@@ -31,13 +31,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         if (isLoginPage) return;
 
         const checkAccess = async () => {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                setAuthState('unauthorized');
-                router.replace('/admin/login');
-                return;
-            }
-
             try {
                 const res = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
                 if (!res.ok) {

@@ -219,8 +219,6 @@ export default function BookingDetailPage() {
             if (emailParam && codeParam) {
                 res = await fetch(`${API_BASE_URL}/booking/public/lookup?bookingCode=${codeParam}&email=${encodeURIComponent(emailParam)}`);
             } else {
-                const token = localStorage.getItem('accessToken');
-                if (!token) { router.push('/login'); return; }
                 res = await fetchWithAuth(`${API_BASE_URL}/booking/my/${params.id}`);
             }
 
@@ -435,7 +433,7 @@ export default function BookingDetailPage() {
 
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     useEffect(() => {
-        setIsLoggedIn(!!localStorage.getItem('accessToken'));
+        setIsLoggedIn(!new URLSearchParams(window.location.search).get('email'));
     }, []);
 
     if (isLoading) return (

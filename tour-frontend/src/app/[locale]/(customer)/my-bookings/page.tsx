@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
@@ -33,18 +32,11 @@ export default function MyBookingsPage() {
     const [bookings, setBookings] = useState<BookingHistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { t, formatPrice, formatDate } = useLocale();
-    const router = useRouter();
 
     const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'UNPAID' | 'CANCELLED'>('ALL');
 
     useEffect(() => {
         const fetchMyBookings = async () => {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                router.push('/login');
-                return;
-            }
-
             try {
                 const res = await fetchWithAuth(`${API_BASE_URL}/booking/history/my-bookings`);
                 const result = (await res.json()) as BookingHistoryResponse;
@@ -63,7 +55,7 @@ export default function MyBookingsPage() {
         };
 
         fetchMyBookings();
-    }, [router]);
+    }, []);
 
     const filteredBookings = bookings.filter(booking => {
         if (filterStatus === 'ALL') return true;

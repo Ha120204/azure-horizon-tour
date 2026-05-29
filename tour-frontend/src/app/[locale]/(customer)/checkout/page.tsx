@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
@@ -12,6 +12,8 @@ import PassengerSection from '@/components/checkout/PassengerSection';
 import OrderSummary from '@/components/checkout/OrderSummary';
 import { API_BASE_URL } from '@/lib/constants';
 import ConfirmBookingModal from '@/components/checkout/ConfirmBookingModal';
+import { buildLocalizedLoginPath } from '@/lib/authRedirect';
+import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
 
 type PassengerType = 'Adult (12+)' | 'Child (4-11)' | 'Infant (<4)';
 
@@ -98,6 +100,7 @@ function isSaleDeparture(departure: CheckoutDeparture | null, regularPrice?: num
 
 function CheckoutContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const { t, formatPrice, language } = useLocale();
 
     // 1. LẤY ID TOUR, PACKAGE VÀ DEPARTURE TỪ URL
@@ -126,6 +129,16 @@ function CheckoutContent() {
 
     // Toast Alert State
     const [errorMsg, setErrorMsg] = useState('');
+
+    // Cuộn lên đầu trang khi component mount (kể cả khi bấm back/forward)
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            if ('scrollRestoration' in window.history) {
+                window.history.scrollRestoration = 'manual';
+            }
+            window.scrollTo(0, 0);
+        }
+    }, []);
 
     const showError = (msg: string) => {
         setErrorMsg(msg);
@@ -246,108 +259,102 @@ function CheckoutContent() {
         sessionStorage.setItem('checkout_isBookForMyself', isBookForMyself.toString());
     }, [isBookForMyself]);
 
-    useEffect(() => {
-        if (appliedVoucher) {
-            sessionStorage.setItem('checkout_appliedVoucher', JSON.stringify(appliedVoucher));
-        } else {
-            sessionStorage.removeItem('checkout_appliedVoucher');
-        }
-    }, [appliedVoucher]);
-
-    useEffect(() => {
-        if (voucherCode) {
-            sessionStorage.setItem('checkout_voucherCode', voucherCode);
-        } else {
-            sessionStorage.removeItem('checkout_voucherCode');
-        }
-    }, [voucherCode]);
-
     // 2. GỌI API LẤY DATA THẬT CỦA TOUR VÀ THÔNG TIN NGƯỜI DÙNG
     useEffect(() => {
         const fetchInitialData = async () => {
-            if (tourIdStr) {
-                try {
-                    const resTour = await fetch(`${API_BASE_URL}/tour/${tourIdStr}?locale=${language}`);
-                    if (resTour.ok) {
-                        const payload = await resTour.json();
-                        const tourInfo = payload.data || payload;
-                        setTourData(tourInfo);
-                        if (packageIdStr && tourInfo.packages) {
-                            const pkg = tourInfo.packages.find((p: CheckoutPackage) => p.id.toString() === packageIdStr);
-                            if (pkg) setSelectedPackage(pkg);
-                        }
-                        if (departureIdStr && tourInfo.departures) {
-                            const dep = tourInfo.departures.find((d: CheckoutDeparture) => d.id.toString() === departureIdStr);
-                            if (dep) setSelectedDeparture(dep);
-                        }
-                    }
-                } catch (error) {
-                    console.error("Lỗi tải thông tin tour:", error);
-                }
-            }
-            setIsLoadingTour(false);
+            try {
+                const profile = await fetchAuthProfile();
+                setIsLoggedIn(!!profile);
 
-            const token = localStorage.getItem('accessToken');
-            setIsLoggedIn(!!token);
-            if (token) {
-                try {
-                    const resUser = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
-                    if (resUser.ok) {
-                        const payload = await resUser.json();
-                        const uData = payload.data || payload;
-                        
-                        const savedContact = sessionStorage.getItem('checkout_contactInfo');
-                        if (!savedContact) {
-                            setContactInfo({ 
-                                fullName: uData.fullName || '', 
-                                email: uData.email || '', 
-                                phone: uData.phone || '',
-                                identityType: uData.identityType || 'CCCD',
-                                identityNo: uData.identityNo || '',
-                                dob: uData.dob || '',
-                                gender: uData.gender || ''
-                            });
+                if (!profile) {
+                    const redirectPath = `${window.location.pathname}${window.location.search}`;
+                    router.replace(buildLocalizedLoginPath(language, redirectPath));
+                    return;
+                }
+
+                if (tourIdStr) {
+                    try {
+                        const resTour = await fetch(`${API_BASE_URL}/tour/${tourIdStr}?locale=${language}`);
+                        if (resTour.ok) {
+                            const payload = await resTour.json();
+                            const tourInfo = payload.data || payload;
+                            setTourData(tourInfo);
+                            if (packageIdStr && tourInfo.packages) {
+                                const pkg = tourInfo.packages.find((p: CheckoutPackage) => p.id.toString() === packageIdStr);
+                                if (pkg) setSelectedPackage(pkg);
+                            }
+                            if (departureIdStr && tourInfo.departures) {
+                                const dep = tourInfo.departures.find((d: CheckoutDeparture) => d.id.toString() === departureIdStr);
+                                if (dep) setSelectedDeparture(dep);
+                            }
                         }
-                        
-                        const savedLead = sessionStorage.getItem('checkout_leadTraveler');
-                        if (!savedLead) {
-                            setLeadTraveler(prev => ({ 
-                                ...prev, 
-                                fullName: uData.fullName || '',
-                                dob: uData.dob || '',
-                                gender: uData.gender || '',
-                                identityType: uData.identityType || 'CCCD',
-                                identityNo: uData.identityNo || '',
-                            }));
+                    } catch (error) {
+                        console.error("Lỗi tải thông tin tour:", error);
+                    }
+                }
+
+                if (profile) {
+                    try {
+                        const resUser = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
+                        if (resUser.ok) {
+                            const payload = await resUser.json();
+                            const uData = payload.data || payload;
+                            
+                            const savedContact = sessionStorage.getItem('checkout_contactInfo');
+                            if (!savedContact) {
+                                setContactInfo({ 
+                                    fullName: uData.fullName || '', 
+                                    email: uData.email || '', 
+                                    phone: uData.phone || '',
+                                    identityType: uData.identityType || 'CCCD',
+                                    identityNo: uData.identityNo || '',
+                                    dob: uData.dob || '',
+                                    gender: uData.gender || ''
+                                });
+                            }
+                            
+                            const savedLead = sessionStorage.getItem('checkout_leadTraveler');
+                            if (!savedLead) {
+                                setLeadTraveler(prev => ({ 
+                                    ...prev, 
+                                    fullName: uData.fullName || '',
+                                    dob: uData.dob || '',
+                                    gender: uData.gender || '',
+                                    identityType: uData.identityType || 'CCCD',
+                                    identityNo: uData.identityNo || '',
+                                }));
+                            }
+                        } else {
+                            setIsLoggedIn(false);
+                            clearClientUserStorage();
+                            window.dispatchEvent(new Event('auth-change'));
+                            const redirectPath = `${window.location.pathname}${window.location.search}`;
+                            router.replace(buildLocalizedLoginPath(language, redirectPath));
+                            return;
                         }
-                    } else {
+                    } catch (error) {
+                        console.error("Lỗi khi tải thông tin user:", error);
                         setIsLoggedIn(false);
-                        localStorage.removeItem('accessToken');
-                        localStorage.removeItem('userName');
-                        localStorage.removeItem('userAvatarUrl');
-                        localStorage.removeItem('userAvatar');
+                        clearClientUserStorage();
                         window.dispatchEvent(new Event('auth-change'));
+                        const redirectPath = `${window.location.pathname}${window.location.search}`;
+                        router.replace(buildLocalizedLoginPath(language, redirectPath));
+                        return;
                     }
-                } catch (error) {
-                    console.error("Lỗi khi tải thông tin user:", error);
-                    setIsLoggedIn(false);
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('userName');
-                    localStorage.removeItem('userAvatarUrl');
-                    localStorage.removeItem('userAvatar');
-                    window.dispatchEvent(new Event('auth-change'));
+                    
+                    try {
+                        const resWallet = await fetchWithAuth(`${API_BASE_URL}/voucher/my-wallet`);
+                        if (resWallet.ok) {
+                            const payload = await resWallet.json();
+                            const walletData = payload.data || payload;
+                            setMyWalletVouchers(walletData.filter((uv: WalletVoucher) => uv.status === 'available') || []);
+                        }
+                    } catch (e) { console.error('Lỗi tải ví voucher:', e); }
                 }
-            }
-
-            if (token) {
-                try {
-                    const resWallet = await fetchWithAuth(`${API_BASE_URL}/voucher/my-wallet`);
-                    if (resWallet.ok) {
-                        const payload = await resWallet.json();
-                        const walletData = payload.data || payload;
-                        setMyWalletVouchers(walletData.filter((uv: WalletVoucher) => uv.status === 'available') || []);
-                    }
-                } catch (e) { console.error('Lỗi tải ví voucher:', e); }
+            } catch (error) {
+                console.error("Lỗi tải dữ liệu ban đầu:", error);
+            } finally {
+                setIsLoadingTour(false);
             }
         };
         fetchInitialData();
@@ -359,11 +366,13 @@ function CheckoutContent() {
         const addon = selectedPackage?.price ?? 0;
         return base + addon;
     })();
+
     const PRICES = {
         'Adult (12+)': basePrice,
         'Child (4-11)': basePrice * 0.7,
         'Infant (<4)': basePrice * 0.1
     };
+
     const adultCount = 1 + passengers.filter(p => p.type === 'Adult (12+)').length;
     const childCount = passengers.filter(p => p.type === 'Child (4-11)').length;
     const infantCount = passengers.filter(p => p.type === 'Infant (<4)').length;
@@ -562,6 +571,7 @@ function CheckoutContent() {
 
         if (!contactInfo.email.includes('@')) {
             showError(t('checkout.errors.invalidEmail'));
+
             return;
         }
 
@@ -627,7 +637,7 @@ function CheckoutContent() {
                 sessionStorage.removeItem('checkout_tourId');
 
                 const bookingCode = data.booking?.bookingCode || data.bookingCode;
-                window.location.href = `/${language}/payment?bookingCode=${bookingCode}`;
+                router.push(`/${language}/payment?bookingCode=${bookingCode}`);
             } else {
                 showError(t('checkout.errors.paymentInit') + ": " + (payload.message || data.message || t('checkout.errors.tryAgain')));
                 setIsPaymentLoading(false);
@@ -650,14 +660,13 @@ function CheckoutContent() {
                 <span className="material-symbols-outlined text-6xl text-error mb-4">error</span>
                 <h2 className="text-2xl font-bold mb-2">{t('checkout.notFound')}</h2>
                 <p className="text-outline mb-6">{t('checkout.goBackDesc')}</p>
-                <button onClick={() => window.location.href = '/destinations'} className="bg-primary text-white px-8 py-3 rounded-full font-bold">{t('checkout.exploreTours')}</button>
+                <button onClick={() => router.push('/destinations')} className="bg-primary text-white px-8 py-3 rounded-full font-bold">{t('checkout.exploreTours')}</button>
             </div>
         );
     }
 
     return (
         <main className="pt-28 pb-20 px-4 md:px-8 max-w-screen-2xl mx-auto flex-grow w-full">
-
             <ErrorToast message={errorMsg} onClose={() => setErrorMsg('')} t={t} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">

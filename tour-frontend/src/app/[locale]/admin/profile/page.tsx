@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { clearClientUserStorage } from '@/lib/authSession';
 import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 import { DangerZone, PasswordFormSection, ProfileInfoFormSection } from './_components/ProfileForms';
 import { ProfileIdentityPanel } from './_components/ProfileIdentityPanel';
@@ -211,6 +212,8 @@ export default function AdminProfilePage() {
             }
 
             showToast('Đổi mật khẩu thành công!');
+            clearClientUserStorage();
+            window.dispatchEvent(new Event('auth-change'));
             setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
             setPwErrors({});
         } catch (error: unknown) {

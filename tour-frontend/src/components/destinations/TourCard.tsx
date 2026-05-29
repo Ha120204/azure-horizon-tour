@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import TourRatingBadge from '@/components/tour/TourRatingBadge';
 
 interface TourCardDeparture {
     price?: number | null;
@@ -28,10 +29,6 @@ interface TourCardProps {
 }
 
 export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
-    const reviewCount = Number(tour.reviewCount ?? tour._count?.reviews ?? 0);
-    const averageRating = Number(tour.averageRating ?? 0);
-    const hasReviews = reviewCount > 0 && averageRating > 0;
-
     return (
         <Link href={`/tour/${tour.id}`} className="block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1">
             <div className="relative aspect-[4/3] overflow-hidden">
@@ -45,14 +42,16 @@ export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
                 <div className="absolute top-4 left-4">
                     <span className="bg-tertiary-container text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest shadow-md">{t('dest.available_badge')}</span>
                 </div>
-                <div className="absolute bottom-4 right-4 bg-surface-container-lowest px-3 py-1.5 rounded-xl editorial-shadow">
-                    <div className={`flex items-center ${hasReviews ? 'text-secondary-container' : 'text-outline'}`}>
-                        <span className="material-symbols-outlined text-sm mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                        <span className="text-xs font-bold text-on-surface">
-                            {hasReviews ? averageRating.toFixed(1) : t('reviews.notRated')}
-                        </span>
-                    </div>
-                </div>
+                <TourRatingBadge
+                    averageRating={tour.averageRating}
+                    reviewCount={tour.reviewCount}
+                    _count={tour._count}
+                    notRatedLabel={t('reviews.notRated')}
+                    reviewLabel={t('tour_detail.reviewSingular')}
+                    reviewsLabel={t('tour_detail.reviewsLabel')}
+                    variant="surface"
+                    className="absolute bottom-4 right-4"
+                />
             </div>
             <div className="p-6">
                 <div className="flex items-center text-outline text-[11px] font-bold uppercase tracking-widest mb-2">

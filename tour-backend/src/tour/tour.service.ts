@@ -18,7 +18,6 @@ import {
   parseTravelScope,
 } from './tour-helpers';
 
-
 const DRAFT_DESTINATION_NAME = 'Chua xac dinh';
 
 @Injectable()
@@ -50,7 +49,6 @@ export class TourService {
   ) {
     const { destinationId, status: dtoStatus } = createTourDto;
 
-    // Admin/SuperAdmin tạo thẳng PUBLISHED; Staff tạo DRAFT (bản nháp — tự chỉnh sửa trước khi gửi duyệt)
     const isAdminRole =
       creatorRole === 'SUPER_ADMIN' || creatorRole === 'ADMIN';
     const finalStatus: TourStatus = isAdminRole
@@ -64,8 +62,7 @@ export class TourService {
       requirePublishableTour(createTourDto);
     }
 
-    const resolvedDestinationId =
-      await this.resolveDestinationId(destinationId);
+    const resolvedDestinationId = await this.resolveDestinationId(destinationId);
 
     return this.prisma.tour.create({
       data: {
@@ -105,6 +102,7 @@ export class TourService {
       maxPrice,
       date,
       ratings,
+      minRating,
       types,
       sortBy,
       status,
@@ -119,7 +117,7 @@ export class TourService {
     const where: Prisma.TourWhereInput = { deletedAt: null };
     const travelScope = parseTravelScope(travelScopeInput);
 
-    // Visibility: Staff chỉ thấy tour của mình; Admin thấy tất cả; Public chỉ thấy PUBLISHED
+    // Visibility
     if (requesterRole === 'STAFF' && requesterId) {
       if (status && Object.values(TourStatus).includes(status as TourStatus)) {
         where.status = status as TourStatus;
@@ -133,17 +131,14 @@ export class TourService {
         ];
       }
     } else if (requesterRole !== 'SUPER_ADMIN' && requesterRole !== 'ADMIN') {
-      // Public request - only PUBLISHED and upcoming tours
       where.status = TourStatus.PUBLISHED;
       where.startDate = { gte: new Date() };
     } else if (
       status &&
       Object.values(TourStatus).includes(status as TourStatus)
     ) {
-      // Admin can filter by specific status
       where.status = status as TourStatus;
     }
-    // Admin/SuperAdmin without status param: see all
 
     if (dest) {
       const normalizedDest = normalizeSearchText(dest);
@@ -180,36 +175,26 @@ export class TourService {
           { nameEn: { contains: dest, mode: 'insensitive' } },
           { destination: { name: { contains: dest, mode: 'insensitive' } } },
           { destination: { nameEn: { contains: dest, mode: 'insensitive' } } },
-          ...(matchingDestinationIds.length > 0
-            ? [{ destinationId: { in: matchingDestinationIds } }]
-            : []),
+          ...(matchingDestinationIds.length > 0 ? [{ destinationId: { in: matchingDestinationIds } }] : []),
           ...(matchingTourIds.length > 0 ? [{ id: { in: matchingTourIds } }] : []),
         ],
       };
       where.AND = Array.isArray(where.AND)
         ? [...where.AND, searchFilter]
-        : where.AND
-          ? [where.AND, searchFilter]
-          : [searchFilter];
+        : where.AND ? [where.AND, searchFilter] : [searchFilter];
     }
 
     if (travelScope) {
-      const scopeFilter: Prisma.TourWhereInput = {
-        destination: { travelScope },
-      };
+      const scopeFilter: Prisma.TourWhereInput = { destination: { travelScope } };
       where.AND = Array.isArray(where.AND)
         ? [...where.AND, scopeFilter]
-        : where.AND
-          ? [where.AND, scopeFilter]
-          : [scopeFilter];
+        : where.AND ? [where.AND, scopeFilter] : [scopeFilter];
     }
 
     if (minPrice || maxPrice) {
       where.price = {
         ...(minPrice ? { gte: parseFloat(minPrice) } : {}),
-        ...(maxPrice && maxPrice !== 'unlimited'
-          ? { lte: parseFloat(maxPrice) }
-          : {}),
+        ...(maxPrice && maxPrice !== 'unlimited' ? { lte: parseFloat(maxPrice) } : {}),
       };
     }
 
@@ -217,27 +202,34 @@ export class TourService {
       where.startDate = { gte: new Date(date) };
     }
 
+    // Legacy: exact bucket ratings (e.g. ratings=4,5)
     if (ratings) {
       const ratingBuckets = parseRatingBuckets(ratings);
       const ratingFilters = ratingBuckets.map((rating) => ({
         AND: [
           { reviews: { some: { isHidden: false } } },
-          {
-            averageRating:
-              rating === 5 ? { gte: 5 } : { gte: rating, lt: rating + 1 },
-          },
+          { averageRating: rating === 5 ? { gte: 5 } : { gte: rating, lt: rating + 1 } },
         ],
       }));
-
       appendAndFilter(
         where,
         ratingFilters.length === 1 ? ratingFilters[0] : { OR: ratingFilters },
       );
     }
 
+    // minRating: lọc tour có averageRating >= threshold (vd: 4.5, 4.0, 3.0)
+    if (minRating) {
+      const threshold = parseFloat(minRating);
+      if (!isNaN(threshold) && threshold > 0) {
+        appendAndFilter(where, {
+          averageRating: { gte: threshold },
+          reviews: { some: { isHidden: false } },
+        });
+      }
+    }
+
     if (types) {
-      const typeArr = types.split(',');
-      where.tourType = { in: typeArr };
+      where.tourType = { in: types.split(',') };
     }
 
     let orderBy: Prisma.TourOrderByWithRelationInput = { id: 'asc' };
@@ -255,24 +247,25 @@ export class TourService {
           destination: { select: { id: true, name: true, nameEn: true, region: true, regionEn: true, travelScope: true, countryCode: true } },
           departures: {
             select: { price: true, note: true, noteEn: true },
-            where: {
-              isActive: true,
-              departureDate: { gte: getMinBookableDate() },
-            },
+            where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
           },
           createdBy: { select: { id: true, fullName: true } },
-          _count: {
-            select: {
-              reviews: { where: { isHidden: false } },
-            },
-          },
+          _count: { select: { reviews: { where: { isHidden: false } } } },
         },
       }),
       this.prisma.tour.count({ where }),
     ]);
 
     return {
-      data: tours.map((tour) => localizeTour(tour, locale)),
+      data: tours.map((tour) => {
+        const localizedTour = localizeTour(tour, locale);
+        const reviewCount = localizedTour._count?.reviews ?? 0;
+        return {
+          ...localizedTour,
+          reviewCount,
+          averageRating: reviewCount > 0 ? localizedTour.averageRating : 0,
+        };
+      }),
       meta: {
         totalItems,
         itemCount: tours.length,
@@ -282,7 +275,6 @@ export class TourService {
       },
     };
   }
-
 
   // Find/Update/Remove — delegated to TourQueryService
   async findOne(id: number, requesterId?: number, requesterRole?: string, localeInput?: string) {
@@ -294,7 +286,6 @@ export class TourService {
   async remove(id: number, requesterId?: number, requesterRole?: string) {
     return this.queryService.remove(id, requesterId, requesterRole);
   }
-
 
   // ─── Workflow ─── delegated to TourWorkflowService ─────────────────────────
   async submitForReview(id: number, requesterId: number) { return this.workflowService.submitForReview(id, requesterId); }

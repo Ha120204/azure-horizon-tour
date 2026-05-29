@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 import { API_BASE_URL } from '@/lib/constants';
+import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { writeClipboardText } from '../_lib/helpers';
 import type { ActivityLog, KpiFilter, LogStats } from '../_lib/types';
 
@@ -107,7 +108,6 @@ export function useSystemLogs() {
     const fetchLogs = useCallback(async (currentPage: number, currentSearch: string, currentAction: string, from: string, to: string) => {
         setIsLoading(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const queryParams = new URLSearchParams({
                 page: currentPage.toString(),
                 limit: '15',
@@ -118,12 +118,8 @@ export function useSystemLogs() {
             if (to) queryParams.append('dateTo', to);
 
             const [logsRes, statsRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/admin/logs?${queryParams.toString()}`, {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                }),
-                fetch(`${API_BASE_URL}/admin/logs/stats`, {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                }),
+                fetchWithAuth(`${API_BASE_URL}/admin/logs?${queryParams.toString()}`),
+                fetchWithAuth(`${API_BASE_URL}/admin/logs/stats`),
             ]);
 
             if (logsRes.ok) {
@@ -178,9 +174,7 @@ export function useSystemLogs() {
             setLinkedLogError(null);
 
             try {
-                const token = localStorage.getItem('accessToken');
-                const res = await fetch(`${API_BASE_URL}/admin/logs/${linkedLogId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` },
+                const res = await fetchWithAuth(`${API_BASE_URL}/admin/logs/${linkedLogId}`, {
                     signal: controller.signal,
                 });
 
@@ -227,16 +221,13 @@ export function useSystemLogs() {
     const handleExport = useCallback(async () => {
         setIsExporting(true);
         try {
-            const token = localStorage.getItem('accessToken');
             const queryParams = new URLSearchParams();
             if (search) queryParams.append('search', search);
             if (actionFilter) queryParams.append('action', actionFilter);
             if (dateFrom) queryParams.append('dateFrom', dateFrom);
             if (dateTo) queryParams.append('dateTo', dateTo);
 
-            const res = await fetch(`${API_BASE_URL}/admin/logs/export?${queryParams.toString()}`, {
-                headers: { 'Authorization': `Bearer ${token}` },
-            });
+            const res = await fetchWithAuth(`${API_BASE_URL}/admin/logs/export?${queryParams.toString()}`);
 
             if (!res.ok) throw new Error('Export failed');
 

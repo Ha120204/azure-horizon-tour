@@ -9,8 +9,9 @@ import LocaleSwitcher from './LocaleSwitcher';
 import { API_BASE_URL } from '@/lib/constants';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/publicSettings';
 import { getDestinationDisplay } from '@/lib/formatDestination';
-import FeedbackToast from '@/components/ui/FeedbackToast';
 import { consumeLogoutSuccessToast, queueLogoutSuccessToast } from '@/lib/authFeedback';
+import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
+import { toastEmitter } from '@/lib/toastEmitter';
 
 interface SearchResult {
     destinations: { id: number; name: string; type?: string; region?: string }[];
@@ -24,7 +25,6 @@ export default function Header() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [userName, setUserName] = useState('');
     const [userAvatar, setUserAvatar] = useState('');
-    const [showLogoutToast, setShowLogoutToast] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
@@ -52,11 +52,6 @@ export default function Header() {
         return () => window.removeEventListener('scroll', onScroll);
     }, [pathname]);
 
-    useEffect(() => {
-        if (consumeLogoutSuccessToast()) {
-            setShowLogoutToast(true);
-        }
-    }, [pathname]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -73,22 +68,29 @@ export default function Header() {
 
     // Kiểm tra đăng nhập
     useEffect(() => {
-        const checkAuth = () => {
-            const token = localStorage.getItem('accessToken');
-            if (token) {
-                setIsLoggedIn(true);
-                setUserName(localStorage.getItem('userName') || '');
-                setUserAvatar(localStorage.getItem('userAvatarUrl') || localStorage.getItem('userAvatar') || '');
-            } else {
+        let isActive = true;
+
+        const checkAuth = async () => {
+            const profile = await fetchAuthProfile();
+            if (!isActive) return;
+
+            if (!profile) {
                 setIsLoggedIn(false);
                 setUserName('');
                 setUserAvatar('');
+                return;
             }
-            
-            // Clean up old insecure refreshToken if it still exists from previous version
-            if (localStorage.getItem('refreshToken')) {
-                localStorage.removeItem('refreshToken');
-            }
+
+            const fullName = profile.fullName || '';
+            const avatarUrl = profile.avatarUrl || '';
+            setIsLoggedIn(true);
+            setUserName(fullName);
+            setUserAvatar(avatarUrl);
+            localStorage.setItem('userName', fullName);
+            if (profile.email) localStorage.setItem('userEmail', profile.email);
+            if (profile.role) localStorage.setItem('userRole', profile.role);
+            if (avatarUrl) localStorage.setItem('userAvatarUrl', avatarUrl);
+            else localStorage.removeItem('userAvatarUrl');
         };
 
         // Chạy lần đầu
@@ -98,7 +100,10 @@ export default function Header() {
         window.addEventListener('auth-change', checkAuth);
 
         // Clean up
-        return () => window.removeEventListener('auth-change', checkAuth);
+        return () => {
+            isActive = false;
+            window.removeEventListener('auth-change', checkAuth);
+        };
     }, []);
 
     // Focus input khi mở thanh search
@@ -177,18 +182,11 @@ export default function Header() {
             console.error("Lỗi khi đăng xuất:", err);
         }
 
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('userName');
-        localStorage.removeItem('userAvatarUrl');
-        localStorage.removeItem('userAvatar');
+        clearClientUserStorage();
 
-        // Bắn event báo hiệu để Header cập nhật lại state lặp tức
+        // Bắn event báo hiệu để Header cập nhật lại state lập tức
         window.dispatchEvent(new Event('auth-change'));
-        queueLogoutSuccessToast();
-        setShowLogoutToast(true);
-        if (pathname === '/') {
-            consumeLogoutSuccessToast();
-        }
+        toastEmitter.success(t('nav.logoutSuccessTitle'), t('profile.logoutSuccess'));
 
         // Chuyển về trang chủ
         router.push('/');
@@ -206,13 +204,7 @@ export default function Header() {
 
     return (
         <>
-            {showLogoutToast ? (
-                <FeedbackToast
-                    title={t('nav.logoutSuccessTitle')}
-                    message={t('profile.logoutSuccess')}
-                    onClose={() => setShowLogoutToast(false)}
-                />
-            ) : null}
+
 
             <nav className={`fixed top-0 w-full z-50 font-body transition-all duration-500 ${(isScrolled || !isHomepage) ? 'bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-200/15' : 'bg-transparent border-transparent shadow-none'}`}
                 style={{ animation: 'headerSlideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}>

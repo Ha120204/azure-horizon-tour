@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { PaymentService } from '../payment/payment.service';
 import type { CancellationPolicy, CancellationPolicyTier, TripLifecycle } from './types';
-import { getErrorMessage } from './helpers/booking-helpers';
+import { getErrorMessage, releaseSeats } from './helpers/booking-helpers';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 @Injectable()
@@ -128,7 +128,11 @@ export class BookingCancellationService {
           data: { status: 'CANCELLED', cancelReason: reason, cancelledAt: new Date(), cancelledBy: 'CUSTOMER', refundAmount: 0, refundNote: 'Huy truoc khi thanh toan' },
         });
         if (updateResult.count === 0) throw new BadRequestException('Trang thai don hang da thay doi, khong the huy tu dong.');
-        await tx.tour.update({ where: { id: booking.tourId }, data: { availableSeats: { increment: booking.numberOfPeople } } });
+        await releaseSeats(tx, {
+          tourId: booking.tourId,
+          departureId: booking.departureId,
+          seats: booking.numberOfPeople,
+        });
       });
 
       try {
@@ -203,13 +207,17 @@ export class BookingCancellationService {
 
     const refundAmount = Number(booking.refundAmount ?? 0);
 
-    await this.prisma.$transaction([
-      this.prisma.booking.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.booking.update({
         where: { id: bookingId },
         data: { status: 'CANCELLED', paymentStatus: 'FAILED', cancelledAt: new Date(), cancelledBy: 'ADMIN', refundNote: adminNote || booking.refundNote, refundedAt: new Date() },
-      }),
-      this.prisma.tour.update({ where: { id: booking.tourId }, data: { availableSeats: { increment: booking.numberOfPeople } } }),
-    ]);
+      });
+      await releaseSeats(tx, {
+        tourId: booking.tourId,
+        departureId: booking.departureId,
+        seats: booking.numberOfPeople,
+      });
+    });
 
     if (refundAmount > 0) {
       await this.prisma.paymentTransaction.create({

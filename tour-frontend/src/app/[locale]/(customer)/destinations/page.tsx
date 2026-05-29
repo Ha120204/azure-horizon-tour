@@ -42,7 +42,7 @@ interface AppliedFilters {
     dest: string;
     date: string;
     sidebarBudget: string;
-    selectedRatings: number[];
+    selectedRating: number;
     selectedTypes: string[];
 }
 
@@ -73,14 +73,14 @@ function DestinationsContent() {
 
     // 4. State cho bộ lọc sidebar
     const [sidebarBudget, setSidebarBudget] = useState(initialBudget);
-    const [selectedRatings, setSelectedRatings] = useState<number[]>([]);
+    const [selectedRating, setSelectedRating] = useState<number>(0);
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
     const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
         travelScope: initialTravelScope,
         dest: initialDest,
         date: initialDate,
         sidebarBudget: initialBudget,
-        selectedRatings: [],
+        selectedRating: 0,
         selectedTypes: [],
     });
     const [showMobileFilter, setShowMobileFilter] = useState(false);
@@ -110,8 +110,8 @@ function DestinationsContent() {
                 query.append('minPrice', appliedFilters.sidebarBudget);
             }
         }
-        if (appliedFilters.selectedRatings.length > 0) {
-            query.append('ratings', appliedFilters.selectedRatings.join(','));
+        if (appliedFilters.selectedRating > 0) {
+            query.append('minRating', appliedFilters.selectedRating.toString());
         }
         if (appliedFilters.selectedTypes.length > 0) {
             query.append('types', appliedFilters.selectedTypes.join(','));
@@ -177,9 +177,9 @@ function DestinationsContent() {
         fetchFilterData();
     }, [travelScope, language]);
 
-    // 7. Toggle star rating
-    const toggleRating = (rating: number) => {
-        setSelectedRatings(prev => prev.includes(rating) ? [] : [rating]);
+    // 7. Set rating threshold (single-select, 0 = no filter)
+    const setRating = (rating: number) => {
+        setSelectedRating(rating);
     };
 
     // 8. Toggle tour type
@@ -196,7 +196,7 @@ function DestinationsContent() {
         setIsAllDestinationsSelected(false);
         setDate('');
         setSidebarBudget('');
-        setSelectedRatings([]);
+        setSelectedRating(0);
         setSelectedTypes([]);
     };
 
@@ -207,7 +207,7 @@ function DestinationsContent() {
             dest,
             date,
             sidebarBudget,
-            selectedRatings,
+            selectedRating,
             selectedTypes,
         });
         setPage(1);
@@ -218,7 +218,7 @@ function DestinationsContent() {
     };
 
     // Đếm tổng bộ lọc đang active
-    const activeFilterCount = selectedRatings.length + selectedTypes.length + (sidebarBudget ? 1 : 0) + (dest ? 1 : 0) + (date ? 1 : 0) + (travelScope ? 1 : 0);
+    const activeFilterCount = (selectedRating > 0 ? 1 : 0) + selectedTypes.length + (sidebarBudget ? 1 : 0) + (dest ? 1 : 0) + (date ? 1 : 0) + (travelScope ? 1 : 0);
     const totalTourCount = totalItems || filteredTours.length;
     const resultSummary =
         language === 'vi'
@@ -289,7 +289,7 @@ function DestinationsContent() {
                                     setIsAllDestinationsSelected={setIsAllDestinationsSelected}
                                     date={date} setDate={setDate}
                                     sidebarBudget={sidebarBudget} setSidebarBudget={setSidebarBudget}
-                                    selectedRatings={selectedRatings} toggleRating={toggleRating}
+                                    selectedRating={selectedRating} setRating={setRating}
                                     selectedTypes={selectedTypes} toggleType={toggleType}
                                     onClearAll={handleClearAll} onApplyFilters={handleApplyFilters}
                                     activeFilterCount={activeFilterCount}
@@ -311,7 +311,7 @@ function DestinationsContent() {
                                     setIsAllDestinationsSelected={setIsAllDestinationsSelected}
                                     date={date} setDate={setDate}
                                     sidebarBudget={sidebarBudget} setSidebarBudget={setSidebarBudget}
-                                    selectedRatings={selectedRatings} toggleRating={toggleRating}
+                                    selectedRating={selectedRating} setRating={setRating}
                                     selectedTypes={selectedTypes} toggleType={toggleType}
                                     onClearAll={handleClearAll} onApplyFilters={handleApplyFilters}
                                     activeFilterCount={activeFilterCount}

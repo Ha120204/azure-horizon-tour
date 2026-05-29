@@ -1,13 +1,13 @@
 'use client'; // Required vì có dùng State, Effect, Event
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from '@/i18n/routing';
 import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { API_BASE_URL } from '@/lib/constants';
+import { clearClientUserStorage } from '@/lib/authSession';
 import { useLocale } from '@/context/LocaleContext';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import PersonalInfoForm from '@/components/profile/PersonalInfoForm';
@@ -41,7 +41,6 @@ type RecentBooking = {
 };
 
 export default function ProfilePage() {
-    const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { t, formatPrice, formatDate } = useLocale();
 
@@ -82,12 +81,6 @@ export default function ProfilePage() {
 
     useEffect(() => {
         const fetchData = async () => {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                router.push('/login');
-                return;
-            }
-
             try {
                 setProfileLoadError('');
                 const resProfile = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
@@ -151,7 +144,7 @@ export default function ProfilePage() {
         };
 
         fetchData();
-    }, [router, t]);
+    }, [t]);
 
     const handleUpdateInfo = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -201,6 +194,8 @@ export default function ProfilePage() {
 
             if (res.ok) {
                 setToast({ msg: t('profile.passwordSuccess') || 'Đổi mật khẩu thành công', type: 'success' });
+                clearClientUserStorage();
+                window.dispatchEvent(new Event('auth-change'));
                 setCurrentPassword('');
                 setNewPassword('');
                 setConfirmNewPassword('');

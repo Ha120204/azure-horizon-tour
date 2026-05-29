@@ -127,6 +127,94 @@ export function assertVoucherAllowedForDeparture(
   throw new BadRequestException(SALE_TOUR_NO_VOUCHER_MESSAGE);
 }
 
+// ─── Seat reservation helpers ────────────────────────────────────────────────
+
+type SeatReservationTx = Pick<Prisma.TransactionClient, 'tour' | 'tourDeparture'>;
+
+type SeatReservationInput = {
+  tourId: number;
+  departureId?: number | null;
+  seats: number;
+};
+
+export async function reserveSeatsAtomically(
+  tx: SeatReservationTx,
+  { tourId, departureId, seats }: SeatReservationInput,
+) {
+  if (!Number.isInteger(seats) || seats < 1) {
+    throw new BadRequestException('Number of seats must be at least 1');
+  }
+
+  if (departureId) {
+    const departureReservation = await tx.tourDeparture.updateMany({
+      where: {
+        id: departureId,
+        tourId,
+        isActive: true,
+        availableSeats: { gte: seats },
+      },
+      data: {
+        availableSeats: { decrement: seats },
+      },
+    });
+
+    if (departureReservation.count === 0) {
+      throw new BadRequestException('Not enough seats for this departure');
+    }
+  }
+
+  const tourReservation = await tx.tour.updateMany({
+    where: {
+      id: tourId,
+      deletedAt: null,
+      availableSeats: { gte: seats },
+    },
+    data: {
+      availableSeats: { decrement: seats },
+    },
+  });
+
+  if (tourReservation.count === 0) {
+    throw new BadRequestException('Not enough seats available');
+  }
+}
+
+type SeatReleaseTx = Pick<Prisma.TransactionClient, 'tour' | 'tourDeparture'>;
+
+type SeatReleaseInput = {
+  tourId: number;
+  departureId?: number | null;
+  seats: number;
+};
+
+export async function releaseSeats(
+  tx: SeatReleaseTx,
+  { tourId, departureId, seats }: SeatReleaseInput,
+) {
+  if (!Number.isInteger(seats) || seats < 1) {
+    throw new BadRequestException('Number of seats must be at least 1');
+  }
+
+  await tx.tour.update({
+    where: { id: tourId },
+    data: {
+      availableSeats: { increment: seats },
+    },
+  });
+
+  if (!departureId) return;
+
+  await tx.tourDeparture.updateMany({
+    where: {
+      id: departureId,
+      tourId,
+    },
+    data: {
+      availableSeats: { increment: seats },
+    },
+  });
+}
+
 // ─── Enum guards ──────────────────────────────────────────────────────────────
 
 export function isBookingStatus(value: string): boolean {

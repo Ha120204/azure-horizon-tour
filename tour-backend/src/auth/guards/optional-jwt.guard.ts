@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ExecutionContext, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 /**
@@ -11,8 +11,14 @@ import { AuthGuard } from '@nestjs/passport';
  */
 @Injectable()
 export class OptionalJwtGuard extends AuthGuard('jwt') {
-  handleRequest(err: any, user: any) {
+  handleRequest<TUser = unknown>(
+    _err: unknown,
+    user: TUser | null | undefined,
+    _info: unknown,
+    _context: ExecutionContext,
+    _status?: unknown,
+  ): TUser {
     // Không throw lỗi dù không có user
-    return user ?? undefined;
+    return (user ?? undefined) as TUser;
   }
 }

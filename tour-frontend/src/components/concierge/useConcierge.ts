@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/constants';
+import { fetchAuthProfile, fetchOptionalAuth } from '@/lib/authSession';
 import type { Message, ChatSessionSummary } from './types';
 
 export function useConcierge() {
@@ -41,10 +42,11 @@ export function useConcierge() {
 
     // ── Sync auth state ───────────────────────────────────────────────────
     useEffect(() => {
-        const syncAuthState = () => {
-            setHasAccessToken(Boolean(localStorage.getItem('accessToken')));
+        const syncAuthState = async () => {
+            const profile = await fetchAuthProfile();
+            setHasAccessToken(Boolean(profile));
         };
-        syncAuthState();
+        void syncAuthState();
         window.addEventListener('auth-change', syncAuthState);
         window.addEventListener('storage', syncAuthState);
         return () => {
@@ -61,16 +63,14 @@ export function useConcierge() {
     }, []);
 
     const loadSessions = useCallback(async () => {
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-            setSessions([]);
-            return;
-        }
         setIsLoadingSessions(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/ai/chat/sessions`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/sessions`);
+            if (res.status === 401) {
+                setSessions([]);
+                setHasAccessToken(false);
+                return;
+            }
             if (!res.ok) return;
             const json = await res.json();
             const data = (json.data ?? json) as { sessions?: ChatSessionSummary[] };
@@ -83,11 +83,9 @@ export function useConcierge() {
     }, []);
 
     const loadSessionById = useCallback(async (sessionId: string) => {
-        const token = localStorage.getItem('accessToken');
-        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
         setIsLoadingHistory(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/ai/chat/${sessionId}`, { headers });
+            const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/${sessionId}`);
             if (!res.ok) {
                 if (res.status === 404) localStorage.removeItem('aiSessionId');
                 return false;
@@ -115,15 +113,14 @@ export function useConcierge() {
     useEffect(() => {
         const loadHistory = async () => {
             const sessionId = localStorage.getItem('aiSessionId');
-            const token = localStorage.getItem('accessToken');
-            const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+            const profile = await fetchAuthProfile();
 
             await loadSessions();
 
-            if (token) {
+            if (profile) {
                 setIsLoadingHistory(true);
                 try {
-                    const res = await fetch(`${API_BASE_URL}/ai/chat/me/latest`, { headers });
+                    const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/me/latest`);
                     if (res.ok) {
                         const json = await res.json();
                         const data = (json.data ?? json) as { sessionId?: string; messages?: Message[] };
@@ -168,11 +165,9 @@ export function useConcierge() {
 
             try {
                 const sessionId = localStorage.getItem('aiSessionId');
-                const token = localStorage.getItem('accessToken');
                 const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-                if (token) headers['Authorization'] = `Bearer ${token}`;
 
-                const res = await fetch(`${API_BASE_URL}/ai/chat`, {
+                const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({ message: text, sessionId: sessionId || undefined }),
@@ -208,7 +203,7 @@ export function useConcierge() {
                         tourCard: data.tourCard,
                     },
                 ]);
-                if (token) await loadSessions();
+                if (hasAccessToken) await loadSessions();
             } catch (error) {
                 console.error('[AI] Chat Error:', error);
                 setIsTyping(false);
@@ -222,7 +217,7 @@ export function useConcierge() {
                 ]);
             }
         },
-        [inputValue, isTyping, cooldown, loadSessions],
+        [inputValue, isTyping, cooldown, loadSessions, hasAccessToken],
     );
 
     // ── Handlers ──────────────────────────────────────────────────────────
@@ -245,11 +240,9 @@ export function useConcierge() {
 
     const handleDeleteSession = useCallback(
         async (sessionId: string) => {
-            const token = localStorage.getItem('accessToken');
             try {
-                await fetch(`${API_BASE_URL}/ai/chat/${sessionId}`, {
+                await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/${sessionId}`, {
                     method: 'DELETE',
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
                 });
             } catch (e) {
                 console.error('[AI] Loi xoa lich su:', e);

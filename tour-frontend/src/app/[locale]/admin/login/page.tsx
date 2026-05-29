@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from '@/i18n/routing';
 import './login.css';
 import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { clearClientUserStorage, fetchOptionalAuth } from '@/lib/authSession';
 
 export default function AdminLoginPage() {
     const router = useRouter();
@@ -20,14 +20,8 @@ export default function AdminLoginPage() {
     // Auto-redirect nếu đã đăng nhập với role hợp lệ
     useEffect(() => {
         const checkExistingAuth = async () => {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                setIsCheckingAuth(false);
-                return;
-            }
-
             try {
-                const res = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
+                const res = await fetchOptionalAuth(`${API_BASE_URL}/auth/profile`);
                 if (res.ok) {
                     const user = await res.json();
                     const role = user.role || user.data?.role;
@@ -77,7 +71,7 @@ export default function AdminLoginPage() {
             const data = payload.data || payload;
 
             // Lưu token + thông tin user
-            localStorage.setItem('accessToken', data.access_token);
+            clearClientUserStorage();
             localStorage.setItem('userName', data.user?.fullName || '');
             localStorage.setItem('userRole', data.user?.role || '');
             if (data.user?.email) localStorage.setItem('userEmail', data.user.email);
@@ -88,11 +82,7 @@ export default function AdminLoginPage() {
             const role = data.user?.role;
             if (role !== 'ADMIN' && role !== 'SUPER_ADMIN' && role !== 'STAFF') {
                 // Xóa token vừa lưu — không cho phép truy cập
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('userName');
-                localStorage.removeItem('userEmail');
-                localStorage.removeItem('userRole');
-                localStorage.removeItem('userAvatarUrl');
+                clearClientUserStorage();
                 // Logout phiên vừa tạo
                 await fetch(`${API_BASE_URL}/auth/logout`, {
                     method: 'POST',

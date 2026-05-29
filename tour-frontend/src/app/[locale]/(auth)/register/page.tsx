@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/i18n/routing';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/constants';
+import { getSafeRedirectPath } from '@/lib/authRedirect';
 
 export default function RegisterPage() {
     const [fullName, setFullName] = useState('');
@@ -21,7 +23,12 @@ export default function RegisterPage() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { t } = useLocale();
+    const redirectTarget = getSafeRedirectPath(searchParams.get('redirect'));
+    const loginHref = redirectTarget
+        ? `/login?redirect=${encodeURIComponent(redirectTarget)}`
+        : '/login';
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -46,7 +53,7 @@ export default function RegisterPage() {
             });
 
             if (res.ok) {
-                setTimeout(() => router.push('/login'), 500);
+                setTimeout(() => router.push(loginHref), 500);
             } else {
                 const errData = await res.json();
                 setError(errData.message || t('auth.regFailed'));
@@ -224,7 +231,7 @@ export default function RegisterPage() {
                     <div className="mt-8 pt-8 border-t border-outline-variant/10 text-center">
                         <p className="text-on-surface-variant text-sm">
                             {t('auth.alreadyHaveAccount')}
-                            <Link href="/login" className="text-primary font-semibold hover:underline ml-1 transition-all">{t('auth.logIn')}</Link>
+                            <Link href={loginHref} className="text-primary font-semibold hover:underline ml-1 transition-all">{t('auth.logIn')}</Link>
                         </p>
                     </div>
                 </div>

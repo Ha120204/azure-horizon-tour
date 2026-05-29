@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/i18n/routing';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/constants';
+import { getSafeRedirectPath } from '@/lib/authRedirect';
+import { clearClientUserStorage } from '@/lib/authSession';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -15,7 +18,12 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { t } = useLocale();
+    const redirectTarget = getSafeRedirectPath(searchParams.get('redirect'));
+    const registerHref = redirectTarget
+        ? `/register?redirect=${encodeURIComponent(redirectTarget)}`
+        : '/register';
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,8 +44,7 @@ export default function LoginPage() {
             if (res.ok) {
                 const payload = await res.json();
                 const data = payload.data || payload;
-                localStorage.setItem('accessToken', data.access_token);
-                // refreshToken is now handled via HttpOnly cookie by the browser
+                clearClientUserStorage();
                 localStorage.setItem('userName', data.user?.fullName || '');
                 if (data.user?.avatarUrl) {
                     localStorage.setItem('userAvatar', data.user.avatarUrl);
@@ -50,7 +57,11 @@ export default function LoginPage() {
 
                 // Chuyển trang mượt mà qua Next Router (0ms delay)
                 keepLoading = true;
-                router.push('/');
+                if (redirectTarget) {
+                    window.location.assign(redirectTarget);
+                } else {
+                    router.push('/');
+                }
 
             } else {
                 const errData = await res.json();
@@ -143,7 +154,7 @@ export default function LoginPage() {
                                 <p className="text-sm text-on-surface-variant font-medium">
                                     {t('auth.noAccount')}
                                     <Link
-                                        href="/register"
+                                        href={registerHref}
                                         className="text-primary font-bold hover:underline ml-1 cursor-pointer"
                                     >
                                         {t('auth.createAccount')}

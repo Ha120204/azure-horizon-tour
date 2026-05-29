@@ -6,6 +6,16 @@ import { MailService } from '../mail/mail.service'
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
+type PasswordResetTokenPayload = {
+  sub: number | string;
+  email?: string;
+};
+
+type RefreshTokenPayload = {
+  sub: number | string;
+  tokenVersion?: number;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -116,15 +126,19 @@ export class AuthService {
 
   async resetPassword(token: string, newPassword: string) {
     // 1. Verify the JWT token
-    let payload: any;
+    let payload: PasswordResetTokenPayload;
     try {
-      payload = this.jwtService.verify(token);
+      payload = this.jwtService.verify<PasswordResetTokenPayload>(token);
     } catch {
       throw new UnauthorizedException('Invalid or expired reset token. Please request a new password reset link.');
     }
+    const userId = Number(payload.sub);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException('Invalid reset token payload. Please request a new password reset link.');
+    }
 
     // 2. Find the user by ID from the token payload
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -135,7 +149,11 @@ export class AuthService {
     // 4. Update the password in the database
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        authTokenVersion: { increment: 1 },
+        authRevokedAt: new Date(),
+      },
     });
 
     return { message: 'Password has been reset successfully' };
@@ -145,15 +163,20 @@ export class AuthService {
   // REFRESH TOKEN: Cấp access_token mới khi token cũ hết hạn
   // =========================================================
   async refreshToken(refreshToken: string) {
-    let payload: any;
+    let payload: RefreshTokenPayload;
     try {
-      payload = this.jwtService.verify(refreshToken);
+      payload = this.jwtService.verify<RefreshTokenPayload>(refreshToken);
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token. Please log in again.');
     }
 
     // Truy vấn DB lấy thông tin user mới nhất (đề phòng role đã thay đổi)
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const userId = Number(payload.sub);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException('Invalid refresh token payload. Please log in again.');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.deletedAt) {
       throw new UnauthorizedException('User not found.');
     }
@@ -241,7 +264,11 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(newPass, 10);
     await this.prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        authTokenVersion: { increment: 1 },
+        authRevokedAt: new Date(),
+      },
     });
 
     return { message: 'Password updated successfully' };

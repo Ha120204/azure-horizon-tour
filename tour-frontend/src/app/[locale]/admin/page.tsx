@@ -252,15 +252,24 @@ export default function AdminDashboardPage() {
         const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
         const gran = getGranularity(diffDays);
         try {
-            const [ovRes, revRes, bsRes, rbRes, bookingStatsRes, tourStatsRes, articleStatsRes, supportStatsRes] = await Promise.all([
-                fetchWithAuth(`${API_BASE_URL}/statistics/overview?dateFrom=${from}&dateTo=${to}`),
-                fetchWithAuth(`${API_BASE_URL}/statistics/revenue?dateFrom=${from}&dateTo=${to}&granularity=${gran}`),
-                fetchWithAuth(`${API_BASE_URL}/statistics/bookings/status?dateFrom=${from}&dateTo=${to}`),
-                fetchWithAuth(`${API_BASE_URL}/booking/admin/all?limit=5&status=ALL`),
-                fetchWithAuth(`${API_BASE_URL}/booking/admin/stats`),
-                fetchWithAuth(`${API_BASE_URL}/tour/admin/stats`),
-                fetchWithAuth(`${API_BASE_URL}/article/admin/stats`),
-                fetchWithAuth(`${API_BASE_URL}/support/stats`),
+            const [ovRes, revRes, bsRes, rbRes, opStatsRes] = await Promise.all([
+                fetchWithAuth(
+`${API_BASE_URL}/statistics/overview?dateFrom=${from}&dateTo=${to}`
+),
+                fetchWithAuth(
+`${API_BASE_URL}/statistics/revenue?dateFrom=${from}&dateTo=${to}&granularity=${gran}`
+),
+                fetchWithAuth(
+`${API_BASE_URL}/statistics/bookings/status?dateFrom=${from}&dateTo=${to}`
+),
+                fetchWithAuth(
+`${API_BASE_URL}/booking/admin/all?limit=5&status=ALL`
+),
+                // 1 call thay cho 4 (booking/stats + tour/stats + article/stats + support/stats)
+                // Cache 30s phia server -> khong bao gio hit DB moi autorefresh 60s
+                fetchWithAuth(
+`${API_BASE_URL}/booking/admin/operational-stats`
+),
             ]);
             if (ovRes.ok) { const j = await ovRes.json(); setOverview(j.data); }
             if (revRes.ok) { const j = await revRes.json(); setRevenueData(j.data?.data ?? []); }
@@ -270,28 +279,22 @@ export default function AdminDashboardPage() {
                 const payload = j.data ?? j;
                 setRecentBookings(payload.bookings ?? []);
             }
-            const [bookingStatsJson, tourStatsJson, articleStatsJson, supportStatsJson] = await Promise.all([
-                bookingStatsRes.ok ? bookingStatsRes.json() : Promise.resolve({}),
-                tourStatsRes.ok ? tourStatsRes.json() : Promise.resolve({}),
-                articleStatsRes.ok ? articleStatsRes.json() : Promise.resolve({}),
-                supportStatsRes.ok ? supportStatsRes.json() : Promise.resolve({}),
-            ]);
-            const bookingStats = bookingStatsJson?.data ?? bookingStatsJson;
-            const tourStats = tourStatsJson?.data ?? tourStatsJson;
-            const articleStats = articleStatsJson?.data ?? articleStatsJson;
-            const supportStats = supportStatsJson?.data ?? supportStatsJson;
-            setOperationalStats({
-                bookingPending: bookingStats.pending ?? 0,
-                cancelRequested: bookingStats.cancelRequested ?? 0,
-                tourPending: tourStats.pending ?? 0,
-                articlePending: articleStats.pending ?? 0,
-                supportOpen: supportStats.open ?? 0,
-            });
+            if (opStatsRes.ok) {
+                const j = await opStatsRes.json();
+                const op = j.data ?? j;
+                setOperationalStats({
+                    bookingPending:  op.bookingPending  ?? 0,
+                    cancelRequested: op.cancelRequested ?? 0,
+                    tourPending:     op.tourPending     ?? 0,
+                    articlePending:  op.articlePending  ?? 0,
+                    supportOpen:     op.supportOpen     ?? 0,
+                });
+            }
             setLastUpdatedAt(new Date());
         } catch (e) {
             if (options.silent) return;
             console.error('Dashboard error:', e);
-            setDashboardError('Không tải được dữ liệu tổng quan. Vui lòng thử làm mới lại.');
+            setDashboardError('Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c d\u1eef li\u1ec7u t\u1ed5ng quan. Vui l\u00f2ng th\u1eed l\u00e0m m\u1edbi l\u1ea1i.');
         } finally {
             if (options.silent) return;
             setLoading(false);

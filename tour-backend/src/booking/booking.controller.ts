@@ -27,15 +27,21 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-draft.dto';
 import { ReviewAssistedBookingDraftDto } from './dto/review-assisted-booking-draft.dto';
+import {
+  RequestCancellationDto,
+  ApproveCancellationDto,
+  RejectCancellationDto,
+} from './dto/cancel-booking.dto';
+import {
+  ConfirmInStoreDto,
+  ReconcilePayosDto,
+  ReportPaymentIssueDto,
+  UpdatePaymentMethodDto,
+  ResendPaymentRequestDto,
+} from './dto/payment-booking.dto';
 import { PaymentService } from '../payment/payment.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
-import {
-  BookingPaymentService,
-  type ConfirmInStoreDto,
-  type ReconcilePayosDto,
-  type ReportPaymentIssueDto,
-  type InStoreCollectionMethod,
-} from './booking-payment.service';
+import { BookingPaymentService } from './booking-payment.service';
 
 type AuthenticatedRequest = {
   user?: {
@@ -87,21 +93,6 @@ class AdminOnlyGuard implements CanActivate {
       );
     }
     return true;
-  }
-}
-
-/** Guard JWT tùy chọn — không chặn khách vãng lai (không ném lỗi 401) */
-@Injectable()
-class OptionalJwtAuthGuard extends AuthGuard('jwt') {
-  handleRequest<TUser = AuthenticatedRequest['user'] | null>(
-    _err: unknown,
-    user: TUser | false | null,
-    _info: unknown,
-    _context: ExecutionContext,
-  ): TUser | null {
-    void _info;
-    void _context;
-    return user || null;
   }
 }
 
@@ -184,7 +175,7 @@ export class BookingController {
 
   // ============== BOOKING CRUD ==============
 
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(AuthGuard('jwt'))
   @Post()
   create(
     @Request() req: AuthenticatedRequest,
@@ -238,6 +229,18 @@ export class BookingController {
   @Get('admin/stats')
   async getAdminQuickStats() {
     const data = await this.bookingService.getAdminQuickStats();
+    return { message: 'Success', data };
+  }
+
+  /**
+   * Staff + Admin: Operational stats — gộm booking/tour/article/support vào 1 call.
+   * Cache 30s in-memory. Frontend chỉ cần gọi endpoint này thay vì 4 endpoint riêng.
+   * GET /booking/admin/operational-stats
+   */
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Get('admin/operational-stats')
+  async getOperationalStats() {
+    const data = await this.bookingService.getOperationalStats();
     return { message: 'Success', data };
   }
 
@@ -377,13 +380,13 @@ export class BookingController {
   async resendPaymentRequest(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
-    @Body('forceEmail') forceEmail?: boolean,
+    @Body() dto: ResendPaymentRequestDto,
   ) {
     const userId = getAuthUserId(req);
     const data = await this.bookingService.resendPaymentRequest(
       Number(id),
       userId,
-      Boolean(forceEmail),
+      dto.forceEmail ?? false,
     );
     return { message: 'Success', data };
   }
@@ -447,15 +450,12 @@ export class BookingController {
   @Patch(':id/payment-method')
   async updatePaymentMethod(
     @Param('id') id: string,
-    @Body('paymentMethod') paymentMethod: 'PAYOS' | 'IN_STORE',
+    @Body() dto: UpdatePaymentMethodDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    if (paymentMethod !== 'PAYOS' && paymentMethod !== 'IN_STORE') {
-      throw new BadRequestException('Phương thức thanh toán không hợp lệ');
-    }
     return this.bookingService.updatePaymentMethod(
       Number(id),
-      paymentMethod,
+      dto.paymentMethod,
       getAuthUserId(req),
     );
   }
@@ -463,25 +463,21 @@ export class BookingController {
   /**
    * Khách hàng gửi yêu cầu hủy booking
    * POST /booking/:id/cancel-request
-   * Body: { reason: string }
+   * Body: { reason: string, bankDetails?: RefundBankDetailsDto }
    */
   @UseGuards(AuthGuard('jwt'))
   @Post(':id/cancel-request')
   @AuditLog('CANCEL_BOOKING', 'Booking')
   async requestCancellation(
     @Param('id') id: string,
-    @Body('reason') reason: string,
-    @Body('bankDetails') bankDetails: Prisma.InputJsonValue | undefined,
+    @Body() dto: RequestCancellationDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    if (!reason || reason.trim().length < 3) {
-      throw new BadRequestException('Vui lòng cung cấp lý do hủy hợp lệ');
-    }
     return this.bookingService.requestCancellation(
       Number(id),
       getAuthUserId(req),
-      reason.trim(),
-      bankDetails,
+      dto.reason.trim(),
+      dto.bankDetails as Prisma.InputJsonValue | undefined,
     );
   }
 
@@ -506,9 +502,9 @@ export class BookingController {
   @AuditLog('UPDATE', 'Booking')
   async approveCancellation(
     @Param('id') id: string,
-    @Body('adminNote') adminNote?: string,
+    @Body() dto: ApproveCancellationDto,
   ) {
-    return this.bookingService.approveCancellation(Number(id), adminNote);
+    return this.bookingService.approveCancellation(Number(id), dto.adminNote);
   }
 
   /**
@@ -521,14 +517,11 @@ export class BookingController {
   @AuditLog('UPDATE', 'Booking')
   async rejectCancellation(
     @Param('id') id: string,
-    @Body('rejectReason') rejectReason: string,
+    @Body() dto: RejectCancellationDto,
   ) {
-    if (!rejectReason || rejectReason.trim().length < 3) {
-      throw new BadRequestException('Vui lòng cung cấp lý do từ chối');
-    }
     return this.bookingService.rejectCancellation(
       Number(id),
-      rejectReason.trim(),
+      dto.rejectReason.trim(),
     );
   }
 
@@ -572,25 +565,6 @@ export class BookingController {
   }
 
   /**
-   * Admin: Xác nhận thủ công booking PENDING khi khách đã thanh toán ngoài hệ thống
-   * @deprecated Dùng /payments/in-store/confirm hoặc /payments/payos/reconcile thay thế.
-   * Giữ lại để backward compat — tự động route sang flow mới theo paymentMethod.
-   * PATCH /booking/admin/:id/confirm-manual
-   */
-  @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
-  @Patch('admin/:id/confirm-manual')
-  @AuditLog('UPDATE', 'Booking')
-  async confirmManual(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    return this.bookingPaymentService.legacyConfirmManual(
-      Number(id),
-      getAuthUserId(req),
-    );
-  }
-
-  /**
    * [ADMIN] Thống kê doanh thu theo nguồn thanh toán (confirmedSource)
    * GET /booking/admin/payment-stats
    * Query: dateFrom?, dateTo?
@@ -620,12 +594,6 @@ export class BookingController {
     @Body() body: ConfirmInStoreDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    const validMethods: InStoreCollectionMethod[] = ['CASH', 'BANK_TRANSFER', 'CARD_POS'];
-    if (!validMethods.includes(body.collectionMethod)) {
-      throw new BadRequestException(
-        'collectionMethod phải là CASH, BANK_TRANSFER, hoặc CARD_POS',
-      );
-    }
     return this.bookingPaymentService.confirmInStore(
       Number(id),
       body,
@@ -682,43 +650,26 @@ export class BookingController {
     @Body() body: ReportPaymentIssueDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    const amount = Number(body.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new BadRequestException('Số tiền đã chuyển là bắt buộc');
-    }
-    if (!body.transferredAt?.trim()) {
-      throw new BadRequestException('Thời gian chuyển khoản là bắt buộc');
-    }
+    // class-validator kiểm tra amount ≥ 1000, transferredAt / transactionRef / senderBank /
+    // senderAccountName bắt buộc, message ≥ 5 ký tự (nếu có). Chỉ cần parse date ở đây.
     const transferredAt = new Date(body.transferredAt);
     if (Number.isNaN(transferredAt.getTime())) {
       throw new BadRequestException('Thời gian chuyển khoản không hợp lệ');
     }
-    if (!body.transactionRef?.trim() || body.transactionRef.trim().length < 4) {
-      throw new BadRequestException('Mã giao dịch hoặc nội dung chuyển khoản là bắt buộc');
-    }
-    if (!body.senderBank?.trim()) {
-      throw new BadRequestException('Ngân hàng chuyển khoản là bắt buộc');
-    }
-    if (!body.senderAccountName?.trim() || body.senderAccountName.trim().length < 2) {
-      throw new BadRequestException('Tên chủ tài khoản chuyển là bắt buộc');
-    }
-    const message = body.message?.trim() ?? '';
-    if (message && message.length < 5) {
-      throw new BadRequestException('Ghi chú phải có tối thiểu 5 ký tự');
-    }
+    const message =
+      body.message?.trim() ||
+      `Khách báo đã chuyển ${body.amount.toLocaleString('vi-VN')}đ nhưng hệ thống chưa ghi nhận.`;
+
     return this.bookingPaymentService.reportPaymentIssue(
       Number(id),
       getAuthUserId(req),
       {
         ...body,
-        amount,
         transferredAt: transferredAt.toISOString(),
         transactionRef: body.transactionRef.trim(),
         senderBank: body.senderBank.trim(),
         senderAccountName: body.senderAccountName.trim(),
-        message:
-          message ||
-          `Khách báo đã chuyển ${amount.toLocaleString('vi-VN')}đ nhưng hệ thống chưa ghi nhận.`,
+        message,
       },
     );
   }

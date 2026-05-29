@@ -4,6 +4,7 @@ import {
   ConflictException,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -61,6 +62,8 @@ function isInCurrentMonth(date: Date, now: Date) {
 
 @Injectable()
 export class VoucherService {
+  private readonly logger = new Logger(VoucherService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -118,14 +121,21 @@ export class VoucherService {
     });
   }
 
-  /** Validate voucher code + tính tiền giảm */
+  /** Validate voucher code + tính tiền giảm.
+   *
+   * @param tx - Prisma transaction client tùy chọn. Khi truyền vào, query chạy
+   *             trong cùng transaction với caller, tránh race condition giữa
+   *             validate và increment usedCount.
+   */
   async validateVoucher(
     code: string,
     totalPrice: number,
     context: VoucherValidationContext = {},
+    tx?: Omit<Prisma.TransactionClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
   ) {
+    const db = tx ?? this.prisma;
     const normalizedCode = code.trim().toUpperCase();
-    const voucher = await this.prisma.voucher.findUnique({
+    const voucher = await db.voucher.findUnique({
       where: { code: normalizedCode },
     });
 
@@ -133,10 +143,11 @@ export class VoucherService {
       throw new BadRequestException('Mã này hiện không còn khả dụng');
     if (voucher.expiresAt < new Date())
       throw new BadRequestException('Mã đã hết hạn sử dụng');
+    // So sánh snapshot tại thời điểm query — atomic guard thực sự nằm ở markAsUsed/markVoucherAsUsed.
     if (voucher.usedCount >= voucher.maxUses)
       throw new BadRequestException('Mã đã được dùng hết — bạn đến hơi muộn rồi 😊');
     if (context.departureId) {
-      const departure = await this.prisma.tourDeparture.findUnique({
+      const departure = await db.tourDeparture.findUnique({
         where: { id: context.departureId },
         select: {
           tourId: true,
@@ -183,26 +194,41 @@ export class VoucherService {
     };
   }
 
-  /** Đánh dấu voucher đã sử dụng */
-  async markAsUsed(userId: number, voucherCode: string) {
-    const voucher = await this.prisma.voucher.findUnique({ where: { code: voucherCode } });
-    if (!voucher) return;
+  /**
+   * Đánh dấu voucher đã sử dụng — **atomic, race-condition-safe**.
+   *
+   * Dùng `updateMany` với điều kiện `usedCount < maxUses` thay vì
+   * `update` mù để đảm bảo không vượt quá giới hạn kể cả khi nhiều
+   * request đến đồng thời.
+   *
+   * @returns `true` nếu ghi nhận thành công, `false` nếu voucher đã hết lượt.
+   */
+  async markAsUsed(userId: number, voucherCode: string): Promise<boolean> {
+    const code = voucherCode.trim().toUpperCase();
+    const voucher = await this.prisma.voucher.findUnique({ where: { code } });
+    if (!voucher) return false;
 
-    await this.prisma.voucher.update({
-      where: { id: voucher.id },
+    // Atomic: chỉ increment khi usedCount vẫn còn dưới maxUses.
+    // Nếu 2 request đến cùng lúc, chỉ 1 cái thắng; cái kia nhận count === 0.
+    const result = await this.prisma.voucher.updateMany({
+      where: { id: voucher.id, usedCount: { lt: voucher.maxUses } },
       data: { usedCount: { increment: 1 } },
     });
 
-    const userVoucher = await this.prisma.userVoucher.findUnique({
-      where: { userId_voucherId: { userId, voucherId: voucher.id } },
+    if (result.count === 0) {
+      this.logger.warn(
+        `[VOUCHER] markAsUsed: voucher "${code}" da het luot (usedCount >= maxUses=${voucher.maxUses}). UserId=${userId}.`,
+      );
+      return false;
+    }
+
+    // Đánh dấu UserVoucher đã dùng (best-effort, không fail nếu không có trong ví)
+    await this.prisma.userVoucher.updateMany({
+      where: { userId, voucherId: voucher.id, isUsed: false },
+      data: { isUsed: true },
     });
 
-    if (userVoucher) {
-      await this.prisma.userVoucher.update({
-        where: { id: userVoucher.id },
-        data: { isUsed: true },
-      });
-    }
+    return true;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -2,7 +2,7 @@ import { Injectable, ConflictException, UnauthorizedException, NotFoundException
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { MailService } from '../mail/mail.service'
+import { MailService } from '../mail/mail.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
@@ -16,6 +16,13 @@ type RefreshTokenPayload = {
   tokenVersion?: number;
 };
 
+type JwtTokenPayload = {
+  sub: number;
+  email: string;
+  role: string;
+  tokenVersion: number;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,8 +30,22 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly adminNotifications: AdminNotificationService,
-  ) { }
+  ) {}
 
+  // =========================================================
+  // JWT helpers — dùng chung cho login thường và Google OAuth
+  // =========================================================
+  signToken(payload: JwtTokenPayload): string {
+    return this.jwtService.sign(payload);
+  }
+
+  signRefreshToken(payload: { sub: number; tokenVersion: number }): string {
+    return this.jwtService.sign(payload, { expiresIn: '7d' });
+  }
+
+  // =========================================================
+  // ĐĂNG KÝ
+  // =========================================================
   async register(email: string, password: string, fullName: string) {
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -63,6 +84,9 @@ export class AuthService {
     return result;
   }
 
+  // =========================================================
+  // ĐĂNG NHẬP (email + password)
+  // =========================================================
   async login(email: string, pass: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -70,6 +94,13 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Tài khoản Google không có password — không cho đăng nhập bằng password
+    if (!user.password) {
+      throw new UnauthorizedException(
+        'Tài khoản này được tạo qua Google Sign-In. Vui lòng dùng nút "Tiếp tục với Google" để đăng nhập.',
+      );
     }
 
     const isMatch = await bcrypt.compare(pass, user.password);
@@ -84,14 +115,9 @@ export class AuthService {
 
     const { password, ...result } = user;
 
-    const payload = { sub: user.id, email: user.email, role: user.role, tokenVersion: user.authTokenVersion };
-    const access_token = this.jwtService.sign(payload);
-
-    // Refresh token — payload tối giản, sống 7 ngày
-    const refresh_token = this.jwtService.sign(
-      { sub: user.id, tokenVersion: user.authTokenVersion },
-      { expiresIn: '7d' },
-    );
+    const payload: JwtTokenPayload = { sub: user.id, email: user.email, role: user.role, tokenVersion: user.authTokenVersion };
+    const access_token = this.signToken(payload);
+    const refresh_token = this.signRefreshToken({ sub: user.id, tokenVersion: user.authTokenVersion });
 
     return { user: result, access_token, refresh_token };
   }
@@ -187,8 +213,8 @@ export class AuthService {
     }
 
     // Sinh access_token mới (kế thừa TTL 1h từ JwtModule.register)
-    const newPayload = { sub: user.id, email: user.email, role: user.role, tokenVersion: user.authTokenVersion };
-    const access_token = this.jwtService.sign(newPayload);
+    const newPayload: JwtTokenPayload = { sub: user.id, email: user.email, role: user.role, tokenVersion: user.authTokenVersion };
+    const access_token = this.signToken(newPayload);
 
     return { access_token };
   }
@@ -256,6 +282,13 @@ export class AuthService {
       throw new NotFoundException('User not found!');
     }
 
+    // Tài khoản Google không có password
+    if (!user.password) {
+      throw new UnauthorizedException(
+        'Tài khoản này được tạo qua Google. Vui lòng dùng tính năng "Đặt mật khẩu" để thiết lập mật khẩu.',
+      );
+    }
+
     const isMatch = await bcrypt.compare(currentPass, user.password);
     if (!isMatch) {
       throw new UnauthorizedException('Current password is incorrect');
@@ -272,5 +305,101 @@ export class AuthService {
     });
 
     return { message: 'Password updated successfully' };
+  }
+
+  // =========================================================
+  // SET PASSWORD: Cho Google users tạo mật khẩu lần đầu
+  // (authProvider 'google' → 'both')
+  // =========================================================
+  async setPassword(userId: number, newPass: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found!');
+
+    // Chỉ cho phép user chưa có password (pure Google user)
+    if (user.password) {
+      throw new UnauthorizedException(
+        'Tài khoản đã có mật khẩu. Vui lòng dùng tính năng "Đổi mật khẩu".',
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(newPass, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        authProvider: 'both', // Giờ có cả Google lẫn email/password
+      },
+    });
+
+    return { message: 'Password set successfully' };
+  }
+
+  // =========================================================
+  // GOOGLE OAUTH: Tìm hoặc tạo user từ Google profile
+  // Phương án A: Tự động liên kết nếu email đã tồn tại
+  // =========================================================
+  async findOrCreateGoogleUser(profile: {
+    googleId: string;
+    email: string;
+    fullName: string;
+    avatarUrl?: string;
+  }) {
+    const { googleId, email, fullName, avatarUrl } = profile;
+
+    // 1. Tìm bằng googleId (đã đăng nhập Google trước đó)
+    const byGoogleId = await this.prisma.user.findUnique({ where: { googleId } });
+    if (byGoogleId) {
+      if (byGoogleId.deletedAt) {
+        throw new UnauthorizedException('Your account has been deactivated. Please contact an administrator.');
+      }
+      return byGoogleId;
+    }
+
+    // 2. Tìm bằng email (đã có tài khoản local) → Phương án A: auto-link
+    const byEmail = await this.prisma.user.findUnique({ where: { email } });
+    if (byEmail) {
+      if (byEmail.deletedAt) {
+        throw new UnauthorizedException('Your account has been deactivated. Please contact an administrator.');
+      }
+      // Gán googleId và đánh dấu authProvider = "both"
+      const updated = await this.prisma.user.update({
+        where: { id: byEmail.id },
+        data: {
+          googleId,
+          authProvider: 'both',
+          // Cập nhật avatar nếu user chưa có
+          ...(avatarUrl && !byEmail.avatarUrl && { avatarUrl }),
+        },
+      });
+      return updated;
+    }
+
+    // 3. Người dùng hoàn toàn mới → tạo tài khoản
+    const newUser = await this.prisma.user.create({
+      data: {
+        email,
+        fullName,
+        password: null,
+        googleId,
+        authProvider: 'google',
+        avatarUrl: avatarUrl ?? null,
+        role: 'CUSTOMER',
+      },
+    });
+
+    // Thông báo admin
+    await this.adminNotifications.createSafe({
+      type: 'customer_new',
+      resourceType: 'User',
+      resourceId: newUser.id,
+      title: 'Khách hàng mới đăng ký (Google)',
+      body: `${newUser.fullName} vừa tạo tài khoản qua Google.`,
+      href: '/admin/customers',
+      severity: 'info',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: { userId: newUser.id, email: newUser.email, provider: 'google' },
+    });
+
+    return newUser;
   }
 }

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, Suspense } from 'react';
 import Image from 'next/image';
@@ -44,6 +44,7 @@ interface AppliedFilters {
     sidebarBudget: string;
     selectedRating: number;
     selectedTypes: string[];
+    departure: string;
 }
 
 const normalizeTravelScope = (value: string | null): TravelScope =>
@@ -59,6 +60,7 @@ function DestinationsContent() {
     const initialBudget = searchParams.get('budget') || '';
     const initialTravelScope = normalizeTravelScope(searchParams.get('travelScope'));
     const initialAllDestinations = searchParams.get('allDestinations') === '1' && !initialDest;
+    const initialDeparture = searchParams.get('departure') || '';
 
     // 2. State cho thanh tìm kiếm
     const [dest, setDest] = useState(initialDest);
@@ -75,6 +77,7 @@ function DestinationsContent() {
     const [sidebarBudget, setSidebarBudget] = useState(initialBudget);
     const [selectedRating, setSelectedRating] = useState<number>(0);
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+    const [departure, setDeparture] = useState(initialDeparture);
     const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
         travelScope: initialTravelScope,
         dest: initialDest,
@@ -82,6 +85,7 @@ function DestinationsContent() {
         sidebarBudget: initialBudget,
         selectedRating: 0,
         selectedTypes: [],
+        departure: initialDeparture,
     });
     const [showMobileFilter, setShowMobileFilter] = useState(false);
     const [sortBy, setSortBy] = useState('recommended');
@@ -115,6 +119,9 @@ function DestinationsContent() {
         }
         if (appliedFilters.selectedTypes.length > 0) {
             query.append('types', appliedFilters.selectedTypes.join(','));
+        }
+        if (appliedFilters.departure) {
+            query.append('departure', appliedFilters.departure);
         }
         query.append('sortBy', sortBy);
         query.append('page', page.toString());
@@ -198,6 +205,7 @@ function DestinationsContent() {
         setSidebarBudget('');
         setSelectedRating(0);
         setSelectedTypes([]);
+        setDeparture('');
     };
 
     // 10. Apply sidebar filters
@@ -209,6 +217,7 @@ function DestinationsContent() {
             sidebarBudget,
             selectedRating,
             selectedTypes,
+            departure,
         });
         setPage(1);
         setShowMobileFilter(false);
@@ -218,7 +227,7 @@ function DestinationsContent() {
     };
 
     // Đếm tổng bộ lọc đang active
-    const activeFilterCount = (selectedRating > 0 ? 1 : 0) + selectedTypes.length + (sidebarBudget ? 1 : 0) + (dest ? 1 : 0) + (date ? 1 : 0) + (travelScope ? 1 : 0);
+    const activeFilterCount = (selectedRating > 0 ? 1 : 0) + selectedTypes.length + (sidebarBudget ? 1 : 0) + (dest ? 1 : 0) + (date ? 1 : 0) + (travelScope ? 1 : 0) + (departure ? 1 : 0);
     const totalTourCount = totalItems || filteredTours.length;
     const resultSummary =
         language === 'vi'
@@ -294,6 +303,7 @@ function DestinationsContent() {
                                     onClearAll={handleClearAll} onApplyFilters={handleApplyFilters}
                                     activeFilterCount={activeFilterCount}
                                     priceRange={priceRange} allDestinations={allDestinations}
+                                    departure={departure} setDeparture={setDeparture}
                                     t={t} formatPrice={formatPrice} language={language}
                                 />
                             </div>
@@ -316,6 +326,7 @@ function DestinationsContent() {
                                     onClearAll={handleClearAll} onApplyFilters={handleApplyFilters}
                                     activeFilterCount={activeFilterCount}
                                     priceRange={priceRange} allDestinations={allDestinations}
+                                    departure={departure} setDeparture={setDeparture}
                                     t={t} formatPrice={formatPrice} language={language}
                                 />
                             </div>

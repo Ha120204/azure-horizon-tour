@@ -96,6 +96,71 @@ export class SearchService {
     };
   }
 
+  /** Lấy danh sách điểm khởi hành distinct từ tours (theo travelScope) */
+  async getDeparturePoints(travelScopeInput?: string, localeInput?: string) {
+    const travelScope = parseTravelScope(travelScopeInput);
+    const locale = normalizeLocale(localeInput);
+
+    const tours = await this.prisma.tour.findMany({
+      where: {
+        deletedAt: null,
+        ...(travelScope ? { destination: { travelScope } } : {}),
+        OR: [
+          { departurePoint: { not: null } },
+          { departurePointEn: { not: null } },
+        ],
+      },
+      select: { departurePoint: true, departurePointEn: true },
+      distinct: ['departurePoint'],
+      orderBy: { departurePoint: 'asc' },
+    });
+
+    // Lọc unique và trả về theo locale
+    const points = tours
+      .map((t) => {
+        const vi = t.departurePoint?.trim() ?? '';
+        const en = t.departurePointEn?.trim() ?? '';
+        return {
+          vi: vi || en,
+          en: en || vi,
+          label: locale === 'en' ? (en || vi) : (vi || en),
+        };
+      })
+      .filter((p) => p.label.length > 0);
+
+    // Deduplicate by label
+    const seen = new Set<string>();
+    const unique = points.filter((p) => {
+      if (seen.has(p.label)) return false;
+      seen.add(p.label);
+      return true;
+    });
+
+    // Fallback: nếu DB chưa có data, trả về các thành phố lớn mặc định
+    if (unique.length === 0) {
+      const defaults =
+        travelScope === 'INTERNATIONAL'
+          ? [
+              { label: locale === 'en' ? 'Ho Chi Minh City (SGN)' : 'TP. Hồ Chí Minh (SGN)', vi: 'TP. Hồ Chí Minh (SGN)', en: 'Ho Chi Minh City (SGN)' },
+              { label: locale === 'en' ? 'Hanoi (HAN)' : 'Hà Nội (HAN)', vi: 'Hà Nội (HAN)', en: 'Hanoi (HAN)' },
+              { label: locale === 'en' ? 'Da Nang (DAD)' : 'Đà Nẵng (DAD)', vi: 'Đà Nẵng (DAD)', en: 'Da Nang (DAD)' },
+            ]
+          : [
+              { label: locale === 'en' ? 'Ho Chi Minh City' : 'TP. Hồ Chí Minh', vi: 'TP. Hồ Chí Minh', en: 'Ho Chi Minh City' },
+              { label: locale === 'en' ? 'Hanoi' : 'Hà Nội', vi: 'Hà Nội', en: 'Hanoi' },
+              { label: locale === 'en' ? 'Da Nang' : 'Đà Nẵng', vi: 'Đà Nẵng', en: 'Da Nang' },
+              { label: locale === 'en' ? 'Can Tho' : 'Cần Thơ', vi: 'Cần Thơ', en: 'Can Tho' },
+              { label: locale === 'en' ? 'Hai Phong' : 'Hải Phòng', vi: 'Hải Phòng', en: 'Hai Phong' },
+              { label: locale === 'en' ? 'Nha Trang' : 'Nha Trang', vi: 'Nha Trang', en: 'Nha Trang' },
+              { label: locale === 'en' ? 'Hue' : 'Huế', vi: 'Huế', en: 'Hue' },
+              { label: locale === 'en' ? 'Vung Tau' : 'Vũng Tàu', vi: 'Vũng Tàu', en: 'Vung Tau' },
+            ];
+      return defaults;
+    }
+
+    return unique;
+  }
+
   /** Live search destinations và tours, hỗ trợ tiếng Việt có/không dấu */
   async liveSearch(query: string, travelScopeInput?: string, localeInput?: string) {
     const normalizedQuery = normalizeSearchText(query || '');

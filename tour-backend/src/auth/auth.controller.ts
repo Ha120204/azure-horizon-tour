@@ -38,7 +38,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly cloudinaryService: CloudinaryService,
-  ) { }
+  ) {}
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
@@ -104,7 +104,7 @@ export class AuthController {
   @Patch('profile')
   async updateProfile(
     @Request() req: AuthenticatedRequest,
-    @Body() body: UpdateProfileDto
+    @Body() body: UpdateProfileDto,
   ) {
     const userId = req.user.userId;
     return this.authService.updateProfile(userId, body);
@@ -157,5 +157,76 @@ export class AuthController {
     res.clearCookie(ACCESS_TOKEN_COOKIE, { path: '/' });
     res.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/' });
     return result;
+  }
+
+  /**
+   * POST /auth/set-password
+   * Chỉ dành cho Google users (password = null) muốn thêm mật khẩu.
+   * Sau khi đặt xong, authProvider trở thành 'both'.
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('set-password')
+  async setPassword(
+    @Request() req: AuthenticatedRequest,
+    @Body() body: { newPassword: string },
+  ) {
+    const userId = req.user.userId;
+    return this.authService.setPassword(userId, body.newPassword);
+  }
+
+
+  // =========================================================
+  // GOOGLE OAUTH 2.0
+  // =========================================================
+
+  /**
+   * GET /auth/google
+   * Redirect người dùng đến Google consent screen.
+   * Passport xử lý tự động — không cần body.
+   */
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  async googleAuth() {}
+
+  /**
+   * GET /auth/google/callback
+   * Google redirect về đây sau khi user đồng ý.
+   * Passport gọi GoogleStrategy.validate() → trả về user object.
+   * Backend tạo JWT cookie → redirect về frontend.
+   */
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleCallback(
+    @Req() req: ExpressRequest & { user: Record<string, unknown> },
+    @Res() res: Response,
+  ) {
+    const user = req.user;
+
+    const payload = {
+      sub: user['id'] as number,
+      email: user['email'] as string,
+      role: user['role'] as string,
+      tokenVersion: user['authTokenVersion'] as number,
+    };
+
+    const access_token = this.authService.signToken(payload);
+    const refresh_token = this.authService.signRefreshToken({
+      sub: payload.sub,
+      tokenVersion: payload.tokenVersion,
+    });
+
+    res.cookie(ACCESS_TOKEN_COOKIE, access_token, authCookieOptions(60 * 60 * 1000));
+    res.cookie(REFRESH_TOKEN_COOKIE, refresh_token, authCookieOptions(7 * 24 * 60 * 60 * 1000));
+
+    // Redirect về trang callback của frontend kèm thông tin user
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const callbackUrl = new URL('/auth/callback', frontendUrl);
+    callbackUrl.searchParams.set('name', (user['fullName'] as string) || '');
+    if (user['avatarUrl']) {
+      callbackUrl.searchParams.set('avatar', user['avatarUrl'] as string);
+    }
+
+    res.redirect(callbackUrl.toString());
   }
 }

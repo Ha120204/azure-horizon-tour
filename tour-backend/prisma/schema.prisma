@@ -39,25 +39,30 @@ enum ArticleStatus {
 }
 
 // =============================================
-// BẢNG NGƯỜI DÙNG (USER)
+// Báº¢NG NGÆ¯á»œI DÃ™NG (USER)
 // =============================================
 model User {
   id        Int       @id @default(autoincrement()) 
   email     String    @unique                        
-  password  String                                  
+  password  String?                                 // Optional: Google users don't have password
   fullName  String
   phone     String?                                 
   avatarUrl String?
   dob       String?
   gender    String?
   identityType  String?   // "CCCD" | "PASSPORT"
-  identityNo    String?   // Mã số giấy tờ tuỳ thân
+  identityNo    String?   // MÃ£ sá»‘ giáº¥y tá» tuá»³ thÃ¢n
   role      Role      @default(CUSTOMER)             
   createdAt DateTime  @default(now())               
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // [PHASE 1] Soft Delete                     
   authTokenVersion Int @default(0)
   authRevokedAt DateTime?
+
+  // -- Google OAuth --
+  googleId     String?  @unique   // Google subject ID (sub)
+  authProvider String   @default("local") // "local" | "google" | "both"
+
 
   bookings        Booking[]
   bookingsConfirmed Booking[]    @relation("BookingConfirmedBy")
@@ -79,13 +84,13 @@ model User {
 }
 
 // =============================================
-// BẢNG ĐIỂM ĐẾN (DESTINATION)
+// Báº¢NG ÄIá»‚M Äáº¾N (DESTINATION)
 // =============================================
 model Destination {
   id          Int      @id @default(autoincrement())
   name        String   @unique 
   nameEn      String?
-  slug        String?  @unique // URL thân thiện (vd: da-nang)
+  slug        String?  @unique // URL thÃ¢n thiá»‡n (vd: da-nang)
   description String?  @db.Text
   imageUrl    String?  
   region      String?  
@@ -102,7 +107,7 @@ model Destination {
 }
 
 // =============================================
-// BẢNG TOUR DU LỊCH
+// Báº¢NG TOUR DU Lá»ŠCH
 // =============================================
 model Tour {
   id             Int         @id @default(autoincrement())
@@ -118,23 +123,23 @@ model Tour {
   
   startDate      DateTime
   durationEn     String?
-  duration       String      @default("Chưa xác định")
+  duration       String      @default("ChÆ°a xÃ¡c Ä‘á»‹nh")
   availableSeats Int
   imageUrl       String?
   averageRating  Float       @default(0)
   tourType       String      @default("Luxury Retreat")
-  departurePoint String?                             // Điểm khởi hành mặc định (VD: "TP. Hồ Chí Minh")
+  departurePoint String?                             // Äiá»ƒm khá»Ÿi hÃ nh máº·c Ä‘á»‹nh (VD: "TP. Há»“ ChÃ­ Minh")
   departurePointEn String?
   
-  // ── Workflow fields ──────────────────────────────────────────────
-  status         TourStatus  @default(PUBLISHED)    // Trạng thái duyệt
-  publishedAt    DateTime?                           // Thời điểm xuất bản
-  reviewNote     String?     @db.Text               // Lý do từ chối (Admin ghi)
-  createdById    Int?                               // Staff/Admin tạo
-  reviewedById   Int?                               // Admin duyệt/từ chối
+  // â”€â”€ Workflow fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  status         TourStatus  @default(PUBLISHED)    // Tráº¡ng thÃ¡i duyá»‡t
+  publishedAt    DateTime?                           // Thá»i Ä‘iá»ƒm xuáº¥t báº£n
+  reviewNote     String?     @db.Text               // LÃ½ do tá»« chá»‘i (Admin ghi)
+  createdById    Int?                               // Staff/Admin táº¡o
+  reviewedById   Int?                               // Admin duyá»‡t/tá»« chá»‘i
   createdBy      User?       @relation("TourCreatedBy",  fields: [createdById],  references: [id], onDelete: SetNull)
   reviewedBy     User?       @relation("TourReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  // ─────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -143,56 +148,56 @@ model Tour {
   bookings       Booking[]
   assistedDrafts AssistedBookingDraft[]
   reviews        Review[]
-  itinerary      TourItinerary[] // [PHASE 1] Lịch trình theo ngày
-  packages       TourPackage[]   // Các gói tour (Tiêu Chuẩn / Cao Cấp / Luxury)
-  departures     TourDeparture[] // Các ngày khởi hành (mỗi ngày có giá và ghế riêng)
-  images         TourImage[]     // [PHASE 2] Bộ ảnh gallery của tour
-  highlights     TourHighlight[] // [PHASE 2] Điểm nổi bật của tour
-  faqs           TourFAQ[]       // [PHASE 2] Câu hỏi thường gặp
+  itinerary      TourItinerary[] // [PHASE 1] Lá»‹ch trÃ¬nh theo ngÃ y
+  packages       TourPackage[]   // CÃ¡c gÃ³i tour (TiÃªu Chuáº©n / Cao Cáº¥p / Luxury)
+  departures     TourDeparture[] // CÃ¡c ngÃ y khá»Ÿi hÃ nh (má»—i ngÃ y cÃ³ giÃ¡ vÃ  gháº¿ riÃªng)
+  images         TourImage[]     // [PHASE 2] Bá»™ áº£nh gallery cá»§a tour
+  highlights     TourHighlight[] // [PHASE 2] Äiá»ƒm ná»•i báº­t cá»§a tour
+  faqs           TourFAQ[]       // [PHASE 2] CÃ¢u há»i thÆ°á»ng gáº·p
 
-  @@index([destinationId, startDate])  // [PHASE 1] Index tăng tốc filter
-  @@index([tourType, price])           // [PHASE 1] Index tăng tốc filter
+  @@index([destinationId, startDate])  // [PHASE 1] Index tÄƒng tá»‘c filter
+  @@index([tourType, price])           // [PHASE 1] Index tÄƒng tá»‘c filter
 }
 
 
 // =============================================
-// BẢNG LỊCH TRÌNH TOUR THEO NGÀY (PHASE 1 - MỚI)
+// Báº¢NG Lá»ŠCH TRÃŒNH TOUR THEO NGÃ€Y (PHASE 1 - Má»šI)
 // =============================================
 model TourItinerary {
   id              Int      @id @default(autoincrement())
   tourId          Int
   tour            Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
-  dayNumber       Int      // Ngày thứ mấy (1, 2, 3...)
-  title           String   // "Khám phá Hội An cổ kính"
+  dayNumber       Int      // NgÃ y thá»© máº¥y (1, 2, 3...)
+  title           String   // "KhÃ¡m phÃ¡ Há»™i An cá»• kÃ­nh"
   titleEn         String?
-  description     String   @db.Text // Mô tả chi tiết hoạt động trong ngày
+  description     String   @db.Text // MÃ´ táº£ chi tiáº¿t hoáº¡t Ä‘á»™ng trong ngÃ y
   descriptionEn   String?  @db.Text
 
-  // [PHASE 2] Thông tin chi tiết theo ngày
-  mealsBreakfast  Boolean  @default(false) // Bữa sáng included
-  mealsLunch      Boolean  @default(false) // Bữa trưa included
-  mealsDinner     Boolean  @default(false) // Bữa tối included
-  accommodation   String?                  // "Vinpearl Resort 5⭐"
+  // [PHASE 2] ThÃ´ng tin chi tiáº¿t theo ngÃ y
+  mealsBreakfast  Boolean  @default(false) // Bá»¯a sÃ¡ng included
+  mealsLunch      Boolean  @default(false) // Bá»¯a trÆ°a included
+  mealsDinner     Boolean  @default(false) // Bá»¯a tá»‘i included
+  accommodation   String?                  // "Vinpearl Resort 5â­"
   accommodationEn String?
-  transport       String?                  // "Xe du lịch 45 chỗ"
+  transport       String?                  // "Xe du lá»‹ch 45 chá»—"
   transportEn     String?
-  activities      String[]                 // ["Lặn ngắm san hô", "Tắm biển Hòn Tằm"]
+  activities      String[]                 // ["Láº·n ngáº¯m san hÃ´", "Táº¯m biá»ƒn HÃ²n Táº±m"]
   activitiesEn    String[] @default([])
-  imageUrl        String?                  // Ảnh minh họa cho ngày
-  timeline        Json?                    // [{"time":"08:00","activity":"Ăn sáng tại KS"}, ...]
+  imageUrl        String?                  // áº¢nh minh há»a cho ngÃ y
+  timeline        Json?                    // [{"time":"08:00","activity":"Ä‚n sÃ¡ng táº¡i KS"}, ...]
   timelineEn      Json?
 
   @@index([tourId, dayNumber])
 }
 
 // =============================================
-// BẢNG ĐIỂM NỔI BẬT TOUR (PHASE 2 - MỚI)
+// Báº¢NG ÄIá»‚M Ná»”I Báº¬T TOUR (PHASE 2 - Má»šI)
 // =============================================
 model TourHighlight {
   id        Int    @id @default(autoincrement())
   tourId    Int
   tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
-  content   String // "Lặn ngắm san hô tại Hòn Mun — 10 vịnh đẹp nhất thế giới"
+  content   String // "Láº·n ngáº¯m san hÃ´ táº¡i HÃ²n Mun â€” 10 vá»‹nh Ä‘áº¹p nháº¥t tháº¿ giá»›i"
   contentEn String?
   icon      String @default("auto_awesome") // Material Symbol icon name
   sortOrder Int    @default(0)
@@ -201,7 +206,7 @@ model TourHighlight {
 }
 
 // =============================================
-// BẢNG CÂU HỎI THƯỜNG GẶP (PHASE 2 - MỚI)
+// Báº¢NG CÃ‚U Há»ŽI THÆ¯á»œNG Gáº¶P (PHASE 2 - Má»šI)
 // =============================================
 model TourFAQ {
   id        Int    @id @default(autoincrement())
@@ -217,7 +222,7 @@ model TourFAQ {
 }
 
 // =============================================
-// BẢNG ẢNH GALLERY TOUR (PHASE 2)
+// Báº¢NG áº¢NH GALLERY TOUR (PHASE 2)
 // =============================================
 model TourImage {
   id        Int    @id @default(autoincrement())
@@ -225,33 +230,33 @@ model TourImage {
   tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
   url       String // Cloudinary secure_url
   altText   String @default("") // Alt text cho SEO
-  sortOrder Int    @default(0)  // Thứ tự hiển thị (0 = ảnh đầu tiên / ảnh bìa)
+  sortOrder Int    @default(0)  // Thá»© tá»± hiá»ƒn thá»‹ (0 = áº£nh Ä‘áº§u tiÃªn / áº£nh bÃ¬a)
 
   @@index([tourId, sortOrder])
 }
 
 // =============================================
-// BẢNG GÓI TOUR (TOUR PACKAGE)
+// Báº¢NG GÃ“I TOUR (TOUR PACKAGE)
 // =============================================
 model TourPackage {
   id          Int      @id @default(autoincrement())
   tourId      Int
   tour        Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
 
-  name        String   // "Gói Tiêu Chuẩn" | "Gói Cao Cấp" | "Gói Luxury"
+  name        String   // "GÃ³i TiÃªu Chuáº©n" | "GÃ³i Cao Cáº¥p" | "GÃ³i Luxury"
   nameEn      String?
-  description String?  @db.Text // Mô tả ngắn về gói
+  description String?  @db.Text // MÃ´ táº£ ngáº¯n vá» gÃ³i
   descriptionEn String? @db.Text
-  price       Float    // Giá/người cho gói này
+  price       Float    // GiÃ¡/ngÆ°á»i cho gÃ³i nÃ y
   badge       String?  // "POPULAR" | "BEST VALUE" | "LUXURY" | null
 
-  // Lưu dạng JSON string array: ["Vé máy bay khứ hồi", "Khách sạn 4★"]
-  includes    String[] // Danh sách dịch vụ bao gồm
+  // LÆ°u dáº¡ng JSON string array: ["VÃ© mÃ¡y bay khá»© há»“i", "KhÃ¡ch sáº¡n 4â˜…"]
+  includes    String[] // Danh sÃ¡ch dá»‹ch vá»¥ bao gá»“m
   includesEn  String[] @default([])
-  excludes    String[] // Danh sách không bao gồm
+  excludes    String[] // Danh sÃ¡ch khÃ´ng bao gá»“m
   excludesEn  String[] @default([])
 
-  sortOrder   Int      @default(0) // Thứ tự hiển thị
+  sortOrder   Int      @default(0) // Thá»© tá»± hiá»ƒn thá»‹
   isActive    Boolean  @default(true)
 
   createdAt   DateTime @default(now())
@@ -261,21 +266,21 @@ model TourPackage {
 }
 
 // =============================================
-// BẢNG NGÀY KHỞI HÀNH (TOUR DEPARTURE)
+// Báº¢NG NGÃ€Y KHá»žI HÃ€NH (TOUR DEPARTURE)
 // =============================================
 model TourDeparture {
   id             Int      @id @default(autoincrement())
   tourId         Int
   tour           Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
 
-  departureDate  DateTime              // Ngày khởi hành cụ thể
-  price          Float?                // Null = dùng tour.price làm fallback
-  availableSeats Int      @default(0)  // Số ghế còn lại cho ngày này
-  maxSeats       Int?                  // [FLASH SALE] Tổng ghế ban đầu — dùng tính % đã đặt thực tế
-  note           String?               // Ghi chú tự do (VD: "Giá ưu đãi cuối tuần")
+  departureDate  DateTime              // NgÃ y khá»Ÿi hÃ nh cá»¥ thá»ƒ
+  price          Float?                // Null = dÃ¹ng tour.price lÃ m fallback
+  availableSeats Int      @default(0)  // Sá»‘ gháº¿ cÃ²n láº¡i cho ngÃ y nÃ y
+  maxSeats       Int?                  // [FLASH SALE] Tá»•ng gháº¿ ban Ä‘áº§u â€” dÃ¹ng tÃ­nh % Ä‘Ã£ Ä‘áº·t thá»±c táº¿
+  note           String?               // Ghi chÃº tá»± do (VD: "GiÃ¡ Æ°u Ä‘Ã£i cuá»‘i tuáº§n")
   noteEn         String?
   category       String?               // [FLASH SALE] 'FLASH_SALE' | 'EARLY_BIRD' | 'LAST_MINUTE' | null
-  flashSaleEndsAt DateTime?            // [FLASH SALE] Thời điểm kết thúc ưu đãi (null = không giới hạn)
+  flashSaleEndsAt DateTime?            // [FLASH SALE] Thá»i Ä‘iá»ƒm káº¿t thÃºc Æ°u Ä‘Ã£i (null = khÃ´ng giá»›i háº¡n)
 
   isActive       Boolean  @default(true)
   sortOrder      Int      @default(0)
@@ -284,22 +289,22 @@ model TourDeparture {
   updatedAt      DateTime @updatedAt
 
   @@index([tourId, departureDate])
-  @@index([category, flashSaleEndsAt]) // [FLASH SALE] Tăng tốc query lọc khuyến mãi
+  @@index([category, flashSaleEndsAt]) // [FLASH SALE] TÄƒng tá»‘c query lá»c khuyáº¿n mÃ£i
 }
 
-// --- CÁC ENUM CHO ĐẶT TOUR ---
+// --- CÃC ENUM CHO Äáº¶T TOUR ---
 enum BookingStatus {
-  PENDING            // Chờ xác nhận
-  CONFIRMED          // Đã chốt
-  CANCEL_REQUESTED   // Khách đã gửi yêu cầu hủy, chờ Admin duyệt
-  CANCELLED          // Đã hủy
+  PENDING            // Chá» xÃ¡c nháº­n
+  CONFIRMED          // ÄÃ£ chá»‘t
+  CANCEL_REQUESTED   // KhÃ¡ch Ä‘Ã£ gá»­i yÃªu cáº§u há»§y, chá» Admin duyá»‡t
+  CANCELLED          // ÄÃ£ há»§y
 }
 
 enum PaymentStatus {
-  UNPAID      // Chưa thanh toán
-  PROCESSING  // Đang chờ xử lý
-  PAID        // Đã thanh toán thành công
-  FAILED      // Thanh toán thất bại
+  UNPAID      // ChÆ°a thanh toÃ¡n
+  PROCESSING  // Äang chá» xá»­ lÃ½
+  PAID        // ÄÃ£ thanh toÃ¡n thÃ nh cÃ´ng
+  FAILED      // Thanh toÃ¡n tháº¥t báº¡i
 }
 
 enum PaymentMethod {
@@ -316,21 +321,21 @@ enum AssistedDraftStatus {
 }
 
 // =============================================
-// BẢNG ĐẶT TOUR (BOOKING)
+// Báº¢NG Äáº¶T TOUR (BOOKING)
 // =============================================
 model Booking {
   id               Int           @id @default(autoincrement())
-  bookingCode      String        @unique @default(uuid()) // Mã Đơn Hàng (VD: BKG-260324-X9F2)
+  bookingCode      String        @unique @default(uuid()) // MÃ£ ÄÆ¡n HÃ ng (VD: BKG-260324-X9F2)
   userId           Int
   tourId           Int
   numberOfPeople   Int
   totalPrice       Float
-  unitPriceAtBooking Float?      // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
+  unitPriceAtBooking Float?      // [PHASE 1] ÄÃ³ng bÄƒng giÃ¡ vÃ© táº¡i thá»i Ä‘iá»ƒm Ä‘áº·t
   
-  departureId      Int?          // [PHASE 2] Liên kết đến Lịch khởi hành
-  packageId        Int?          // [PHASE 2] Liên kết đến Gói Tour
-  contactInfo      Json?         // [PHASE 2] Thông tin liên hệ người đặt (tên, email, phone)
-  passengers       Json?         // [PHASE 2] Danh sách hành khách
+  departureId      Int?          // [PHASE 2] LiÃªn káº¿t Ä‘áº¿n Lá»‹ch khá»Ÿi hÃ nh
+  packageId        Int?          // [PHASE 2] LiÃªn káº¿t Ä‘áº¿n GÃ³i Tour
+  contactInfo      Json?         // [PHASE 2] ThÃ´ng tin liÃªn há»‡ ngÆ°á»i Ä‘áº·t (tÃªn, email, phone)
+  passengers       Json?         // [PHASE 2] Danh sÃ¡ch hÃ nh khÃ¡ch
   
   status           BookingStatus @default(PENDING)
   paymentStatus    PaymentStatus @default(UNPAID)
@@ -338,44 +343,44 @@ model Booking {
   holdExpiresAt    DateTime?
   confirmedById    Int?
   confirmedBy      User?         @relation("BookingConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
-  paymentGatewayTxnRef String?   // Mã giao dịch từ cổng thanh toán để đối soát
+  paymentGatewayTxnRef String?   // MÃ£ giao dá»‹ch tá»« cá»•ng thanh toÃ¡n Ä‘á»ƒ Ä‘á»‘i soÃ¡t
   isAssistedBooking Boolean      @default(false)
   assistedDraftId  Int?          @unique
   
-  voucherCode      String?       // Mã voucher đã áp dụng (nếu có)
-  discountAmount   Float         @default(0) // Số tiền đã giảm (VNĐ)
+  voucherCode      String?       // MÃ£ voucher Ä‘Ã£ Ã¡p dá»¥ng (náº¿u cÃ³)
+  discountAmount   Float         @default(0) // Sá»‘ tiá»n Ä‘Ã£ giáº£m (VNÄ)
 
-  // ── Cancellation fields ──────────────────────────────────────────
-  cancelReason        String?   @db.Text  // Lý do hủy của khách
-  cancelRequestedAt   DateTime?           // Thời điểm gửi yêu cầu hủy
-  cancelledAt         DateTime?           // Thời điểm thực sự hủy
+  // â”€â”€ Cancellation fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  cancelReason        String?   @db.Text  // LÃ½ do há»§y cá»§a khÃ¡ch
+  cancelRequestedAt   DateTime?           // Thá»i Ä‘iá»ƒm gá»­i yÃªu cáº§u há»§y
+  cancelledAt         DateTime?           // Thá»i Ä‘iá»ƒm thá»±c sá»± há»§y
   cancelledBy         String?             // "CUSTOMER" | "ADMIN" | "SYSTEM"
-  refundAmount        Float?              // Số tiền hoàn lại thực tế (VNĐ)
-  refundNote          String?   @db.Text  // Ghi chú hoàn tiền / lý do từ chối
-  refundBankDetails   Json?               // Thông tin nhận hoàn tiền (Ngân hàng, STK, Tên chủ TK)
-  refundedAt          DateTime?           // Thời điểm Admin thực sự chuyển khoản hoàn tiền
-  // ─────────────────────────────────────────────────────────────────
+  refundAmount        Float?              // Sá»‘ tiá»n hoÃ n láº¡i thá»±c táº¿ (VNÄ)
+  refundNote          String?   @db.Text  // Ghi chÃº hoÃ n tiá»n / lÃ½ do tá»« chá»‘i
+  refundBankDetails   Json?               // ThÃ´ng tin nháº­n hoÃ n tiá»n (NgÃ¢n hÃ ng, STK, TÃªn chá»§ TK)
+  refundedAt          DateTime?           // Thá»i Ä‘iá»ƒm Admin thá»±c sá»± chuyá»ƒn khoáº£n hoÃ n tiá»n
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   deletedAt        DateTime?     // [PHASE 1] Soft Delete
 
-  // Kết nối (Relations)
+  // Káº¿t ná»‘i (Relations)
   user             User          @relation(fields: [userId], references: [id])
   tour             Tour          @relation(fields: [tourId], references: [id])
   assistedDraft    AssistedBookingDraft? @relation(fields: [assistedDraftId], references: [id], onDelete: SetNull)
-  transactions     PaymentTransaction[] // [PHASE 1] Log thanh toán
+  transactions     PaymentTransaction[] // [PHASE 1] Log thanh toÃ¡n
   notifications    BookingNotification[]
-  supportTickets   SupportTicket[]      // [PHASE 1] Ticket hỗ trợ liên quan đến đơn
+  supportTickets   SupportTicket[]      // [PHASE 1] Ticket há»— trá»£ liÃªn quan Ä‘áº¿n Ä‘Æ¡n
 
-  @@index([userId, status])                  // [PHASE 1] Index: lịch sử booking user
-  @@index([status, paymentStatus, createdAt]) // [PHASE 1] Index: cron job quét đơn hết hạn
+  @@index([userId, status])                  // [PHASE 1] Index: lá»‹ch sá»­ booking user
+  @@index([status, paymentStatus, createdAt]) // [PHASE 1] Index: cron job quÃ©t Ä‘Æ¡n háº¿t háº¡n
   @@index([status, paymentStatus, holdExpiresAt])
 }
 
 // =============================================
-// BẢNG LOG THANH TOÁN (PHASE 1 - MỚI)
-// Lưu toàn bộ lịch sử giao dịch với cổng thanh toán
+// Báº¢NG LOG THANH TOÃN (PHASE 1 - Má»šI)
+// LÆ°u toÃ n bá»™ lá»‹ch sá»­ giao dá»‹ch vá»›i cá»•ng thanh toÃ¡n
 // =============================================
 model AssistedBookingDraft {
   id               Int                 @id @default(autoincrement())
@@ -432,31 +437,31 @@ model PaymentTransaction {
   booking        Booking  @relation(fields: [bookingId], references: [id])
   
   gateway        String   // "PAYOS" | "MANUAL"
-  transactionRef String?  // Mã tham chiếu từ cổng thanh toán hoặc biên lai
-  amount         Float    // Số tiền giao dịch (VNĐ)
+  transactionRef String?  // MÃ£ tham chiáº¿u tá»« cá»•ng thanh toÃ¡n hoáº·c biÃªn lai
+  amount         Float    // Sá»‘ tiá»n giao dá»‹ch (VNÄ)
   status         String   // "PENDING" | "SUCCESS" | "FAILED"
-  rawPayload     String?  @db.Text // JSON payload gốc từ webhook để đối soát
+  rawPayload     String?  @db.Text // JSON payload gá»‘c tá»« webhook Ä‘á»ƒ Ä‘á»‘i soÃ¡t
 
-  // ── Audit nguồn tiền [PHASE 1] ───────────────────────────────────────────────
-  // Ghi rõ bằng cách nào tiền được ghi nhận:
-  //   PAYOS_WEBHOOK               — PayOS gọi webhook thành công
-  //   PAYOS_RETURN_SYNC           — Return URL + gọi lại PayOS API
-  //   PAYOS_MANUAL_RECONCILIATION — Admin xác nhận ảnh CK thủ công
-  //   IN_STORE_CASH               — Thu tiền mặt tại quầy
-  //   IN_STORE_BANK_TRANSFER      — Chuyển khoản tại quầy (có biên lai)
-  //   IN_STORE_CARD_POS           — Quẹt thẻ POS
-  //   ADMIN_OVERRIDE              — Override khẩn cấp (chỉ SUPER_ADMIN)
-  confirmedSource  String?   // Enum string, null nếu chưa xác nhận
-  confirmedById    Int?      // Admin/Staff thực hiện xác nhận
-  confirmedAt      DateTime? // Thời điểm xác nhận
-  confirmedNote    String?   @db.Text // Ghi chú — bắt buộc với manual flows
-  evidenceUrl      String?   // URL ảnh giao dịch (Cloudinary)
-  // ────────────────────────────────────────────────────────────────────
+  // â”€â”€ Audit nguá»“n tiá»n [PHASE 1] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ghi rÃµ báº±ng cÃ¡ch nÃ o tiá»n Ä‘Æ°á»£c ghi nháº­n:
+  //   PAYOS_WEBHOOK               â€” PayOS gá»i webhook thÃ nh cÃ´ng
+  //   PAYOS_RETURN_SYNC           â€” Return URL + gá»i láº¡i PayOS API
+  //   PAYOS_MANUAL_RECONCILIATION â€” Admin xÃ¡c nháº­n áº£nh CK thá»§ cÃ´ng
+  //   IN_STORE_CASH               â€” Thu tiá»n máº·t táº¡i quáº§y
+  //   IN_STORE_BANK_TRANSFER      â€” Chuyá»ƒn khoáº£n táº¡i quáº§y (cÃ³ biÃªn lai)
+  //   IN_STORE_CARD_POS           â€” Quáº¹t tháº» POS
+  //   ADMIN_OVERRIDE              â€” Override kháº©n cáº¥p (chá»‰ SUPER_ADMIN)
+  confirmedSource  String?   // Enum string, null náº¿u chÆ°a xÃ¡c nháº­n
+  confirmedById    Int?      // Admin/Staff thá»±c hiá»‡n xÃ¡c nháº­n
+  confirmedAt      DateTime? // Thá»i Ä‘iá»ƒm xÃ¡c nháº­n
+  confirmedNote    String?   @db.Text // Ghi chÃº â€” báº¯t buá»™c vá»›i manual flows
+  evidenceUrl      String?   // URL áº£nh giao dá»‹ch (Cloudinary)
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   createdAt      DateTime @default(now())
 
   @@index([bookingId])
-  @@index([confirmedSource, confirmedAt]) // Tăng tốc thống kê theo nguồn tiền
+  @@index([confirmedSource, confirmedAt]) // TÄƒng tá»‘c thá»‘ng kÃª theo nguá»“n tiá»n
 }
 
 model BookingNotification {
@@ -482,19 +487,19 @@ model BookingNotification {
   @@index([status, createdAt])
 }
 
-// --- BẢNG NHẬT KÝ HÀNH ĐỘNG (AUDIT LOG) ---
+// --- Báº¢NG NHáº¬T KÃ HÃ€NH Äá»˜NG (AUDIT LOG) ---
 model SystemLog {
   id          Int      @id @default(autoincrement())
   action      String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | ROLE_CHANGE | CANCEL_BOOKING | EXPORT | REVOKE_SESSION
   resource    String   // 'Tour' | 'Booking' | 'User' | 'Voucher' | 'Article' | 'Review' | 'Auth'
-  resourceId  String?  // ID của object bị tác động
-  targetName  String?  // Tên hiển thị của object (VD: "Tour Hội An Heritage Walk")
-  description String   @db.Text // Mô tả hành động (human-readable)
-  oldData     Json?    // Snapshot dữ liệu trước khi thay đổi
-  newData     Json?    // Snapshot dữ liệu sau khi thay đổi
-  ipAddress   String?  // IP của người thực hiện
+  resourceId  String?  // ID cá»§a object bá»‹ tÃ¡c Ä‘á»™ng
+  targetName  String?  // TÃªn hiá»ƒn thá»‹ cá»§a object (VD: "Tour Há»™i An Heritage Walk")
+  description String   @db.Text // MÃ´ táº£ hÃ nh Ä‘á»™ng (human-readable)
+  oldData     Json?    // Snapshot dá»¯ liá»‡u trÆ°á»›c khi thay Ä‘á»•i
+  newData     Json?    // Snapshot dá»¯ liá»‡u sau khi thay Ä‘á»•i
+  ipAddress   String?  // IP cá»§a ngÆ°á»i thá»±c hiá»‡n
   userAgent   String?  // Browser/OS info
-  userId      Int?     // ID Admin/Staff thực hiện (null = system)
+  userId      Int?     // ID Admin/Staff thá»±c hiá»‡n (null = system)
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
@@ -554,23 +559,23 @@ model SuperRiskReview {
 }
 
 
-// --- HỆ THỐNG VOUCHER ---
+// --- Há»† THá»NG VOUCHER ---
 enum DiscountType {
-  PERCENTAGE    // Giảm theo %
-  FIXED_AMOUNT  // Giảm số tiền cố định (VNĐ)
+  PERCENTAGE    // Giáº£m theo %
+  FIXED_AMOUNT  // Giáº£m sá»‘ tiá»n cá»‘ Ä‘á»‹nh (VNÄ)
 }
 
 model Voucher {
   id            Int           @id @default(autoincrement())
-  code          String        @unique           // Mã voucher: AZURE2026
+  code          String        @unique           // MÃ£ voucher: AZURE2026
   label         String                          // "Premium Escape"
-  description   String        @db.Text          // Mô tả điều kiện
-  discountType  DiscountType                    // PERCENTAGE hoặc FIXED_AMOUNT
-  discountValue Float                           // 15 (= 15%) hoặc 500000 (= 500.000 VNĐ)
-  minOrderValue Float         @default(0)       // Giá trị đơn tối thiểu để dùng
-  maxUses       Int           @default(100)     // Tổng lượt sử dụng toàn hệ thống
-  usedCount     Int           @default(0)       // Đã dùng bao nhiêu lần
-  expiresAt     DateTime                        // Ngày hết hạn
+  description   String        @db.Text          // MÃ´ táº£ Ä‘iá»u kiá»‡n
+  discountType  DiscountType                    // PERCENTAGE hoáº·c FIXED_AMOUNT
+  discountValue Float                           // 15 (= 15%) hoáº·c 500000 (= 500.000 VNÄ)
+  minOrderValue Float         @default(0)       // GiÃ¡ trá»‹ Ä‘Æ¡n tá»‘i thiá»ƒu Ä‘á»ƒ dÃ¹ng
+  maxUses       Int           @default(100)     // Tá»•ng lÆ°á»£t sá»­ dá»¥ng toÃ n há»‡ thá»‘ng
+  usedCount     Int           @default(0)       // ÄÃ£ dÃ¹ng bao nhiÃªu láº§n
+  expiresAt     DateTime                        // NgÃ y háº¿t háº¡n
   isActive      Boolean       @default(true)
   createdAt     DateTime      @default(now())
 
@@ -581,46 +586,46 @@ model UserVoucher {
   id         Int       @id @default(autoincrement())
   userId     Int
   voucherId  Int
-  isUsed     Boolean   @default(false)         // Đã sử dụng chưa
-  savedAt    DateTime  @default(now())         // Ngày lưu vào ví
+  isUsed     Boolean   @default(false)         // ÄÃ£ sá»­ dá»¥ng chÆ°a
+  savedAt    DateTime  @default(now())         // NgÃ y lÆ°u vÃ o vÃ­
 
   user       User      @relation(fields: [userId], references: [id])
   voucher    Voucher   @relation(fields: [voucherId], references: [id])
 
-  @@unique([userId, voucherId])                // Mỗi user chỉ lưu mỗi voucher 1 lần
+  @@unique([userId, voucherId])                // Má»—i user chá»‰ lÆ°u má»—i voucher 1 láº§n
 }
 
-// --- HỆ THỐNG BÀI VIẾT (JOURNAL / BLOG) ---
+// --- Há»† THá»NG BÃ€I VIáº¾T (JOURNAL / BLOG) ---
 model Article {
   id          Int           @id @default(autoincrement())
-  slug        String        @unique               // URL thân thiện
+  slug        String        @unique               // URL thÃ¢n thiá»‡n
   category    String                              // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
   title       String
-  excerpt     String        @db.Text              // Tóm tắt ngắn hiển thị trên card
-  content     String        @db.Text              // Nội dung đầy đủ (HTML)
+  excerpt     String        @db.Text              // TÃ³m táº¯t ngáº¯n hiá»ƒn thá»‹ trÃªn card
+  content     String        @db.Text              // Ná»™i dung Ä‘áº§y Ä‘á»§ (HTML)
   imageUrl    String
   author      String
-  readTime    Int           @default(5)           // Thời gian đọc (phút)
-  isFeatured  Boolean       @default(false)       // Bài nổi bật hiện trên hero
-  publishedAt DateTime?                           // Nullable để hỗ trợ DRAFT
+  readTime    Int           @default(5)           // Thá»i gian Ä‘á»c (phÃºt)
+  isFeatured  Boolean       @default(false)       // BÃ i ná»•i báº­t hiá»‡n trÃªn hero
+  publishedAt DateTime?                           // Nullable Ä‘á»ƒ há»— trá»£ DRAFT
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
-  deletedAt   DateTime?                           // Soft Delete (thùng rác)
+  deletedAt   DateTime?                           // Soft Delete (thÃ¹ng rÃ¡c)
 
-  // ── Workflow fields ──────────────────────────────────────────────
-  status        ArticleStatus @default(PUBLISHED) // Trạng thái duyệt
-  reviewNote    String?       @db.Text             // Lý do từ chối (Admin ghi)
-  createdById   Int?                               // Staff/Admin tạo
-  reviewedById  Int?                               // Admin duyệt/từ chối
+  // â”€â”€ Workflow fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  status        ArticleStatus @default(PUBLISHED) // Tráº¡ng thÃ¡i duyá»‡t
+  reviewNote    String?       @db.Text             // LÃ½ do tá»« chá»‘i (Admin ghi)
+  createdById   Int?                               // Staff/Admin táº¡o
+  reviewedById  Int?                               // Admin duyá»‡t/tá»« chá»‘i
   createdBy     User?         @relation("ArticleCreatedBy",  fields: [createdById],  references: [id], onDelete: SetNull)
   reviewedBy    User?         @relation("ArticleReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  // ─────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 }
 
-// --- HỢP PHẦN AI CONCIERGE (LƯU TRỮ LỊCH SỬ CHAT) ---
+// --- Há»¢P PHáº¦N AI CONCIERGE (LÆ¯U TRá»® Lá»ŠCH Sá»¬ CHAT) ---
 model ChatSession {
   id        String   @id @default(uuid())
-  userId    Int?     // Thuộc về User nào (có thể null nếu khách chưa đăng nhập)
+  userId    Int?     // Thuá»™c vá» User nÃ o (cÃ³ thá»ƒ null náº¿u khÃ¡ch chÆ°a Ä‘Äƒng nháº­p)
   user      User?    @relation(fields: [userId], references: [id])
   
   messages  ChatMessage[]
@@ -639,15 +644,15 @@ model ChatMessage {
   createdAt DateTime @default(now())
 }
 
-// --- HỆ THỐNG ĐÁNH GIÁ (REVIEWS) ---
+// --- Há»† THá»NG ÄÃNH GIÃ (REVIEWS) ---
 model Review {
   id         Int      @id @default(autoincrement())
-  rating     Int      // Từ 1 đến 5 sao
+  rating     Int      // Tá»« 1 Ä‘áº¿n 5 sao
   content    String   @db.Text
-  imageUrls  String[] // Danh sách các ảnh đính kèm (Lưu mảng trên Postgres)
+  imageUrls  String[] // Danh sÃ¡ch cÃ¡c áº£nh Ä‘Ã­nh kÃ¨m (LÆ°u máº£ng trÃªn Postgres)
 
-  isHidden   Boolean  @default(false) // Admin ẩn review
-  adminReply String?  @db.Text        // Admin phản hồi review
+  isHidden   Boolean  @default(false) // Admin áº©n review
+  adminReply String?  @db.Text        // Admin pháº£n há»“i review
 
   tourId    Int
   tour      Tour     @relation(fields: [tourId], references: [id])
@@ -658,12 +663,12 @@ model Review {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([tourId, rating])   // Index tăng tốc filter review
-  @@index([isHidden])         // Index cho admin filter ẩn/hiện
+  @@index([tourId, rating])   // Index tÄƒng tá»‘c filter review
+  @@index([isHidden])         // Index cho admin filter áº©n/hiá»‡n
 }
 
 // =============================================
-// BẢNG NGƯỜI ĐĂNG KÝ NHẬN TIN (NEWSLETTER)
+// Báº¢NG NGÆ¯á»œI ÄÄ‚NG KÃ NHáº¬N TIN (NEWSLETTER)
 // =============================================
 model Subscriber {
   id        Int      @id @default(autoincrement())
@@ -673,43 +678,43 @@ model Subscriber {
 }
 
 // =============================================
-// BẢNG CÀI ĐẶT HỆ THỐNG (KEY-VALUE STORE)
+// Báº¢NG CÃ€I Äáº¶T Há»† THá»NG (KEY-VALUE STORE)
 // =============================================
 model SystemSetting {
   id          Int      @id @default(autoincrement())
   key         String   @unique   // VD: "company_name", "booking_hold_minutes"
-  value       String   @db.Text  // Giá trị (luôn lưu dạng String)
-  label       String             // Tên hiển thị: "Tên công ty"
-  description String?            // Mô tả thêm
-  group       String             // Nhóm: "company" | "booking" | "announcement"
+  value       String   @db.Text  // GiÃ¡ trá»‹ (luÃ´n lÆ°u dáº¡ng String)
+  label       String             // TÃªn hiá»ƒn thá»‹: "TÃªn cÃ´ng ty"
+  description String?            // MÃ´ táº£ thÃªm
+  group       String             // NhÃ³m: "company" | "booking" | "announcement"
   updatedAt   DateTime @updatedAt
-  updatedBy   Int?               // ID admin đã chỉnh sửa lần cuối
+  updatedBy   Int?               // ID admin Ä‘Ã£ chá»‰nh sá»­a láº§n cuá»‘i
 }
 
 // =============================================
-// HỀ THỐNG HỔ TRỢ KHÁCH HÀNG (SUPPORT TICKETS)
+// Há»€ THá»NG Há»” TRá»¢ KHÃCH HÃ€NG (SUPPORT TICKETS)
 // =============================================
 model SupportTicket {
   id              Int      @id @default(autoincrement())
-  accessCode      String?  @default(uuid()) @unique // [FIX] Bắt buộc dùng để khách vãng lai xem ticket, chống lộ dữ liệu
+  accessCode      String?  @default(uuid()) @unique // [FIX] Báº¯t buá»™c dÃ¹ng Ä‘á»ƒ khÃ¡ch vÃ£ng lai xem ticket, chá»‘ng lá»™ dá»¯ liá»‡u
   customerName    String
   customerEmail   String
   customerPhone   String?
-  bookingRef      String?                // Mã booking liên quan — giữ để tương thích với dữ liệu cũ
-  // ── Liên kết FK thật tới Booking [PHASE 1] ──────────────────────────────
-  // Dùng song song với bookingRef. bookingId = FK chuẩn cho ticket mới.
-  // Dữ liệu cũ giữ nguyên bookingRef, không cần migrate.
-  bookingId       Int?                   // FK thật tới Booking
+  bookingRef      String?                // MÃ£ booking liÃªn quan â€” giá»¯ Ä‘á»ƒ tÆ°Æ¡ng thÃ­ch vá»›i dá»¯ liá»‡u cÅ©
+  // â”€â”€ LiÃªn káº¿t FK tháº­t tá»›i Booking [PHASE 1] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // DÃ¹ng song song vá»›i bookingRef. bookingId = FK chuáº©n cho ticket má»›i.
+  // Dá»¯ liá»‡u cÅ© giá»¯ nguyÃªn bookingRef, khÃ´ng cáº§n migrate.
+  bookingId       Int?                   // FK tháº­t tá»›i Booking
   booking         Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  // ─────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   subject         String
   message         String   @db.Text
   category        String   @default("general") // booking|payment|reschedule|complaint|general
   status          String   @default("NEW")     // NEW|IN_PROGRESS|RESOLVED
-  assignedStaffId Int?                         // Staff được assign xử lý
-  rating          Int?                         // Đánh giá của khách sau khi RESOLVED (1-5)
+  assignedStaffId Int?                         // Staff Ä‘Æ°á»£c assign xá»­ lÃ½
+  rating          Int?                         // ÄÃ¡nh giÃ¡ cá»§a khÃ¡ch sau khi RESOLVED (1-5)
 
-  // Liên kết tới tài khoản người dùng (nullable — guest submissions không có)
+  // LiÃªn káº¿t tá»›i tÃ i khoáº£n ngÆ°á»i dÃ¹ng (nullable â€” guest submissions khÃ´ng cÃ³)
   userId          Int?
   user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -722,7 +727,7 @@ model SupportTicket {
   @@index([status])
   @@index([customerEmail])
   @@index([userId])
-  @@index([bookingId])  // [PHASE 1] Tìm ticket theo booking
+  @@index([bookingId])  // [PHASE 1] TÃ¬m ticket theo booking
 }
 
 model TicketReply {

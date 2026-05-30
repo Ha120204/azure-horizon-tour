@@ -11,7 +11,7 @@ import { clearClientUserStorage } from '@/lib/authSession';
 import { useLocale } from '@/context/LocaleContext';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import PersonalInfoForm from '@/components/profile/PersonalInfoForm';
-import ChangePasswordForm from '@/components/profile/ChangePasswordForm';
+import SecurityCard from '@/components/profile/SecurityCard';
 import VoucherWallet from '@/components/profile/VoucherWallet';
 import SupportTicketList, { type SupportTicket } from '@/components/profile/SupportTicketList';
 import SupportTicketDetail from '@/components/profile/SupportTicketDetail';
@@ -26,6 +26,8 @@ type ProfileUser = {
     identityType?: string;
     identityNo?: string;
     avatarUrl?: string;
+    authProvider?: string; // "local" | "google" | "both"
+    googleId?: string | null;
 };
 
 type RecentBooking = {
@@ -78,6 +80,7 @@ export default function ProfilePage() {
     const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [isChangePasswordVisible, setIsChangePasswordVisible] = useState(false);
+    const [isPersonalInfoOpen, setIsPersonalInfoOpen] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -287,6 +290,7 @@ export default function ProfilePage() {
 
     const totalTrips = recentBookings.filter(b => b.status !== 'CANCELLED' && b.status !== 'CANCEL_REQUESTED').length;
     const confirmedTrips = recentBookings.filter(b => b.status === 'CONFIRMED' && b.paymentStatus === 'PAID').length;
+    const isGoogleLinked = userData?.authProvider === 'google' || userData?.authProvider === 'both';
 
     return (
         <div className="bg-background text-on-background min-h-screen font-body flex flex-col relative">
@@ -299,14 +303,14 @@ export default function ProfilePage() {
                             <span className="material-symbols-outlined text-2xl">{toast.type === 'success' ? 'check_circle' : 'error'}</span>
                         </div>
                         <div>
-                            <h4 className="text-sm font-bold text-slate-800 font-headline">{toast.type === 'success' ? 'Success!' : 'Error!'}</h4>
+                            <h4 className="text-sm font-bold text-slate-800 font-headline">{toast.type === 'success' ? 'Thành công!' : 'Lỗi!'}</h4>
                             <p className="text-xs text-slate-500 mt-0.5">{toast.msg}</p>
                         </div>
                     </div>
                 </div>
             )}
 
-            <main className="pt-32 pb-20 px-4 md:px-8 max-w-7xl mx-auto space-y-16 w-full flex-grow">
+            <main className="pt-32 pb-20 px-4 md:px-8 max-w-7xl mx-auto space-y-10 w-full flex-grow">
                 <ProfileHeader
                     name={name}
                     email={email}
@@ -320,38 +324,69 @@ export default function ProfilePage() {
                     t={t}
                 />
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="bg-surface-container-lowest p-8 rounded-xl ambient-shadow space-y-8 h-fit">
-                            <PersonalInfoForm
-                                name={name} setName={setName}
-                                phone={phone} setPhone={setPhone}
-                                email={email}
-                                dob={dob} setDob={setDob}
-                                gender={gender} setGender={setGender}
-                                identityType={identityType} setIdentityType={setIdentityType}
-                                identityNo={identityNo} setIdentityNo={setIdentityNo}
-                                onSubmit={handleUpdateInfo}
-                                t={t}
-                            />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                    {/* ── LEFT SIDEBAR ── */}
+                    <div className="lg:col-span-1 space-y-5">
 
-                            <hr className="border-outline-variant/30" />
+                        {/* 1) Bao mat & Dang nhap — SecurityCard */}
+                        <SecurityCard
+                            authProvider={userData?.authProvider}
+                            email={userData?.email}
+                            currentPassword={currentPassword} setCurrentPassword={setCurrentPassword}
+                            newPassword={newPassword} setNewPassword={setNewPassword}
+                            confirmNewPassword={confirmNewPassword} setConfirmNewPassword={setConfirmNewPassword}
+                            isChangingPassword={isChangingPassword}
+                            onChangePassword={handleChangePassword}
+                            onPasswordSet={async () => {
+                                // Refresh userData để cập nhật authProvider → 'both'
+                                const res = await fetchWithAuth(`${API_BASE_URL}/auth/profile`);
+                                if (res.ok) {
+                                    const payload = await res.json();
+                                    const data = payload.data !== undefined ? payload.data : payload;
+                                    setUserData(data);
+                                    setToast({ msg: 'Thiết lập mật khẩu thành công!', type: 'success' });
+                                    setTimeout(() => setToast(null), 3000);
+                                }
+                            }}
+                            t={t}
+                        />
 
-                            <ChangePasswordForm
-                                isVisible={isChangePasswordVisible}
-                                setIsVisible={setIsChangePasswordVisible}
-                                currentPassword={currentPassword} setCurrentPassword={setCurrentPassword}
-                                newPassword={newPassword} setNewPassword={setNewPassword}
-                                confirmNewPassword={confirmNewPassword} setConfirmNewPassword={setConfirmNewPassword}
-                                showCurrentPassword={showCurrentPassword} setShowCurrentPassword={setShowCurrentPassword}
-                                showNewPassword={showNewPassword} setShowNewPassword={setShowNewPassword}
-                                showConfirmNewPassword={showConfirmNewPassword} setShowConfirmNewPassword={setShowConfirmNewPassword}
-                                isChangingPassword={isChangingPassword}
-                                onSubmit={handleChangePassword}
-                                t={t}
-                            />
+                        {/* 2) Thong tin ca nhan — Accordion */}
+                        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/10 shadow-sm overflow-hidden">
+                            <button
+                                type="button"
+                                onClick={() => setIsPersonalInfoOpen(v => !v)}
+                                className="w-full px-5 py-4 flex items-center justify-between hover:bg-surface-container-low transition-colors"
+                            >
+                                <span className="flex items-center gap-2 text-sm font-bold text-on-surface">
+                                    <span className="material-symbols-outlined text-[18px] text-primary">person</span>
+                                    Thông tin cá nhân
+                                </span>
+                                <span className={`material-symbols-outlined text-outline transition-transform duration-200 ${isPersonalInfoOpen ? 'rotate-180' : ''}`}>
+                                    expand_more
+                                </span>
+                            </button>
+
+                            {isPersonalInfoOpen && (
+                                <div className="px-5 pb-5 border-t border-outline-variant/10">
+                                    <div className="pt-4">
+                                        <PersonalInfoForm
+                                            name={name} setName={setName}
+                                            phone={phone} setPhone={setPhone}
+                                            email={email}
+                                            dob={dob} setDob={setDob}
+                                            gender={gender} setGender={setGender}
+                                            identityType={identityType} setIdentityType={setIdentityType}
+                                            identityNo={identityNo} setIdentityNo={setIdentityNo}
+                                            onSubmit={handleUpdateInfo}
+                                            t={t}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
+                        {/* 3) Voucher */}
                         <VoucherWallet
                             myVouchers={myVouchers}
                             showAllVouchers={showAllVouchers}
@@ -361,6 +396,8 @@ export default function ProfilePage() {
                         />
                     </div>
 
+
+                    {/* ── RIGHT CONTENT ── */}
                     <div className="lg:col-span-2 space-y-8">
                         {/* Tab switcher */}
                         <div className="flex items-center gap-1 bg-surface-container-low p-1.5 rounded-2xl w-fit">
@@ -388,9 +425,9 @@ export default function ProfilePage() {
                                 <span className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-sm">support_agent</span>
                                     {t('profile.supportRequests')}
-                                    {myTickets.filter(t => t.status !== 'RESOLVED').length > 0 && (
+                                    {myTickets.filter(tk => tk.status !== 'RESOLVED').length > 0 && (
                                         <span className="bg-primary text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
-                                            {myTickets.filter(t => t.status !== 'RESOLVED').length}
+                                            {myTickets.filter(tk => tk.status !== 'RESOLVED').length}
                                         </span>
                                     )}
                                 </span>
@@ -417,34 +454,10 @@ export default function ProfilePage() {
                                         const isCancelled = booking.status === 'CANCELLED';
                                         const isCancelRequested = booking.status === 'CANCEL_REQUESTED';
                                         const isPaid = booking.paymentStatus === 'PAID' && !isCancelled && !isCancelRequested;
-                                        const badgeLabel = isCancelled
-                                            ? t('profile.cancelledBadge')
-                                            : isCancelRequested
-                                                ? t('profile.cancelRequestedBadge')
-                                                : isPaid
-                                                    ? t('profile.confirmedBadge')
-                                                    : t('profile.unpaidBadge');
-                                        const badgeClass = isCancelled
-                                            ? 'bg-red-50 text-red-600 border border-red-200'
-                                            : isCancelRequested
-                                                ? 'bg-orange-50 text-orange-600 border border-orange-200'
-                                                : isPaid
-                                                    ? 'bg-tertiary-container text-white'
-                                                    : 'bg-secondary-container text-on-secondary-container';
-                                        const statusLabel = isCancelled
-                                            ? t('profile.cancelledLbl')
-                                            : isCancelRequested
-                                                ? t('profile.cancelRequestedLbl')
-                                                : isPaid
-                                                    ? t('profile.paidLbl')
-                                                    : t('profile.incompleteLbl');
-                                        const statusClass = isCancelled
-                                            ? 'text-red-600 bg-red-50'
-                                            : isCancelRequested
-                                                ? 'text-orange-600 bg-orange-50'
-                                                : isPaid
-                                                    ? 'text-tertiary-container bg-tertiary-container/10'
-                                                    : 'text-amber-600 bg-amber-50';
+                                        const badgeLabel = isCancelled ? t('profile.cancelledBadge') : isCancelRequested ? t('profile.cancelRequestedBadge') : isPaid ? t('profile.confirmedBadge') : t('profile.unpaidBadge');
+                                        const badgeClass = isCancelled ? 'bg-red-50 text-red-600 border border-red-200' : isCancelRequested ? 'bg-orange-50 text-orange-600 border border-orange-200' : isPaid ? 'bg-tertiary-container text-white' : 'bg-secondary-container text-on-secondary-container';
+                                        const statusLabel = isCancelled ? t('profile.cancelledLbl') : isCancelRequested ? t('profile.cancelRequestedLbl') : isPaid ? t('profile.paidLbl') : t('profile.incompleteLbl');
+                                        const statusClass = isCancelled ? 'text-red-600 bg-red-50' : isCancelRequested ? 'text-orange-600 bg-orange-50' : isPaid ? 'text-tertiary-container bg-tertiary-container/10' : 'text-amber-600 bg-amber-50';
                                         return (
                                             <div key={booking.id} className="group bg-surface-container-lowest rounded-xl overflow-hidden ambient-shadow transition-all duration-300 hover:-translate-y-1">
                                                 <div className="relative h-48 overflow-hidden">
@@ -456,9 +469,7 @@ export default function ProfilePage() {
                                                         src={booking.tour?.imageUrl || "https://images.unsplash.com/photo-1610574138412-7bf28ade0222?w=600&auto=format&fit=crop&q=60"}
                                                     />
                                                     <div className="absolute top-4 left-4">
-                                                        <span className={`px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-full shadow-lg ${badgeClass}`}>
-                                                            {badgeLabel}
-                                                        </span>
+                                                        <span className={`px-3 py-1.5 text-[10px] font-bold tracking-widest uppercase rounded-full shadow-lg ${badgeClass}`}>{badgeLabel}</span>
                                                     </div>
                                                     <div className="absolute -bottom-4 right-4 bg-white px-4 py-2 rounded-lg shadow-xl border border-surface-container">
                                                         <span className="text-lg font-bold font-headline text-primary">{formatPrice(booking.totalPrice)}</span>
@@ -473,9 +484,7 @@ export default function ProfilePage() {
                                                         </p>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <span className={`text-xs font-semibold px-2 py-1 rounded ${statusClass}`}>
-                                                            {statusLabel}
-                                                        </span>
+                                                        <span className={`text-xs font-semibold px-2 py-1 rounded ${statusClass}`}>{statusLabel}</span>
                                                         <Link href={`/my-bookings/${booking.id}`} className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
                                                             <span className="material-symbols-outlined">arrow_forward</span>
                                                         </Link>
@@ -498,18 +507,16 @@ export default function ProfilePage() {
                         )}
                     </div>
                 </div>
-
             </main>
 
             <Footer />
 
-            {/* Support Ticket Detail Modal */}
             {selectedTicket && (
                 <SupportTicketDetail
                     ticket={selectedTicket}
                     onClose={() => setSelectedTicket(null)}
                     onTicketUpdate={(updated) => {
-                        setMyTickets(prev => prev.map(t => t.id === updated.id ? updated : t));
+                        setMyTickets(prev => prev.map(tk => tk.id === updated.id ? updated : tk));
                         setSelectedTicket(updated);
                     }}
                 />

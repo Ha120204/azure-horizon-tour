@@ -44,6 +44,18 @@ export class SearchController {
   }
 
   /**
+   * GET /search/departure-points
+   * Returns distinct departure points from active tours.
+   */
+  @Get('departure-points')
+  async getDeparturePoints(
+    @Query('travelScope') travelScope?: string,
+    @Query('locale') locale?: string,
+  ) {
+    return this.searchService.getDeparturePoints(travelScope, locale);
+  }
+
+  /**
    * GET /search
    * Live search destinations and tours. Matches Vietnamese names with or without accents.
    */

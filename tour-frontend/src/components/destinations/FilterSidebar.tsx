@@ -36,6 +36,9 @@ interface FilterSidebarProps {
     activeFilterCount: number;
     priceRange: { min: number; max: number };
     allDestinations: DestinationOption[];
+    // Departure filter
+    departure: string;
+    setDeparture: (v: string) => void;
     t: (key: string) => string;
     formatPrice: (price: number) => string;
     language: string;
@@ -52,12 +55,16 @@ export default function FilterSidebar({
     onClearAll, onApplyFilters,
     activeFilterCount,
     allDestinations,
+    departure, setDeparture,
     t, formatPrice, language,
 }: FilterSidebarProps) {
     const [sidebarSuggestions, setSidebarSuggestions] = useState<DestinationOption[]>([]);
     const [isSidebarDestFocused, setIsSidebarDestFocused] = useState(false);
     const sidebarDebounceRef = useRef<NodeJS.Timeout | null>(null);
     const sidebarDestRef = useRef<HTMLDivElement>(null);
+    const [departurePoints, setDeparturePoints] = useState<{ label: string }[]>([]);
+    const [isDepartureOpen, setIsDepartureOpen] = useState(false);
+    const departureRef = useRef<HTMLDivElement>(null);
 
     const handleSidebarDestChange = useCallback((value: string) => {
         setIsAllDestinationsSelected(false);
@@ -87,10 +94,27 @@ export default function FilterSidebar({
             if (sidebarDestRef.current && !sidebarDestRef.current.contains(event.target as Node)) {
                 setIsSidebarDestFocused(false);
             }
+            if (departureRef.current && !departureRef.current.contains(event.target as Node)) {
+                setIsDepartureOpen(false);
+            }
         }
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // Fetch departure points
+    useEffect(() => {
+        const fetchDepartures = async () => {
+            try {
+                const params = new URLSearchParams({ locale: language });
+                if (travelScope) params.set('travelScope', travelScope);
+                const res = await fetch(`${API_BASE_URL}/search/departure-points?${params.toString()}`);
+                const json = await res.json();
+                setDeparturePoints(json.data || json);
+            } catch { /* ignore */ }
+        };
+        fetchDepartures();
+    }, [travelScope, language]);
 
     const tourTypes = [
         { value: 'Tour Gia Đình',    icon: 'family_restroom', label: t('filter.tourType_family'),    desc: t('filter.tourType_familyDesc') },
@@ -175,7 +199,71 @@ export default function FilterSidebar({
                 </div>
             </div>
 
-            {/* Search Section */}
+            {/* Departure City Filter */}
+            <div className="px-6 py-6 border-b border-outline-variant/10">
+                <h3 className="font-bold text-[11px] text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm text-primary">flight_takeoff</span>
+                    {language === 'vi' ? 'Điểm khởi hành' : 'Departure City'}
+                </h3>
+                <div ref={departureRef} className="relative">
+                    <button
+                        type="button"
+                        onClick={() => setIsDepartureOpen(!isDepartureOpen)}
+                        className="w-full flex items-center justify-between bg-surface-container-low border border-outline-variant/15 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary/30 hover:bg-white transition-all"
+                    >
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="material-symbols-outlined text-outline text-[18px] flex-shrink-0">location_city</span>
+                            <span className={`truncate ${departure ? 'text-on-surface font-semibold' : 'text-outline-variant'}`}>
+                                {departure || (language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities')}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                            {departure && (
+                                <span
+                                    className="w-5 h-5 flex items-center justify-center rounded-full bg-outline-variant/20 hover:bg-error/10 hover:text-error transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setDeparture(''); }}
+                                >
+                                    <span className="material-symbols-outlined text-[13px]">close</span>
+                                </span>
+                            )}
+                            <span className="material-symbols-outlined text-outline text-[18px]">
+                                {isDepartureOpen ? 'expand_less' : 'expand_more'}
+                            </span>
+                        </div>
+                    </button>
+
+                    {isDepartureOpen && (
+                        <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-[100] max-h-[240px] overflow-y-auto">
+                            {/* All */}
+                            <button
+                                type="button"
+                                onClick={() => { setDeparture(''); setIsDepartureOpen(false); }}
+                                className={`w-full px-4 py-2.5 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors ${!departure ? 'text-primary' : 'text-slate-600'}`}
+                            >
+                                <span className="material-symbols-outlined text-[16px]">travel_explore</span>
+                                <span className="text-sm font-bold">{language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities'}</span>
+                                {!departure && <span className="material-symbols-outlined text-[14px] text-primary ml-auto">check</span>}
+                            </button>
+                            <div className="mx-3 my-1 border-t border-slate-100" />
+                            {departurePoints.map((pt, idx) => (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => { setDeparture(pt.label); setIsDepartureOpen(false); }}
+                                    className={`w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors ${departure === pt.label ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-slate-400 text-[16px]">location_city</span>
+                                        <span className="text-sm font-semibold">{pt.label}</span>
+                                    </div>
+                                    {departure === pt.label && <span className="material-symbols-outlined text-[14px] text-primary">check</span>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <div className="px-6 py-6 border-b border-outline-variant/10">
                 <h3 className="font-bold text-[11px] text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-sm text-primary">search</span>

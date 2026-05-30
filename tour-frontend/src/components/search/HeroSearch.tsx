@@ -55,6 +55,12 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     // State riêng cho Budget
     const [budget, setBudget] = useState('');
 
+    // State cho Điểm khởi hành
+    const [departure, setDeparture] = useState('');
+    const [isDepartureOpen, setIsDepartureOpen] = useState(false);
+    const [departurePoints, setDeparturePoints] = useState<{label:string}[]>([]);
+    const departureRef = useRef<HTMLDivElement>(null);
+
     // State điều khiển đóng/mở Dropdown
     const [isDestFocused, setIsDestFocused] = useState(false);
     const [isBudgetOpen, setIsBudgetOpen] = useState(false);
@@ -102,6 +108,22 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         fetchDestinations();
     }, [travelScope, language]);
 
+    // ═══ Fetch departure points by trip scope ═══
+    useEffect(() => {
+        const fetchDepartures = async () => {
+            try {
+                const params = new URLSearchParams({ travelScope, locale: language });
+                const res = await fetch(`${API_BASE_URL}/search/departure-points?${params.toString()}`);
+                const json = await res.json();
+                setDeparturePoints(json.data || json);
+            } catch (error) {
+                console.error('Lỗi fetch điểm khởi hành:', error);
+            }
+        };
+        fetchDepartures();
+    }, [travelScope, language]);
+
+
     // ═══ Live search — gọi API khi user gõ (debounce 300ms) ═══
     const performSearch = useCallback(async (query: string) => {
         if (query.length < 2) {
@@ -137,6 +159,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         setSearchDestinations([]);
         setSearchTours([]);
         setIsDestFocused(false);
+        setDeparture('');
     };
 
     const handleDestinationChange = (value: string) => {
@@ -161,6 +184,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         function handleClickOutside(event: MouseEvent) {
             if (destRef.current && !destRef.current.contains(event.target as Node)) setIsDestFocused(false);
             if (budgetRef.current && !budgetRef.current.contains(event.target as Node)) setIsBudgetOpen(false);
+            if (departureRef.current && !departureRef.current.contains(event.target as Node)) setIsDepartureOpen(false);
         }
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -171,6 +195,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         setDestination(name);
         setIsAllDestinationsSelected(false);
         setIsDestFocused(false);
+        setDeparture('');
     };
 
     const handleSelectAllDestinations = () => {
@@ -179,6 +204,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         setSearchDestinations([]);
         setSearchTours([]);
         setIsDestFocused(false);
+        setDeparture('');
     };
 
     const handleSelectBudget = (value: string) => {
@@ -195,6 +221,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         if (isAllDestinationsSelected) params.append('allDestinations', '1');
         if (!isAllDestinationsSelected && destination.trim()) params.append('dest', destination);
         if (date) params.append('date', date);
+        if (departure.trim()) params.append('departure', departure.trim());
         if (budget) params.append('budget', budget);
         router.push(`/destinations?${params.toString()}`);
     };
@@ -229,7 +256,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     ];
 
     return (
-        <div className="relative z-50 max-w-4xl mx-auto w-full">
+        <div className="relative z-50 max-w-6xl mx-auto w-full">
             <div className="mb-3 flex justify-center">
                 <div className="relative grid grid-cols-2 rounded-full bg-white/15 p-1 border border-white/20 backdrop-blur-md shadow-lg shadow-slate-950/10">
                     <span
@@ -263,8 +290,58 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             onSubmit={handleSearch}
             className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:flex-row items-center p-2 border border-slate-100 w-full"
         >
+            {/* 0. Điểm khởi hành */}
+            <div ref={departureRef} className="flex-1 flex items-center gap-3 px-4 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative" onClick={() => setIsDepartureOpen(!isDepartureOpen)}>
+                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform flex-shrink-0">flight_takeoff</span>
+                <div className="flex flex-col flex-1 min-w-0">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">
+                        {language === 'vi' ? 'Khởi hành từ' : 'Departure'}
+                    </label>
+                    <div className="flex items-center justify-between gap-1">
+                        <span className={`text-sm font-bold whitespace-nowrap ${departure ? 'text-slate-800' : 'text-slate-300'}`}>
+                            {departure || (language === 'vi' ? 'Chọn điểm khởi hành' : 'Select departure')}
+                        </span>
+                        <span className="material-symbols-outlined text-slate-400 text-[18px] ml-1 flex-shrink-0">
+                            {isDepartureOpen ? 'expand_less' : 'expand_more'}
+                        </span>
+                    </div>
+                </div>
+                {/* Departure dropdown */}
+                {isDepartureOpen && (
+                    <div className="absolute top-[calc(100%+24px)] left-0 w-full md:w-[300px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                        {/* Option: Tất cả điểm khởi hành */}
+                        <div
+                            onClick={() => { setDeparture(''); setIsDepartureOpen(false); }}
+                            className={`px-5 py-3 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${!departure ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
+                        >
+                            <span className="material-symbols-outlined text-[18px]">travel_explore</span>
+                            <span className="text-sm font-bold">{language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities'}</span>
+                            {!departure && <span className="material-symbols-outlined text-[16px] text-primary ml-auto">check</span>}
+                        </div>
+                        <div className="mx-4 my-1 border-t border-slate-100" />
+                        {departurePoints.map((pt, idx) => (
+                            <div
+                                key={idx}
+                                onClick={() => { setDeparture(pt.label); setIsDepartureOpen(false); }}
+                                className={`px-5 py-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition-colors ${departure === pt.label ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="material-symbols-outlined text-[18px] text-slate-400">location_city</span>
+                                    <span className="text-sm font-bold">{pt.label}</span>
+                                </div>
+                                {departure === pt.label && <span className="material-symbols-outlined text-[16px] text-primary">check</span>}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Divider */}
+            <div className="hidden md:block w-px h-10 bg-slate-200"></div>
+
             {/* 1. Destination */}
             <div ref={destRef} className="flex-1 flex items-center gap-4 px-6 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative">
+
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">location_on</span>
                 <div className="flex flex-col flex-1 relative w-full">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{t('search.destination')}</label>
@@ -275,7 +352,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                             value={destination}
                             onChange={(e) => handleDestinationChange(e.target.value)}
                             onFocus={() => setIsDestFocused(true)}
-                            className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none placeholder:text-slate-300 w-full truncate"
+                            className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none placeholder:text-slate-300 w-full"
                         />
                         {destination && (
                             <button
@@ -406,10 +483,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <div className="hidden md:block w-px h-10 bg-slate-200"></div>
 
             {/* 2. Dates */}
-            <div className="flex-1 flex items-center gap-4 px-6 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group">
-                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">calendar_today</span>
-                <div className="flex flex-col flex-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{t('search.dates')}</label>
+            <div className="flex-1 min-w-0 flex items-center gap-3 px-4 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group">
+                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform flex-shrink-0">calendar_today</span>
+                <div className="flex flex-col flex-1 min-w-0">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{t('search.dates')}</label>
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none text-slate-500 w-full" />
                 </div>
             </div>
@@ -418,15 +495,15 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <div className="hidden md:block w-px h-10 bg-slate-200"></div>
 
             {/* 3. Budget (CUSTOM DROPDOWN) */}
-            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex-1 flex items-center gap-4 px-6 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative">
-                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform">account_balance_wallet</span>
-                <div className="flex flex-col flex-1 w-full">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{t('search.budget')}</label>
-                    <div className="flex items-center justify-between">
-                        <span className={`text-sm font-bold ${currentBudgetLabel ? 'text-slate-800' : 'text-slate-300'}`}>
+            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex-1 flex items-center gap-3 px-4 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative">
+                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform flex-shrink-0">account_balance_wallet</span>
+                <div className="flex flex-col flex-1 min-w-0">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{t('search.budget')}</label>
+                    <div className="flex items-center justify-between gap-1">
+                        <span className={`text-sm font-bold whitespace-nowrap ${currentBudgetLabel ? 'text-slate-800' : 'text-slate-300'}`}>
                             {currentBudgetLabel || t('search.selectBudget')}
                         </span>
-                        <span className="material-symbols-outlined text-slate-400 text-[18px]">
+                        <span className="material-symbols-outlined text-slate-400 text-[18px] flex-shrink-0">
                             {isBudgetOpen ? 'expand_less' : 'expand_more'}
                         </span>
                     </div>

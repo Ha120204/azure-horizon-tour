@@ -60,6 +60,13 @@ const nextConfig = {
         port: '3000',
         pathname: '/**',
       },
+      // Google profile pictures (OAuth avatar)
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };

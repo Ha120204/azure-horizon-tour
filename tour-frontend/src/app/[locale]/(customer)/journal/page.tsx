@@ -124,36 +124,66 @@ export default function JournalPage() {
             <Header />
 
             <main className="max-w-[1440px] mx-auto min-h-screen bg-slate-50 pb-24 font-sans pt-24">
-                {/* Banner Text Header */}
-                <header className="pt-24 pb-16 px-8 md:px-16 lg:px-24 text-center relative overflow-hidden">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-100/40 rounded-full blur-[80px] -z-10"></div>
-                    <h1 className="text-[4rem] md:text-[5.5rem] font-extrabold tracking-tighter text-slate-900 leading-[0.9] animate-fade-in-up">
-                        {t('journal.title').replace('.', '')}<span className="text-blue-600">.</span>
-                    </h1>
-                    <p className="mt-8 text-slate-500 text-lg md:text-xl max-w-2xl mx-auto tracking-tight animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-                        {t('journal.subtitle')}
-                    </p>
+                {/* ── Editorial Hero Header ── */}
+                <header className="relative overflow-hidden pt-16 pb-0 text-center"
+                    style={{ background: 'linear-gradient(160deg, #f8f7f4 0%, #eef2ff 55%, #f1f5fb 100%)' }}>
+                    {/* Layered ambient glows */}
+                    <div className="pointer-events-none absolute inset-0 -z-0">
+                        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[700px] h-[380px] rounded-full bg-blue-200/25 blur-[90px]" />
+                        <div className="absolute top-10 left-1/4 w-[300px] h-[200px] rounded-full bg-indigo-100/30 blur-[70px]" />
+                        <div className="absolute top-10 right-1/4 w-[260px] h-[180px] rounded-full bg-sky-100/30 blur-[60px]" />
+                    </div>
+
+                    <div className="relative z-10 px-8 md:px-16 lg:px-24 pt-10 pb-14">
+                        {/* Badge — chuẩn CNT / T+L / Airbnb Magazine */}
+                        <div className="flex items-center justify-center gap-3 mb-8 animate-fade-in-up">
+                            <div className="h-px w-10 bg-blue-600/40" />
+                            <span className="text-[10px] font-bold tracking-[0.28em] uppercase text-blue-700 bg-blue-50 border border-blue-200/60 px-3 py-1 rounded-full">
+                                Journal
+                            </span>
+                            <div className="h-px w-10 bg-blue-600/40" />
+                        </div>
+
+                        {/* Main title */}
+                        <h1 className="text-[4rem] md:text-[5.5rem] font-extrabold tracking-tighter text-slate-900 leading-[0.9] animate-fade-in-up">
+                            {t('journal.title').replace('.', '')}<span className="text-blue-600">.</span>
+                        </h1>
+
+                        {/* Subtitle */}
+                        <p className="mt-7 text-slate-500 text-base md:text-lg max-w-xl mx-auto leading-relaxed animate-fade-in-up" style={{ animationDelay: '80ms' }}>
+                            {t('journal.subtitle')}
+                        </p>
+
+                        {/* Separator trước tabs */}
+                        <div className="mt-12 flex items-center justify-center gap-4">
+                            <div className="h-px flex-1 max-w-[120px] bg-gradient-to-r from-transparent to-slate-200" />
+                            <span className="text-[10px] font-bold tracking-[0.22em] text-slate-400 uppercase">
+                                {language === 'vi' ? 'Khám phá theo chủ đề' : 'Browse by topic'}
+                            </span>
+                            <div className="h-px flex-1 max-w-[120px] bg-gradient-to-l from-transparent to-slate-200" />
+                        </div>
+                    </div>
                 </header>
 
                 {/* Category Filter Navigation */}
-                <nav className="sticky top-[80px] z-40 bg-slate-50/80 backdrop-blur-xl border-b border-slate-200 shadow-sm transition-all duration-300">
-                    <div className="max-w-[1440px] mx-auto px-8 md:px-16 flex justify-start md:justify-center items-center h-20 gap-x-8 md:gap-x-12 overflow-x-auto hide-scrollbar relative">
+                <nav className="sticky top-[80px] z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm transition-all duration-300">
+                    <div className="max-w-[1440px] mx-auto px-8 md:px-16 flex justify-start md:justify-center items-center h-[60px] gap-x-8 md:gap-x-12 overflow-x-auto hide-scrollbar relative">
                         {CATEGORIES.map((cat) => (
                             <button
                                 key={cat}
                                 onClick={() => setActiveCategory(cat)}
-                                className={`relative group text-xs font-bold tracking-[0.2em] transition-all duration-300 whitespace-nowrap py-4 ${activeCategory === cat
+                                className={`relative group text-[11px] font-bold tracking-[0.18em] transition-all duration-300 whitespace-nowrap py-4 uppercase ${activeCategory === cat
                                     ? 'text-blue-800'
-                                    : 'text-slate-400 hover:text-slate-800'
+                                    : 'text-slate-400 hover:text-slate-700'
                                     }`}
                             >
                                 {t(`journal.categories.${cat}`)}
                                 <span
-                                    className={`absolute bottom-0 left-0 w-full h-[3px] bg-blue-800 rounded-t-md transition-transform duration-300 ease-out origin-left ${activeCategory === cat
+                                    className={`absolute bottom-0 left-0 w-full h-[2px] bg-blue-700 rounded-t-full transition-transform duration-300 ease-out origin-left ${activeCategory === cat
                                         ? 'scale-x-100'
-                                        : 'scale-x-0 group-hover:scale-x-100'
+                                        : 'scale-x-0 group-hover:scale-x-75'
                                         }`}
-                                ></span>
+                                />
                             </button>
                         ))}
                     </div>

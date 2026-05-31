@@ -364,7 +364,8 @@ export default function PromotionsPage() {
             <main className="flex-grow">
                 <HeroBanner timeLeft={timeLeft} isMounted={isMounted} nearestFlashSaleEndsAt={nearestFlashSaleEndsAt} t={t} />
 
-                <section id="vouchers">
+                {/* scroll-margin-top compensates for the 88px fixed header */}
+                <section id="vouchers" style={{ scrollMarginTop: '88px' }}>
                     <VoucherCarousel
                         vouchers={vouchers}
                         copiedCode={copiedCode}
@@ -380,7 +381,7 @@ export default function PromotionsPage() {
                     />
                 </section>
 
-                <section id="deals">
+                <section id="deals" style={{ scrollMarginTop: '88px' }}>
                     <DealGrid
                         deals={deals}
                         filteredDeals={filteredDeals}

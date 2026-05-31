@@ -1,7 +1,55 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable smooth-scroll utility
+// • Uses scrollIntoView block:"center" so content lands mid-viewport (Klook/Airbnb pattern)
+// • Falls back to behavior:"instant" when user prefers reduced motion (WCAG 2.1 SC 2.3.3)
+// ─────────────────────────────────────────────────────────────────────────────
+function scrollToSection(sectionId: string) {
+    const el = document.getElementById(sectionId);
+    if (!el) return;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({
+        behavior: reduced ? 'instant' : 'smooth',
+        block: 'center',
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CTA buttons — extracted so the scroll logic stays DRY
+// ─────────────────────────────────────────────────────────────────────────────
+function CtaButtons({ t }: { t: (key: string) => string }) {
+    const handleDeals = useCallback(() => scrollToSection('deals'), []);
+    const handleVouchers = useCallback(() => scrollToSection('vouchers'), []);
+
+    return (
+        <div className="anim-fade-rise-d3 flex flex-col sm:flex-row items-center gap-4">
+            {/* Primary — Explore Deals */}
+            <button
+                type="button"
+                onClick={handleDeals}
+                className="inline-flex items-center gap-2 px-10 py-4 rounded-full font-headline font-bold text-sm text-white transition-all duration-200 hover:scale-[1.03] active:scale-[0.97] shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                style={{ background: 'linear-gradient(135deg, #003f87 0%, #0055b3 100%)' }}
+            >
+                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>local_offer</span>
+                {t('exploreDeals') ?? 'Khám Phá Ưu Đãi'}
+            </button>
+
+            {/* Secondary — Get Voucher */}
+            <button
+                type="button"
+                onClick={handleVouchers}
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-full font-headline font-bold text-sm text-white border border-white/25 hover:bg-white/10 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+                <span className="material-symbols-outlined text-[18px]">redeem</span>
+                {t('getVoucher') ?? 'Lấy Voucher'}
+            </button>
+        </div>
+    );
+}
 
 interface HeroBannerProps {
     timeLeft: { days: number; hours: number; minutes: number; seconds: number };
@@ -165,23 +213,7 @@ export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEnd
                 )}
 
                 {/* CTA */}
-                <div className="anim-fade-rise-d3 flex flex-col sm:flex-row items-center gap-4">
-                    <a
-                        href="#deals"
-                        className="inline-flex items-center gap-2 px-10 py-4 rounded-full font-headline font-bold text-sm text-white transition-all duration-200 hover:scale-[1.03] active:scale-[0.97] shadow-2xl"
-                        style={{ background: 'linear-gradient(135deg, #003f87 0%, #0055b3 100%)' }}
-                    >
-                        <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>local_offer</span>
-                        {t('exploreDeals') ?? 'Khám Phá Ưu Đãi'}
-                    </a>
-                    <a
-                        href="#vouchers"
-                        className="inline-flex items-center gap-2 px-8 py-4 rounded-full font-headline font-bold text-sm text-white border border-white/25 hover:bg-white/10 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm"
-                    >
-                        <span className="material-symbols-outlined text-[18px]">redeem</span>
-                        {t('getVoucher') ?? 'Lấy Voucher'}
-                    </a>
-                </div>
+                <CtaButtons t={t} />
 
                 {/* Scroll cue */}
                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/40 anim-fade-rise-d3">

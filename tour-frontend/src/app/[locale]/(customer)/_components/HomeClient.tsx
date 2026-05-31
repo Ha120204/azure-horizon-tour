@@ -80,6 +80,99 @@ const isPaymentErrorCode = (value: string | null) => value !== null && PAYMENT_E
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+// ── Count-up hook ──────────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 1400, decimals = 0, started = false) {
+  const [count, setCount] = useState(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!started) return;
+    const startTime = performance.now();
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(parseFloat((eased * target).toFixed(decimals)));
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [started, target, duration, decimals]);
+
+  return count;
+}
+
+// ── Single animated stat ───────────────────────────────────────────────────
+interface StatItemProps {
+  numericValue: number;
+  suffix: string;
+  label: string;
+  isRating?: boolean;
+  started: boolean;
+  decimals?: number;
+}
+function StatItem({ numericValue, suffix, label, isRating = false, started, decimals = 0 }: StatItemProps) {
+  const count = useCountUp(numericValue, 1400, decimals, started);
+  const displayNum = decimals > 0 ? count.toFixed(decimals) : Math.floor(count).toLocaleString();
+
+  return (
+    <div className="flex flex-col items-center text-center text-white select-none">
+      {isRating ? (
+        <div className="flex items-center gap-1.5 leading-none">
+          <p className="text-3xl font-extrabold font-headline drop-shadow tabular-nums">{displayNum}</p>
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="text-amber-400 text-[13px] leading-none">★★★★★</span>
+            <span className="text-white/50 text-[9px] font-bold uppercase tracking-widest leading-none">{suffix}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-3xl font-extrabold font-headline leading-none drop-shadow tabular-nums">
+          {displayNum}{suffix}
+        </p>
+      )}
+      <p className="text-[11px] text-white/55 mt-1.5 tracking-[0.12em] uppercase font-semibold whitespace-nowrap">{label}</p>
+    </div>
+  );
+}
+
+// ── Stats Row (triggered once on viewport enter) ───────────────────────────
+function StatsRow({ t }: { t: (key: string) => string }) {
+  const [started, setStarted] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setStarted(true); observer.disconnect(); } },
+      { threshold: 0.3 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const STATS: StatItemProps[] = [
+    { numericValue: 500, suffix: '+',  label: t('hero.statTours'),        started, decimals: 0 },
+    { numericValue: 50,  suffix: '+',  label: t('hero.statDestinations'), started, decimals: 0 },
+    { numericValue: 10,  suffix: 'K+', label: t('hero.statTravelers'),    started, decimals: 0 },
+    { numericValue: 4.9, suffix: '/5', label: t('hero.statRating'),       started, decimals: 1, isRating: true },
+  ];
+
+  return (
+    <div ref={rowRef} className="max-w-3xl mx-auto px-6 pb-8 hidden md:flex items-center justify-center">
+      {STATS.map((stat, i) => (
+        <div key={stat.label} className="flex items-center">
+          <StatItem {...stat} />
+          {i < STATS.length - 1 && (
+            <div className="mx-8 h-8 w-px bg-white/20 flex-shrink-0" />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HeroVideoBackground({ travelScope }: { travelScope: TravelScope }) {
   const activeScopeRef = useRef(travelScope);
   const [videoState, setVideoState] = useState({
@@ -218,19 +311,7 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
 
         {/* Stats Row */}
         <div className="absolute bottom-0 left-0 right-0 z-20">
-          <div className="max-w-4xl mx-auto px-6 pb-8 hidden md:flex items-center justify-center gap-12">
-            {[
-              { value: '500+', label: t('hero.statTours') },
-              { value: '50+',  label: t('hero.statDestinations') },
-              { value: '10K+', label: t('hero.statTravelers') },
-              { value: '4.9★', label: t('hero.statRating') },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center text-white">
-                <p className="text-2xl font-extrabold font-headline leading-none drop-shadow">{stat.value}</p>
-                <p className="text-xs text-white/60 mt-1 tracking-wide uppercase font-medium">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+          <StatsRow t={t} />
           <div className="h-16 bg-gradient-to-b from-transparent to-white" />
         </div>
 

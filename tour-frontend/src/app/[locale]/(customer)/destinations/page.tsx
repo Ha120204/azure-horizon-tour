@@ -1,13 +1,15 @@
-﻿'use client';
+'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useCallback } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
+import { LayoutGroup } from 'framer-motion';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
 import FilterSidebar from '@/components/destinations/FilterSidebar';
 import TourCard from '@/components/destinations/TourCard';
+import TourDetailDrawer from '@/components/destinations/TourDetailDrawer';
 import Pagination from '@/components/destinations/Pagination';
 import { API_BASE_URL } from '@/lib/constants';
 
@@ -78,6 +80,17 @@ function DestinationsContent() {
     const [selectedRating, setSelectedRating] = useState<number>(0);
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
     const [departure, setDeparture] = useState(initialDeparture);
+
+    // ── Drawer state: which tour is expanded ──────────────────────────
+    const [selectedTour, setSelectedTour] = useState<{ id: number; imageUrl?: string | null } | null>(null);
+
+    const handleSelectTour = useCallback((id: number, imageUrl: string | null | undefined) => {
+        setSelectedTour({ id, imageUrl });
+    }, []);
+
+    const handleCloseDrawer = useCallback(() => {
+        setSelectedTour(null);
+    }, []);
     const [appliedFilters, setAppliedFilters] = useState<AppliedFilters>({
         travelScope: initialTravelScope,
         dest: initialDest,
@@ -241,6 +254,7 @@ function DestinationsContent() {
     const showRefetchOverlay = isLoading && hasLoadedTours;
 
     return (
+        <LayoutGroup>
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
             <style dangerouslySetInnerHTML={{
                 __html: `
@@ -368,7 +382,13 @@ function DestinationsContent() {
                             ) : filteredTours.length > 0 ? (
                                 <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 transition-opacity duration-200 ${showRefetchOverlay ? 'opacity-55 pointer-events-none' : 'opacity-100'}`}>
                                     {filteredTours.map((tour) => (
-                                        <TourCard key={tour.id} tour={tour} t={t} formatPrice={formatPrice} />
+                                        <TourCard
+                                            key={tour.id}
+                                            tour={tour}
+                                            t={t}
+                                            formatPrice={formatPrice}
+                                            onSelect={handleSelectTour}
+                                        />
                                     ))}
                                 </div>
                             ) : (
@@ -402,6 +422,14 @@ function DestinationsContent() {
 
             <Footer />
         </div>
+
+            {/* Tour detail drawer — expands from the clicked card via Framer Motion layoutId */}
+            <TourDetailDrawer
+                tourId={selectedTour?.id ?? null}
+                imageUrl={selectedTour?.imageUrl}
+                onClose={handleCloseDrawer}
+            />
+        </LayoutGroup>
     );
 }
 

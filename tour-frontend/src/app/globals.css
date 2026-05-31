@@ -290,81 +290,71 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   View Transition CSS Recipes
-   Source: vercel-react-view-transitions/references/css-recipes.md
+   View Transition CSS — Native browser API (Chrome/Edge 111+, Safari 18.2+)
+   Triggered by: document.startViewTransition() in TourCard onClick
+   Shared element: viewTransitionName on card image ↔ gallery hero image
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Timing variables ── */
 :root {
-  --vt-duration-exit: 150ms;
-  --vt-duration-enter: 250ms;
-  --vt-duration-move: 420ms;
-  --vt-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --vt-duration-exit:  150ms;
+  --vt-duration-enter: 280ms;
+  --vt-duration-move:  480ms;
+  --vt-ease:           cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ── Shared keyframes ── */
-@keyframes vt-fade {
-  from { opacity: 0; filter: blur(2px); }
-  to   { opacity: 1; filter: blur(0); }
+/* ── Shared keyframes ────────────────────────────────────────────── */
+@keyframes vt-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes vt-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes vt-slide-from-right {
+  from { transform: translateX(64px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes vt-slide-to-left {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-64px); opacity: 0; }
+}
+@keyframes vt-blur-through {
+  0%   { filter: blur(0); }
+  40%  { filter: blur(4px); }
+  100% { filter: blur(0); }
 }
 
-@keyframes vt-slide-x {
-  from { translate: var(--vt-slide-x, 0); }
-  to   { translate: 0; }
+/* ── Page-level transition (root element) ────────────────────────── */
+/* Old page slides out to the left */
+::view-transition-old(root) {
+  animation: var(--vt-duration-exit) ease-in both vt-slide-to-left;
+}
+/* New page slides in from the right */
+::view-transition-new(root) {
+  animation: var(--vt-duration-enter) var(--vt-ease) var(--vt-duration-exit) both vt-slide-from-right;
 }
 
-@keyframes vt-via-blur {
-  30% { filter: blur(3px); }
-}
-
-/* ── Directional navigation: nav-forward (list → detail) ── */
-::view-transition-old(.nav-forward) {
-  --vt-slide-x: -48px;
-  animation:
-    var(--vt-duration-exit) ease-in both vt-fade reverse,
-    var(--vt-duration-move) var(--vt-easing) both vt-slide-x reverse;
-}
-::view-transition-new(.nav-forward) {
-  --vt-slide-x: 48px;
-  animation:
-    var(--vt-duration-enter) var(--vt-easing) var(--vt-duration-exit) both vt-fade,
-    var(--vt-duration-move) var(--vt-easing) both vt-slide-x;
-}
-
-/* Same classes, reverse direction for going back */
-::view-transition-old(.slide-to-left) {
-  --vt-slide-x: -48px;
-  animation:
-    var(--vt-duration-exit) ease-in both vt-fade reverse,
-    var(--vt-duration-move) var(--vt-easing) both vt-slide-x reverse;
-}
-::view-transition-new(.slide-from-right) {
-  --vt-slide-x: 48px;
-  animation:
-    var(--vt-duration-enter) var(--vt-easing) var(--vt-duration-exit) both vt-fade,
-    var(--vt-duration-move) var(--vt-easing) both vt-slide-x;
-}
-
-/* ── Shared element morph: tour card image → detail hero image ──
-   The browser interpolates position, size, border-radius automatically.
-   We only add a subtle blur-through for polish.
+/* ── Shared element: tour card image → detail hero image ─────────────
+   The browser automatically morphs position + size + border-radius.
+   We only add a blur-through for visual polish.
+   This fires for ANY element with a matching viewTransitionName.
 ── */
-::view-transition-group(.morph) {
+::view-transition-group(*) {
   animation-duration: var(--vt-duration-move);
-  animation-timing-function: var(--vt-easing);
+  animation-timing-function: var(--vt-ease);
 }
-::view-transition-image-pair(.morph) {
-  animation-name: vt-via-blur;
+::view-transition-image-pair(*) {
+  animation-name: vt-blur-through;
+  animation-duration: var(--vt-duration-move);
 }
 
-/* ── Reduced motion override for view transitions ──
-   Overrides the browser's default cross-fade for users who prefer no motion.
-── */
+/* ── Reduced motion ──────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*),
   ::view-transition-new(*),
   ::view-transition-group(*) {
     animation-duration: 0s !important;
-    animation-delay: 0s !important;
+    animation-delay:    0s !important;
   }
 }

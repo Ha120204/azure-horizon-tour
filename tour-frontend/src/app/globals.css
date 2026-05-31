@@ -291,65 +291,45 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    View Transition CSS — Native browser API (Chrome/Edge 111+, Safari 18.2+)
-   Triggered by: document.startViewTransition() in TourCard onClick
-   Shared element: viewTransitionName on card image ↔ gallery hero image
+   How it works:
+   1. Old page fades out.
+   2. Tour image (shared element) smoothly morphs from card position/size
+      to detail-page hero position/size (browser handles this automatically).
+   3. New page fades in around the expanding image.
+   Combined visual = "card expanding into detail page".
    ═══════════════════════════════════════════════════════════════════════════ */
 
-:root {
-  --vt-duration-exit:  150ms;
-  --vt-duration-enter: 280ms;
-  --vt-duration-move:  480ms;
-  --vt-ease:           cubic-bezier(0.16, 1, 0.3, 1);
+/* ── Keyframes ── */
+@keyframes vt-fade-out {
+  to { opacity: 0; }
 }
-
-/* ── Shared keyframes ────────────────────────────────────────────── */
 @keyframes vt-fade-in {
   from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes vt-fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-@keyframes vt-slide-from-right {
-  from { transform: translateX(64px); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
-}
-@keyframes vt-slide-to-left {
-  from { transform: translateX(0);     opacity: 1; }
-  to   { transform: translateX(-64px); opacity: 0; }
-}
-@keyframes vt-blur-through {
-  0%   { filter: blur(0); }
-  40%  { filter: blur(4px); }
-  100% { filter: blur(0); }
 }
 
-/* ── Page-level transition (root element) ────────────────────────── */
-/* Old page slides out to the left */
+/* ── Root (whole-page) snapshots: simple cross-fade ─────────────────
+   DO NOT use slide here — sliding competes visually with the shared
+   element morph and makes the animation feel like "page change", not
+   "card expanding". A clean fade keeps focus on the shared element.
+── */
 ::view-transition-old(root) {
-  animation: var(--vt-duration-exit) ease-in both vt-slide-to-left;
+  animation: 200ms ease-in forwards vt-fade-out;
 }
-/* New page slides in from the right */
 ::view-transition-new(root) {
-  animation: var(--vt-duration-enter) var(--vt-ease) var(--vt-duration-exit) both vt-slide-from-right;
+  animation: 350ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both vt-fade-in;
 }
 
-/* ── Shared element: tour card image → detail hero image ─────────────
-   The browser automatically morphs position + size + border-radius.
-   We only add a blur-through for visual polish.
-   This fires for ANY element with a matching viewTransitionName.
+/* ── Shared element timing ───────────────────────────────────────────
+   The browser already handles position/size/border-radius morphing.
+   We only extend the duration to make the expansion feel luxurious.
+   DO NOT override animation-name here — that would break the morph.
 ── */
 ::view-transition-group(*) {
-  animation-duration: var(--vt-duration-move);
-  animation-timing-function: var(--vt-ease);
-}
-::view-transition-image-pair(*) {
-  animation-name: vt-blur-through;
-  animation-duration: var(--vt-duration-move);
+  animation-duration: 500ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ── Reduced motion ──────────────────────────────────────────────── */
+/* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*),
   ::view-transition-new(*),

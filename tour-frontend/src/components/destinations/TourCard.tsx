@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import TourRatingBadge from '@/components/tour/TourRatingBadge';
 
 interface TourCardDeparture {
@@ -29,50 +29,6 @@ interface TourCardProps {
 }
 
 export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
-    const router = useRouter();
-
-    /**
-     * Smooth expand transition via View Transition API.
-     *
-     * How it works:
-     * 1. Browser captures a screenshot of the current page (old state).
-     * 2. `router.push` navigates to the detail page (new state).
-     * 3. Browser morphs the element with matching `viewTransitionName` from
-     *    its card position/size to its detail-page position/size.
-     *
-     * `viewTransitionName` is set on the image container div below.
-     * The matching name on the TourGallery hero image makes the shared
-     * element morph happen automatically.
-     *
-     * Graceful degradation: falls back to normal navigation on browsers
-     * without View Transition support (Firefox < 144, Safari < 18.2).
-     */
-    const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-        e.preventDefault();
-
-        const url = `/tour/${tour.id}`;
-
-        // Fallback for browsers without View Transition API support
-        if (typeof document.startViewTransition !== 'function') {
-            router.push(url);
-            return;
-        }
-
-        // Check reduced motion preference — instant nav, no animation
-        const prefersReducedMotion = window.matchMedia(
-            '(prefers-reduced-motion: reduce)'
-        ).matches;
-        if (prefersReducedMotion) {
-            router.push(url);
-            return;
-        }
-
-        // Trigger the shared element morph + page slide transition
-        document.startViewTransition(() => {
-            router.push(url);
-        });
-    };
-
     const displayPrice = formatPrice(
         tour.departures && tour.departures.length > 0
             ? Math.min(...tour.departures.map((d) => d.price ?? tour.price))
@@ -80,19 +36,29 @@ export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
     );
 
     return (
-        <a
+        /*
+         * Using <Link> here (not <a> + onClick) is critical.
+         * With `experimental.viewTransition: true` in next.config.mjs, Next.js
+         * wraps every Link navigation in document.startViewTransition() and
+         * correctly waits for the new page to fully render before capturing
+         * the "new" snapshot. This is what makes the shared element morph work.
+         *
+         * The `viewTransitionName` on the image container is matched by the
+         * same name on TourGallery's hero image — the browser automatically
+         * morphs between the two positions/sizes without any extra CSS.
+         */
+        <Link
             href={`/tour/${tour.id}`}
-            onClick={handleClick}
             className="block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1"
         >
             {/*
-              Image container — the shared element.
-              `viewTransitionName` must be unique per card (uses tour.id).
-              The matching name in TourGallery tells the browser to morph
-              this element into the hero image on the detail page.
+              The shared element — viewTransitionName must be unique per tour.
+              When the user navigates to the detail page, the browser matches
+              this name to the one on the hero image in TourGallery and
+              smoothly morphs between the two (expanding from card to hero).
             */}
             <div
-                className="relative aspect-[4/3] overflow-hidden"
+                className="relative aspect-[4/3] overflow-hidden rounded-2xl"
                 style={{ viewTransitionName: `tour-img-${tour.id}` }}
             >
                 <Image
@@ -147,6 +113,6 @@ export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
                     </div>
                 </div>
             </div>
-        </a>
+        </Link>
     );
 }

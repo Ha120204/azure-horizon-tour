@@ -196,7 +196,7 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
         />
 
         {/* Hero Content */}
-        <div className="relative z-30 text-center text-white px-6 w-full max-w-5xl mx-auto flex flex-col items-center">
+        <div className="relative z-30 text-center text-white px-6 w-full max-w-6xl mx-auto flex flex-col items-center">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/25 bg-white/10 backdrop-blur-sm text-[0.6875rem] font-bold tracking-[0.12em] uppercase mb-6 text-white/90">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             {t('hero.badge')}
@@ -211,7 +211,7 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
             {t('hero.subtitle')}
           </p>
 
-          <div className="w-full max-w-4xl mx-auto">
+          <div className="w-full max-w-6xl mx-auto">
             <HeroSearch travelScope={travelScope} onTravelScopeChange={setTravelScope} />
           </div>
         </div>

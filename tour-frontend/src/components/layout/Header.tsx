@@ -236,35 +236,46 @@ export default function Header() {
                         <div className="relative flex items-center" ref={searchContainerRef}>
                             <form
                                 onSubmit={handleQuickSearch}
-                                className={`transition-all duration-300 ease-in-out overflow-hidden flex items-center bg-slate-100 rounded-full ${isSearchOpen ? 'w-48 md:w-64 px-4 opacity-100 mr-2' : 'w-0 opacity-0'}`}
+                                className={`flex items-center rounded-full w-40 sm:w-48 md:w-60 px-3 py-1.5 border transition-all duration-300 ${
+                                    (isScrolled || !isHomepage)
+                                        ? 'bg-slate-100/90 border-slate-200/10 text-slate-800 focus-within:bg-white focus-within:border-primary/20 focus-within:ring-2 focus-within:ring-primary/10'
+                                        : 'bg-white/10 hover:bg-white/15 border-white/20 text-white focus-within:bg-white/20 focus-within:border-white/30'
+                                }`}
                             >
+                                <span className={`material-symbols-outlined text-[18px] shrink-0 mr-1.5 ${
+                                    (isScrolled || !isHomepage) ? 'text-slate-400' : 'text-white/60'
+                                }`}>
+                                    search
+                                </span>
                                 <input
                                     ref={searchInputRef}
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder={t('nav.search')}
-                                    className="w-full bg-transparent border-none text-sm text-slate-700 focus:ring-0 outline-none py-2 placeholder:text-slate-400"
+                                    className={`w-full bg-transparent border-none p-0 text-xs sm:text-sm focus:ring-0 outline-none ${
+                                        (isScrolled || !isHomepage)
+                                            ? 'text-slate-800 placeholder:text-slate-400'
+                                            : 'text-white placeholder:text-white/50'
+                                    }`}
                                 />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchQuery('');
+                                            setIsDropdownOpen(false);
+                                        }}
+                                        className="flex items-center justify-center p-0.5 rounded-full hover:bg-black/5 shrink-0"
+                                    >
+                                        <span className={`material-symbols-outlined text-[14px] ${
+                                            (isScrolled || !isHomepage) ? 'text-slate-400' : 'text-white/60'
+                                        }`}>
+                                            close
+                                        </span>
+                                    </button>
+                                )}
                             </form>
-
-                            <button
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => {
-                                    if (isSearchOpen) {
-                                        setSearchQuery('');
-                                        setIsSearchOpen(false);
-                                        setIsDropdownOpen(false);
-                                    } else {
-                                        setIsSearchOpen(true);
-                                    }
-                                }}
-                                className={`transition-colors flex items-center justify-center p-2 rounded-full ${(isScrolled || !isHomepage) ? 'text-slate-600 hover:text-blue-800' : 'text-white/90 hover:text-white'}`}
-                            >
-                                <span className="material-symbols-outlined text-xl">
-                                    {isSearchOpen ? 'close' : 'search'}
-                                </span>
-                            </button>
 
                             {/* Dropdown Live Search */}
                             {isDropdownOpen && searchQuery.length >= 2 && (

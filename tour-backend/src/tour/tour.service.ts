@@ -101,6 +101,7 @@ export class TourService {
       minPrice,
       maxPrice,
       date,
+      departure,
       ratings,
       minRating,
       types,
@@ -132,7 +133,7 @@ export class TourService {
       }
     } else if (requesterRole !== 'SUPER_ADMIN' && requesterRole !== 'ADMIN') {
       where.status = TourStatus.PUBLISHED;
-      where.startDate = { gte: new Date() };
+      // Lưu ý: giới hạn date được xử lý ở khối filter thống nhất bên dưới
     } else if (
       status &&
       Object.values(TourStatus).includes(status as TourStatus)
@@ -198,8 +199,29 @@ export class TourService {
       };
     }
 
-    if (date) {
-      where.startDate = { gte: new Date(date) };
+    // ══ Date filter: hỗ trợ cả tour dùng startDate lẫn TourDeparture ══
+    // Công chúản: hiện tour khi startDate >= date OR có departure tương lai
+    {
+      const isPublicUser = requesterRole !== 'SUPER_ADMIN' && requesterRole !== 'ADMIN' && requesterRole !== 'STAFF';
+      const effectiveDate = date ? new Date(date) : (isPublicUser ? new Date() : null);
+      if (effectiveDate) {
+        appendAndFilter(where, {
+          OR: [
+            { startDate: { gte: effectiveDate } },
+            { departures: { some: { isActive: true, departureDate: { gte: effectiveDate } } } },
+          ],
+        });
+      }
+    }
+
+    // ══ Điểm khởi hành filter ══
+    if (departure?.trim()) {
+      appendAndFilter(where, {
+        OR: [
+          { departurePoint: { contains: departure.trim(), mode: 'insensitive' } },
+          { departurePointEn: { contains: departure.trim(), mode: 'insensitive' } },
+        ],
+      });
     }
 
     // Legacy: exact bucket ratings (e.g. ratings=4,5)

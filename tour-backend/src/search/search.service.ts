@@ -126,7 +126,15 @@ export class SearchService {
           label: locale === 'en' ? (en || vi) : (vi || en),
         };
       })
-      .filter((p) => p.label.length > 0);
+      .filter((p) => {
+        if (!p.label || p.label.length === 0) return false;
+        // Loại các điểm khởi hành là combo nhiều thành phố (dữ liệu nhập không chuẩn)
+        const lower = p.label.toLowerCase();
+        if (lower.includes(' hoặc ') || lower.includes(' or ') || lower.includes(' và ') || lower.includes(' / ')) return false;
+        // Loại tên quá dài (> 40 ký tự là tên điểm khởi hành không chuẩn)
+        if (p.label.length > 40) return false;
+        return true;
+      });
 
     // Deduplicate by label
     const seen = new Set<string>();

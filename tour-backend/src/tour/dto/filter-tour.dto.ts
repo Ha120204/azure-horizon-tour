@@ -51,5 +51,9 @@ export class FilterTourDto {
 
   @IsOptional()
   @IsString()
+  departure?: string; // Lọc theo điểm khởi hành (contains, case-insensitive)
+
+  @IsOptional()
+  @IsString()
   status?: string; // 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED'
 }

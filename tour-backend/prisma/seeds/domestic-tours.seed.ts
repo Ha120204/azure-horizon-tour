@@ -702,7 +702,7 @@ const tours: DomesticTourSeed[] = [
       availableSeats: 80,
       imageUrl: IMAGES.hoiAn[0],
       tourType: 'Văn Hóa & Lịch Sử',
-      departurePoint: 'Đà Nẵng hoặc Hội An',
+      departurePoint: 'Đà Nẵng',
       highlights: [
         'Dạo phố cổ Hội An buổi tối',
         'Trải nghiệm rừng dừa Bảy Mẫu',
@@ -1108,8 +1108,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       duration: '2 ngày 1 đêm',
       availableSeats: 85,
       imageUrl: IMAGES.canTho[0],
-      tourType: 'Văn Hóa & Ẩm Thực',
-      departurePoint: 'TP.HCM hoặc Cần Thơ',
+      tourType: 'Văn Hóa & Lịch Sử',
+      departurePoint: 'TP.HCM',
       highlights: [
         'Đi thuyền chợ nổi Cái Răng buổi sáng',
         'Tham quan vườn trái cây hoặc nhà cổ theo mùa',
@@ -1264,7 +1264,7 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       duration: '2 ngày 1 đêm',
       availableSeats: 75,
       imageUrl: IMAGES.maiChau[0],
-      tourType: 'Văn Hóa & Nghỉ Dưỡng',
+      tourType: 'Nghỉ Dưỡng',
       departurePoint: 'Hà Nội',
       highlights: [
         'Dạo bản Lác và thung lũng Mai Châu',

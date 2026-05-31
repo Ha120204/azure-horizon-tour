@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { ViewTransition } from 'react';
 import TourRatingBadge from '@/components/tour/TourRatingBadge';
 
 interface TourCardDeparture {
@@ -30,51 +31,70 @@ interface TourCardProps {
 
 export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
     return (
-        <Link href={`/tour/${tour.id}`} className="block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1">
-            <div className="relative aspect-[4/3] overflow-hidden">
-                <Image
-                    alt={tour.name}
-                    className="object-cover transition-transform duration-700 group-hover:scale-110"
-                    src={tour.imageUrl || 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=1200'}
-                    fill
-                    sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
-                />
-                <div className="absolute top-4 left-4">
-                    <span className="bg-tertiary-container text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest shadow-md">{t('dest.available_badge')}</span>
-                </div>
-                <TourRatingBadge
-                    averageRating={tour.averageRating}
-                    reviewCount={tour.reviewCount}
-                    _count={tour._count}
-                    notRatedLabel={t('reviews.notRated')}
-                    reviewLabel={t('tour_detail.reviewSingular')}
-                    reviewsLabel={t('tour_detail.reviewsLabel')}
-                    variant="surface"
-                    className="absolute bottom-4 right-4"
-                />
-            </div>
-            <div className="p-6">
-                <div className="flex items-center text-outline text-[11px] font-bold uppercase tracking-widest mb-2">
-                    <span className="material-symbols-outlined text-xs mr-1">schedule</span>
-                    {tour.duration}
-                </div>
-                <h3 className="font-headline text-xl font-bold text-on-surface mb-6 truncate" title={tour.name}>{tour.name}</h3>
-                <div className="flex items-center justify-between pt-4 border-t border-outline-variant/10">
-                    <div>
-                        <span className="text-[10px] text-outline block font-bold uppercase tracking-tighter">{t('dest.from')}</span>
-                        <span className="text-xl font-extrabold text-primary">
-                            {formatPrice(
-                                tour.departures && tour.departures.length > 0
-                                    ? Math.min(...tour.departures.map((d) => d.price ?? tour.price))
-                                    : tour.price
-                            )}
-                        </span>
+        // Outer ViewTransition: list identity — animates card enter/exit on filter/sort/page change
+        <ViewTransition key={tour.id}>
+            <Link
+                href={`/tour/${tour.id}`}
+                // transitionTypes tags this navigation so detail page can react with directional slide
+                transitionTypes={['nav-forward']}
+                className="block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1"
+            >
+                <div className="relative aspect-[4/3] overflow-hidden">
+                    {/*
+                      Inner ViewTransition: shared element morph
+                      name must match the one in TourGallery for the same tour.
+                      Only one VT with this name can be mounted — guaranteed because
+                      each card has a unique tour.id.
+                    */}
+                    <ViewTransition name={`tour-img-${tour.id}`} share="morph">
+                        <div className="absolute inset-0">
+                            <Image
+                                alt={tour.name}
+                                className="object-cover transition-transform duration-700 group-hover:scale-110"
+                                src={tour.imageUrl || 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=1200'}
+                                fill
+                                sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                            />
+                        </div>
+                    </ViewTransition>
+
+                    <div className="absolute top-4 left-4 z-10">
+                        <span className="bg-tertiary-container text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest shadow-md">{t('dest.available_badge')}</span>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-surface-container-high group-hover:bg-primary flex items-center justify-center transition-colors duration-300">
-                        <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">arrow_forward</span>
+                    <TourRatingBadge
+                        averageRating={tour.averageRating}
+                        reviewCount={tour.reviewCount}
+                        _count={tour._count}
+                        notRatedLabel={t('reviews.notRated')}
+                        reviewLabel={t('tour_detail.reviewSingular')}
+                        reviewsLabel={t('tour_detail.reviewsLabel')}
+                        variant="surface"
+                        className="absolute bottom-4 right-4 z-10"
+                    />
+                </div>
+                <div className="p-6">
+                    <div className="flex items-center text-outline text-[11px] font-bold uppercase tracking-widest mb-2">
+                        <span className="material-symbols-outlined text-xs mr-1">schedule</span>
+                        {tour.duration}
+                    </div>
+                    <h3 className="font-headline text-xl font-bold text-on-surface mb-6 truncate" title={tour.name}>{tour.name}</h3>
+                    <div className="flex items-center justify-between pt-4 border-t border-outline-variant/10">
+                        <div>
+                            <span className="text-[10px] text-outline block font-bold uppercase tracking-tighter">{t('dest.from')}</span>
+                            <span className="text-xl font-extrabold text-primary">
+                                {formatPrice(
+                                    tour.departures && tour.departures.length > 0
+                                        ? Math.min(...tour.departures.map((d) => d.price ?? tour.price))
+                                        : tour.price
+                                )}
+                            </span>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-surface-container-high group-hover:bg-primary flex items-center justify-center transition-colors duration-300">
+                            <span className="material-symbols-outlined text-primary group-hover:text-white transition-colors">arrow_forward</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </Link>
+            </Link>
+        </ViewTransition>
     );
 }

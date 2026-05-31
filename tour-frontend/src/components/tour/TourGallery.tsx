@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { ViewTransition } from 'react';
 import type { Tour } from '@/types';
 
 interface TourImage { id: number; url: string; altText?: string; sortOrder: number; }
@@ -12,6 +13,8 @@ type GalleryTour = Pick<Tour, 'name' | 'tourCode' | 'imageUrl'> & {
 interface TourGalleryProps {
     tour: GalleryTour;
     t: (key: string) => string;
+    /** Tour ID — used for the shared element view transition name matching TourCard */
+    tourId: string | number;
 }
 
 const FALLBACK_IMAGES = [
@@ -41,7 +44,7 @@ function GalleryImage({
     );
 }
 
-export default function TourGallery({ tour, t }: TourGalleryProps) {
+export default function TourGallery({ tour, t, tourId }: TourGalleryProps) {
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
     // Lấy ảnh thực tế từ database, không fix cứng thêm fallback nữa
@@ -84,7 +87,12 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
         if (imgCount === 1) {
             return (
                 <div className="w-full h-[300px] md:h-[480px] rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                    <GalleryImage src={allImages[0]} alt={tour.name} sizes="100vw" priority />
+                    {/* Shared element: name matches TourCard → smooth morph on navigation */}
+                    <ViewTransition name={`tour-img-${tourId}`} share="morph">
+                        <div className="absolute inset-0">
+                            <GalleryImage src={allImages[0]} alt={tour.name} sizes="100vw" priority />
+                        </div>
+                    </ViewTransition>
                     {renderTourCode()}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                 </div>
@@ -96,7 +104,11 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
                     <div className="rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                        <GalleryImage src={allImages[0]} alt={tour.name} sizes="(min-width: 768px) 50vw, 100vw" priority />
+                        <ViewTransition name={`tour-img-${tourId}`} share="morph">
+                            <div className="absolute inset-0">
+                                <GalleryImage src={allImages[0]} alt={tour.name} sizes="(min-width: 768px) 50vw, 100vw" priority />
+                            </div>
+                        </ViewTransition>
                         {renderTourCode()}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
@@ -114,7 +126,11 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
             return (
                 <div className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
                     <div className="md:col-span-2 md:row-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                        <GalleryImage src={allImages[0]} alt={tour.name} sizes="(min-width: 768px) 67vw, 100vw" priority />
+                        <ViewTransition name={`tour-img-${tourId}`} share="morph">
+                            <div className="absolute inset-0">
+                                <GalleryImage src={allImages[0]} alt={tour.name} sizes="(min-width: 768px) 67vw, 100vw" priority />
+                            </div>
+                        </ViewTransition>
                         {renderTourCode()}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
@@ -136,9 +152,13 @@ export default function TourGallery({ tour, t }: TourGalleryProps) {
         const side = rest.slice(0, 3);
         return (
             <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-2 md:gap-3 h-[300px] md:h-[480px] relative">
-                {/* Ảnh chính */}
+                {/* Ảnh chính — shared element target */}
                 <div className="md:col-span-2 md:row-span-2 rounded-2xl overflow-hidden relative cursor-zoom-in group" onClick={() => setLightboxIndex(0)}>
-                    <GalleryImage src={main} alt={tour.name} sizes="(min-width: 768px) 50vw, 100vw" priority />
+                    <ViewTransition name={`tour-img-${tourId}`} share="morph">
+                        <div className="absolute inset-0">
+                            <GalleryImage src={main} alt={tour.name} sizes="(min-width: 768px) 50vw, 100vw" priority />
+                        </div>
+                    </ViewTransition>
                     {renderTourCode()}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                 </div>

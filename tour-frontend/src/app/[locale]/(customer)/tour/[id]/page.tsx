@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import { ViewTransition } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -124,6 +125,11 @@ export default function TourDetailPage() {
     const hasReviewStats = reviewStats.totalReviews > 0 && reviewStats.averageRating > 0;
 
     return (
+        <ViewTransition
+            enter={{ 'nav-forward': 'slide-from-right', default: 'none' }}
+            exit={{ 'nav-forward': 'slide-to-left', default: 'none' }}
+            default="none"
+        >
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
             <Header />
 
@@ -143,7 +149,7 @@ export default function TourDetailPage() {
                     <span className="text-on-surface font-medium truncate max-w-[200px]">{tour.name}</span>
                 </nav>
 
-                <TourGallery tour={tour} t={t} />
+                <TourGallery tour={tour} t={t} tourId={params.id as string} />
 
                 {/* ── Highlights ── */}
                 <HighlightsSection highlights={tour.highlights ?? []} t={t} />
@@ -475,5 +481,6 @@ export default function TourDetailPage() {
                 onSuccess={fetchReviews}
             />
         </div>
+        </ViewTransition>
     );
 }

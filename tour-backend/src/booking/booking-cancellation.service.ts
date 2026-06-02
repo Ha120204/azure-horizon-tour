@@ -269,6 +269,68 @@ export class BookingCancellationService {
     return { message: 'Da tu choi yeu cau huy, booking tiep tuc hieu luc' };
   }
 
+  async adminCancelBooking(bookingId: number, adminId: number, reason: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+      include: { user: true, tour: true },
+    });
+    if (!booking) throw new NotFoundException('Booking khong ton tai');
+    if (booking.status === 'CANCELLED') throw new BadRequestException('Booking nay da duoc huy truoc do');
+
+    const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
+    if (!cancellationPolicy.canCancel) {
+      throw new BadRequestException(cancellationPolicy.cancelUnavailableReason ?? 'Khong the huy booking nay.');
+    }
+
+    const refundAmount = cancellationPolicy.estimatedRefundAmount;
+    const refundNote = booking.paymentStatus === 'PAID'
+      ? cancellationPolicy.refundNote
+      : 'Admin huy truoc khi thanh toan - khong co hoan tien';
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'CANCELLED',
+          paymentStatus: 'FAILED',
+          cancelReason: reason,
+          cancelledAt: new Date(),
+          cancelledBy: 'ADMIN',
+          refundAmount,
+          refundNote,
+        },
+      });
+      await releaseSeats(tx, {
+        tourId: booking.tourId,
+        departureId: booking.departureId,
+        seats: booking.numberOfPeople,
+      });
+    });
+
+    if (booking.paymentMethod === 'PAYOS' && booking.paymentStatus !== 'PAID') {
+      try {
+        await this.paymentService.cancelPaymentLink(bookingId, 'Admin huy don');
+      } catch {
+        this.logger.warn(`[PAYOS] Khong the huy link PayOS cho booking #${bookingId}.`);
+      }
+    }
+
+    await this.adminNotifications.createSafe({
+      type: 'booking_cancelled',
+      resourceType: 'Booking',
+      resourceId: bookingId,
+      title: 'Admin da huy booking',
+      body: `Booking ${booking.bookingCode} da duoc admin huy.`,
+      href: '/admin/bookings?status=CANCELLED',
+      severity: 'warning',
+      targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
+      metadata: { bookingCode: booking.bookingCode, reason, adminId, refundAmount },
+    });
+
+    this.logger.log(`[ADMIN] Booking cancelled bookingId=${bookingId} adminId=${adminId}`);
+    return { message: 'Da huy booking va hoan tra ghe', refundAmount, refundNote };
+  }
+
   async getCancelRequests() {
     const requests = await this.prisma.booking.findMany({
       where: { status: 'CANCEL_REQUESTED', deletedAt: null },

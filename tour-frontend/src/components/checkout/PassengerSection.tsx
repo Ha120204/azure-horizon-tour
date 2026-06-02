@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-
-type PassengerType = 'Adult (12+)' | 'Child (4-11)' | 'Infant (<4)';
+import {
+    getPassengerAgeLabel,
+    getPassengerIdentityDocTypes,
+    validatePassengerIdentityNo,
+    type PassengerType,
+} from '@/lib/passengerDetails';
 
 interface Passenger {
     type: PassengerType;
@@ -134,15 +138,11 @@ export default function PassengerSection({
 
     // Identity document validation
     function getIdentityDocTypes(type: PassengerType) {
-        if (type === 'Infant (<4)') return [{ value: 'BIRTH_CERT', label: t('checkout.birthCertificate') }, { value: 'PASSPORT', label: t('checkout.passport') }];
-        return [{ value: 'CCCD', label: t('checkout.citizenId') }, { value: 'PASSPORT', label: t('checkout.passport') }];
+        return getPassengerIdentityDocTypes(type, t);
     }
 
     function validateIdentityNo(idType: string, idNo: string): string | null {
-        if (!idNo) return null;
-        if (idType === 'CCCD' && !/^\d{12}$/.test(idNo)) return t('checkout.citizenIdError');
-        if (idType === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(idNo)) return t('checkout.passportError');
-        return null;
+        return validatePassengerIdentityNo(idType, idNo, t);
     }
 
     // Trigger validation on save attempt
@@ -176,8 +176,7 @@ export default function PassengerSection({
     };
 
     const ageLabel = (p: Passenger) => {
-        const age = calcAge(p.dob);
-        return age !== null ? `${age} ${t('checkout.yearsOld')}` : p.dob;
+        return getPassengerAgeLabel(p.dob, t('checkout.yearsOld'));
     };
 
     return (

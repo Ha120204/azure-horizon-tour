@@ -19,6 +19,8 @@ interface ActiveToursTableProps {
     submittingTourId: number | null;
     onToggleSelectAll: () => void;
     onToggleSelect: (id: number) => void;
+    canSelectTour: (tour: Tour) => boolean;
+    onOpenDetail: (tour: Tour) => void;
     onOpenContent: (tour: Tour) => void;
     onEdit: (tour: Tour) => void;
     onSubmit: (tour: Tour) => void;
@@ -42,6 +44,8 @@ export function ActiveToursTable({
     submittingTourId,
     onToggleSelectAll,
     onToggleSelect,
+    canSelectTour,
+    onOpenDetail,
     onOpenContent,
     onEdit,
     onSubmit,
@@ -50,6 +54,8 @@ export function ActiveToursTable({
     onPageChange,
     onPageSizeChange,
 }: ActiveToursTableProps) {
+    const hasSelectableTours = tours.some(canSelectTour);
+
     return (
         <div id="tours-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
@@ -60,9 +66,11 @@ export function ActiveToursTable({
                                 <input
                                     type="checkbox"
                                     checked={isAllSelected}
+                                    disabled={!hasSelectableTours}
                                     onChange={onToggleSelectAll}
-                                    className="w-4 h-4 rounded border-outline-variant accent-primary cursor-pointer"
-                                    aria-label="Chọn tất cả"
+                                    className="w-4 h-4 rounded border-outline-variant accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-35"
+                                    aria-label={hasSelectableTours ? 'Chọn tất cả tour đang hiển thị' : 'Không có tour nào có thể chọn'}
+                                    title={hasSelectableTours ? 'Chọn tất cả tour đang hiển thị' : 'Không có tour nào có thể chọn'}
                                 />
                             </th>
                             <th className="py-3.5 px-3 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-center w-12">STT</th>
@@ -83,14 +91,14 @@ export function ActiveToursTable({
                     <tbody className="divide-y divide-outline-variant/10">
                         {isLoading ? (
                             <tr>
-                                <td colSpan={10} className="py-20 text-center">
+                                <td colSpan={11} className="py-20 text-center">
                                     <span className="material-symbols-outlined text-4xl text-primary animate-spin" aria-hidden="true">progress_activity</span>
                                     <p className="text-on-surface-variant text-sm mt-3">Đang tải dữ liệu…</p>
                                 </td>
                             </tr>
                         ) : tours.length === 0 ? (
                             <tr>
-                                <td colSpan={10} className="py-20 text-center">
+                                <td colSpan={11} className="py-20 text-center">
                                     <span className="material-symbols-outlined text-4xl text-outline mb-2 block" aria-hidden="true">travel_explore</span>
                                     <p className="font-bold text-on-surface">Không tìm thấy tour nào</p>
                                     <p className="text-on-surface-variant text-sm mt-1">Thử thay đổi bộ lọc hoặc {isStaff ? 'tạo bản nháp mới' : 'tạo tour mới'}.</p>
@@ -109,7 +117,9 @@ export function ActiveToursTable({
                                     isStaff={isStaff}
                                     isAdmin={isAdmin}
                                     submittingTourId={submittingTourId}
+                                    canSelectTour={canSelectTour}
                                     onToggleSelect={onToggleSelect}
+                                    onOpenDetail={onOpenDetail}
                                     onOpenContent={onOpenContent}
                                     onEdit={onEdit}
                                     onSubmit={onSubmit}

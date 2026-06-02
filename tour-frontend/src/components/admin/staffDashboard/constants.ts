@@ -57,7 +57,18 @@ export function toArray(value: unknown): unknown[] {
     const obj = toObject(value);
     const data = obj.data;
     const dataObj = toObject(data);
-    const candidates = [obj.data, obj.tours, dataObj.tours, dataObj.data, dataObj.items, obj.items, obj.bookings, dataObj.bookings];
+    const candidates = [
+        obj.data,
+        obj.tours,
+        dataObj.tours,
+        obj.tickets,
+        dataObj.tickets,
+        dataObj.data,
+        dataObj.items,
+        obj.items,
+        obj.bookings,
+        dataObj.bookings,
+    ];
     for (const candidate of candidates) {
         if (Array.isArray(candidate)) return candidate;
     }

@@ -5,13 +5,20 @@ export interface Voucher {
   description: string;
   discountType: 'PERCENTAGE' | 'FIXED_AMOUNT';
   discountValue: number;
+  maxDiscountAmount?: number | null;
   minOrderValue: number;
   maxUses: number;
+  usageLimitPerUser?: number | null;
   usedCount: number;
+  startsAt: string;
   expiresAt: string;
   isActive: boolean;
+  isStackable: boolean;
+  eligibleTourIds: number[];
+  eligibleDestinationIds: number[];
+  eligibleCustomerSegments: string[];
   createdAt: string;
-  computedStatus: 'active' | 'expired' | 'depleted' | 'inactive';
+  computedStatus: 'active' | 'expired' | 'depleted' | 'inactive' | 'scheduled';
 }
 
 export interface Stats {
@@ -36,6 +43,8 @@ export interface ToastState {
 export type ModalMode = 'create' | 'edit' | null;
 
 export type VoucherStatusFilter = Voucher['computedStatus'] | 'expiringSoon' | 'expiredThisMonth' | 'redeemed';
+export type VoucherSortBy = 'createdAt' | 'startsAt' | 'expiresAt' | 'usedCount' | 'discountValue' | 'minOrderValue';
+export type VoucherSortOrder = 'asc' | 'desc';
 
 export interface VoucherKpiItem {
   icon: string;
@@ -43,5 +52,6 @@ export interface VoucherKpiItem {
   value: string;
   color: string;
   active: boolean;
+  hint?: string;
   onClick?: () => void;
 }

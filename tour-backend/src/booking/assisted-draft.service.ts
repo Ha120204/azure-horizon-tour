@@ -53,8 +53,42 @@ type AssistedDraftValidationSource = {
   tourId?: number | null;
   departureId?: number | null;
   numberOfPeople?: number | null;
+  passengers?: unknown;
   tour?: { departures?: Array<{ id: number }> | null } | null;
 };
+
+const ASSISTED_SOURCE_CHANNELS = [
+  'LIVE_CHAT',
+  'ZALO',
+  'FACEBOOK',
+  'PHONE',
+  'WEBSITE',
+  'WALK_IN',
+  'PARTNER',
+] as const;
+
+const ASSISTED_CONFIRMATION_CHANNELS = [
+  'ZALO',
+  'EMAIL',
+  'SMS',
+  'PHONE',
+  'MANUAL',
+  'NO_SEND',
+] as const;
+
+function normalizeAssistedSourceChannel(value?: string | null) {
+  const normalized = String(value || 'LIVE_CHAT').trim().toUpperCase();
+  return ASSISTED_SOURCE_CHANNELS.includes(normalized as (typeof ASSISTED_SOURCE_CHANNELS)[number])
+    ? normalized
+    : 'LIVE_CHAT';
+}
+
+function normalizeAssistedConfirmationChannel(value?: string | null) {
+  const normalized = String(value || 'ZALO').trim().toUpperCase();
+  return ASSISTED_CONFIRMATION_CHANNELS.includes(normalized as (typeof ASSISTED_CONFIRMATION_CHANNELS)[number])
+    ? normalized
+    : 'MANUAL';
+}
 
 @Injectable()
 export class AssistedDraftService {
@@ -95,45 +129,51 @@ export class AssistedDraftService {
   }
 
   private assertAssistedDraftReadyForApproval(draft: AssistedDraftValidationSource) {
-    if (!draft.customerName?.trim()) throw new BadRequestException('Customer name is required before approval');
+    if (!draft.customerName?.trim()) throw new BadRequestException('Cần nhập tên người đại diện trước khi gửi duyệt');
     if (!draft.customerEmail?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.customerEmail))
-      throw new BadRequestException('Valid customer email is required');
-    if (!draft.customerPhone?.trim()) throw new BadRequestException('Customer phone is required');
-    if (!/^(0|\+84)(\d{9})$/.test(draft.customerPhone.trim().replace(/\s+/g, '')))
-      throw new BadRequestException('Valid Vietnamese customer phone is required');
-    if (!draft.customerIdentityNo?.trim()) throw new BadRequestException('Customer CCCD is required');
-    if (!/^\d{12}$/.test(draft.customerIdentityNo.trim())) throw new BadRequestException('Customer CCCD must be 12 digits');
-    const confirmationChannel = String(draft.confirmationChannel || 'ZALO').toUpperCase();
-    if (!['ZALO', 'EMAIL', 'PHONE', 'MANUAL'].includes(confirmationChannel))
-      throw new BadRequestException('Invalid confirmation channel');
+      throw new BadRequestException('Email người đại diện chưa đúng định dạng');
+    if (!draft.customerPhone?.trim()) throw new BadRequestException('Cần nhập số điện thoại người đại diện');
+    if (!/^(0\d{9}|\+?84\d{9})$/.test(draft.customerPhone.trim().replace(/\s+/g, '')))
+      throw new BadRequestException('Số điện thoại người đại diện chưa đúng định dạng Việt Nam');
+    if (draft.customerIdentityNo?.trim() && !/^\d{12}$/.test(draft.customerIdentityNo.trim()))
+      throw new BadRequestException('CCCD người đại diện phải gồm đúng 12 chữ số');
+    const confirmationChannel = normalizeAssistedConfirmationChannel(draft.confirmationChannel);
     if (confirmationChannel === 'EMAIL' && !draft.emailForTicket?.trim() && !draft.customerEmail?.trim())
-      throw new BadRequestException('Email is required when confirmation channel is email');
-    if (!draft.tourId) throw new BadRequestException('Tour is required before approval');
-    if (!draft.numberOfPeople || draft.numberOfPeople < 1) throw new BadRequestException('Number of people must be at least 1');
+      throw new BadRequestException('Cần email nhận vé hoặc email người đại diện khi chọn kênh Email');
+    if (!draft.tourId) throw new BadRequestException('Cần chọn tour trước khi gửi duyệt');
+    if (!draft.numberOfPeople || draft.numberOfPeople < 1) throw new BadRequestException('Số khách phải từ 1 trở lên');
+    const passengerInputs = asPassengerInputs(draft.passengers) ?? [];
+    if (passengerInputs.length !== draft.numberOfPeople)
+      throw new BadRequestException('Danh sách khách đi tour chưa khớp tổng số khách');
+    const normalizedPassengers = normalizePassengers(draft.passengers, draft.numberOfPeople);
+    const adultCount = normalizedPassengers.filter(passenger => passenger.type === 'Adult (12+)').length;
+    const infantCount = normalizedPassengers.filter(passenger => passenger.type === 'Infant (<4)').length;
+    if (adultCount < 1) throw new BadRequestException('Cần ít nhất 1 người lớn trong đoàn');
+    if (infantCount > adultCount) throw new BadRequestException('Số em bé không vượt quá số người lớn');
     if ((draft.tour?.departures?.length ?? 0) > 0 && !draft.departureId)
-      throw new BadRequestException('Departure is required before approval');
+      throw new BadRequestException('Cần chọn lịch khởi hành cụ thể trước khi gửi duyệt');
   }
 
   async calculateAssistedQuote(tx: TransactionClient, dto: AssistedQuoteDto): Promise<AssistedQuote> {
     const tour = await tx.tour.findUnique({ where: { id: dto.tourId, deletedAt: null } });
-    if (!tour) throw new NotFoundException('Tour not found');
-    if (tour.startDate < new Date()) throw new BadRequestException('Tour nay da dien ra, khong the tao dat ho');
+    if (!tour) throw new NotFoundException('Không tìm thấy tour');
+    if (tour.startDate < new Date()) throw new BadRequestException('Tour này đã diễn ra, không thể tạo booking đặt hộ');
 
     let selectedDeparture: TourDeparture | null = null;
     if (dto.departureId) {
       selectedDeparture = await tx.tourDeparture.findUnique({ where: { id: dto.departureId } });
       if (!selectedDeparture || selectedDeparture.tourId !== tour.id || !selectedDeparture.isActive)
-        throw new BadRequestException('Invalid departure');
+        throw new BadRequestException('Lịch khởi hành không hợp lệ');
       if (selectedDeparture.availableSeats < dto.numberOfPeople)
-        throw new BadRequestException('Not enough seats for this departure');
+        throw new BadRequestException('Lịch khởi hành không còn đủ chỗ cho đoàn này');
     } else if (tour.availableSeats < dto.numberOfPeople) {
-      throw new BadRequestException('Not enough seats available');
+      throw new BadRequestException('Tour không còn đủ chỗ cho đoàn này');
     }
 
     let basePrice = selectedDeparture?.price ?? tour.price;
     if (dto.packageId) {
       const pkg = await tx.tourPackage.findUnique({ where: { id: dto.packageId } });
-      if (!pkg || pkg.tourId !== tour.id || !pkg.isActive) throw new BadRequestException('Invalid tour package');
+      if (!pkg || pkg.tourId !== tour.id || !pkg.isActive) throw new BadRequestException('Gói tour không hợp lệ');
       basePrice += pkg.price;
     }
 
@@ -145,7 +185,7 @@ export class AssistedDraftService {
       assertVoucherAllowedForDeparture(selectedDeparture, dto.voucherCode, tour.price);
       const result = await this.voucherService.validateVoucher(
         dto.voucherCode, totalPrice,
-        { tourId: tour.id, departureId: selectedDeparture?.id ?? null },
+        { userId: dto.customerId ?? null, tourId: tour.id, departureId: selectedDeparture?.id ?? null },
       );
       discountAmount = result.discountAmount;
       totalPrice = result.finalPrice;
@@ -191,7 +231,7 @@ export class AssistedDraftService {
   ) {
     if (draft.customerId) {
       const user = await tx.user.findUnique({ where: { id: draft.customerId } });
-      if (!user) throw new NotFoundException('Customer not found');
+      if (!user) throw new NotFoundException('Không tìm thấy khách hàng');
       return user;
     }
     const email = String(draft.customerEmail || '').trim().toLowerCase();
@@ -303,22 +343,24 @@ export class AssistedDraftService {
         assistedDraft: true,
       },
     });
-    if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.paymentStatus === 'PAID') throw new BadRequestException('Booking da thanh toan');
+    if (!booking) throw new NotFoundException('Không tìm thấy booking');
+    if (booking.paymentStatus === 'PAID') throw new BadRequestException('Booking đã thanh toán');
     if (booking.paymentMethod !== 'PAYOS') {
-      throw new BadRequestException('Don tai quay khong tao link PayOS. Hay doi phuong thuc sang PayOS truoc khi gui lai yeu cau thanh toan.');
+      throw new BadRequestException('Đơn tại quầy không tạo link PayOS. Hãy đổi phương thức sang PayOS trước khi gửi lại yêu cầu thanh toán.');
     }
     const holdExpiresAt = booking.holdExpiresAt ?? new Date(Date.now() + PAYOS_HOLD_MINUTES * 60 * 1000);
     if (holdExpiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException('Booking da het han thanh toan. Vui long tao booking moi.');
+      throw new BadRequestException('Booking đã hết hạn thanh toán. Vui lòng tạo booking mới.');
     }
 
-    const channel = forceEmail ? 'EMAIL' : String(booking.assistedDraft?.confirmationChannel || 'ZALO').toUpperCase();
-    const normalizedChannel = ['EMAIL', 'ZALO', 'PHONE', 'MANUAL'].includes(channel) ? channel : 'MANUAL';
+    const channel = forceEmail ? 'EMAIL' : booking.assistedDraft?.confirmationChannel;
+    const normalizedChannel = normalizeAssistedConfirmationChannel(channel);
     const emailRecipient = booking.assistedDraft?.emailForTicket || booking.assistedDraft?.customerEmail || booking.user.email;
     const recipient = normalizedChannel === 'EMAIL'
       ? emailRecipient
-      : booking.assistedDraft?.customerPhone || booking.user.phone || null;
+      : normalizedChannel === 'NO_SEND'
+        ? null
+        : booking.assistedDraft?.customerPhone || booking.user.phone || null;
     const amountVND = Math.round(booking.totalPrice);
     const description = `AH ${booking.bookingCode}`;
 
@@ -361,7 +403,7 @@ export class AssistedDraftService {
     let notification = await this.prisma.bookingNotification.create({
       data: {
         bookingId: booking.id, type: 'PAYMENT_REQUEST', channel: normalizedChannel, recipient,
-        status: 'PENDING', subject: `Yeu cau thanh toan ${booking.bookingCode}`, content,
+        status: normalizedChannel === 'NO_SEND' ? 'SKIPPED' : 'PENDING', subject: `Yeu cau thanh toan ${booking.bookingCode}`, content,
         paymentUrl: paymentRequest.checkoutUrl,
         qrCodeUrl: paymentRequest.qrCode || `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(paymentRequest.checkoutUrl)}`,
         createdById: actorUserId,
@@ -371,7 +413,7 @@ export class AssistedDraftService {
     if (normalizedChannel === 'EMAIL') {
       if (!emailRecipient) {
         notification = await this.prisma.bookingNotification.update({
-          where: { id: notification.id }, data: { status: 'FAILED', errorMessage: 'Missing email recipient' },
+          where: { id: notification.id }, data: { status: 'FAILED', errorMessage: 'Thiếu email người nhận' },
         });
       } else {
         try {
@@ -402,8 +444,8 @@ export class AssistedDraftService {
       customerEmail: dto.customerEmail?.trim().toLowerCase(),
       customerPhone: dto.customerPhone?.trim() || null,
       customerIdentityNo: dto.customerIdentityNo?.trim() || null,
-      sourceChannel: dto.sourceChannel?.trim() || 'LIVE_CHAT',
-      confirmationChannel: dto.confirmationChannel?.trim().toUpperCase() || 'ZALO',
+      sourceChannel: normalizeAssistedSourceChannel(dto.sourceChannel),
+      confirmationChannel: normalizeAssistedConfirmationChannel(dto.confirmationChannel),
       emailForTicket: dto.emailForTicket?.trim().toLowerCase() || dto.customerEmail?.trim().toLowerCase() || null,
       voucherCode: dto.voucherCode?.trim() || undefined,
       specialRequests: dto.specialRequests?.trim() || null,
@@ -450,11 +492,11 @@ export class AssistedDraftService {
 
   async updateAssistedDraft(id: number, actorUserId: number, actorRole: string, dto: CreateAssistedBookingDraftDto) {
     const existing = await this.prisma.assistedBookingDraft.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('Draft not found');
+    if (!existing) throw new NotFoundException('Không tìm thấy bản nháp đặt hộ');
     if (actorRole === 'STAFF' && existing.createdByStaffId !== actorUserId)
-      throw new ForbiddenException('Ban khong co quyen sua ban nhap nay');
+      throw new ForbiddenException('Bạn không có quyền sửa bản nháp này');
     if (!['DRAFT', 'NEEDS_REVISION'].includes(existing.status))
-      throw new BadRequestException('Chi co the sua ban nhap hoac ban can chinh sua');
+      throw new BadRequestException('Chỉ có thể sửa bản nháp hoặc bản cần chỉnh sửa');
 
     const payload = {
       ...dto,
@@ -462,8 +504,12 @@ export class AssistedDraftService {
       customerEmail: dto.customerEmail?.trim().toLowerCase(),
       customerPhone: dto.customerPhone?.trim() || null,
       customerIdentityNo: dto.customerIdentityNo?.trim() || null,
-      sourceChannel: dto.sourceChannel?.trim() || existing.sourceChannel || 'LIVE_CHAT',
-      confirmationChannel: dto.confirmationChannel?.trim().toUpperCase() || existing.confirmationChannel || 'ZALO',
+      sourceChannel: dto.sourceChannel !== undefined
+        ? normalizeAssistedSourceChannel(dto.sourceChannel)
+        : normalizeAssistedSourceChannel(existing.sourceChannel),
+      confirmationChannel: dto.confirmationChannel !== undefined
+        ? normalizeAssistedConfirmationChannel(dto.confirmationChannel)
+        : normalizeAssistedConfirmationChannel(existing.confirmationChannel),
       emailForTicket: dto.emailForTicket?.trim().toLowerCase() || dto.customerEmail?.trim().toLowerCase() || existing.emailForTicket || null,
       voucherCode: dto.voucherCode?.trim() || undefined,
       specialRequests: dto.specialRequests?.trim() || null,
@@ -512,7 +558,7 @@ export class AssistedDraftService {
     if (actorRole === 'STAFF') where.createdByStaffId = actorUserId;
     if (status && status !== 'ALL') {
       const normalizedStatus = status.toUpperCase();
-      if (!isAssistedDraftStatus(normalizedStatus)) throw new BadRequestException('Invalid assisted draft status');
+      if (!isAssistedDraftStatus(normalizedStatus)) throw new BadRequestException('Trạng thái bản nháp không hợp lệ');
       where.status = normalizedStatus as AssistedDraftStatus;
     }
     if (search) {
@@ -534,15 +580,15 @@ export class AssistedDraftService {
       where: { id },
       include: { convertedBooking: { select: { id: true, bookingCode: true } } },
     });
-    if (!draft) throw new NotFoundException('Draft not found');
+    if (!draft) throw new NotFoundException('Không tìm thấy bản nháp đặt hộ');
     if (actorRole === 'STAFF' && draft.createdByStaffId !== actorUserId) {
-      throw new ForbiddenException('Ban khong co quyen xoa ban nhap nay');
+      throw new ForbiddenException('Bạn không có quyền xóa bản nháp này');
     }
     if (draft.convertedBooking || draft.status === 'CONVERTED') {
-      throw new BadRequestException('Ban nhap da tao booking, khong the xoa');
+      throw new BadRequestException('Bản nháp đã tạo booking, không thể xóa');
     }
     if (!['DRAFT', 'NEEDS_REVISION', 'REJECTED'].includes(draft.status)) {
-      throw new BadRequestException('Chi co the xoa ban nhap, ban can sua hoac ban da tu choi');
+      throw new BadRequestException('Chỉ có thể xóa bản nháp, bản cần sửa hoặc bản đã từ chối');
     }
 
     await this.prisma.$transaction([
@@ -567,7 +613,7 @@ export class AssistedDraftService {
     ]);
 
     return {
-      message: 'Da xoa ban nhap dat ho',
+      message: 'Đã xóa bản nháp đặt hộ',
       data: { id: draft.id, draftCode: draft.draftCode },
     };
   }
@@ -577,15 +623,15 @@ export class AssistedDraftService {
       where: { id },
       include: { tour: { include: { departures: { where: { isActive: true }, select: { id: true } } } } },
     });
-    if (!draft) throw new NotFoundException('Draft not found');
+    if (!draft) throw new NotFoundException('Không tìm thấy bản nháp đặt hộ');
     const normalizedRole = actorRole.toUpperCase();
     if (normalizedRole === 'ADMIN' || normalizedRole === 'SUPER_ADMIN') {
-      return this.approveAssistedDraft(id, actorUserId, 'Admin duyet truc tiep tu thao tac submit');
+      return this.approveAssistedDraft(id, actorUserId, 'Admin duyệt trực tiếp từ thao tác gửi duyệt');
     }
     if (normalizedRole === 'STAFF' && draft.createdByStaffId !== actorUserId)
-      throw new ForbiddenException('Ban khong co quyen gui ban nhap nay');
+      throw new ForbiddenException('Bạn không có quyền gửi bản nháp này');
     if (!['DRAFT', 'NEEDS_REVISION'].includes(draft.status))
-      throw new BadRequestException('Chi co the gui ban nhap hoac ban can chinh sua');
+      throw new BadRequestException('Chỉ có thể gửi bản nháp hoặc bản cần chỉnh sửa');
     this.assertAssistedDraftReadyForApproval(draft);
 
     const quote = await this.prisma.$transaction((tx) =>
@@ -613,8 +659,8 @@ export class AssistedDraftService {
 
   async requestRevisionAssistedDraft(id: number, adminId: number, reason: string) {
     const draft = await this.prisma.assistedBookingDraft.findUnique({ where: { id } });
-    if (!draft) throw new NotFoundException('Draft not found');
-    if (draft.status !== 'PENDING_APPROVAL') throw new BadRequestException('Chi ban nhap dang cho duyet moi co the yeu cau chinh sua');
+    if (!draft) throw new NotFoundException('Không tìm thấy bản nháp đặt hộ');
+    if (draft.status !== 'PENDING_APPROVAL') throw new BadRequestException('Chỉ bản nháp đang chờ duyệt mới có thể yêu cầu chỉnh sửa');
     const updated = await this.prisma.assistedBookingDraft.update({
       where: { id },
       data: { status: 'NEEDS_REVISION', reviewedByAdminId: adminId, reviewedAt: new Date(), rejectionReason: reason },
@@ -625,8 +671,8 @@ export class AssistedDraftService {
 
   async rejectAssistedDraft(id: number, adminId: number, reason: string) {
     const draft = await this.prisma.assistedBookingDraft.findUnique({ where: { id } });
-    if (!draft) throw new NotFoundException('Draft not found');
-    if (draft.status !== 'PENDING_APPROVAL') throw new BadRequestException('Chi ban nhap dang cho duyet moi co the bi tu choi');
+    if (!draft) throw new NotFoundException('Không tìm thấy bản nháp đặt hộ');
+    if (draft.status !== 'PENDING_APPROVAL') throw new BadRequestException('Chỉ bản nháp đang chờ duyệt mới có thể bị từ chối');
     const updated = await this.prisma.assistedBookingDraft.update({
       where: { id },
       data: { status: 'REJECTED', reviewedByAdminId: adminId, reviewedAt: new Date(), rejectionReason: reason },
@@ -657,10 +703,10 @@ export class AssistedDraftService {
           tour: { include: { departures: { where: { isActive: true }, select: { id: true } } } },
         },
       });
-      if (!draft) throw new NotFoundException('Draft not found');
+      if (!draft) throw new NotFoundException('Không tìm thấy bản nháp đặt hộ');
       if (!['DRAFT', 'PENDING_APPROVAL', 'NEEDS_REVISION'].includes(draft.status))
-        throw new BadRequestException('Chi ban nhap, ban can sua hoac ban dang cho duyet moi co the duyet');
-      if (draft.convertedBooking) throw new BadRequestException('Ban nhap nay da tao booking');
+        throw new BadRequestException('Chỉ bản nháp, bản cần sửa hoặc bản đang chờ duyệt mới có thể duyệt');
+      if (draft.convertedBooking) throw new BadRequestException('Bản nháp này đã tạo booking');
       this.assertAssistedDraftReadyForApproval(draft);
 
       const tourId = draft.tourId!;
@@ -697,7 +743,8 @@ export class AssistedDraftService {
           discountAmount: quote.discountAmount,
           contactInfo: {
             name: draft.customerName, email: draft.customerEmail, phone: draft.customerPhone,
-            identityType: 'CCCD', identityNo: draft.customerIdentityNo,
+            identityType: draft.customerIdentityNo ? 'CCCD' : null,
+            identityNo: draft.customerIdentityNo || null,
             sourceChannel: draft.sourceChannel, confirmationChannel: draft.confirmationChannel,
             emailForTicket: draft.emailForTicket, specialRequests: draft.specialRequests,
           },

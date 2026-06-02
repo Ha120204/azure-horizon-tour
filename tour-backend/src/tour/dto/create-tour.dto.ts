@@ -35,7 +35,7 @@ export class CreateTourDto {
   @IsOptional()
   @Type(() => Date)
   @IsDate()
-  @IsFutureDate({ message: 'Ngay khoi hanh phai la ngay hom nay hoac trong tuong lai.' })
+  @IsFutureDate({ message: 'Ngày khởi hành phải là hôm nay hoặc trong tương lai.' })
   startDate?: Date;
 
   @IsOptional()

@@ -45,25 +45,69 @@ export const formatPassengerBreakdown = (passengers?: DraftPassenger[] | null, f
   return parts.length ? parts.join(' · ') : `${Math.max(1, fallbackPeople)} khách`;
 };
 
-export const buildPassengerDraftPayload = (form: AssistedDraftForm): DraftPassenger[] => {
+type BuildPassengerOptions = { useRepresentativeAsFirstPassenger?: boolean };
+
+const compactPassenger = (passenger: DraftPassenger): DraftPassenger =>
+  Object.fromEntries(
+    Object.entries(passenger).filter(([, value]) => value !== undefined && value !== ''),
+  ) as DraftPassenger;
+
+export const buildPassengerDraftPayload = (
+  form: AssistedDraftForm,
+  currentPassengersOrOptions: DraftPassenger[] | BuildPassengerOptions = [],
+  maybeOptions: BuildPassengerOptions = {},
+): DraftPassenger[] => {
+  const currentPassengers = Array.isArray(currentPassengersOrOptions) ? currentPassengersOrOptions : [];
+  const options = Array.isArray(currentPassengersOrOptions) ? maybeOptions : currentPassengersOrOptions;
   const adultCount = Math.max(1, parsePassengerCount(form.adultCount, 1));
   const childCount = parsePassengerCount(form.childCount);
   const infantCount = parsePassengerCount(form.infantCount);
+  const useRepresentativeAsFirstPassenger = options.useRepresentativeAsFirstPassenger ?? true;
+  const passengersByType = passengerTypeOrder.reduce((acc, type) => {
+    acc[type] = currentPassengers
+      .filter(passenger => normalizePassengerTypeLabel(String(passenger.type ?? 'Adult (12+)')) === type)
+      .map(passenger => compactPassenger({ ...passenger, type }));
+    return acc;
+  }, {} as Record<PassengerType, DraftPassenger[]>);
 
-  return [
-    ...Array.from({ length: adultCount }, (_, index) => ({
-      type: 'Adult (12+)' as PassengerType,
-      ...(index === 0
-        ? {
-            fullName: form.customerName.trim() || undefined,
-            identityType: 'CCCD',
-            identityNo: form.customerIdentityNo.trim() || undefined,
-          }
-        : {}),
-    })),
-    ...Array.from({ length: childCount }, () => ({ type: 'Child (4-11)' as PassengerType })),
-    ...Array.from({ length: infantCount }, () => ({ type: 'Infant (<4)' as PassengerType })),
+  const buildRows = (type: PassengerType, count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      compactPassenger({ ...(passengersByType[type][index] ?? {}), type }),
+    );
+
+  const passengers = [
+    ...buildRows('Adult (12+)', adultCount),
+    ...buildRows('Child (4-11)', childCount),
+    ...buildRows('Infant (<4)', infantCount),
   ];
+
+  if (useRepresentativeAsFirstPassenger && passengers[0]) {
+    const representativeName = form.customerName.trim();
+    const representativeIdentityNo = form.customerIdentityNo.trim();
+    passengers[0] = compactPassenger({
+      ...passengers[0],
+      type: 'Adult (12+)' as PassengerType,
+      fullName: representativeName || passengers[0].fullName,
+      identityType: representativeIdentityNo ? 'CCCD' : passengers[0].identityType,
+      identityNo: representativeIdentityNo || passengers[0].identityNo,
+    });
+  }
+
+  if (!useRepresentativeAsFirstPassenger && passengers[0]) {
+    const firstPassenger = { ...passengers[0] };
+    const representativeName = form.customerName.trim();
+    const representativeIdentityNo = form.customerIdentityNo.trim();
+    if (representativeName && firstPassenger.fullName === representativeName) {
+      delete firstPassenger.fullName;
+    }
+    if (representativeIdentityNo && firstPassenger.identityNo === representativeIdentityNo) {
+      delete firstPassenger.identityNo;
+      if (firstPassenger.identityType === 'CCCD') delete firstPassenger.identityType;
+    }
+    passengers[0] = compactPassenger(firstPassenger);
+  }
+
+  return passengers;
 };
 
 export const toValidDate = (d?: string | null) => {
@@ -98,14 +142,58 @@ export const getInitials = (name?: string) => {
     : name.substring(0, 2).toUpperCase();
 };
 
+const API_ERROR_TRANSLATIONS: Record<string, string> = {
+  'customer name is required before approval': 'Cần nhập tên người đại diện trước khi gửi duyệt.',
+  'valid customer email is required': 'Email người đại diện chưa đúng định dạng.',
+  'customer phone is required': 'Cần nhập số điện thoại người đại diện.',
+  'valid vietnamese customer phone is required': 'Số điện thoại người đại diện chưa đúng định dạng Việt Nam.',
+  'customer cccd must be 12 digits': 'CCCD người đại diện phải gồm đúng 12 chữ số.',
+  'email is required when confirmation channel is email': 'Cần email nhận vé hoặc email người đại diện khi chọn kênh Email.',
+  'tour is required before approval': 'Cần chọn tour trước khi gửi duyệt.',
+  'number of people must be at least 1': 'Số khách phải từ 1 trở lên.',
+  'passenger list must match number of people': 'Danh sách khách đi tour chưa khớp tổng số khách.',
+  'at least one adult passenger is required': 'Cần ít nhất 1 người lớn trong đoàn.',
+  'infant count cannot exceed adult count': 'Số em bé không vượt quá số người lớn.',
+  'departure is required before approval': 'Cần chọn lịch khởi hành cụ thể trước khi gửi duyệt.',
+  'tour not found': 'Không tìm thấy tour.',
+  'tour nay da dien ra, khong the tao dat ho': 'Tour này đã diễn ra, không thể tạo booking đặt hộ.',
+  'invalid departure': 'Lịch khởi hành không hợp lệ.',
+  'not enough seats for this departure': 'Lịch khởi hành không còn đủ chỗ cho đoàn này.',
+  'not enough seats available': 'Tour không còn đủ chỗ cho đoàn này.',
+  'invalid tour package': 'Gói tour không hợp lệ.',
+  'customer not found': 'Không tìm thấy khách hàng.',
+  'booking not found': 'Không tìm thấy booking.',
+  'draft not found': 'Không tìm thấy bản nháp đặt hộ.',
+  'invalid assisted draft status': 'Trạng thái bản nháp không hợp lệ.',
+  'ban khong co quyen sua ban nhap nay': 'Bạn không có quyền sửa bản nháp này.',
+  'ban khong co quyen xoa ban nhap nay': 'Bạn không có quyền xóa bản nháp này.',
+  'ban khong co quyen gui ban nhap nay': 'Bạn không có quyền gửi bản nháp này.',
+  'chi co the sua ban nhap hoac ban can chinh sua': 'Chỉ có thể sửa bản nháp hoặc bản cần chỉnh sửa.',
+  'chi co the gui ban nhap hoac ban can chinh sua': 'Chỉ có thể gửi bản nháp hoặc bản cần chỉnh sửa.',
+  'ban nhap da tao booking, khong the xoa': 'Bản nháp đã tạo booking, không thể xóa.',
+  'chi co the xoa ban nhap, ban can sua hoac ban da tu choi': 'Chỉ có thể xóa bản nháp, bản cần sửa hoặc bản đã từ chối.',
+  'chi ban nhap dang cho duyet moi co the yeu cau chinh sua': 'Chỉ bản nháp đang chờ duyệt mới có thể yêu cầu chỉnh sửa.',
+  'chi ban nhap dang cho duyet moi co the bi tu choi': 'Chỉ bản nháp đang chờ duyệt mới có thể bị từ chối.',
+  'ban nhap nay da tao booking': 'Bản nháp này đã tạo booking.',
+  'don tai quay khong tao link payos. hay doi phuong thuc sang payos truoc khi gui lai yeu cau thanh toan.': 'Đơn tại quầy không tạo link PayOS. Hãy đổi phương thức sang PayOS trước khi gửi lại yêu cầu thanh toán.',
+  'booking da het han thanh toan. vui long tao booking moi.': 'Booking đã hết hạn thanh toán. Vui lòng tạo booking mới.',
+  'thao tac that bai': 'Thao tác thất bại.',
+  'load failed': 'Không tải được dữ liệu.',
+};
+
+export const translateApiMessage = (message: string) => {
+  const normalized = message.trim().replace(/\s+/g, ' ').toLowerCase();
+  return API_ERROR_TRANSLATIONS[normalized] ?? message;
+};
+
 export const getErrorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message : fallback;
+  error instanceof Error ? translateApiMessage(error.message) : fallback;
 
 export const getApiErrorMessage = (payload: unknown, fallback: string) => {
   if (!payload || typeof payload !== 'object') return fallback;
   const message = (payload as { message?: unknown }).message;
-  if (Array.isArray(message)) return message.map(String).join('\n');
-  if (typeof message === 'string') return message;
+  if (Array.isArray(message)) return message.map(item => translateApiMessage(String(item))).join('\n');
+  if (typeof message === 'string') return translateApiMessage(message);
   return fallback;
 };
 
@@ -115,7 +203,7 @@ export const isValidEmail = (email: string) =>
 export const normalizePhone = (phone: string) => phone.replace(/[\s.-]/g, '');
 
 export const isValidVietnamPhone = (phone: string) =>
-  /^(0|\+84)\d{9}$/.test(normalizePhone(phone));
+  /^(0\d{9}|\+?84\d{9})$/.test(normalizePhone(phone));
 
 export const isValidCccd = (value: string) => /^\d{12}$/.test(value.trim());
 

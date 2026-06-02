@@ -6,16 +6,18 @@ export interface AdminVoucherQuery {
     | 'expired'
     | 'depleted'
     | 'inactive'
+    | 'scheduled'
     | 'expiringSoon'
     | 'expiredThisMonth'
     | 'redeemed';
   page?: number;
   limit?: number;
-  sortBy?: 'createdAt' | 'expiresAt' | 'usedCount';
+  sortBy?: 'createdAt' | 'startsAt' | 'expiresAt' | 'usedCount' | 'discountValue' | 'minOrderValue';
   sortOrder?: 'asc' | 'desc';
 }
 
 export interface VoucherValidationContext {
+  userId?: number | null;
   tourId?: number | null;
   departureId?: number | null;
 }

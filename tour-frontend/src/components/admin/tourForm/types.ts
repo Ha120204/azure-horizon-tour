@@ -35,6 +35,48 @@ export interface TourDeparture {
     flashSaleEndsAt: string;
 }
 
+export interface TourHighlightForm {
+    id?: number;
+    content: string;
+    contentEn: string;
+    icon: string;
+}
+
+export interface TourFaqForm {
+    id?: number;
+    question: string;
+    questionEn: string;
+    answer: string;
+    answerEn: string;
+}
+
+export interface TourTimelineEntry {
+    time: string;
+    activity: string;
+}
+
+export interface TourItineraryDayForm {
+    id?: number;
+    dayNumber: number;
+    title: string;
+    titleEn: string;
+    description: string;
+    descriptionEn: string;
+    mealsBreakfast: boolean;
+    mealsLunch: boolean;
+    mealsDinner: boolean;
+    accommodation: string;
+    accommodationEn: string;
+    transport: string;
+    transportEn: string;
+    activitiesText: string;
+    activitiesEnText: string;
+    timelineItems: TourTimelineEntry[];
+    timelineEnItems: TourTimelineEntry[];
+    timelineText: string;
+    timelineEnText: string;
+}
+
 export interface TourFormData {
     name: string;
     nameEn: string;
@@ -82,6 +124,43 @@ export interface ExistingTourDeparture {
     flashSaleEndsAt?: string | Date | null;
 }
 
+export interface ExistingTourHighlight {
+    id?: number;
+    content?: string | null;
+    contentEn?: string | null;
+    icon?: string | null;
+    sortOrder?: number | null;
+}
+
+export interface ExistingTourFaq {
+    id?: number;
+    question?: string | null;
+    questionEn?: string | null;
+    answer?: string | null;
+    answerEn?: string | null;
+    sortOrder?: number | null;
+}
+
+export interface ExistingTourItineraryDay {
+    id?: number;
+    dayNumber?: number | null;
+    title?: string | null;
+    titleEn?: string | null;
+    description?: string | null;
+    descriptionEn?: string | null;
+    mealsBreakfast?: boolean | null;
+    mealsLunch?: boolean | null;
+    mealsDinner?: boolean | null;
+    accommodation?: string | null;
+    accommodationEn?: string | null;
+    transport?: string | null;
+    transportEn?: string | null;
+    activities?: string[] | null;
+    activitiesEn?: string[] | null;
+    timeline?: TourTimelineEntry[] | null;
+    timelineEn?: TourTimelineEntry[] | null;
+}
+
 export interface InitialTourData {
     id: number;
     name?: string;
@@ -103,6 +182,9 @@ export interface InitialTourData {
     images?: ExistingTourImage[];
     packages?: ExistingTourPackage[];
     departures?: ExistingTourDeparture[];
+    highlights?: ExistingTourHighlight[];
+    faqs?: ExistingTourFaq[];
+    itinerary?: ExistingTourItineraryDay[];
 }
 
 export interface TourFormModalProps {

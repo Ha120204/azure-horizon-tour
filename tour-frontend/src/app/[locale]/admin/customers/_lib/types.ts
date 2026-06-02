@@ -10,6 +10,8 @@ export interface User {
     status: string;
     bookingCount: number;
     reviewCount: number;
+    totalSpent?: number;
+    lastBookingAt?: string | null;
     dob?: string | null;
     gender?: string | null;
     recentBookings?: {
@@ -22,10 +24,16 @@ export interface User {
     }[];
 }
 
+export type CustomerSortKey = 'fullName' | 'createdAt' | 'bookingCount' | 'reviewCount' | 'status';
+export type SortDirection = 'asc' | 'desc';
+export type CustomerBookingFilter = '' | 'has_bookings' | 'no_bookings';
+export type CustomerSegmentFilter = '' | 'new_7_days' | 'new_30_days' | 'has_phone' | 'missing_phone';
+
 export interface Stats {
     totalUsers: number;
     activeUsers: number;
     newThisMonth: number;
+    customersWithBookings?: number;
     staffAndAdmin: number;
 }
 

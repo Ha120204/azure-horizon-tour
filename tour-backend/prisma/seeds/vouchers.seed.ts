@@ -6,11 +6,20 @@ type VoucherSeed = {
   description: string;
   discountType: DiscountType;
   discountValue: number;
+  maxDiscountAmount?: number | null;
   minOrderValue: number;
   maxUses: number;
+  usageLimitPerUser?: number | null;
+  startsAt?: Date;
   expiresAt: Date;
   isActive?: boolean;
+  isStackable?: boolean;
+  eligibleTourIds?: number[];
+  eligibleDestinationIds?: number[];
+  eligibleCustomerSegments?: string[];
 };
+
+const DEFAULT_PUBLIC_VOUCHER_STARTS_AT = new Date('2026-01-01T00:00:00.000Z');
 
 const vouchers: VoucherSeed[] = [
   // Tour thường: ưu đãi nhẹ, số lượt dùng rộng, phù hợp hiển thị public thường xuyên.
@@ -322,28 +331,30 @@ const vouchers: VoucherSeed[] = [
 
 export async function seedVouchers(prisma: PrismaClient) {
   for (const voucher of vouchers) {
+    const voucherData = {
+      label: voucher.label,
+      description: voucher.description,
+      discountType: voucher.discountType,
+      discountValue: voucher.discountValue,
+      maxDiscountAmount: voucher.maxDiscountAmount ?? null,
+      minOrderValue: voucher.minOrderValue,
+      maxUses: voucher.maxUses,
+      usageLimitPerUser: voucher.usageLimitPerUser ?? null,
+      startsAt: voucher.startsAt ?? DEFAULT_PUBLIC_VOUCHER_STARTS_AT,
+      expiresAt: voucher.expiresAt,
+      isActive: voucher.isActive ?? true,
+      isStackable: voucher.isStackable ?? false,
+      eligibleTourIds: voucher.eligibleTourIds ?? [],
+      eligibleDestinationIds: voucher.eligibleDestinationIds ?? [],
+      eligibleCustomerSegments: voucher.eligibleCustomerSegments ?? [],
+    };
+
     await prisma.voucher.upsert({
       where: { code: voucher.code },
-      update: {
-        label: voucher.label,
-        description: voucher.description,
-        discountType: voucher.discountType,
-        discountValue: voucher.discountValue,
-        minOrderValue: voucher.minOrderValue,
-        maxUses: voucher.maxUses,
-        expiresAt: voucher.expiresAt,
-        isActive: voucher.isActive ?? true,
-      },
+      update: voucherData,
       create: {
         code: voucher.code,
-        label: voucher.label,
-        description: voucher.description,
-        discountType: voucher.discountType,
-        discountValue: voucher.discountValue,
-        minOrderValue: voucher.minOrderValue,
-        maxUses: voucher.maxUses,
-        expiresAt: voucher.expiresAt,
-        isActive: voucher.isActive ?? true,
+        ...voucherData,
       },
     });
   }

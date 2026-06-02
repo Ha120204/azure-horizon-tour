@@ -13,6 +13,7 @@ import {
     type AdminRole,
 } from '@/lib/adminAccess';
 import { API_BASE_URL } from '@/lib/constants';
+import { saveClientUserStorage } from '@/lib/authSession';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -56,11 +57,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }
 
                 setCurrentUserRole(role);
-                localStorage.setItem('userRole', role);
-                if (profile.fullName) localStorage.setItem('userName', profile.fullName);
-                if (profile.email) localStorage.setItem('userEmail', profile.email);
-                if (profile.avatarUrl) localStorage.setItem('userAvatarUrl', profile.avatarUrl);
-                else localStorage.removeItem('userAvatarUrl');
+                saveClientUserStorage({
+                    id: profile.id,
+                    userId: profile.userId,
+                    fullName: profile.fullName,
+                    email: profile.email,
+                    role,
+                    avatarUrl: profile.avatarUrl ?? null,
+                });
 
                 setAuthState('authorized');
             } catch {

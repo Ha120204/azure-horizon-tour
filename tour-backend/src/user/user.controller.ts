@@ -17,6 +17,7 @@ import { UserService } from './user.service';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { BulkUpdateUserStatusDto } from './dto/bulk-update-user-status.dto';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 import { Role } from '@prisma/client';
 
@@ -56,6 +57,10 @@ export class UserController {
     @Query('search') search?: string,
     @Query('role') role?: string,
     @Query('status') status?: string,
+    @Query('bookingFilter') bookingFilter?: string,
+    @Query('segmentFilter') segmentFilter?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -63,6 +68,10 @@ export class UserController {
       search,
       role,
       status,
+      bookingFilter,
+      segmentFilter,
+      sortBy,
+      sortDir,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 10,
     }, req.user.role);
@@ -76,6 +85,16 @@ export class UserController {
   @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
   getStats(@Request() req: AuthenticatedAdminRequest) {
     return this.userService.getStats(req.user.role);
+  }
+
+  @Patch('bulk-status')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @AuditLog('UPDATE', 'User')
+  bulkUpdateStatus(
+    @Body() dto: BulkUpdateUserStatusDto,
+    @Request() req: AuthenticatedAdminRequest,
+  ) {
+    return this.userService.bulkUpdateCustomerStatus(dto.ids, dto.status, req.user.userId, req.user.role);
   }
 
   /**

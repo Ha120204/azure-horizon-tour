@@ -27,7 +27,6 @@ export default function BookingManagementPage() {
         onExport={booking.handleExport}
       />
 
-      <CancelRequestPanel onActionDone={booking.refreshBookingsAndPaymentStats} />
       <AssistedBookingWorkspace onChanged={booking.refreshBookingsAndPaymentStats} showToast={booking.showToast} />
 
       <BookingKpiGrid
@@ -40,6 +39,8 @@ export default function BookingManagementPage() {
 
       <PaymentStatsSection
         paymentStats={booking.paymentStats}
+        isLoading={booking.isPaymentStatsLoading}
+        error={booking.paymentStatsError}
         statsDateFrom={booking.statsDateFrom}
         statsDateTo={booking.statsDateTo}
         defaultStatsDateTo={booking.defaultStatsDateTo}
@@ -48,47 +49,59 @@ export default function BookingManagementPage() {
         onClearDates={booking.clearStatsDates}
       />
 
-      <BookingFilters
-        search={booking.search}
-        statusFilter={booking.statusFilter}
-        paymentFilter={booking.paymentFilter}
-        paymentMethodFilter={booking.paymentMethodFilter}
-        needsReconciliation={booking.needsReconciliation}
-        dateFrom={booking.dateFrom}
-        dateTo={booking.dateTo}
-        hasFilter={booking.hasFilter}
-        isLoading={booking.isLoading}
-        totalItems={booking.meta.totalItems}
-        onSearchChange={booking.setSearch}
-        onStatusChange={booking.changeStatusFilter}
-        onPaymentChange={booking.changePaymentFilter}
-        onPaymentMethodChange={booking.changePaymentMethodFilter}
-        onNeedsReconciliationChange={booking.changeNeedsReconciliation}
-        onDateFromChange={booking.changeDateFrom}
-        onDateToChange={booking.changeDateTo}
-        onResetFilters={booking.resetFilters}
-      />
+      <CancelRequestPanel onActionDone={booking.refreshBookingsAndPaymentStats} />
 
-      <BookingTable
-        bookings={booking.bookings}
-        isLoading={booking.isLoading}
-        hasFilter={booking.hasFilter}
-        statusFilter={booking.statusFilter}
-        meta={booking.meta}
-        pageSize={booking.pageSize}
-        onOpenBooking={booking.setSelectedBooking}
-        onResetFilters={booking.resetFilters}
-        onCopyPaymentRequest={booking.copyPaymentRequest}
-        onResendPaymentRequest={booking.resendPaymentRequest}
-        onPageChange={booking.setPage}
-        onPageSizeChange={booking.changePageSize}
-      />
+      <section className="mb-8" aria-label="Danh sách đơn đặt tour">
+        <BookingFilters
+          search={booking.search}
+          statusFilter={booking.statusFilter}
+          paymentFilter={booking.paymentFilter}
+          paymentMethodFilter={booking.paymentMethodFilter}
+          needsReconciliation={booking.needsReconciliation}
+          needsCustomerCall={booking.needsCustomerCall}
+          dateFrom={booking.dateFrom}
+          dateTo={booking.dateTo}
+          departureFrom={booking.departureFrom}
+          departureTo={booking.departureTo}
+          hasFilter={booking.hasFilter}
+          isLoading={booking.isLoading}
+          totalItems={booking.meta.totalItems}
+          onSearchChange={booking.setSearch}
+          onStatusChange={booking.changeStatusFilter}
+          onPaymentChange={booking.changePaymentFilter}
+          onPaymentMethodChange={booking.changePaymentMethodFilter}
+          onNeedsReconciliationChange={booking.changeNeedsReconciliation}
+          onDateFromChange={booking.changeDateFrom}
+          onDateToChange={booking.changeDateTo}
+          onResetFilters={booking.resetFilters}
+        />
+
+        <BookingTable
+          bookings={booking.bookings}
+          isLoading={booking.isLoading}
+          hasFilter={booking.hasFilter}
+          statusFilter={booking.statusFilter}
+          meta={booking.meta}
+          pageSize={booking.pageSize}
+          onOpenBooking={booking.setSelectedBooking}
+          onResetFilters={booking.resetFilters}
+          onCopyPaymentRequest={booking.copyPaymentRequest}
+          onResendPaymentRequest={booking.resendPaymentRequest}
+          onBulkResendPaymentRequests={booking.bulkResendPaymentRequests}
+          onCancelBooking={booking.cancelBooking}
+          onSaveBookingNote={booking.saveBookingNote}
+          onPageChange={booking.setPage}
+          onPageSizeChange={booking.changePageSize}
+        />
+      </section>
 
       {booking.selectedBooking && (
         <BookingDetailModal
           booking={booking.selectedBooking}
           onClose={() => booking.setSelectedBooking(null)}
           onConfirmSuccess={booking.handleConfirmSuccess}
+          onCopyPaymentRequest={booking.copyPaymentRequest}
+          onResendPaymentRequest={booking.resendPaymentRequest}
         />
       )}
 

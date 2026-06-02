@@ -11,8 +11,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { AiService } from './ai.service';
+import type { TourTranslationRequest } from './ai.service';
 
 type ChatRequestBody = {
   message?: string;
@@ -65,6 +68,17 @@ export class AiController {
     }
 
     return this.aiService.chat(message, body.sessionId, req.user?.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+  @Post('translate/tour')
+  translateTourDraft(@Body() body: TourTranslationRequest) {
+    if (!body || typeof body !== 'object') {
+      throw new BadRequestException('Tour draft content is required');
+    }
+
+    return this.aiService.translateTourDraft(body);
   }
 
   @UseGuards(OptionalJwtGuard)

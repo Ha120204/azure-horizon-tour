@@ -11,18 +11,107 @@ export interface Meta {
 export interface Tour {
     id: number;
     name: string;
+    nameEn?: string;
+    description?: string;
+    descriptionEn?: string;
     imageUrl: string;
     price: number;
     availableSeats: number;
+    bookedSeats?: number;
+    totalSeats?: number;
     duration: string;
+    durationEn?: string;
     tourType: string;
+    tourCode?: string;
     averageRating: number;
     startDate: string;
+    endDate?: string;
+    departurePoint?: string;
+    departurePointEn?: string;
+    destinationId?: number | null;
     destination: { id: number; name: string };
     status: TourStatus;
     reviewNote?: string;
     createdById?: number;
     createdBy?: { id: number; fullName: string };
+    images?: TourImage[];
+    packages?: TourPackage[];
+    departures?: TourDeparture[];
+    highlights?: TourHighlight[];
+    itinerary?: TourItineraryDay[];
+    faqs?: TourFaq[];
+}
+
+export interface TourImage {
+    id: number;
+    url: string;
+    altText?: string;
+    sortOrder?: number;
+}
+
+export interface TourPackage {
+    id: number;
+    name: string;
+    nameEn?: string;
+    description?: string;
+    descriptionEn?: string;
+    price: number;
+    badge?: string;
+    includes?: string[] | string;
+    includesEn?: string[] | string;
+    excludes?: string[] | string;
+    excludesEn?: string[] | string;
+}
+
+export interface TourDeparture {
+    id: number;
+    departureDate: string;
+    price: number;
+    availableSeats: number;
+    maxSeats?: number;
+    note?: string;
+    noteEn?: string;
+    category?: string;
+}
+
+export interface TourHighlight {
+    id: number;
+    content: string;
+    contentEn?: string;
+    icon?: string;
+}
+
+export interface TourTimelineEntry {
+    time: string;
+    activity: string;
+}
+
+export interface TourItineraryDay {
+    id: number;
+    dayNumber: number;
+    title: string;
+    titleEn?: string | null;
+    description: string;
+    descriptionEn?: string | null;
+    mealsBreakfast?: boolean;
+    mealsLunch?: boolean;
+    mealsDinner?: boolean;
+    accommodation?: string | null;
+    accommodationEn?: string | null;
+    transport?: string | null;
+    transportEn?: string | null;
+    activities?: string[];
+    activitiesEn?: string[];
+    timeline?: TourTimelineEntry[];
+    timelineEn?: TourTimelineEntry[];
+}
+
+export interface TourFaq {
+    id: number;
+    question: string;
+    questionEn?: string;
+    answer: string;
+    answerEn?: string;
 }
 
 export interface TrashedTour extends Tour {
@@ -64,6 +153,7 @@ export interface TourKpiItem {
     label: string;
     value: string;
     unit: string | null;
+    subtitle?: string | null;
     color: string;
     highlight: boolean;
     onClick: (() => void) | null;

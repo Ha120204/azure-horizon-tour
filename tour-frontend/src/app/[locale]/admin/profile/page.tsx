@@ -5,7 +5,7 @@ import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { clearClientUserStorage } from '@/lib/authSession';
 import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
-import { DangerZone, PasswordFormSection, ProfileInfoFormSection } from './_components/ProfileForms';
+import { PasswordFormSection, ProfileInfoFormSection } from './_components/ProfileForms';
 import { ProfileIdentityPanel } from './_components/ProfileIdentityPanel';
 import { Toast } from './_components/Toast';
 import {
@@ -233,7 +233,7 @@ export default function AdminProfilePage() {
 
     if (isLoading) {
         return (
-            <main className="flex-1 pt-8 px-8 pb-12 flex items-center justify-center min-h-[60vh]">
+            <main className="flex-1 pt-8 px-8 pb-12 flex items-center justify-center min-h-[60vh] bg-slate-50/60">
                 <div className="flex flex-col items-center gap-4 text-slate-400">
                     <span className="material-symbols-outlined text-5xl animate-spin">progress_activity</span>
                     <p className="text-sm font-medium">Đang tải hồ sơ...</p>
@@ -245,8 +245,10 @@ export default function AdminProfilePage() {
     return (
         <main className="flex-1 pt-8 px-8 pb-16 overflow-y-auto w-full max-w-[1200px] mx-auto">
             <div className="mb-8">
-                <h1 className="text-[1.75rem] font-bold text-slate-800 leading-tight">Hồ sơ cá nhân</h1>
-                <p className="text-slate-500 text-sm mt-1">Quản lý thông tin tài khoản và bảo mật đăng nhập của bạn.</p>
+                <div className="flex items-center gap-3 mb-1">
+                    <h1 className="text-[1.75rem] font-bold text-slate-800 leading-tight">Hồ sơ cá nhân</h1>
+                </div>
+                <p className="text-slate-500 text-sm">Quản lý tài khoản &amp; bảo mật đăng nhập.</p>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-6">
@@ -282,9 +284,6 @@ export default function AdminProfilePage() {
                         onChangePassword={handleChangePassword}
                     />
 
-                    <DangerZone
-                        onUnavailableAction={() => showToast('Tính năng này sẽ được triển khai trong phiên bản tới.', 'info')}
-                    />
                 </div>
             </div>
 

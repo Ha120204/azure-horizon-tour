@@ -28,11 +28,11 @@ export function TourPageHeader({ isStaff, onExportCSV, onCreate }: TourPageHeade
                 </button>
                 <button
                     onClick={onCreate}
-                    aria-label={isStaff ? 'Tạo bản nháp tour' : 'Tạo tour hoặc bản nháp'}
+                    aria-label="Tạo tour mới"
                     className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-90 transition-opacity active:scale-[0.98] flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none"
                 >
-                    <span className="material-symbols-outlined text-sm" aria-hidden="true">{isStaff ? 'draft' : 'add'}</span>
-                    {isStaff ? 'Tạo bản nháp' : 'Tạo Tour / Nháp'}
+                    <span className="material-symbols-outlined text-sm" aria-hidden="true">add_circle</span>
+                    Tạo Tour Mới
                 </button>
             </div>
         </div>

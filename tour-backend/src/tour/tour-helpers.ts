@@ -33,7 +33,7 @@ export const parseRatingBuckets = (input?: string): number[] => {
     .map((r) => Number(r.trim()))
     .filter((r) => !Number.isNaN(r));
   if (ratings.length === 0 || ratings.some((r) => !Number.isInteger(r) || r < 1 || r > 5)) {
-    throw new BadRequestException('ratings khong hop le');
+    throw new BadRequestException('Bộ lọc đánh giá không hợp lệ');
   }
   return Array.from(new Set(ratings));
 };
@@ -72,27 +72,27 @@ export const requirePublishableTour = (
   options: { requireDepartures?: boolean } = {},
 ) => {
   const errors: string[] = [];
-  if (!hasText(tour.name)) errors.push('Ten tour');
-  if (!hasText(tour.description)) errors.push('Mo ta');
-  if (tour.price == null || Number(tour.price) <= 0) errors.push('Gia');
-  if (!tour.destinationId) errors.push('Diem den');
-  if (tour.destination?.name === DRAFT_DESTINATION_NAME) errors.push('Diem den');
-  if (!hasText(tour.duration)) errors.push('Thoi luong');
-  if (tour.availableSeats == null || Number(tour.availableSeats) < 1) errors.push('So ghe');
+  if (!hasText(tour.name)) errors.push('Tên tour');
+  if (!hasText(tour.description)) errors.push('Mô tả');
+  if (tour.price == null || Number(tour.price) <= 0) errors.push('Giá');
+  if (!tour.destinationId) errors.push('Điểm đến');
+  if (tour.destination?.name === DRAFT_DESTINATION_NAME) errors.push('Điểm đến');
+  if (!hasText(tour.duration)) errors.push('Thời lượng');
+  if (tour.availableSeats == null || Number(tour.availableSeats) < 1) errors.push('Số ghế');
 
   const startDate = tour.startDate ? new Date(tour.startDate) : null;
-  if (!startDate || Number.isNaN(startDate.getTime())) errors.push('Ngay khoi hanh');
+  if (!startDate || Number.isNaN(startDate.getTime())) errors.push('Ngày khởi hành');
 
   if (options.requireDepartures) {
     const validDepartures = (tour.departures ?? []).filter(
       (d) => d.isActive !== false && d.departureDate && Number(d.availableSeats ?? 0) > 0,
     );
-    if (validDepartures.length === 0) errors.push('It nhat 1 chuyen khoi hanh');
+    if (validDepartures.length === 0) errors.push('Ít nhất 1 chuyến khởi hành');
   }
 
   if (errors.length > 0) {
     throw new BadRequestException(
-      `Vui long hoan thien thong tin truoc khi gui duyet: ${[...new Set(errors)].join(', ')}`,
+      `Vui lòng hoàn thiện thông tin trước khi gửi duyệt: ${[...new Set(errors)].join(', ')}`,
     );
   }
 };
@@ -111,5 +111,5 @@ export const sanitizePublicTourDetail = <T extends Record<string, unknown>>(tour
 export const parseTravelScope = (input?: string) => {
   if (!input) return undefined;
   if (input === 'DOMESTIC' || input === 'INTERNATIONAL') return input;
-  throw new BadRequestException('travelScope khong hop le');
+  throw new BadRequestException('Phạm vi điểm đến không hợp lệ');
 };

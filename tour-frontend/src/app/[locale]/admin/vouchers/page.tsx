@@ -2,6 +2,7 @@
 
 import VoucherDetailDrawer from '@/components/admin/VoucherDetailDrawer';
 import VoucherFormModal from '@/components/admin/VoucherFormModal';
+import { VoucherBulkActionBar } from './_components/VoucherBulkActionBar';
 import { DeleteVoucherDialog, VoucherToast } from './_components/VoucherDialogs';
 import { VoucherFilters, VoucherKpiGrid, VoucherPageHeader } from './_components/VoucherPageSections';
 import { VoucherTable } from './_components/VoucherTable';
@@ -36,6 +37,18 @@ export default function VoucherManagementPage() {
         onClearFilters={voucher.clearVoucherFilters}
       />
 
+      <VoucherBulkActionBar
+        selectedCount={voucher.selectedCount}
+        activeCount={voucher.selectedActiveCount}
+        inactiveCount={voucher.selectedInactiveCount}
+        canManage={voucher.currentUserRole !== null && voucher.currentUserRole !== 'STAFF'}
+        isBulkUpdating={voucher.isBulkUpdating}
+        onExport={voucher.exportSelectedVouchers}
+        onBulkDeactivate={voucher.bulkDeactivate}
+        onBulkActivate={voucher.bulkActivate}
+        onClear={voucher.clearSelection}
+      />
+
       <VoucherTable
         vouchers={voucher.vouchers}
         isLoadingList={voucher.isLoadingList}
@@ -44,11 +57,22 @@ export default function VoucherManagementPage() {
         limit={voucher.limit}
         currentUserRole={voucher.currentUserRole}
         toggleLoadingId={voucher.toggleLoadingId}
+        sortBy={voucher.sortBy}
+        sortOrder={voucher.sortOrder}
+        selectedVoucherIds={voucher.selectedVoucherIds}
+        allCurrentPageSelected={voucher.allCurrentPageSelected}
+        someCurrentPageSelected={voucher.someCurrentPageSelected}
         onOpenDetail={voucher.setDetailId}
         onEdit={voucher.openEdit}
+        onDuplicate={voucher.openDuplicate}
         onToggle={voucher.handleToggle}
         onDelete={voucher.setDeleteTarget}
-        onPageChange={voucher.setPage}
+        onCopyCode={voucher.copyVoucherCode}
+        onCopyShareLink={voucher.copyVoucherShareLink}
+        onToggleSelected={voucher.toggleSelectedVoucher}
+        onToggleCurrentPage={voucher.toggleCurrentPageSelection}
+        onSortChange={voucher.changeSort}
+        onPageChange={voucher.changePage}
         onPageSizeChange={voucher.changePageSize}
       />
 

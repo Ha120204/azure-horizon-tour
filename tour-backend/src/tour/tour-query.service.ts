@@ -41,7 +41,7 @@ export class TourQueryService {
         reviewedBy: { select: { id: true, fullName: true } },
       },
     });
-    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
     const localizedTour = localizeTour(tour, locale);
     return isAdminLikeRole(requesterRole) ? localizedTour : sanitizePublicTourDetail(localizedTour);
   }
@@ -50,13 +50,13 @@ export class TourQueryService {
 
   async update(id: number, updateTourDto: UpdateTourDto, requesterId?: number, requesterRole?: string) {
     const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
-    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
 
     const isAdminRole = requesterRole === 'SUPER_ADMIN' || requesterRole === 'ADMIN';
     if (!isAdminRole) {
-      if (tour.createdById !== requesterId) throw new ForbiddenException('Ban khong co quyen chinh sua tour nay');
+      if (tour.createdById !== requesterId) throw new ForbiddenException('Bạn không có quyền chỉnh sửa tour này');
       if (tour.status !== TourStatus.DRAFT && tour.status !== TourStatus.REJECTED)
-        throw new ForbiddenException('Chi co the chinh sua tour o trang thai Ban nhap hoac Bi tu choi');
+        throw new ForbiddenException('Chỉ có thể chỉnh sửa tour ở trạng thái Bản nháp hoặc Bị từ chối');
     }
 
     const { destinationId, status, ...rest } = updateTourDto;
@@ -68,7 +68,7 @@ export class TourQueryService {
         ...(rest.nameEn !== undefined && { nameEn: rest.nameEn?.trim() || null }),
         ...(rest.description !== undefined && { description: rest.description?.trim() ?? '' }),
         ...(rest.descriptionEn !== undefined && { descriptionEn: rest.descriptionEn?.trim() || null }),
-        ...(rest.duration !== undefined && { duration: rest.duration?.trim() || 'Chua xac dinh' }),
+        ...(rest.duration !== undefined && { duration: rest.duration?.trim() || 'Chưa xác định' }),
         ...(rest.durationEn !== undefined && { durationEn: rest.durationEn?.trim() || null }),
         ...(rest.imageUrl !== undefined && { imageUrl: rest.imageUrl?.trim() || null }),
         ...(rest.tourType !== undefined && { tourType: rest.tourType?.trim() || 'Luxury Retreat' }),
@@ -84,12 +84,12 @@ export class TourQueryService {
 
   async remove(id: number, requesterId?: number, requesterRole?: string) {
     const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
-    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
     const isAdminRole = requesterRole === 'SUPER_ADMIN' || requesterRole === 'ADMIN';
     if (!isAdminRole) {
-      if (tour.createdById !== requesterId) throw new ForbiddenException('Ban khong co quyen xoa ban nhap nay');
+      if (tour.createdById !== requesterId) throw new ForbiddenException('Bạn không có quyền xóa bản nháp này');
       if (tour.status !== TourStatus.DRAFT && tour.status !== TourStatus.REJECTED)
-        throw new BadRequestException('Chi co the xoa tour o trang thai Ban nhap hoac Bi tu choi');
+        throw new BadRequestException('Chỉ có thể xóa tour ở trạng thái Bản nháp hoặc Bị từ chối');
     }
     return this.prisma.tour.update({ where: { id }, data: { deletedAt: new Date() } });
   }
@@ -213,7 +213,7 @@ export class TourQueryService {
 
   async restoreTour(id: number) {
     const tour = await this.prisma.tour.findFirst({ where: { id, deletedAt: { not: null } } });
-    if (!tour) throw new NotFoundException(`Tour ${id} not found in trash`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id} trong thùng rác`);
     return this.prisma.tour.update({ where: { id }, data: { deletedAt: null } });
   }
 
@@ -222,9 +222,9 @@ export class TourQueryService {
       where: { id, deletedAt: { not: null } },
       include: { _count: { select: { bookings: true } } },
     });
-    if (!tour) throw new NotFoundException(`Tour ${id} not found in trash`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id} trong thùng rác`);
     if (tour._count.bookings > 0) {
-      throw new BadRequestException('Tour da phat sinh booking, chi duoc luu tru va khoi phuc');
+      throw new BadRequestException('Tour đã phát sinh booking, chỉ được lưu trữ và khôi phục');
     }
     return tour;
   }
@@ -232,12 +232,12 @@ export class TourQueryService {
   async permanentDelete(id: number) {
     const tour = await this.assertCanPermanentDeleteTour(id);
     await this.prisma.tour.delete({ where: { id } });
-    return { message: `Tour "${tour.name}" da bi xoa vinh vien.` };
+    return { message: `Tour "${tour.name}" đã bị xóa vĩnh viễn.` };
   }
 
   async bulkRestoreTours(ids: number[]) {
     const uniqueIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
-    if (uniqueIds.length === 0) throw new BadRequestException('Danh sach tour khong hop le');
+    if (uniqueIds.length === 0) throw new BadRequestException('Danh sách tour không hợp lệ');
     const result = await this.prisma.tour.updateMany({
       where: { id: { in: uniqueIds }, deletedAt: { not: null } },
       data: { deletedAt: null },
@@ -247,7 +247,7 @@ export class TourQueryService {
 
   async bulkPermanentDelete(ids: number[]) {
     const uniqueIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
-    if (uniqueIds.length === 0) throw new BadRequestException('Danh sach tour khong hop le');
+    if (uniqueIds.length === 0) throw new BadRequestException('Danh sách tour không hợp lệ');
 
     const tours = await this.prisma.tour.findMany({
       where: { id: { in: uniqueIds }, deletedAt: { not: null } },
@@ -301,7 +301,7 @@ export class TourQueryService {
       ],
     });
 
-    const badgeMapVi: Record<string, string> = { FLASH_SALE: 'FLASH SALE', EARLY_BIRD: 'DAT SOM', LAST_MINUTE: 'GIO CHOT' };
+    const badgeMapVi: Record<string, string> = { FLASH_SALE: 'FLASH SALE', EARLY_BIRD: 'ĐẶT SỚM', LAST_MINUTE: 'GIỜ CHÓT' };
     const badgeMapEn: Record<string, string> = { FLASH_SALE: 'FLASH SALE', EARLY_BIRD: 'EARLY BIRD', LAST_MINUTE: 'LAST MINUTE' };
     const badgeMap = locale === 'en' ? badgeMapEn : badgeMapVi;
     const categoryMap: Record<string, string> = { FLASH_SALE: 'flash', EARLY_BIRD: 'early', LAST_MINUTE: 'lastminute' };

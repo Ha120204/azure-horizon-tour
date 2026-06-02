@@ -31,6 +31,11 @@ enum TravelScope {
   INTERNATIONAL
 }
 
+enum TourPackagePresetType {
+  INCLUDE
+  EXCLUDE
+}
+
 enum ArticleStatus {
   DRAFT
   PENDING_REVIEW
@@ -42,66 +47,66 @@ enum ArticleStatus {
 // Báº¢NG NGÆ¯á»œI DÃ™NG (USER)
 // =============================================
 model User {
-  id        Int       @id @default(autoincrement()) 
-  email     String    @unique                        
-  password  String?                                 // Optional: Google users don't have password
-  fullName  String
-  phone     String?                                 
-  avatarUrl String?
-  dob       String?
-  gender    String?
-  identityType  String?   // "CCCD" | "PASSPORT"
-  identityNo    String?   // MÃ£ sá»‘ giáº¥y tá» tuá»³ thÃ¢n
-  role      Role      @default(CUSTOMER)             
-  createdAt DateTime  @default(now())               
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime? // [PHASE 1] Soft Delete                     
-  authTokenVersion Int @default(0)
-  authRevokedAt DateTime?
+  id               Int       @id @default(autoincrement())
+  email            String    @unique
+  password         String? // Optional: Google users don't have password
+  fullName         String
+  phone            String?
+  avatarUrl        String?
+  dob              String?
+  gender           String?
+  identityType     String? // "CCCD" | "PASSPORT"
+  identityNo       String? // MÃ£ sá»‘ giáº¥y tá» tuá»³ thÃ¢n
+  role             Role      @default(CUSTOMER)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime? // [PHASE 1] Soft Delete
+  authTokenVersion Int       @default(0)
+  authRevokedAt    DateTime?
 
   // -- Google OAuth --
-  googleId     String?  @unique   // Google subject ID (sub)
-  authProvider String   @default("local") // "local" | "google" | "both"
+  googleId     String? @unique // Google subject ID (sub)
+  authProvider String  @default("local") // "local" | "google" | "both"
 
-
-  bookings        Booking[]
-  bookingsConfirmed Booking[]    @relation("BookingConfirmedBy")
-  bookingNotifications BookingNotification[]
-  userVouchers    UserVoucher[]
-  chatSessions    ChatSession[]
-  reviews         Review[]
-  systemLogs      SystemLog[]
-  adminNotificationReads AdminNotificationRead[]
-  supportTickets  SupportTicket[]
-  createdTours    Tour[]    @relation("TourCreatedBy")
-  reviewedTours   Tour[]    @relation("TourReviewedBy")
-  createdArticles Article[] @relation("ArticleCreatedBy")
-  reviewedArticles Article[] @relation("ArticleReviewedBy")
-  assistedDraftsCreated AssistedBookingDraft[] @relation("AssistedDraftCreatedBy")
-  assistedDraftsReviewed AssistedBookingDraft[] @relation("AssistedDraftReviewedBy")
-  assistedDraftsAsCustomer AssistedBookingDraft[] @relation("AssistedDraftCustomer")
-  superRiskReviews SuperRiskReview[] @relation("SuperRiskReviewedBy")
+  bookings                 Booking[]
+  bookingsConfirmed        Booking[]               @relation("BookingConfirmedBy")
+  bookingNotifications     BookingNotification[]
+  chatSessions             ChatSession[]
+  reviews                  Review[]
+  systemLogs               SystemLog[]
+  adminNotificationReads   AdminNotificationRead[]
+  supportTickets           SupportTicket[]
+  createdTours             Tour[]                  @relation("TourCreatedBy")
+  reviewedTours            Tour[]                  @relation("TourReviewedBy")
+  packagePresetItems       TourPackagePresetItem[] @relation("TourPackagePresetCreatedBy")
+  createdArticles          Article[]               @relation("ArticleCreatedBy")
+  reviewedArticles         Article[]               @relation("ArticleReviewedBy")
+  assistedDraftsCreated    AssistedBookingDraft[]  @relation("AssistedDraftCreatedBy")
+  assistedDraftsReviewed   AssistedBookingDraft[]  @relation("AssistedDraftReviewedBy")
+  assistedDraftsAsCustomer AssistedBookingDraft[]  @relation("AssistedDraftCustomer")
+  superRiskReviews         SuperRiskReview[]       @relation("SuperRiskReviewedBy")
+  userVouchers             UserVoucher[]
 }
 
 // =============================================
 // Báº¢NG ÄIá»‚M Äáº¾N (DESTINATION)
 // =============================================
 model Destination {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique 
+  id          Int         @id @default(autoincrement())
+  name        String      @unique
   nameEn      String?
-  slug        String?  @unique // URL thÃ¢n thiá»‡n (vd: da-nang)
-  description String?  @db.Text
-  imageUrl    String?  
-  region      String?  
+  slug        String?     @unique // URL thÃ¢n thiá»‡n (vd: da-nang)
+  description String?     @db.Text
+  imageUrl    String?
+  region      String?
   regionEn    String?
   travelScope TravelScope @default(DOMESTIC)
   countryCode String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  tours       Tour[]   
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tours Tour[]
 
   @@index([travelScope])
 }
@@ -110,81 +115,80 @@ model Destination {
 // Báº¢NG TOUR DU Lá»ŠCH
 // =============================================
 model Tour {
-  id             Int         @id @default(autoincrement())
-  tourCode       String      @unique @default(uuid())
-  name           String
-  nameEn         String?
-  description    String      @db.Text
-  descriptionEn  String?     @db.Text
-  price          Float
-  
-  destinationId  Int
-  destination    Destination @relation(fields: [destinationId], references: [id])
-  
-  startDate      DateTime
-  durationEn     String?
-  duration       String      @default("ChÆ°a xÃ¡c Ä‘á»‹nh")
-  availableSeats Int
-  imageUrl       String?
-  averageRating  Float       @default(0)
-  tourType       String      @default("Luxury Retreat")
-  departurePoint String?                             // Äiá»ƒm khá»Ÿi hÃ nh máº·c Ä‘á»‹nh (VD: "TP. Há»“ ChÃ­ Minh")
+  id            Int     @id @default(autoincrement())
+  tourCode      String  @unique @default(uuid())
+  name          String
+  nameEn        String?
+  description   String  @db.Text
+  descriptionEn String? @db.Text
+  price         Float
+
+  destinationId Int
+  destination   Destination @relation(fields: [destinationId], references: [id])
+
+  startDate        DateTime
+  durationEn       String?
+  duration         String   @default("ChÆ°a xÃ¡c Ä‘á»‹nh")
+  availableSeats   Int
+  imageUrl         String?
+  averageRating    Float    @default(0)
+  tourType         String   @default("Luxury Retreat")
+  departurePoint   String? // Äiá»ƒm khá»Ÿi hÃ nh máº·c Ä‘á»‹nh (VD: "TP. Há»“ ChÃ­ Minh")
   departurePointEn String?
-  
+
   // â”€â”€ Workflow fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  status         TourStatus  @default(PUBLISHED)    // Tráº¡ng thÃ¡i duyá»‡t
-  publishedAt    DateTime?                           // Thá»i Ä‘iá»ƒm xuáº¥t báº£n
-  reviewNote     String?     @db.Text               // LÃ½ do tá»« chá»‘i (Admin ghi)
-  createdById    Int?                               // Staff/Admin táº¡o
-  reviewedById   Int?                               // Admin duyá»‡t/tá»« chá»‘i
-  createdBy      User?       @relation("TourCreatedBy",  fields: [createdById],  references: [id], onDelete: SetNull)
-  reviewedBy     User?       @relation("TourReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  status       TourStatus @default(PUBLISHED) // Tráº¡ng thÃ¡i duyá»‡t
+  publishedAt  DateTime? // Thá»i Ä‘iá»ƒm xuáº¥t báº£n
+  reviewNote   String?    @db.Text // LÃ½ do tá»« chá»‘i (Admin ghi)
+  createdById  Int? // Staff/Admin táº¡o
+  reviewedById Int? // Admin duyá»‡t/tá»« chá»‘i
+  createdBy    User?      @relation("TourCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reviewedBy   User?      @relation("TourReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?   // [PHASE 1] Soft Delete
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // [PHASE 1] Soft Delete
 
   bookings       Booking[]
   assistedDrafts AssistedBookingDraft[]
   reviews        Review[]
   itinerary      TourItinerary[] // [PHASE 1] Lá»‹ch trÃ¬nh theo ngÃ y
-  packages       TourPackage[]   // CÃ¡c gÃ³i tour (TiÃªu Chuáº©n / Cao Cáº¥p / Luxury)
+  packages       TourPackage[] // CÃ¡c gÃ³i tour (TiÃªu Chuáº©n / Cao Cáº¥p / Luxury)
   departures     TourDeparture[] // CÃ¡c ngÃ y khá»Ÿi hÃ nh (má»—i ngÃ y cÃ³ giÃ¡ vÃ  gháº¿ riÃªng)
-  images         TourImage[]     // [PHASE 2] Bá»™ áº£nh gallery cá»§a tour
+  images         TourImage[] // [PHASE 2] Bá»™ áº£nh gallery cá»§a tour
   highlights     TourHighlight[] // [PHASE 2] Äiá»ƒm ná»•i báº­t cá»§a tour
-  faqs           TourFAQ[]       // [PHASE 2] CÃ¢u há»i thÆ°á»ng gáº·p
+  faqs           TourFAQ[] // [PHASE 2] CÃ¢u há»i thÆ°á»ng gáº·p
 
-  @@index([destinationId, startDate])  // [PHASE 1] Index tÄƒng tá»‘c filter
-  @@index([tourType, price])           // [PHASE 1] Index tÄƒng tá»‘c filter
+  @@index([destinationId, startDate]) // [PHASE 1] Index tÄƒng tá»‘c filter
+  @@index([tourType, price]) // [PHASE 1] Index tÄƒng tá»‘c filter
 }
-
 
 // =============================================
 // Báº¢NG Lá»ŠCH TRÃŒNH TOUR THEO NGÃ€Y (PHASE 1 - Má»šI)
 // =============================================
 model TourItinerary {
-  id              Int      @id @default(autoincrement())
-  tourId          Int
-  tour            Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
-  dayNumber       Int      // NgÃ y thá»© máº¥y (1, 2, 3...)
-  title           String   // "KhÃ¡m phÃ¡ Há»™i An cá»• kÃ­nh"
-  titleEn         String?
-  description     String   @db.Text // MÃ´ táº£ chi tiáº¿t hoáº¡t Ä‘á»™ng trong ngÃ y
-  descriptionEn   String?  @db.Text
+  id            Int     @id @default(autoincrement())
+  tourId        Int
+  tour          Tour    @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  dayNumber     Int // NgÃ y thá»© máº¥y (1, 2, 3...)
+  title         String // "KhÃ¡m phÃ¡ Há»™i An cá»• kÃ­nh"
+  titleEn       String?
+  description   String  @db.Text // MÃ´ táº£ chi tiáº¿t hoáº¡t Ä‘á»™ng trong ngÃ y
+  descriptionEn String? @db.Text
 
   // [PHASE 2] ThÃ´ng tin chi tiáº¿t theo ngÃ y
   mealsBreakfast  Boolean  @default(false) // Bá»¯a sÃ¡ng included
   mealsLunch      Boolean  @default(false) // Bá»¯a trÆ°a included
   mealsDinner     Boolean  @default(false) // Bá»¯a tá»‘i included
-  accommodation   String?                  // "Vinpearl Resort 5â­"
+  accommodation   String? // "Vinpearl Resort 5â­"
   accommodationEn String?
-  transport       String?                  // "Xe du lá»‹ch 45 chá»—"
+  transport       String? // "Xe du lá»‹ch 45 chá»—"
   transportEn     String?
-  activities      String[]                 // ["Láº·n ngáº¯m san hÃ´", "Táº¯m biá»ƒn HÃ²n Táº±m"]
+  activities      String[] // ["Láº·n ngáº¯m san hÃ´", "Táº¯m biá»ƒn HÃ²n Táº±m"]
   activitiesEn    String[] @default([])
-  imageUrl        String?                  // áº¢nh minh há»a cho ngÃ y
-  timeline        Json?                    // [{"time":"08:00","activity":"Ä‚n sÃ¡ng táº¡i KS"}, ...]
+  imageUrl        String? // áº¢nh minh há»a cho ngÃ y
+  timeline        Json? // [{"time":"08:00","activity":"Ä‚n sÃ¡ng táº¡i KS"}, ...]
   timelineEn      Json?
 
   @@index([tourId, dayNumber])
@@ -194,13 +198,13 @@ model TourItinerary {
 // Báº¢NG ÄIá»‚M Ná»”I Báº¬T TOUR (PHASE 2 - Má»šI)
 // =============================================
 model TourHighlight {
-  id        Int    @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   tourId    Int
-  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  tour      Tour    @relation(fields: [tourId], references: [id], onDelete: Cascade)
   content   String // "Láº·n ngáº¯m san hÃ´ táº¡i HÃ²n Mun â€” 10 vá»‹nh Ä‘áº¹p nháº¥t tháº¿ giá»›i"
   contentEn String?
-  icon      String @default("auto_awesome") // Material Symbol icon name
-  sortOrder Int    @default(0)
+  icon      String  @default("auto_awesome") // Material Symbol icon name
+  sortOrder Int     @default(0)
 
   @@index([tourId, sortOrder])
 }
@@ -209,14 +213,14 @@ model TourHighlight {
 // Báº¢NG CÃ‚U Há»ŽI THÆ¯á»œNG Gáº¶P (PHASE 2 - Má»šI)
 // =============================================
 model TourFAQ {
-  id        Int    @id @default(autoincrement())
-  tourId    Int
-  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
-  question  String
+  id         Int     @id @default(autoincrement())
+  tourId     Int
+  tour       Tour    @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  question   String
   questionEn String?
-  answer    String @db.Text
-  answerEn  String? @db.Text
-  sortOrder Int    @default(0)
+  answer     String  @db.Text
+  answerEn   String? @db.Text
+  sortOrder  Int     @default(0)
 
   @@index([tourId, sortOrder])
 }
@@ -230,7 +234,7 @@ model TourImage {
   tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
   url       String // Cloudinary secure_url
   altText   String @default("") // Alt text cho SEO
-  sortOrder Int    @default(0)  // Thá»© tá»± hiá»ƒn thá»‹ (0 = áº£nh Ä‘áº§u tiÃªn / áº£nh bÃ¬a)
+  sortOrder Int    @default(0) // Thá»© tá»± hiá»ƒn thá»‹ (0 = áº£nh Ä‘áº§u tiÃªn / áº£nh bÃ¬a)
 
   @@index([tourId, sortOrder])
 }
@@ -239,54 +243,68 @@ model TourImage {
 // Báº¢NG GÃ“I TOUR (TOUR PACKAGE)
 // =============================================
 model TourPackage {
-  id          Int      @id @default(autoincrement())
-  tourId      Int
-  tour        Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  id     Int  @id @default(autoincrement())
+  tourId Int
+  tour   Tour @relation(fields: [tourId], references: [id], onDelete: Cascade)
 
-  name        String   // "GÃ³i TiÃªu Chuáº©n" | "GÃ³i Cao Cáº¥p" | "GÃ³i Luxury"
-  nameEn      String?
-  description String?  @db.Text // MÃ´ táº£ ngáº¯n vá» gÃ³i
+  name          String // "GÃ³i TiÃªu Chuáº©n" | "GÃ³i Cao Cáº¥p" | "GÃ³i Luxury"
+  nameEn        String?
+  description   String? @db.Text // MÃ´ táº£ ngáº¯n vá» gÃ³i
   descriptionEn String? @db.Text
-  price       Float    // GiÃ¡/ngÆ°á»i cho gÃ³i nÃ y
-  badge       String?  // "POPULAR" | "BEST VALUE" | "LUXURY" | null
+  price         Float // GiÃ¡/ngÆ°á»i cho gÃ³i nÃ y
+  badge         String? // "POPULAR" | "BEST VALUE" | "LUXURY" | null
 
   // LÆ°u dáº¡ng JSON string array: ["VÃ© mÃ¡y bay khá»© há»“i", "KhÃ¡ch sáº¡n 4â˜…"]
-  includes    String[] // Danh sÃ¡ch dá»‹ch vá»¥ bao gá»“m
-  includesEn  String[] @default([])
-  excludes    String[] // Danh sÃ¡ch khÃ´ng bao gá»“m
-  excludesEn  String[] @default([])
+  includes   String[] // Danh sÃ¡ch dá»‹ch vá»¥ bao gá»“m
+  includesEn String[] @default([])
+  excludes   String[] // Danh sÃ¡ch khÃ´ng bao gá»“m
+  excludesEn String[] @default([])
 
-  sortOrder   Int      @default(0) // Thá»© tá»± hiá»ƒn thá»‹
-  isActive    Boolean  @default(true)
+  sortOrder Int     @default(0) // Thá»© tá»± hiá»ƒn thá»‹
+  isActive  Boolean @default(true)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tourId, sortOrder])
+}
+
+model TourPackagePresetItem {
+  id              Int                   @id @default(autoincrement())
+  type            TourPackagePresetType
+  label           String
+  normalizedLabel String
+  isActive        Boolean               @default(true)
+  createdById     Int?
+  createdBy       User?                 @relation("TourPackagePresetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([type, normalizedLabel])
+  @@index([type, isActive, label])
 }
 
 // =============================================
 // Báº¢NG NGÃ€Y KHá»žI HÃ€NH (TOUR DEPARTURE)
 // =============================================
 model TourDeparture {
-  id             Int      @id @default(autoincrement())
-  tourId         Int
-  tour           Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  id     Int  @id @default(autoincrement())
+  tourId Int
+  tour   Tour @relation(fields: [tourId], references: [id], onDelete: Cascade)
 
-  departureDate  DateTime              // NgÃ y khá»Ÿi hÃ nh cá»¥ thá»ƒ
-  price          Float?                // Null = dÃ¹ng tour.price lÃ m fallback
-  availableSeats Int      @default(0)  // Sá»‘ gháº¿ cÃ²n láº¡i cho ngÃ y nÃ y
-  maxSeats       Int?                  // [FLASH SALE] Tá»•ng gháº¿ ban Ä‘áº§u â€” dÃ¹ng tÃ­nh % Ä‘Ã£ Ä‘áº·t thá»±c táº¿
-  note           String?               // Ghi chÃº tá»± do (VD: "GiÃ¡ Æ°u Ä‘Ã£i cuá»‘i tuáº§n")
-  noteEn         String?
-  category       String?               // [FLASH SALE] 'FLASH_SALE' | 'EARLY_BIRD' | 'LAST_MINUTE' | null
-  flashSaleEndsAt DateTime?            // [FLASH SALE] Thá»i Ä‘iá»ƒm káº¿t thÃºc Æ°u Ä‘Ã£i (null = khÃ´ng giá»›i háº¡n)
+  departureDate   DateTime // NgÃ y khá»Ÿi hÃ nh cá»¥ thá»ƒ
+  price           Float? // Null = dÃ¹ng tour.price lÃ m fallback
+  availableSeats  Int       @default(0) // Sá»‘ gháº¿ cÃ²n láº¡i cho ngÃ y nÃ y
+  maxSeats        Int? // [FLASH SALE] Tá»•ng gháº¿ ban Ä‘áº§u â€” dÃ¹ng tÃ­nh % Ä‘Ã£ Ä‘áº·t thá»±c táº¿
+  note            String? // Ghi chÃº tá»± do (VD: "GiÃ¡ Æ°u Ä‘Ã£i cuá»‘i tuáº§n")
+  noteEn          String?
+  category        String? // [FLASH SALE] 'FLASH_SALE' | 'EARLY_BIRD' | 'LAST_MINUTE' | null
+  flashSaleEndsAt DateTime? // [FLASH SALE] Thá»i Ä‘iá»ƒm káº¿t thÃºc Æ°u Ä‘Ã£i (null = khÃ´ng giá»›i háº¡n)
+  isActive        Boolean   @default(true)
+  sortOrder       Int       @default(0)
 
-  isActive       Boolean  @default(true)
-  sortOrder      Int      @default(0)
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tourId, departureDate])
   @@index([category, flashSaleEndsAt]) // [FLASH SALE] TÄƒng tá»‘c query lá»c khuyáº¿n mÃ£i
@@ -294,17 +312,17 @@ model TourDeparture {
 
 // --- CÃC ENUM CHO Äáº¶T TOUR ---
 enum BookingStatus {
-  PENDING            // Chá» xÃ¡c nháº­n
-  CONFIRMED          // ÄÃ£ chá»‘t
-  CANCEL_REQUESTED   // KhÃ¡ch Ä‘Ã£ gá»­i yÃªu cáº§u há»§y, chá» Admin duyá»‡t
-  CANCELLED          // ÄÃ£ há»§y
+  PENDING // Chá» xÃ¡c nháº­n
+  CONFIRMED // ÄÃ£ chá»‘t
+  CANCEL_REQUESTED // KhÃ¡ch Ä‘Ã£ gá»­i yÃªu cáº§u há»§y, chá» Admin duyá»‡t
+  CANCELLED // ÄÃ£ há»§y
 }
 
 enum PaymentStatus {
-  UNPAID      // ChÆ°a thanh toÃ¡n
-  PROCESSING  // Äang chá» xá»­ lÃ½
-  PAID        // ÄÃ£ thanh toÃ¡n thÃ nh cÃ´ng
-  FAILED      // Thanh toÃ¡n tháº¥t báº¡i
+  UNPAID // ChÆ°a thanh toÃ¡n
+  PROCESSING // Äang chá» xá»­ lÃ½
+  PAID // ÄÃ£ thanh toÃ¡n thÃ nh cÃ´ng
+  FAILED // Thanh toÃ¡n tháº¥t báº¡i
 }
 
 enum PaymentMethod {
@@ -324,56 +342,56 @@ enum AssistedDraftStatus {
 // Báº¢NG Äáº¶T TOUR (BOOKING)
 // =============================================
 model Booking {
-  id               Int           @id @default(autoincrement())
-  bookingCode      String        @unique @default(uuid()) // MÃ£ ÄÆ¡n HÃ ng (VD: BKG-260324-X9F2)
-  userId           Int
-  tourId           Int
-  numberOfPeople   Int
-  totalPrice       Float
-  unitPriceAtBooking Float?      // [PHASE 1] ÄÃ³ng bÄƒng giÃ¡ vÃ© táº¡i thá»i Ä‘iá»ƒm Ä‘áº·t
-  
-  departureId      Int?          // [PHASE 2] LiÃªn káº¿t Ä‘áº¿n Lá»‹ch khá»Ÿi hÃ nh
-  packageId        Int?          // [PHASE 2] LiÃªn káº¿t Ä‘áº¿n GÃ³i Tour
-  contactInfo      Json?         // [PHASE 2] ThÃ´ng tin liÃªn há»‡ ngÆ°á»i Ä‘áº·t (tÃªn, email, phone)
-  passengers       Json?         // [PHASE 2] Danh sÃ¡ch hÃ nh khÃ¡ch
-  
-  status           BookingStatus @default(PENDING)
-  paymentStatus    PaymentStatus @default(UNPAID)
-  paymentMethod    PaymentMethod @default(PAYOS)
-  holdExpiresAt    DateTime?
-  confirmedById    Int?
-  confirmedBy      User?         @relation("BookingConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
-  paymentGatewayTxnRef String?   // MÃ£ giao dá»‹ch tá»« cá»•ng thanh toÃ¡n Ä‘á»ƒ Ä‘á»‘i soÃ¡t
-  isAssistedBooking Boolean      @default(false)
-  assistedDraftId  Int?          @unique
-  
-  voucherCode      String?       // MÃ£ voucher Ä‘Ã£ Ã¡p dá»¥ng (náº¿u cÃ³)
-  discountAmount   Float         @default(0) // Sá»‘ tiá»n Ä‘Ã£ giáº£m (VNÄ)
+  id                 Int    @id @default(autoincrement())
+  bookingCode        String @unique @default(uuid()) // MÃ£ ÄÆ¡n HÃ ng (VD: BKG-260324-X9F2)
+  userId             Int
+  tourId             Int
+  numberOfPeople     Int
+  totalPrice         Float
+  unitPriceAtBooking Float? // [PHASE 1] ÄÃ³ng bÄƒng giÃ¡ vÃ© táº¡i thá»i Ä‘iá»ƒm Ä‘áº·t
+
+  departureId Int? // [PHASE 2] LiÃªn káº¿t Ä‘áº¿n Lá»‹ch khá»Ÿi hÃ nh
+  packageId   Int? // [PHASE 2] LiÃªn káº¿t Ä‘áº¿n GÃ³i Tour
+  contactInfo Json? // [PHASE 2] ThÃ´ng tin liÃªn há»‡ ngÆ°á»i Ä‘áº·t (tÃªn, email, phone)
+  passengers  Json? // [PHASE 2] Danh sÃ¡ch hÃ nh khÃ¡ch
+
+  status               BookingStatus @default(PENDING)
+  paymentStatus        PaymentStatus @default(UNPAID)
+  paymentMethod        PaymentMethod @default(PAYOS)
+  holdExpiresAt        DateTime?
+  confirmedById        Int?
+  confirmedBy          User?         @relation("BookingConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  paymentGatewayTxnRef String? // MÃ£ giao dá»‹ch tá»« cá»•ng thanh toÃ¡n Ä‘á»ƒ Ä‘á»‘i soÃ¡t
+  isAssistedBooking    Boolean       @default(false)
+  assistedDraftId      Int?          @unique
+
+  voucherCode    String? // MÃ£ voucher Ä‘Ã£ Ã¡p dá»¥ng (náº¿u cÃ³)
+  discountAmount Float   @default(0) // Sá»‘ tiá»n Ä‘Ã£ giáº£m (VNÄ)
 
   // â”€â”€ Cancellation fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  cancelReason        String?   @db.Text  // LÃ½ do há»§y cá»§a khÃ¡ch
-  cancelRequestedAt   DateTime?           // Thá»i Ä‘iá»ƒm gá»­i yÃªu cáº§u há»§y
-  cancelledAt         DateTime?           // Thá»i Ä‘iá»ƒm thá»±c sá»± há»§y
-  cancelledBy         String?             // "CUSTOMER" | "ADMIN" | "SYSTEM"
-  refundAmount        Float?              // Sá»‘ tiá»n hoÃ n láº¡i thá»±c táº¿ (VNÄ)
-  refundNote          String?   @db.Text  // Ghi chÃº hoÃ n tiá»n / lÃ½ do tá»« chá»‘i
-  refundBankDetails   Json?               // ThÃ´ng tin nháº­n hoÃ n tiá»n (NgÃ¢n hÃ ng, STK, TÃªn chá»§ TK)
-  refundedAt          DateTime?           // Thá»i Ä‘iá»ƒm Admin thá»±c sá»± chuyá»ƒn khoáº£n hoÃ n tiá»n
+  cancelReason      String?   @db.Text // LÃ½ do há»§y cá»§a khÃ¡ch
+  cancelRequestedAt DateTime? // Thá»i Ä‘iá»ƒm gá»­i yÃªu cáº§u há»§y
+  cancelledAt       DateTime? // Thá»i Ä‘iá»ƒm thá»±c sá»± há»§y
+  cancelledBy       String? // "CUSTOMER" | "ADMIN" | "SYSTEM"
+  refundAmount      Float? // Sá»‘ tiá»n hoÃ n láº¡i thá»±c táº¿ (VNÄ)
+  refundNote        String?   @db.Text // Ghi chÃº hoÃ n tiá»n / lÃ½ do tá»« chá»‘i
+  refundBankDetails Json? // ThÃ´ng tin nháº­n hoÃ n tiá»n (NgÃ¢n hÃ ng, STK, TÃªn chá»§ TK)
+  refundedAt        DateTime? // Thá»i Ä‘iá»ƒm Admin thá»±c sá»± chuyá»ƒn khoáº£n hoÃ n tiá»n
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  deletedAt        DateTime?     // [PHASE 1] Soft Delete
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // [PHASE 1] Soft Delete
 
   // Káº¿t ná»‘i (Relations)
-  user             User          @relation(fields: [userId], references: [id])
-  tour             Tour          @relation(fields: [tourId], references: [id])
-  assistedDraft    AssistedBookingDraft? @relation(fields: [assistedDraftId], references: [id], onDelete: SetNull)
-  transactions     PaymentTransaction[] // [PHASE 1] Log thanh toÃ¡n
-  notifications    BookingNotification[]
-  supportTickets   SupportTicket[]      // [PHASE 1] Ticket há»— trá»£ liÃªn quan Ä‘áº¿n Ä‘Æ¡n
+  user           User                  @relation(fields: [userId], references: [id])
+  tour           Tour                  @relation(fields: [tourId], references: [id])
+  assistedDraft  AssistedBookingDraft? @relation(fields: [assistedDraftId], references: [id], onDelete: SetNull)
+  transactions   PaymentTransaction[] // [PHASE 1] Log thanh toÃ¡n
+  notifications  BookingNotification[]
+  supportTickets SupportTicket[] // [PHASE 1] Ticket há»— trá»£ liÃªn quan Ä‘áº¿n Ä‘Æ¡n
 
-  @@index([userId, status])                  // [PHASE 1] Index: lá»‹ch sá»­ booking user
+  @@index([userId, status]) // [PHASE 1] Index: lá»‹ch sá»­ booking user
   @@index([status, paymentStatus, createdAt]) // [PHASE 1] Index: cron job quÃ©t Ä‘Æ¡n háº¿t háº¡n
   @@index([status, paymentStatus, holdExpiresAt])
 }
@@ -383,48 +401,48 @@ model Booking {
 // LÆ°u toÃ n bá»™ lá»‹ch sá»­ giao dá»‹ch vá»›i cá»•ng thanh toÃ¡n
 // =============================================
 model AssistedBookingDraft {
-  id               Int                 @id @default(autoincrement())
-  draftCode        String              @unique
-  status           AssistedDraftStatus @default(DRAFT)
+  id        Int                 @id @default(autoincrement())
+  draftCode String              @unique
+  status    AssistedDraftStatus @default(DRAFT)
 
-  customerId       Int?
-  customer         User?               @relation("AssistedDraftCustomer", fields: [customerId], references: [id], onDelete: SetNull)
-  customerName     String?
-  customerEmail    String?
-  customerPhone    String?
-  customerIdentityNo String?
-  sourceChannel    String              @default("LIVE_CHAT")
-  confirmationChannel String           @default("ZALO")
-  emailForTicket   String?
-  sourceTicketId   Int?
-  sourceTicket     SupportTicket?      @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)
+  customerId          Int?
+  customer            User?          @relation("AssistedDraftCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  customerName        String?
+  customerEmail       String?
+  customerPhone       String?
+  customerIdentityNo  String?
+  sourceChannel       String         @default("LIVE_CHAT")
+  confirmationChannel String         @default("ZALO")
+  emailForTicket      String?
+  sourceTicketId      Int?
+  sourceTicket        SupportTicket? @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)
 
-  tourId           Int?
-  tour             Tour?               @relation(fields: [tourId], references: [id])
-  packageId        Int?
-  departureId      Int?
-  numberOfPeople   Int                 @default(1)
-  passengers       Json?
+  tourId         Int?
+  tour           Tour? @relation(fields: [tourId], references: [id])
+  packageId      Int?
+  departureId    Int?
+  numberOfPeople Int   @default(1)
+  passengers     Json?
 
-  quotedPrice      Float               @default(0)
+  quotedPrice      Float   @default(0)
   unitPriceAtDraft Float?
   voucherCode      String?
-  discountAmount   Float               @default(0)
-  specialRequests  String?             @db.Text
-  internalNote     String?             @db.Text
+  discountAmount   Float   @default(0)
+  specialRequests  String? @db.Text
+  internalNote     String? @db.Text
 
-  createdByStaffId Int?
-  createdByStaff   User?               @relation("AssistedDraftCreatedBy", fields: [createdByStaffId], references: [id], onDelete: SetNull)
+  createdByStaffId  Int?
+  createdByStaff    User?     @relation("AssistedDraftCreatedBy", fields: [createdByStaffId], references: [id], onDelete: SetNull)
   reviewedByAdminId Int?
-  reviewedByAdmin  User?               @relation("AssistedDraftReviewedBy", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
-  reviewedAt       DateTime?
-  approvalNote     String?             @db.Text
-  rejectionReason  String?             @db.Text
+  reviewedByAdmin   User?     @relation("AssistedDraftReviewedBy", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  approvalNote      String?   @db.Text
+  rejectionReason   String?   @db.Text
 
   convertedBooking Booking?
 
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, createdAt])
   @@index([createdByStaffId, status])
@@ -432,15 +450,15 @@ model AssistedBookingDraft {
 }
 
 model PaymentTransaction {
-  id             Int      @id @default(autoincrement())
-  bookingId      Int
-  booking        Booking  @relation(fields: [bookingId], references: [id])
-  
-  gateway        String   // "PAYOS" | "MANUAL"
-  transactionRef String?  // MÃ£ tham chiáº¿u tá»« cá»•ng thanh toÃ¡n hoáº·c biÃªn lai
-  amount         Float    // Sá»‘ tiá»n giao dá»‹ch (VNÄ)
-  status         String   // "PENDING" | "SUCCESS" | "FAILED"
-  rawPayload     String?  @db.Text // JSON payload gá»‘c tá»« webhook Ä‘á»ƒ Ä‘á»‘i soÃ¡t
+  id        Int     @id @default(autoincrement())
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  gateway        String // "PAYOS" | "MANUAL"
+  transactionRef String? // MÃ£ tham chiáº¿u tá»« cá»•ng thanh toÃ¡n hoáº·c biÃªn lai
+  amount         Float // Sá»‘ tiá»n giao dá»‹ch (VNÄ)
+  status         String // "PENDING" | "SUCCESS" | "FAILED"
+  rawPayload     String? @db.Text // JSON payload gá»‘c tá»« webhook Ä‘á»ƒ Ä‘á»‘i soÃ¡t
 
   // â”€â”€ Audit nguá»“n tiá»n [PHASE 1] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Ghi rÃµ báº±ng cÃ¡ch nÃ o tiá»n Ä‘Æ°á»£c ghi nháº­n:
@@ -451,37 +469,37 @@ model PaymentTransaction {
   //   IN_STORE_BANK_TRANSFER      â€” Chuyá»ƒn khoáº£n táº¡i quáº§y (cÃ³ biÃªn lai)
   //   IN_STORE_CARD_POS           â€” Quáº¹t tháº» POS
   //   ADMIN_OVERRIDE              â€” Override kháº©n cáº¥p (chá»‰ SUPER_ADMIN)
-  confirmedSource  String?   // Enum string, null náº¿u chÆ°a xÃ¡c nháº­n
-  confirmedById    Int?      // Admin/Staff thá»±c hiá»‡n xÃ¡c nháº­n
-  confirmedAt      DateTime? // Thá»i Ä‘iá»ƒm xÃ¡c nháº­n
-  confirmedNote    String?   @db.Text // Ghi chÃº â€” báº¯t buá»™c vá»›i manual flows
-  evidenceUrl      String?   // URL áº£nh giao dá»‹ch (Cloudinary)
+  confirmedSource String? // Enum string, null náº¿u chÆ°a xÃ¡c nháº­n
+  confirmedById   Int? // Admin/Staff thá»±c hiá»‡n xÃ¡c nháº­n
+  confirmedAt     DateTime? // Thá»i Ä‘iá»ƒm xÃ¡c nháº­n
+  confirmedNote   String?   @db.Text // Ghi chÃº â€” báº¯t buá»™c vá»›i manual flows
+  evidenceUrl     String? // URL áº£nh giao dá»‹ch (Cloudinary)
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([bookingId])
   @@index([confirmedSource, confirmedAt]) // TÄƒng tá»‘c thá»‘ng kÃª theo nguá»“n tiá»n
 }
 
 model BookingNotification {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   bookingId    Int
-  booking      Booking  @relation(fields: [bookingId], references: [id])
+  booking      Booking   @relation(fields: [bookingId], references: [id])
   type         String
   channel      String
   recipient    String?
   status       String
   subject      String?
-  content      String   @db.Text
+  content      String    @db.Text
   paymentUrl   String?
-  qrCodeUrl    String?  @db.Text
-  errorMessage String?  @db.Text
+  qrCodeUrl    String?   @db.Text
+  errorMessage String?   @db.Text
   sentAt       DateTime?
   createdById  Int?
-  createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdBy    User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([bookingId, type, createdAt])
   @@index([status, createdAt])
@@ -490,16 +508,16 @@ model BookingNotification {
 // --- Báº¢NG NHáº¬T KÃ HÃ€NH Äá»˜NG (AUDIT LOG) ---
 model SystemLog {
   id          Int      @id @default(autoincrement())
-  action      String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | ROLE_CHANGE | CANCEL_BOOKING | EXPORT | REVOKE_SESSION
-  resource    String   // 'Tour' | 'Booking' | 'User' | 'Voucher' | 'Article' | 'Review' | 'Auth'
-  resourceId  String?  // ID cá»§a object bá»‹ tÃ¡c Ä‘á»™ng
-  targetName  String?  // TÃªn hiá»ƒn thá»‹ cá»§a object (VD: "Tour Há»™i An Heritage Walk")
+  action      String // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | ROLE_CHANGE | CANCEL_BOOKING | EXPORT | REVOKE_SESSION
+  resource    String // 'Tour' | 'Booking' | 'User' | 'Voucher' | 'Article' | 'Review' | 'Auth'
+  resourceId  String? // ID cá»§a object bá»‹ tÃ¡c Ä‘á»™ng
+  targetName  String? // TÃªn hiá»ƒn thá»‹ cá»§a object (VD: "Tour Há»™i An Heritage Walk")
   description String   @db.Text // MÃ´ táº£ hÃ nh Ä‘á»™ng (human-readable)
-  oldData     Json?    // Snapshot dá»¯ liá»‡u trÆ°á»›c khi thay Ä‘á»•i
-  newData     Json?    // Snapshot dá»¯ liá»‡u sau khi thay Ä‘á»•i
-  ipAddress   String?  // IP cá»§a ngÆ°á»i thá»±c hiá»‡n
-  userAgent   String?  // Browser/OS info
-  userId      Int?     // ID Admin/Staff thá»±c hiá»‡n (null = system)
+  oldData     Json? // Snapshot dá»¯ liá»‡u trÆ°á»›c khi thay Ä‘á»•i
+  newData     Json? // Snapshot dá»¯ liá»‡u sau khi thay Ä‘á»•i
+  ipAddress   String? // IP cá»§a ngÆ°á»i thá»±c hiá»‡n
+  userAgent   String? // Browser/OS info
+  userId      Int? // ID Admin/Staff thá»±c hiá»‡n (null = system)
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
@@ -522,7 +540,7 @@ model AdminNotification {
   metadata     Json?
   createdAt    DateTime @default(now())
 
-  reads        AdminNotificationRead[]
+  reads AdminNotificationRead[]
 
   @@index([type, createdAt])
   @@index([resourceType, resourceId])
@@ -535,18 +553,18 @@ model AdminNotificationRead {
   userId         Int
   readAt         DateTime @default(now())
 
-  notification   AdminNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification AdminNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([notificationId, userId])
   @@index([userId, readAt])
 }
 
 model SuperRiskReview {
-  id            Int       @id @default(autoincrement())
-  riskKey       String    @unique
-  status        String    @default("OPEN") // OPEN | REVIEWED | RESOLVED
-  note          String?   @db.Text
+  id           Int       @id @default(autoincrement())
+  riskKey      String    @unique
+  status       String    @default("OPEN") // OPEN | REVIEWED | RESOLVED
+  note         String?   @db.Text
   reviewedById Int?
   reviewedBy   User?     @relation("SuperRiskReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt   DateTime?
@@ -558,113 +576,121 @@ model SuperRiskReview {
   @@index([reviewedById, updatedAt])
 }
 
-
 // --- Há»† THá»NG VOUCHER ---
 enum DiscountType {
-  PERCENTAGE    // Giáº£m theo %
-  FIXED_AMOUNT  // Giáº£m sá»‘ tiá»n cá»‘ Ä‘á»‹nh (VNÄ)
+  PERCENTAGE // Giáº£m theo %
+  FIXED_AMOUNT // Giáº£m sá»‘ tiá»n cá»‘ Ä‘á»‹nh (VNÄ)
 }
 
 model Voucher {
-  id            Int           @id @default(autoincrement())
-  code          String        @unique           // MÃ£ voucher: AZURE2026
-  label         String                          // "Premium Escape"
-  description   String        @db.Text          // MÃ´ táº£ Ä‘iá»u kiá»‡n
-  discountType  DiscountType                    // PERCENTAGE hoáº·c FIXED_AMOUNT
-  discountValue Float                           // 15 (= 15%) hoáº·c 500000 (= 500.000 VNÄ)
-  minOrderValue Float         @default(0)       // GiÃ¡ trá»‹ Ä‘Æ¡n tá»‘i thiá»ƒu Ä‘á»ƒ dÃ¹ng
-  maxUses       Int           @default(100)     // Tá»•ng lÆ°á»£t sá»­ dá»¥ng toÃ n há»‡ thá»‘ng
-  usedCount     Int           @default(0)       // ÄÃ£ dÃ¹ng bao nhiÃªu láº§n
-  expiresAt     DateTime                        // NgÃ y háº¿t háº¡n
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
+  id                       Int          @id @default(autoincrement())
+  code                     String       @unique
+  label                    String
+  description              String       @db.Text
+  discountType             DiscountType
+  discountValue            Float
+  maxDiscountAmount        Float?
+  minOrderValue            Float        @default(0)
+  maxUses                  Int          @default(100)
+  usageLimitPerUser        Int?
+  usedCount                Int          @default(0)
+  startsAt                 DateTime     @default(now())
+  expiresAt                DateTime
+  isActive                 Boolean      @default(true)
+  isStackable              Boolean      @default(false)
+  eligibleTourIds          Int[]        @default([])
+  eligibleDestinationIds   Int[]        @default([])
+  eligibleCustomerSegments String[]     @default([])
+  createdAt                DateTime     @default(now())
 
-  userVouchers  UserVoucher[]
+  userVouchers UserVoucher[]
+
+  @@index([startsAt, expiresAt])
 }
 
 model UserVoucher {
-  id         Int       @id @default(autoincrement())
-  userId     Int
-  voucherId  Int
-  isUsed     Boolean   @default(false)         // ÄÃ£ sá»­ dá»¥ng chÆ°a
-  savedAt    DateTime  @default(now())         // NgÃ y lÆ°u vÃ o vÃ­
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  voucherId Int
+  isUsed    Boolean  @default(false) // ÄÃ£ sá»­ dá»¥ng chÆ°a
+  savedAt   DateTime @default(now()) // NgÃ y lÆ°u vÃ o vÃ­
 
-  user       User      @relation(fields: [userId], references: [id])
-  voucher    Voucher   @relation(fields: [voucherId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  voucher Voucher @relation(fields: [voucherId], references: [id])
 
-  @@unique([userId, voucherId])                // Má»—i user chá»‰ lÆ°u má»—i voucher 1 láº§n
+  @@unique([userId, voucherId]) // Má»—i user chá»‰ lÆ°u má»—i voucher 1 láº§n
 }
 
 // --- Há»† THá»NG BÃ€I VIáº¾T (JOURNAL / BLOG) ---
 model Article {
-  id          Int           @id @default(autoincrement())
-  slug        String        @unique               // URL thÃ¢n thiá»‡n
-  category    String                              // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
+  id          Int       @id @default(autoincrement())
+  slug        String    @unique // URL thÃ¢n thiá»‡n
+  category    String // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
   title       String
-  excerpt     String        @db.Text              // TÃ³m táº¯t ngáº¯n hiá»ƒn thá»‹ trÃªn card
-  content     String        @db.Text              // Ná»™i dung Ä‘áº§y Ä‘á»§ (HTML)
+  excerpt     String    @db.Text // TÃ³m táº¯t ngáº¯n hiá»ƒn thá»‹ trÃªn card
+  content     String    @db.Text // Ná»™i dung Ä‘áº§y Ä‘á»§ (HTML)
   imageUrl    String
   author      String
-  readTime    Int           @default(5)           // Thá»i gian Ä‘á»c (phÃºt)
-  isFeatured  Boolean       @default(false)       // BÃ i ná»•i báº­t hiá»‡n trÃªn hero
-  publishedAt DateTime?                           // Nullable Ä‘á»ƒ há»— trá»£ DRAFT
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  deletedAt   DateTime?                           // Soft Delete (thÃ¹ng rÃ¡c)
+  readTime    Int       @default(5) // Thá»i gian Ä‘á»c (phÃºt)
+  isFeatured  Boolean   @default(false) // BÃ i ná»•i báº­t hiá»‡n trÃªn hero
+  publishedAt DateTime? // Nullable Ä‘á»ƒ há»— trá»£ DRAFT
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? // Soft Delete (thÃ¹ng rÃ¡c)
 
   // â”€â”€ Workflow fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  status        ArticleStatus @default(PUBLISHED) // Tráº¡ng thÃ¡i duyá»‡t
-  reviewNote    String?       @db.Text             // LÃ½ do tá»« chá»‘i (Admin ghi)
-  createdById   Int?                               // Staff/Admin táº¡o
-  reviewedById  Int?                               // Admin duyá»‡t/tá»« chá»‘i
-  createdBy     User?         @relation("ArticleCreatedBy",  fields: [createdById],  references: [id], onDelete: SetNull)
-  reviewedBy    User?         @relation("ArticleReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  status       ArticleStatus @default(PUBLISHED) // Tráº¡ng thÃ¡i duyá»‡t
+  reviewNote   String?       @db.Text // LÃ½ do tá»« chá»‘i (Admin ghi)
+  createdById  Int? // Staff/Admin táº¡o
+  reviewedById Int? // Admin duyá»‡t/tá»« chá»‘i
+  createdBy    User?         @relation("ArticleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reviewedBy   User?         @relation("ArticleReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 }
 
 // --- Há»¢P PHáº¦N AI CONCIERGE (LÆ¯U TRá»® Lá»ŠCH Sá»¬ CHAT) ---
 model ChatSession {
-  id        String   @id @default(uuid())
-  userId    Int?     // Thuá»™c vá» User nÃ o (cÃ³ thá»ƒ null náº¿u khÃ¡ch chÆ°a Ä‘Äƒng nháº­p)
-  user      User?    @relation(fields: [userId], references: [id])
-  
+  id     String @id @default(uuid())
+  userId Int? // Thuá»™c vá» User nÃ o (cÃ³ thá»ƒ null náº¿u khÃ¡ch chÆ°a Ä‘Äƒng nháº­p)
+  user   User?  @relation(fields: [userId], references: [id])
+
   messages  ChatMessage[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 }
 
 model ChatMessage {
-  id        Int      @id @default(autoincrement())
+  id        Int         @id @default(autoincrement())
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
-  role      String   // 'user' | 'model' | 'system'
-  content   String   @db.Text
-  
+
+  role    String // 'user' | 'model' | 'system'
+  content String @db.Text
+
   createdAt DateTime @default(now())
 }
 
 // --- Há»† THá»NG ÄÃNH GIÃ (REVIEWS) ---
 model Review {
-  id         Int      @id @default(autoincrement())
-  rating     Int      // Tá»« 1 Ä‘áº¿n 5 sao
-  content    String   @db.Text
-  imageUrls  String[] // Danh sÃ¡ch cÃ¡c áº£nh Ä‘Ã­nh kÃ¨m (LÆ°u máº£ng trÃªn Postgres)
+  id        Int      @id @default(autoincrement())
+  rating    Int // Tá»« 1 Ä‘áº¿n 5 sao
+  content   String   @db.Text
+  imageUrls String[] // Danh sÃ¡ch cÃ¡c áº£nh Ä‘Ã­nh kÃ¨m (LÆ°u máº£ng trÃªn Postgres)
 
-  isHidden   Boolean  @default(false) // Admin áº©n review
-  adminReply String?  @db.Text        // Admin pháº£n há»“i review
+  isHidden   Boolean @default(false) // Admin áº©n review
+  adminReply String? @db.Text // Admin pháº£n há»“i review
 
-  tourId    Int
-  tour      Tour     @relation(fields: [tourId], references: [id])
+  tourId Int
+  tour   Tour @relation(fields: [tourId], references: [id])
 
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([tourId, rating])   // Index tÄƒng tá»‘c filter review
-  @@index([isHidden])         // Index cho admin filter áº©n/hiá»‡n
+  @@index([tourId, rating]) // Index tÄƒng tá»‘c filter review
+  @@index([isHidden]) // Index cho admin filter áº©n/hiá»‡n
 }
 
 // =============================================
@@ -682,13 +708,13 @@ model Subscriber {
 // =============================================
 model SystemSetting {
   id          Int      @id @default(autoincrement())
-  key         String   @unique   // VD: "company_name", "booking_hold_minutes"
-  value       String   @db.Text  // GiÃ¡ trá»‹ (luÃ´n lÆ°u dáº¡ng String)
-  label       String             // TÃªn hiá»ƒn thá»‹: "TÃªn cÃ´ng ty"
-  description String?            // MÃ´ táº£ thÃªm
-  group       String             // NhÃ³m: "company" | "booking" | "announcement"
+  key         String   @unique // VD: "company_name", "booking_hold_minutes"
+  value       String   @db.Text // GiÃ¡ trá»‹ (luÃ´n lÆ°u dáº¡ng String)
+  label       String // TÃªn hiá»ƒn thá»‹: "TÃªn cÃ´ng ty"
+  description String? // MÃ´ táº£ thÃªm
+  group       String // NhÃ³m: "company" | "booking" | "announcement"
   updatedAt   DateTime @updatedAt
-  updatedBy   Int?               // ID admin Ä‘Ã£ chá»‰nh sá»­a láº§n cuá»‘i
+  updatedBy   Int? // ID admin Ä‘Ã£ chá»‰nh sá»­a láº§n cuá»‘i
 }
 
 // =============================================
@@ -696,48 +722,48 @@ model SystemSetting {
 // =============================================
 model SupportTicket {
   id              Int      @id @default(autoincrement())
-  accessCode      String?  @default(uuid()) @unique // [FIX] Báº¯t buá»™c dÃ¹ng Ä‘á»ƒ khÃ¡ch vÃ£ng lai xem ticket, chá»‘ng lá»™ dá»¯ liá»‡u
+  accessCode      String?  @unique @default(uuid()) // [FIX] Báº¯t buá»™c dÃ¹ng Ä‘á»ƒ khÃ¡ch vÃ£ng lai xem ticket, chá»‘ng lá»™ dá»¯ liá»‡u
   customerName    String
   customerEmail   String
   customerPhone   String?
-  bookingRef      String?                // MÃ£ booking liÃªn quan â€” giá»¯ Ä‘á»ƒ tÆ°Æ¡ng thÃ­ch vá»›i dá»¯ liá»‡u cÅ©
+  bookingRef      String? // MÃ£ booking liÃªn quan â€” giá»¯ Ä‘á»ƒ tÆ°Æ¡ng thÃ­ch vá»›i dá»¯ liá»‡u cÅ©
   // â”€â”€ LiÃªn káº¿t FK tháº­t tá»›i Booking [PHASE 1] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // DÃ¹ng song song vá»›i bookingRef. bookingId = FK chuáº©n cho ticket má»›i.
   // Dá»¯ liá»‡u cÅ© giá»¯ nguyÃªn bookingRef, khÃ´ng cáº§n migrate.
-  bookingId       Int?                   // FK tháº­t tá»›i Booking
-  booking         Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  bookingId       Int? // FK tháº­t tá»›i Booking
+  booking         Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   subject         String
   message         String   @db.Text
   category        String   @default("general") // booking|payment|reschedule|complaint|general
-  status          String   @default("NEW")     // NEW|IN_PROGRESS|RESOLVED
-  assignedStaffId Int?                         // Staff Ä‘Æ°á»£c assign xá»­ lÃ½
-  rating          Int?                         // ÄÃ¡nh giÃ¡ cá»§a khÃ¡ch sau khi RESOLVED (1-5)
+  status          String   @default("NEW") // NEW|IN_PROGRESS|RESOLVED
+  assignedStaffId Int? // Staff Ä‘Æ°á»£c assign xá»­ lÃ½
+  rating          Int? // ÄÃ¡nh giÃ¡ cá»§a khÃ¡ch sau khi RESOLVED (1-5)
 
   // LiÃªn káº¿t tá»›i tÃ i khoáº£n ngÆ°á»i dÃ¹ng (nullable â€” guest submissions khÃ´ng cÃ³)
-  userId          Int?
-  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId Int?
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  assistedDrafts  AssistedBookingDraft[]
-  replies         TicketReply[]
+  assistedDrafts AssistedBookingDraft[]
+  replies        TicketReply[]
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([customerEmail])
   @@index([userId])
-  @@index([bookingId])  // [PHASE 1] TÃ¬m ticket theo booking
+  @@index([bookingId]) // [PHASE 1] TÃ¬m ticket theo booking
 }
 
 model TicketReply {
-  id         Int      @id @default(autoincrement())
+  id         Int           @id @default(autoincrement())
   ticketId   Int
   ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  senderType String                          // "staff" | "customer"
+  senderType String // "staff" | "customer"
   senderName String
-  content    String   @db.Text
-  createdAt  DateTime @default(now())
+  content    String        @db.Text
+  createdAt  DateTime      @default(now())
 
   @@index([ticketId])
 }

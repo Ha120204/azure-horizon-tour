@@ -20,7 +20,7 @@ type SaleDepartureOptions = {
 };
 
 export const SALE_TOUR_NO_VOUCHER_MESSAGE =
-  'SALE_TOUR_NO_VOUCHER:Tour dang trong chuong trinh uu dai nen khong the ap dung them voucher';
+  'SALE_TOUR_NO_VOUCHER:Tour đang trong chương trình ưu đãi nên không thể áp dụng thêm voucher';
 
 export function isSaleDeparture(
   departure: SaleDepartureLike | null | undefined,

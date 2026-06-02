@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +13,77 @@ const LLMGATE_LEGACY_BASE_URLS = new Set([
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown AI error';
 }
+
+type TranslationTimelineEntry = {
+  time?: string;
+  activity?: string;
+};
+
+type IndexedTranslationItem = {
+  index?: number;
+};
+
+export type TourTranslationRequest = {
+  name?: string;
+  description?: string;
+  departurePoint?: string;
+  duration?: string;
+  packages?: (IndexedTranslationItem & {
+    name?: string;
+    description?: string;
+    includes?: string[];
+    excludes?: string[];
+  })[];
+  departures?: (IndexedTranslationItem & {
+    note?: string;
+  })[];
+  highlights?: (IndexedTranslationItem & {
+    content?: string;
+  })[];
+  faqs?: (IndexedTranslationItem & {
+    question?: string;
+    answer?: string;
+  })[];
+  itinerary?: (IndexedTranslationItem & {
+    title?: string;
+    description?: string;
+    accommodation?: string;
+    transport?: string;
+    activities?: string[];
+    timeline?: TranslationTimelineEntry[];
+  })[];
+};
+
+export type TourTranslationResponse = {
+  nameEn?: string;
+  descriptionEn?: string;
+  departurePointEn?: string;
+  durationEn?: string;
+  packages?: (IndexedTranslationItem & {
+    nameEn?: string;
+    descriptionEn?: string;
+    includesEn?: string[];
+    excludesEn?: string[];
+  })[];
+  departures?: (IndexedTranslationItem & {
+    noteEn?: string;
+  })[];
+  highlights?: (IndexedTranslationItem & {
+    contentEn?: string;
+  })[];
+  faqs?: (IndexedTranslationItem & {
+    questionEn?: string;
+    answerEn?: string;
+  })[];
+  itinerary?: (IndexedTranslationItem & {
+    titleEn?: string;
+    descriptionEn?: string;
+    accommodationEn?: string;
+    transportEn?: string;
+    activitiesEn?: string[];
+    timelineEn?: TranslationTimelineEntry[];
+  })[];
+};
 
 // Tool definitions in OpenAI-compatible format for LLMGate.
 const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
@@ -541,6 +612,160 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
       stream: false,
       ...payload,
     });
+  }
+
+  private truncateForTranslation(value: unknown, maxLength = 1200): string {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    return trimmed.length > maxLength
+      ? `${trimmed.slice(0, maxLength).trim()}...`
+      : trimmed;
+  }
+
+  private compactTranslationRequest(
+    payload: TourTranslationRequest,
+  ): TourTranslationRequest {
+    const cleanList = <T extends IndexedTranslationItem>(
+      items: T[] | undefined,
+      mapper: (item: T, index: number) => T,
+    ) => (Array.isArray(items) ? items.map(mapper) : []);
+
+    return {
+      name: this.truncateForTranslation(payload.name, 180),
+      description: this.truncateForTranslation(payload.description, 1800),
+      departurePoint: this.truncateForTranslation(payload.departurePoint, 180),
+      duration: this.truncateForTranslation(payload.duration, 80),
+      packages: cleanList(payload.packages, (pkg, index) => ({
+        index: Number(pkg.index ?? index),
+        name: this.truncateForTranslation(pkg.name, 120),
+        description: this.truncateForTranslation(pkg.description, 400),
+        includes: Array.isArray(pkg.includes)
+          ? pkg.includes.map((item) => this.truncateForTranslation(item, 160)).filter(Boolean)
+          : [],
+        excludes: Array.isArray(pkg.excludes)
+          ? pkg.excludes.map((item) => this.truncateForTranslation(item, 160)).filter(Boolean)
+          : [],
+      })),
+      departures: cleanList(payload.departures, (departure, index) => ({
+        index: Number(departure.index ?? index),
+        note: this.truncateForTranslation(departure.note, 240),
+      })),
+      highlights: cleanList(payload.highlights, (highlight, index) => ({
+        index: Number(highlight.index ?? index),
+        content: this.truncateForTranslation(highlight.content, 240),
+      })),
+      faqs: cleanList(payload.faqs, (faq, index) => ({
+        index: Number(faq.index ?? index),
+        question: this.truncateForTranslation(faq.question, 240),
+        answer: this.truncateForTranslation(faq.answer, 800),
+      })),
+      itinerary: cleanList(payload.itinerary, (day, index) => ({
+        index: Number(day.index ?? index),
+        title: this.truncateForTranslation(day.title, 180),
+        description: this.truncateForTranslation(day.description, 1200),
+        accommodation: this.truncateForTranslation(day.accommodation, 180),
+        transport: this.truncateForTranslation(day.transport, 180),
+        activities: Array.isArray(day.activities)
+          ? day.activities.map((item) => this.truncateForTranslation(item, 180)).filter(Boolean)
+          : [],
+        timeline: Array.isArray(day.timeline)
+          ? day.timeline.map((item) => ({
+              time: this.truncateForTranslation(item.time, 40),
+              activity: this.truncateForTranslation(item.activity, 240),
+            }))
+          : [],
+      })),
+    };
+  }
+
+  private parseTranslationJson(rawText: string): TourTranslationResponse {
+    const fencedMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate = fencedMatch?.[1] ?? rawText;
+    const firstBrace = candidate.indexOf('{');
+    const lastBrace = candidate.lastIndexOf('}');
+    if (firstBrace < 0 || lastBrace <= firstBrace) {
+      throw new Error('AI response did not contain a JSON object');
+    }
+    return JSON.parse(candidate.slice(firstBrace, lastBrace + 1)) as TourTranslationResponse;
+  }
+
+  private async runTourTranslation(
+    model: string,
+    input: TourTranslationRequest,
+  ): Promise<TourTranslationResponse> {
+    const response = await this.executeChatCompletion(model, {
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a senior travel copy translator. Translate Vietnamese tour draft content into natural, concise English for a travel booking website. Preserve numbers, prices, dates, hotel ratings, and place names unless they have a common English name. Return only valid JSON. Keep every array item aligned by its index.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            instructions:
+              'Translate the provided fields from Vietnamese to English. Omit fields that have no source text. For timeline items, keep the same time and translate only activity.',
+            outputShape: {
+              nameEn: 'string',
+              descriptionEn: 'string',
+              departurePointEn: 'string',
+              durationEn: 'string',
+              packages: [
+                {
+                  index: 0,
+                  nameEn: 'string',
+                  descriptionEn: 'string',
+                  includesEn: ['string'],
+                  excludesEn: ['string'],
+                },
+              ],
+              departures: [{ index: 0, noteEn: 'string' }],
+              highlights: [{ index: 0, contentEn: 'string' }],
+              faqs: [{ index: 0, questionEn: 'string', answerEn: 'string' }],
+              itinerary: [
+                {
+                  index: 0,
+                  titleEn: 'string',
+                  descriptionEn: 'string',
+                  accommodationEn: 'string',
+                  transportEn: 'string',
+                  activitiesEn: ['string'],
+                  timelineEn: [{ time: 'string', activity: 'string' }],
+                },
+              ],
+            },
+            input,
+          }),
+        },
+      ],
+      max_tokens: 2500,
+      temperature: 0.2,
+    });
+
+    return this.parseTranslationJson(response.choices[0]?.message?.content || '');
+  }
+
+  async translateTourDraft(
+    payload: TourTranslationRequest,
+  ): Promise<TourTranslationResponse> {
+    const compactInput = this.compactTranslationRequest(payload);
+    try {
+      return await this.runTourTranslation(this.primaryModel, compactInput);
+    } catch (error) {
+      this.logAiErrorContext('Tour translation primary model', this.primaryModel, error);
+      try {
+        return await this.runTourTranslation(this.fallbackModel, compactInput);
+      } catch (fallbackError) {
+        this.logAiErrorContext(
+          'Tour translation fallback model',
+          this.fallbackModel,
+          fallbackError,
+        );
+        throw new ServiceUnavailableException(
+          'Không thể tạo bản tiếng Anh tự động lúc này. Vui lòng thử lại sau.',
+        );
+      }
+    }
   }
 
   private getFunctionToolCall(

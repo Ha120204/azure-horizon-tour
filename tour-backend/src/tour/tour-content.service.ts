@@ -104,4 +104,63 @@ export class TourContentService {
     if (!day) throw new NotFoundException(`Itinerary day ${dayId} not found for tour ${tourId}`);
     return this.prisma.tourItinerary.update({ where: { id: dayId }, data });
   }
+
+  async upsertItinerary(
+    tourId: number,
+    itinerary: {
+      dayNumber?: number;
+      title: string;
+      titleEn?: string;
+      description: string;
+      descriptionEn?: string;
+      mealsBreakfast?: boolean;
+      mealsLunch?: boolean;
+      mealsDinner?: boolean;
+      accommodation?: string;
+      accommodationEn?: string;
+      transport?: string;
+      transportEn?: string;
+      activities?: string[];
+      activitiesEn?: string[];
+      imageUrl?: string;
+      timeline?: any[];
+      timelineEn?: any[];
+    }[],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(tourId, requesterId, requesterRole);
+    const validItinerary = itinerary.filter((day) => day.title?.trim() && day.description?.trim());
+    await this.prisma.tourItinerary.deleteMany({ where: { tourId } });
+
+    if (validItinerary.length > 0) {
+      await this.prisma.tourItinerary.createMany({
+        data: validItinerary.map((day, i) => ({
+          tourId,
+          dayNumber: day.dayNumber ?? i + 1,
+          title: day.title.trim(),
+          titleEn: day.titleEn?.trim() || null,
+          description: day.description.trim(),
+          descriptionEn: day.descriptionEn?.trim() || null,
+          mealsBreakfast: !!day.mealsBreakfast,
+          mealsLunch: !!day.mealsLunch,
+          mealsDinner: !!day.mealsDinner,
+          accommodation: day.accommodation?.trim() || null,
+          accommodationEn: day.accommodationEn?.trim() || null,
+          transport: day.transport?.trim() || null,
+          transportEn: day.transportEn?.trim() || null,
+          activities: day.activities ?? [],
+          activitiesEn: day.activitiesEn ?? [],
+          imageUrl: day.imageUrl?.trim() || null,
+          timeline: day.timeline ?? [],
+          timelineEn: day.timelineEn ?? [],
+        })),
+      });
+    }
+
+    return this.prisma.tourItinerary.findMany({
+      where: { tourId },
+      orderBy: { dayNumber: 'asc' },
+    });
+  }
 }

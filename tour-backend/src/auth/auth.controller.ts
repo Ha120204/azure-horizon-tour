@@ -33,6 +33,15 @@ function authCookieOptions(maxAge: number): CookieOptions {
   };
 }
 
+function clearAuthCookieOptions(): CookieOptions {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  };
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -88,8 +97,8 @@ export class AuthController {
 
   @Post('logout')
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie(ACCESS_TOKEN_COOKIE, { path: '/' });
-    res.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/' });
+    res.clearCookie(ACCESS_TOKEN_COOKIE, clearAuthCookieOptions());
+    res.clearCookie(REFRESH_TOKEN_COOKIE, clearAuthCookieOptions());
     return { message: 'Logged out successfully' };
   }
 
@@ -154,8 +163,8 @@ export class AuthController {
   ) {
     const userId = req.user.userId;
     const result = await this.authService.changePassword(userId, body.currentPassword, body.newPassword);
-    res.clearCookie(ACCESS_TOKEN_COOKIE, { path: '/' });
-    res.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/' });
+    res.clearCookie(ACCESS_TOKEN_COOKIE, clearAuthCookieOptions());
+    res.clearCookie(REFRESH_TOKEN_COOKIE, clearAuthCookieOptions());
     return result;
   }
 
@@ -186,8 +195,7 @@ export class AuthController {
    */
   @Get('google')
   @UseGuards(AuthGuard('google'))
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  async googleAuth() {}
+  googleAuth() {}
 
   /**
    * GET /auth/google/callback
@@ -197,7 +205,7 @@ export class AuthController {
    */
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  async googleCallback(
+  googleCallback(
     @Req() req: ExpressRequest & { user: Record<string, unknown> },
     @Res() res: Response,
   ) {

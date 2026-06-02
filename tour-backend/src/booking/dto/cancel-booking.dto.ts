@@ -70,3 +70,16 @@ export class RejectCancellationDto {
   @MaxLength(500, { message: 'Lý do từ chối không được vượt quá 500 ký tự' })
   rejectReason: string;
 }
+
+export class AdminCancelBookingDto {
+  @IsString()
+  @MinLength(10, { message: 'Lý do hủy phải có ít nhất 10 ký tự' })
+  @MaxLength(1000, { message: 'Lý do hủy không được vượt quá 1000 ký tự' })
+  reason: string;
+}
+
+export class UpdateBookingNoteDto {
+  @IsString()
+  @MaxLength(1000, { message: 'Ghi chú không được vượt quá 1000 ký tự' })
+  note: string;
+}

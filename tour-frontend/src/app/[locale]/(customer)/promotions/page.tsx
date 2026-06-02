@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
@@ -122,6 +122,13 @@ export default function PromotionsPage() {
     const { language, formatPrice } = useLocale();
     const t = useTranslations('promotions');
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const voucherQuery = searchParams.get('voucher');
+    const sharedVoucherCode = useMemo(() => {
+        const code = voucherQuery?.trim();
+        return code ? code.toUpperCase() : null;
+    }, [voucherQuery]);
+    const lastHandledSharedVoucherRef = useRef<string | null>(null);
 
     const TAB_OPTIONS = getTabOptions(t);
     const T_AND_C = getTAndC(t);
@@ -175,6 +182,7 @@ export default function PromotionsPage() {
     // ── Vouchers from API ─────────
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
     const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+    const [highlightedVoucherCode, setHighlightedVoucherCode] = useState<string | null>(null);
 
     useEffect(() => {
         fetch(`${API_BASE_URL}/voucher`)
@@ -232,6 +240,48 @@ export default function PromotionsPage() {
     // ── Save to wallet ────────────
     const [savingId, setSavingId] = useState<number | null>(null);
     const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    useEffect(() => {
+        if (!sharedVoucherCode) {
+            setHighlightedVoucherCode(null);
+            lastHandledSharedVoucherRef.current = null;
+            return;
+        }
+        if (vouchers.length === 0 || lastHandledSharedVoucherRef.current === sharedVoucherCode) return;
+
+        lastHandledSharedVoucherRef.current = sharedVoucherCode;
+        const targetIndex = vouchers.findIndex(voucher => voucher.code.toUpperCase() === sharedVoucherCode);
+
+        document.getElementById('vouchers')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        if (targetIndex === -1) {
+            setHighlightedVoucherCode(null);
+            setToastMsg({
+                type: 'error',
+                text: language === 'vi'
+                    ? `Mã ${sharedVoucherCode} không còn khả dụng.`
+                    : `Voucher ${sharedVoucherCode} is no longer available.`,
+            });
+            window.setTimeout(() => setToastMsg(null), 3500);
+            return;
+        }
+
+        const targetVoucher = vouchers[targetIndex];
+        setHighlightedVoucherCode(targetVoucher.code);
+        setToastMsg({
+            type: 'success',
+            text: language === 'vi'
+                ? `Đã mở voucher ${targetVoucher.code}.`
+                : `Opened voucher ${targetVoucher.code}.`,
+        });
+
+        if (targetIndex >= 4) {
+            setIsModalOpen(true);
+        }
+
+        window.setTimeout(() => setToastMsg(null), 3000);
+    }, [language, sharedVoucherCode, vouchers]);
 
     const handleSaveToWallet = async (voucherId: number) => {
         const profile = await fetchAuthProfile();
@@ -312,9 +362,6 @@ export default function PromotionsPage() {
         }
     };
 
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
     // ── Render ─────────────────────────────────────────────────────
     return (
         <div className="bg-surface font-body text-on-surface min-h-screen flex flex-col">
@@ -375,6 +422,7 @@ export default function PromotionsPage() {
                         onSave={handleSaveToWallet}
                         isModalOpen={isModalOpen}
                         setIsModalOpen={setIsModalOpen}
+                        highlightedCode={highlightedVoucherCode}
                         t={t}
                         formatPrice={formatPrice}
                         language={language}

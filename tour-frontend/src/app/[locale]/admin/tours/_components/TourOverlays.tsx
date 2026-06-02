@@ -4,6 +4,7 @@ import TourContentDrawer from '@/components/admin/TourContentDrawer';
 import TourFormModal from '@/components/admin/TourFormModal';
 import ReviewTourModal from '@/components/admin/ReviewTourModal';
 import type { TourFormModalProps } from '@/components/admin/tourForm/types';
+import { TourReferenceDrawer } from './TourReferenceDrawer';
 import {
     BulkHideConfirmDialog,
     BulkPermanentDeleteDialog,
@@ -32,6 +33,10 @@ interface TourOverlaysProps {
     contentDrawerTour: Tour | null;
     onCloseContentDrawer: () => void;
     onContentSuccess: (message: string) => void;
+    detailDrawerTour: Tour | null;
+    isDetailLoading: boolean;
+    onCloseDetailDrawer: () => void;
+    onCreateDraftFromReference: () => void;
     submitTarget: Tour | null;
     submittingTourId: number | null;
     onConfirmSubmit: (tourId: number) => void | Promise<void>;
@@ -72,6 +77,10 @@ export function TourOverlays({
     contentDrawerTour,
     onCloseContentDrawer,
     onContentSuccess,
+    detailDrawerTour,
+    isDetailLoading,
+    onCloseDetailDrawer,
+    onCreateDraftFromReference,
     submitTarget,
     submittingTourId,
     onConfirmSubmit,
@@ -127,6 +136,16 @@ export function TourOverlays({
                     tour={contentDrawerTour}
                     onClose={onCloseContentDrawer}
                     onSuccess={onContentSuccess}
+                />
+            )}
+
+            {detailDrawerTour && (
+                <TourReferenceDrawer
+                    tour={detailDrawerTour}
+                    isStaff={isStaff}
+                    isLoading={isDetailLoading}
+                    onClose={onCloseDetailDrawer}
+                    onCreateDraft={onCreateDraftFromReference}
                 />
             )}
 

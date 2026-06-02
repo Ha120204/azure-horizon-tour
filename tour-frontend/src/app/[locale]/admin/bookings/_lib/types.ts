@@ -1,7 +1,10 @@
+import type { PassengerType as SharedPassengerType } from '@/lib/passengerDetails';
+
 export interface BookingUser {
   id: number;
   fullName: string;
   email: string;
+  phone?: string | null;
   avatarUrl?: string;
 }
 
@@ -53,10 +56,18 @@ export interface Booking {
   discountAmount: number;
   voucherCode?: string | null;
   createdAt: string;
+  cancelRequestedAt?: string | null;
+  cancelledAt?: string | null;
+  cancelledBy?: string | null;
+  cancelReason?: string | null;
+  departureDate?: string | null;
+  contactPhone?: string | null;
+  adminNote?: string | null;
   user: BookingUser;
   tour: BookingTour | null;
   refundAmount?: number | null;
   refundedAt?: string | null;
+  refundNote?: string | null;
   notifications?: BookingNotification[];
   transactions?: PaymentTransaction[];
   supportTickets?: { id: number; status: string; category: string; subject?: string | null; createdAt: string }[];
@@ -115,13 +126,21 @@ export interface PaymentStats {
   byGroup: Record<string, { revenue: number; percentage: number }>;
 }
 
+export type BookingSavedViewKey = 'all' | 'pending' | 'unpaid' | 'upcoming' | 'cancelled' | 'needsCall';
+
 export type AssistedDraftStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'NEEDS_REVISION' | 'REJECTED' | 'CONVERTED';
 export type AssistedDraftAction = 'submit' | 'approve' | 'reject' | 'request-revision';
 export type AssistedDraftReviewAction = Extract<AssistedDraftAction, 'approve' | 'reject' | 'request-revision'>;
-export type PassengerType = 'Adult (12+)' | 'Child (4-11)' | 'Infant (<4)';
+export type PassengerType = SharedPassengerType;
 
 export type DraftPassenger = {
   type?: PassengerType | string;
+  fullName?: string;
+  dob?: string;
+  gender?: string;
+  identityType?: string;
+  identityNo?: string;
+  notes?: string;
   [key: string]: unknown;
 };
 

@@ -39,6 +39,7 @@ export type PassengerInput = {
 };
 
 export type AssistedQuoteDto = {
+  customerId?: number | null;
   tourId: number;
   departureId?: number;
   packageId?: number;

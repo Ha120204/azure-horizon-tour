@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { Link } from '@/i18n/routing';
 import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 import type { QuickStats, MyTour, MyTicket, BookingResult, Tone } from './staffDashboard/types';
 import {
@@ -30,9 +30,9 @@ function SectionHeader({
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
             <div>
                 <h2 className="font-headline text-base font-bold text-slate-900">{title}</h2>
-                <p className="mt-0.5 text-xs font-medium text-slate-400">{subtitle}</p>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">{subtitle}</p>
             </div>
-            {action}
+            <div className="shrink-0">{action}</div>
         </div>
     );
 }
@@ -52,13 +52,13 @@ function EmptyState({
 }) {
     return (
         <div className="flex min-h-[260px] flex-col items-center justify-center px-6 py-12 text-center">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-50 text-slate-300">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-400">
                 <span className="material-symbols-outlined text-[26px]" aria-hidden="true">{icon}</span>
             </div>
-            <p className="mt-4 text-sm font-bold text-slate-700">{title}</p>
-            <p className="mt-1 max-w-xs text-xs leading-5 text-slate-400">{description}</p>
+            <p className="mt-4 text-sm font-bold text-slate-800">{title}</p>
+            <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">{description}</p>
             {href && action ? (
-                <Link href={href} className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100">
+                <Link href={href} className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
                     {action}
                     <span className="material-symbols-outlined text-[14px]" aria-hidden="true">arrow_forward</span>
                 </Link>
@@ -67,83 +67,102 @@ function EmptyState({
     );
 }
 
-function StatCard({
+function WorkQueueRow({
     icon,
     label,
     value,
-    tone,
-    href,
     helper,
-    urgent = false,
+    href,
+    tone,
+    meta,
 }: {
     icon: string;
     label: string;
-    value: number | string;
-    tone: Tone;
-    href: string;
+    value: number;
     helper: string;
-    urgent?: boolean;
+    href: string;
+    tone: 'amber' | 'orange' | 'teal';
+    meta: string;
 }) {
-    const t = toneClass[tone];
+    const styles = {
+        amber: {
+            icon: 'bg-amber-50 text-amber-700',
+            value: value > 0 ? 'text-amber-700' : 'text-slate-400',
+            badge: value > 0 ? 'bg-amber-50 text-amber-700 ring-amber-100' : 'bg-slate-100 text-slate-500 ring-slate-200',
+        },
+        orange: {
+            icon: 'bg-orange-50 text-orange-700',
+            value: value > 0 ? 'text-orange-700' : 'text-slate-400',
+            badge: value > 0 ? 'bg-orange-50 text-orange-700 ring-orange-100' : 'bg-slate-100 text-slate-500 ring-slate-200',
+        },
+        teal: {
+            icon: 'bg-teal-50 text-teal-700',
+            value: value > 0 ? 'text-teal-700' : 'text-slate-400',
+            badge: value > 0 ? 'bg-teal-50 text-teal-700 ring-teal-100' : 'bg-slate-100 text-slate-500 ring-slate-200',
+        },
+    }[tone];
 
     return (
         <Link
             href={href}
-            className={`group flex min-h-[132px] flex-col justify-between rounded-2xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${urgent ? `${t.border} ${t.soft}` : 'border-slate-100'}`}
+            aria-label={`${label}: ${value.toLocaleString('vi-VN')}. ${helper}`}
+            className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 transition hover:border-blue-100 hover:bg-blue-50/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 sm:grid-cols-[auto_minmax(0,1fr)_96px_112px_auto]"
         >
-            <div className="flex items-start justify-between gap-3">
-                <div className={`grid h-10 w-10 place-items-center rounded-xl ${t.icon}`}>
-                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
-                </div>
-                <span className="material-symbols-outlined text-[17px] text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500" aria-hidden="true">
-                    arrow_forward
-                </span>
-            </div>
-            <div>
-                <p className="text-xs font-bold text-slate-500">{label}</p>
-                <p className="mt-1 font-headline text-3xl font-extrabold tracking-tight text-slate-950">{value}</p>
-                <p className="mt-1 text-[11px] font-medium leading-4 text-slate-400">{helper}</p>
-            </div>
+            <span className={`grid h-10 w-10 place-items-center rounded-xl ${styles.icon}`}>
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+            </span>
+            <span className="min-w-0">
+                <span className="block text-sm font-semibold text-slate-900">{label}</span>
+                <span className="mt-0.5 block truncate text-xs font-medium text-slate-500">{helper}</span>
+            </span>
+            <span className={`hidden justify-self-end font-headline text-2xl font-bold tracking-tight sm:block ${styles.value}`}>
+                {value.toLocaleString('vi-VN')}
+            </span>
+            <span className={`hidden w-fit justify-self-end rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.04em] ring-1 sm:inline-flex ${styles.badge}`}>
+                {meta}
+            </span>
+            <span className="flex items-center gap-2">
+                <span className={`font-headline text-xl font-bold sm:hidden ${styles.value}`}>{value.toLocaleString('vi-VN')}</span>
+                <span className="material-symbols-outlined text-[18px] text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" aria-hidden="true">arrow_forward</span>
+            </span>
         </Link>
     );
 }
 
-function PriorityTask({
+function CompactMetricCard({
     icon,
-    title,
-    description,
+    label,
     value,
-    tone,
+    helper,
     href,
+    tone,
 }: {
     icon: string;
-    title: string;
-    description: string;
+    label: string;
     value: number;
-    tone: Tone;
+    helper: string;
     href: string;
+    tone: Tone;
 }) {
     const t = toneClass[tone];
-    const hasWork = value > 0;
-
     return (
         <Link
             href={href}
-            className={`group flex items-center gap-4 rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${hasWork ? `${t.border} bg-white` : 'border-slate-100 bg-white'}`}
+            aria-label={`${label}: ${value.toLocaleString('vi-VN')}. ${helper}`}
+            className="group rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
         >
-            <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${t.icon}`}>
-                <span className="material-symbols-outlined text-[21px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+            <div className="flex items-start justify-between gap-3">
+                <span className={`grid h-10 w-10 place-items-center rounded-xl ${t.icon}`}>
+                    <span className="material-symbols-outlined text-[19px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+                </span>
+                <span className="material-symbols-outlined text-[17px] text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600" aria-hidden="true">arrow_forward</span>
             </div>
-            <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${hasWork ? t.dot : 'bg-emerald-400'}`} aria-hidden="true" />
-                    <p className="truncate text-sm font-bold text-slate-900">{title}</p>
-                </div>
-                <p className="mt-1 truncate text-xs font-medium text-slate-400">{description}</p>
-            </div>
-            <div className="text-right">
-                <p className={`font-headline text-2xl font-extrabold ${hasWork ? t.text : 'text-slate-400'}`}>{value}</p>
-                <span className="material-symbols-outlined text-[17px] text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500" aria-hidden="true">arrow_forward</span>
+            <div className="mt-4 flex items-end justify-between gap-3">
+                <span className="min-w-0">
+                    <span className="block text-xs font-bold uppercase tracking-[0.08em] text-slate-500">{label}</span>
+                    <span className="mt-1 block truncate text-xs font-medium text-slate-500">{helper}</span>
+                </span>
+                <span className="font-headline text-2xl font-bold tracking-tight text-slate-950">{value.toLocaleString('vi-VN')}</span>
             </div>
         </Link>
     );
@@ -171,7 +190,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
             const [statsRes, toursRes, ticketsRes, tourStatsRes, articleStatsRes, supportStatsRes] = await Promise.all([
                 fetchWithAuth(`${API_BASE_URL}/booking/admin/stats`),
                 fetchWithAuth(`${API_BASE_URL}/tour?limit=6`),
-                fetchWithAuth(`${API_BASE_URL}/support/tickets?limit=5`),
+                fetchWithAuth(`${API_BASE_URL}/support/tickets?view=open&limit=5`),
                 fetchWithAuth(`${API_BASE_URL}/tour/admin/stats`),
                 fetchWithAuth(`${API_BASE_URL}/article/admin/stats`),
                 fetchWithAuth(`${API_BASE_URL}/support/stats`),
@@ -199,12 +218,17 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                 total: getNumber(bookingStats, 'total'),
                 publishedTours: getNumber(bookingStats, 'publishedTours'),
                 unpaidCount: getNumber(bookingStats, 'unpaidCount'),
+                pendingOverdue: getNumber(bookingStats, 'pendingOverdue'),
+                cancelRequestedOverdue: getNumber(bookingStats, 'cancelRequestedOverdue'),
                 assistedDraftPending: getNumber(bookingStats, 'assistedDraftPending'),
                 tourDraft: getNumber(tourStats, 'draft'),
                 tourPending: getNumber(tourStats, 'pending'),
                 articleDraft: getNumber(articleStats, 'draft'),
                 articlePending: getNumber(articleStats, 'pending'),
                 supportOpen: getNumber(supportStats, 'open'),
+                supportAssignedToMeOpen: getNumber(supportStats, 'assignedToMeOpen'),
+                supportUnassignedOpen: getNumber(supportStats, 'unassignedOpen'),
+                supportOverdue: getNumber(supportStats, 'overdue'),
             });
 
             if (toursRes.ok) {
@@ -269,42 +293,58 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
 
     const today = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
     const openTickets = stats?.supportOpen ?? 0;
+    const ticketsAssignedToMe = stats?.supportAssignedToMeOpen ?? 0;
+    const unassignedTickets = stats?.supportUnassignedOpen ?? 0;
+    const overdueTickets = stats?.supportOverdue ?? 0;
     const pendingBookings = stats?.pending ?? 0;
+    const overduePendingBookings = stats?.pendingOverdue ?? 0;
     const cancelRequests = stats?.cancelRequested ?? 0;
+    const overdueCancelRequests = stats?.cancelRequestedOverdue ?? 0;
     const totalCriticalWork = pendingBookings + cancelRequests + openTickets;
+    const totalSlaIssues = overduePendingBookings + overdueCancelRequests + overdueTickets;
+    const queueTone = loading
+        ? 'bg-slate-50 text-slate-700 ring-slate-200'
+        : totalCriticalWork > 0
+            ? 'bg-amber-50 text-amber-800 ring-amber-100'
+            : 'bg-emerald-50 text-emerald-800 ring-emerald-100';
 
-    const statCards = useMemo(() => [
+    const workQueueItems = useMemo(() => [
         {
             icon: 'pending_actions',
             label: 'Booking chờ xử lý',
-            value: pendingBookings.toLocaleString('vi-VN'),
-            helper: 'Mở danh sách booking đang chờ',
+            value: pendingBookings,
+            helper: overduePendingBookings > 0 ? `${overduePendingBookings.toLocaleString('vi-VN')} quá 24h` : 'Mở danh sách booking đang chờ',
             tone: 'amber' as const,
             href: '/admin/bookings?status=PENDING',
-            urgent: pendingBookings > 0,
+            meta: overduePendingBookings > 0 ? 'Quá hạn' : pendingBookings > 0 ? 'Chờ xử lý' : 'Ổn',
         },
         {
             icon: 'assignment_late',
             label: 'Yêu cầu hủy',
-            value: cancelRequests.toLocaleString('vi-VN'),
-            helper: 'Cần kiểm tra điều kiện hoàn hủy',
+            value: cancelRequests,
+            helper: overdueCancelRequests > 0 ? `${overdueCancelRequests.toLocaleString('vi-VN')} quá 4h` : 'Cần kiểm tra điều kiện hoàn hủy',
             tone: 'orange' as const,
             href: '/admin/bookings?status=CANCEL_REQUESTED',
-            urgent: cancelRequests > 0,
+            meta: overdueCancelRequests > 0 ? 'Quá hạn' : cancelRequests > 0 ? 'Cần duyệt' : 'Ổn',
         },
         {
             icon: 'support_agent',
             label: 'Ticket đang mở',
-            value: openTickets.toLocaleString('vi-VN'),
-            helper: 'Theo dõi phản hồi khách hàng',
+            value: openTickets,
+            helper: overdueTickets > 0
+                ? `${overdueTickets.toLocaleString('vi-VN')} quá 2h · của tôi ${ticketsAssignedToMe.toLocaleString('vi-VN')}`
+                : `Của tôi ${ticketsAssignedToMe.toLocaleString('vi-VN')} · chưa giao ${unassignedTickets.toLocaleString('vi-VN')}`,
             tone: 'teal' as const,
-            href: '/admin/support',
-            urgent: openTickets > 0,
+            href: '/admin/support?view=open',
+            meta: overdueTickets > 0 ? 'Quá hạn' : openTickets > 0 ? 'Đang mở' : 'Ổn',
         },
+    ], [cancelRequests, openTickets, pendingBookings, ticketsAssignedToMe, unassignedTickets, overdueCancelRequests, overduePendingBookings, overdueTickets]);
+
+    const contentMetrics = useMemo(() => [
         {
             icon: 'edit_note',
             label: 'Tour nháp',
-            value: (stats?.tourDraft ?? 0).toLocaleString('vi-VN'),
+            value: stats?.tourDraft ?? 0,
             helper: 'Tiếp tục hoàn thiện nội dung tour',
             tone: 'slate' as const,
             href: '/admin/tours?status=DRAFT',
@@ -312,7 +352,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
         {
             icon: 'approval',
             label: 'Tour chờ duyệt',
-            value: (stats?.tourPending ?? 0).toLocaleString('vi-VN'),
+            value: stats?.tourPending ?? 0,
             helper: 'Các tour đã gửi quản trị duyệt',
             tone: 'blue' as const,
             href: '/admin/tours?status=PENDING_REVIEW',
@@ -320,27 +360,76 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
         {
             icon: 'article',
             label: 'Bài viết chờ duyệt',
-            value: (stats?.articlePending ?? 0).toLocaleString('vi-VN'),
+            value: stats?.articlePending ?? 0,
             helper: 'Nội dung đang chờ kiểm duyệt',
             tone: 'violet' as const,
             href: '/admin/articles?status=PENDING_REVIEW',
         },
-    ], [cancelRequests, openTickets, pendingBookings, stats?.articlePending, stats?.tourDraft, stats?.tourPending]);
+    ], [stats?.articlePending, stats?.tourDraft, stats?.tourPending]);
+    const supportScope = [
+        {
+            label: 'Của tôi',
+            value: ticketsAssignedToMe,
+            helper: 'Ticket đã giao cho bạn',
+            tone: 'bg-blue-50 text-blue-700 ring-blue-100',
+            href: '/admin/support?view=open&assigned=me',
+        },
+        {
+            label: 'Chưa giao',
+            value: unassignedTickets,
+            helper: 'Cần điều phối người phụ trách',
+            tone: 'bg-amber-50 text-amber-700 ring-amber-100',
+            href: '/admin/support?view=open&assigned=none',
+        },
+        {
+            label: 'Toàn hệ thống',
+            value: openTickets,
+            helper: 'Tất cả ticket NEW/IN_PROGRESS',
+            tone: 'bg-slate-100 text-slate-700 ring-slate-200',
+            href: '/admin/support?view=open',
+        },
+    ];
+    const slaCards = [
+        {
+            icon: 'schedule',
+            label: 'Booking quá 24h',
+            value: overduePendingBookings,
+            helper: 'Booking PENDING chưa được xác nhận',
+            href: '/admin/bookings?status=PENDING',
+            tone: overduePendingBookings > 0 ? 'bg-red-50 text-red-700 ring-red-100' : 'bg-white text-slate-700 ring-slate-200',
+        },
+        {
+            icon: 'timer',
+            label: 'Hủy quá 4h',
+            value: overdueCancelRequests,
+            helper: 'Yêu cầu hủy chờ quyết định',
+            href: '/admin/bookings?status=CANCEL_REQUESTED',
+            tone: overdueCancelRequests > 0 ? 'bg-red-50 text-red-700 ring-red-100' : 'bg-white text-slate-700 ring-slate-200',
+        },
+        {
+            icon: 'support_agent',
+            label: 'Ticket quá 2h',
+            value: overdueTickets,
+            helper: 'Ticket mở chưa được xử lý kịp SLA',
+            href: '/admin/support?view=overdue',
+            tone: overdueTickets > 0 ? 'bg-red-50 text-red-700 ring-red-100' : 'bg-white text-slate-700 ring-slate-200',
+        },
+    ];
 
     const showLookupEmpty = hasSearched && !searching && !searchError && bookingResults.length === 0;
 
     return (
         <main className="min-h-screen w-full flex-1 bg-slate-50 px-4 pb-16 pt-7 sm:px-6 lg:px-8">
             <div className="mx-auto w-full max-w-[1400px] space-y-6">
-                <section className="rounded-[28px] border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <section className="rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-sm sm:px-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex items-start gap-4">
-                            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-teal-400 to-blue-600 text-white shadow-lg shadow-blue-500/20">
-                                <span className="material-symbols-outlined text-[24px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>workspaces</span>
+                            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+                                <span className="material-symbols-outlined text-[22px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>workspaces</span>
                             </div>
                             <div>
-                                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Bàn làm việc hôm nay</p>
-                                <h1 className="mt-1 font-headline text-2xl font-extrabold leading-tight tracking-tight text-slate-950 sm:text-[1.9rem]">
+                                <p className="text-xs font-bold uppercase tracking-[0.1em] text-blue-600">Bàn làm việc hôm nay</p>
+                                <h1 className="mt-0.5 font-headline text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-[23px]">
                                     Xin chào, {staffName}
                                 </h1>
                                 <p className="mt-1 text-sm font-medium text-slate-500">{today} · Nhân viên Azure Horizon</p>
@@ -348,6 +437,16 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                         </div>
 
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <div className={`rounded-2xl px-4 py-3 text-sm ring-1 ${queueTone}`}>
+                                <p className="text-xs font-semibold opacity-70">Hàng đợi</p>
+                                <p className="mt-0.5 font-bold">
+                                    {loading
+                                        ? 'Đang tải...'
+                                        : totalCriticalWork > 0
+                                            ? `${totalCriticalWork.toLocaleString('vi-VN')} việc cần xử lý`
+                                            : 'Không có việc khẩn cấp'}
+                                </p>
+                            </div>
                             <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm">
                                 <p className="text-xs font-semibold text-slate-400">Cập nhật lần cuối</p>
                                 <p className="mt-0.5 font-bold text-slate-700">{formatTime(lastUpdated)}</p>
@@ -365,43 +464,10 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                         </div>
                     </div>
 
-                    <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
-                        {loading ? (
-                            Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[88px]" />)
-                        ) : (
-                            <>
-                                <PriorityTask
-                                    icon="pending_actions"
-                                    title="Booking cần xử lý"
-                                    description="Kiểm tra booking mới hoặc đang chờ xác nhận"
-                                    value={pendingBookings}
-                                    tone="amber"
-                                    href="/admin/bookings?status=PENDING"
-                                />
-                                <PriorityTask
-                                    icon="assignment_late"
-                                    title="Yêu cầu hủy cần duyệt"
-                                    description="Ưu tiên phản hồi để tránh khách chờ lâu"
-                                    value={cancelRequests}
-                                    tone="orange"
-                                    href="/admin/bookings?status=CANCEL_REQUESTED"
-                                />
-                                <PriorityTask
-                                    icon="support_agent"
-                                    title="Ticket khách hàng đang mở"
-                                    description="Theo dõi câu hỏi và khiếu nại còn tồn đọng"
-                                    value={openTickets}
-                                    tone="teal"
-                                    href="/admin/support"
-                                />
-                            </>
-                        )}
-                    </div>
-
                     {!loading && !loadError ? (
-                        <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500">
+                        <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
                             {totalCriticalWork > 0
-                                ? `Có ${totalCriticalWork.toLocaleString('vi-VN')} việc cần xử lý. Ưu tiên các mục có trạng thái chờ để giảm thời gian phản hồi khách.`
+                                ? 'Dùng các card bên dưới để mở đúng danh sách đã lọc và xử lý theo thứ tự ưu tiên.'
                                 : 'Không có việc khẩn cấp. Bạn có thể kiểm tra tour, bài viết hoặc lịch sử hỗ trợ.'}
                         </div>
                     ) : null}
@@ -419,12 +485,121 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                     </section>
                 ) : null}
 
-                <section className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-                    {loading ? (
-                        Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[132px]" />)
-                    ) : (
-                        statCards.map(card => <StatCard key={card.label} {...card} />)
-                    )}
+                <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.95fr)]">
+                    <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
+                        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-[0.1em] text-blue-600">Bảng điều phối</p>
+                                <h2 className="mt-1 font-headline text-lg font-bold text-slate-950">Việc cần xử lý hôm nay</h2>
+                                <p className="mt-0.5 text-xs font-medium text-slate-500">Mở thẳng danh sách đã lọc, xử lý theo thứ tự ưu tiên từ trên xuống.</p>
+                            </div>
+                            {!loading ? (
+                                <span className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-bold ${
+                                    totalCriticalWork > 0
+                                        ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100'
+                                        : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+                                }`}>
+                                    {totalCriticalWork > 0
+                                        ? `${totalCriticalWork.toLocaleString('vi-VN')} việc đang chờ`
+                                        : 'Hàng đợi trống'}
+                                </span>
+                            ) : null}
+                        </div>
+
+                        <div className="space-y-2">
+                            {loading ? (
+                                Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[74px]" />)
+                            ) : (
+                                workQueueItems.map(item => <WorkQueueRow key={item.label} {...item} />)
+                            )}
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            {loading ? (
+                                Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[68px]" />)
+                            ) : (
+                                supportScope.map(item => (
+                                    <Link
+                                        key={item.label}
+                                        href={item.href}
+                                        aria-label={`${item.label}: ${item.value.toLocaleString('vi-VN')}. ${item.helper}`}
+                                        className={`group rounded-2xl px-4 py-3 ring-1 transition hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${item.tone}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <p className="text-[11px] font-bold uppercase tracking-[0.08em] opacity-75">{item.label}</p>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="font-headline text-xl font-bold">{item.value.toLocaleString('vi-VN')}</p>
+                                                <span className="material-symbols-outlined text-[14px] opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-70" aria-hidden="true">arrow_forward</span>
+                                            </div>
+                                        </div>
+                                        <p className="mt-1 text-xs font-medium opacity-80">{item.helper}</p>
+                                    </Link>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    <aside className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-[0.1em] text-red-600">SLA & cảnh báo</p>
+                                <h2 className="mt-1 font-headline text-lg font-bold text-slate-950">Ưu tiên quá hạn</h2>
+                                <p className="mt-0.5 text-xs font-medium text-slate-500">Các mục vượt ngưỡng phản hồi cần được kéo lên trước.</p>
+                            </div>
+                            {!loading ? (
+                                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                                    totalSlaIssues > 0
+                                        ? 'bg-red-50 text-red-700 ring-1 ring-red-100'
+                                        : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+                                }`}>
+                                    {totalSlaIssues > 0 ? `${totalSlaIssues.toLocaleString('vi-VN')} quá hạn` : 'Đúng SLA'}
+                                </span>
+                            ) : null}
+                        </div>
+
+                        <div className="space-y-2">
+                            {loading ? (
+                                Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[76px]" />)
+                            ) : (
+                                slaCards.map(item => (
+                                    <Link
+                                        key={item.label}
+                                        href={item.href}
+                                        aria-label={`${item.label}: ${item.value}. ${item.helper}`}
+                                        className={`group block rounded-2xl px-4 py-3 ring-1 transition hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 ${item.tone}`}
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{item.icon}</span>
+                                                    <p className="text-xs font-bold uppercase tracking-[0.08em] opacity-80">{item.label}</p>
+                                                </div>
+                                                <p className="mt-1 truncate text-xs font-medium opacity-80">{item.helper}</p>
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                <p className="font-headline text-xl font-bold">{item.value.toLocaleString('vi-VN')}</p>
+                                                <span className="material-symbols-outlined text-[15px] opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-70" aria-hidden="true">arrow_forward</span>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))
+                            )}
+                        </div>
+                    </aside>
+                </section>
+
+                <section className="space-y-3">
+                    <div>
+                        <h2 className="font-headline text-base font-bold text-slate-900">Nội dung đang theo dõi</h2>
+                        <p className="text-xs font-medium text-slate-500">Các mục chưa gấp nhưng cần giữ nhịp hoàn thiện và duyệt nội dung.</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        {loading ? (
+                            Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[120px]" />)
+                        ) : (
+                            contentMetrics.map(card => <CompactMetricCard key={card.label} {...card} />)
+                        )}
+                    </div>
                 </section>
 
                 <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
@@ -433,7 +608,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                             title="Tour mới nhất"
                             subtitle="Theo dõi nội dung tour vừa được tạo trong hệ thống"
                             action={(
-                                <Link href="/admin/tours" className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100">
+                                <Link href="/admin/tours" className="inline-flex min-h-10 items-center gap-1 rounded-full bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
                                     Tạo tour mới
                                     <span className="material-symbols-outlined text-[14px]" aria-hidden="true">add</span>
                                 </Link>
@@ -462,7 +637,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                                 myTours.map(tour => {
                                     const status = TOUR_STATUS[tour.status] ?? { label: tour.status, cls: 'bg-slate-100 text-slate-600' };
                                     return (
-                                        <Link key={tour.id} href="/admin/tours" className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-slate-50/70">
+                                        <Link key={tour.id} href="/admin/tours" className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-slate-50/70 focus:outline-none focus-visible:bg-blue-50">
                                             <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100">
                                                 {tour.imageUrl ? (
                                                     <Image src={tour.imageUrl} alt={tour.name} width={44} height={44} sizes="44px" className="h-full w-full rounded-xl object-cover" />
@@ -472,7 +647,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className="truncate text-sm font-bold text-slate-800">{tour.name}</p>
-                                                <p className="mt-0.5 truncate text-xs font-medium text-slate-400">
+                                                <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
                                                     {tour.destination?.name ?? 'Chưa có điểm đến'} · {formatDate(tour.createdAt)}
                                                 </p>
                                             </div>
@@ -484,7 +659,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                         </div>
                         {myTours.length > 0 ? (
                             <div className="border-t border-slate-100 px-6 py-3">
-                                <Link href="/admin/tours" className="inline-flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700">
+                                <Link href="/admin/tours" className="inline-flex min-h-10 items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
                                     Xem tất cả tour
                                     <span className="material-symbols-outlined text-[15px]" aria-hidden="true">arrow_forward</span>
                                 </Link>
@@ -497,7 +672,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                             title="Ticket hỗ trợ"
                             subtitle="Các yêu cầu khách hàng đang cần phản hồi"
                             action={(
-                                <Link href="/admin/support" className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700">
+                                <Link href="/admin/support?view=open" className="inline-flex min-h-10 items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
                                     Tất cả
                                     <span className="material-symbols-outlined text-[14px]" aria-hidden="true">arrow_forward</span>
                                 </Link>
@@ -514,21 +689,23 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                             ) : myTickets.length === 0 ? (
                                 <EmptyState
                                     icon="support_agent"
-                                    title="Không có ticket cần xử lý"
-                                    description="Hàng đợi hỗ trợ đang trống. Khi khách gửi yêu cầu mới, ticket sẽ xuất hiện ở đây."
-                                    href="/admin/support"
-                                    action="Xem lịch sử hỗ trợ"
+                                    title={openTickets > 0 ? `${openTickets.toLocaleString('vi-VN')} ticket đang mở trong hệ thống` : 'Không có ticket đang mở'}
+                                    description={openTickets > 0
+                                        ? 'Có ticket đang mở nhưng danh sách nhanh chưa tải được. Mở hàng đợi hỗ trợ để kiểm tra toàn bộ ticket.'
+                                        : 'Hàng đợi hỗ trợ đang trống. Khi khách gửi yêu cầu mới, ticket sẽ xuất hiện ở đây.'}
+                                    href={openTickets > 0 ? '/admin/support?view=open' : '/admin/support'}
+                                    action={openTickets > 0 ? 'Mở hàng đợi ticket' : 'Xem lịch sử hỗ trợ'}
                                 />
                             ) : (
                                 myTickets.map(ticket => {
                                     const status = TICKET_STATUS[ticket.status] ?? { label: ticket.status, cls: 'bg-slate-100 text-slate-600' };
                                     return (
-                                        <Link key={ticket.id} href="/admin/support" className="block px-6 py-4 transition-colors hover:bg-slate-50/70">
+                                        <Link key={ticket.id} href="/admin/support?view=open" className="block px-6 py-4 transition-colors hover:bg-slate-50/70 focus:outline-none focus-visible:bg-blue-50">
                                             <div className="flex items-start justify-between gap-3">
                                                 <p className="min-w-0 truncate text-sm font-bold text-slate-800">{ticket.subject}</p>
-                                                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${status.cls}`}>{status.label}</span>
+                                                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${status.cls}`}>{status.label}</span>
                                             </div>
-                                            <p className="mt-1 text-xs font-medium text-slate-400">{ticket.customerName} · {formatDate(ticket.createdAt)}</p>
+                                            <p className="mt-1 text-xs font-medium text-slate-500">{ticket.customerName} · {formatDate(ticket.createdAt)}</p>
                                         </Link>
                                     );
                                 })
@@ -560,12 +737,12 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                                 }}
                                 placeholder="VD: BKG-290326-XXXX hoặc tên khách..."
                                 autoComplete="off"
-                                className="min-h-11 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                                className="min-h-11 flex-1 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                             />
                             <button
                                 type="submit"
                                 disabled={searching || !searchQuery.trim()}
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm shadow-blue-500/20 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm shadow-blue-500/20 transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                             >
                                 {searching ? (
                                     <span className="material-symbols-outlined text-[17px] animate-spin" aria-hidden="true">progress_activity</span>
@@ -587,7 +764,7 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[760px] text-sm">
                                         <thead>
-                                            <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wider text-slate-400">
+                                            <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                                                 <th className="px-4 py-3 text-left font-bold">Mã booking</th>
                                                 <th className="px-4 py-3 text-left font-bold">Khách hàng</th>
                                                 <th className="px-4 py-3 text-left font-bold">Tour</th>
@@ -603,10 +780,10 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                                                         <td className="px-4 py-3 font-mono text-xs font-bold text-blue-600">{booking.bookingCode}</td>
                                                         <td className="px-4 py-3">
                                                             <p className="text-xs font-bold text-slate-700">{booking.user?.fullName ?? 'Chưa có tên'}</p>
-                                                            <p className="mt-0.5 text-[11px] text-slate-400">{booking.user?.email ?? 'Không có email'}</p>
+                                                            <p className="mt-0.5 text-[11px] text-slate-500">{booking.user?.email ?? 'Không có email'}</p>
                                                         </td>
                                                         <td className="max-w-[240px] truncate px-4 py-3 text-xs font-medium text-slate-600">{booking.tour?.name ?? 'Chưa có tour'}</td>
-                                                        <td className="px-4 py-3 text-right text-xs font-black text-slate-900">{formatVND(booking.totalPrice)}</td>
+                                                        <td className="px-4 py-3 text-right text-xs font-bold text-slate-900">{formatVND(booking.totalPrice)}</td>
                                                         <td className="px-4 py-3">
                                                             <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${status.cls}`}>
                                                                 <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
@@ -619,17 +796,26 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-400">
-                                    Hiển thị {bookingResults.length} kết quả · Chế độ tra cứu nhanh
+                                <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-4 py-3">
+                                    <span className="text-xs font-medium text-slate-500">
+                                        Hiển thị {bookingResults.length} kết quả · Chế độ tra cứu nhanh
+                                    </span>
+                                    <Link
+                                        href={`/admin/bookings?search=${encodeURIComponent(searchQuery.trim())}`}
+                                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                                    >
+                                        Xem tất cả
+                                        <span className="material-symbols-outlined text-[13px]" aria-hidden="true">arrow_forward</span>
+                                    </Link>
                                 </div>
                             </div>
                         ) : null}
 
                         {showLookupEmpty ? (
-                            <div className="mt-5 rounded-2xl bg-slate-50 py-10 text-center">
-                                <span className="material-symbols-outlined text-4xl text-slate-300" aria-hidden="true">search_off</span>
+                            <div className="mt-5 rounded-2xl bg-slate-50 px-6 py-10 text-center">
+                                <span className="material-symbols-outlined text-4xl text-slate-400" aria-hidden="true">search_off</span>
                                 <p className="mt-2 text-sm font-bold text-slate-700">Không tìm thấy booking phù hợp</p>
-                                <p className="mt-1 text-xs text-slate-400">Kiểm tra lại mã booking, email hoặc tên khách hàng.</p>
+                                <p className="mt-1 text-xs text-slate-500">Kiểm tra lại mã booking, email hoặc tên khách hàng.</p>
                             </div>
                         ) : null}
                     </div>

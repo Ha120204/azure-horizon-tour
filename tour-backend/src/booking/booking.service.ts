@@ -195,7 +195,7 @@ export class BookingService {
         const voucherResult = await this.voucherService.validateVoucher(
           dto.voucherCode,
           totalPrice,
-          { tourId: tour.id, departureId: selectedDeparture?.id ?? null },
+          { userId: finalUserId, tourId: tour.id, departureId: selectedDeparture?.id ?? null },
         );
         discountAmount = voucherResult.discountAmount;
         totalPrice = voucherResult.finalPrice;
@@ -742,12 +742,65 @@ export class BookingService {
   }
 
 
+  async updateAdminNote(bookingId: number, adminId: number, note: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+      select: { id: true, contactInfo: true },
+    });
+    if (!booking) throw new NotFoundException('Booking khong ton tai');
+
+    const existing = booking.contactInfo;
+    const contactInfo = existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+    contactInfo.adminNote = note.trim();
+    contactInfo.adminNoteUpdatedAt = new Date().toISOString();
+    contactInfo.adminNoteById = adminId;
+
+    const updated = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { contactInfo: contactInfo as Prisma.InputJsonValue },
+    });
+    return updated;
+  }
+
+  async adminCancelBooking(bookingId: number, adminId: number, reason: string) {
+    return this.cancellationService.adminCancelBooking(bookingId, adminId, reason);
+  }
   // --- Query --- delegated to BookingQueryService -------------------------
 
   async getMyBookings(userId: number) { return this.queryService.getMyBookings(userId); }
   async getMyBookingById(bookingId: number, userId: number) { return this.queryService.getMyBookingById(bookingId, userId); }
   async findMyByBookingCode(bookingCode: string, userId: number) { return this.queryService.findMyByBookingCode(bookingCode, userId); }
-  async getAllBookings(status?: string, paymentStatus?: string, search?: string, dateFrom?: string, dateTo?: string, page = 1, limit = 10, paymentMethod?: 'PAYOS' | 'IN_STORE', needsReconciliation = false) { return this.queryService.getAllBookings(status, paymentStatus, search, dateFrom, dateTo, page, limit, paymentMethod, needsReconciliation); }
+  async getAllBookings(
+    status?: string,
+    paymentStatus?: string,
+    search?: string,
+    dateFrom?: string,
+    dateTo?: string,
+    page = 1,
+    limit = 10,
+    paymentMethod?: 'PAYOS' | 'IN_STORE',
+    needsReconciliation = false,
+    departureFrom?: string,
+    departureTo?: string,
+    needsCustomerCall = false,
+  ) {
+    return this.queryService.getAllBookings(
+      status,
+      paymentStatus,
+      search,
+      dateFrom,
+      dateTo,
+      page,
+      limit,
+      paymentMethod,
+      needsReconciliation,
+      departureFrom,
+      departureTo,
+      needsCustomerCall,
+    );
+  }
 
   async retryPayment(bookingId: number, userId: number) { return this.queryService.retryPayment(bookingId, userId); }
   async findPublicByBookingCode(bookingCode: string, email: string) { return this.queryService.findPublicByBookingCode(bookingCode, email); }
@@ -784,11 +837,34 @@ export class BookingService {
   }
 
   private async _computeQuickStats() {
-    const [grouped, paymentGrouped, myToursCount, assistedDraftGrouped] = await Promise.all([
+    const pendingOverdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const cancelRequestedOverdueSince = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const [
+      grouped,
+      paymentGrouped,
+      myToursCount,
+      assistedDraftGrouped,
+      pendingOverdue,
+      cancelRequestedOverdue,
+    ] = await Promise.all([
       this.prisma.booking.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { status: true } }),
       this.prisma.booking.groupBy({ by: ['paymentStatus'], where: { deletedAt: null }, _count: { paymentStatus: true } }),
       this.prisma.tour.count({ where: { deletedAt: null, status: 'PUBLISHED' } }),
       this.prisma.assistedBookingDraft.groupBy({ by: ['status'], _count: { status: true } }),
+      this.prisma.booking.count({
+        where: {
+          deletedAt: null,
+          status: 'PENDING',
+          createdAt: { lt: pendingOverdueSince },
+        },
+      }),
+      this.prisma.booking.count({
+        where: {
+          deletedAt: null,
+          status: 'CANCEL_REQUESTED',
+          cancelRequestedAt: { lt: cancelRequestedOverdueSince },
+        },
+      }),
     ]);
     const map: Record<string, number> = {};
     for (const row of grouped) map[row.status] = row._count.status;
@@ -800,6 +876,8 @@ export class BookingService {
       pending: map['PENDING'] || 0, confirmed: map['CONFIRMED'] || 0,
       cancelRequested: map['CANCEL_REQUESTED'] || 0, cancelled: map['CANCELLED'] || 0,
       total: Object.values(map).reduce((a, b) => a + b, 0),
+      pendingOverdue,
+      cancelRequestedOverdue,
       publishedTours: myToursCount,
       unpaidCount: paymentMap['UNPAID'] || 0, processingCount: paymentMap['PROCESSING'] || 0,
       failedPaymentCount: paymentMap['FAILED'] || 0,

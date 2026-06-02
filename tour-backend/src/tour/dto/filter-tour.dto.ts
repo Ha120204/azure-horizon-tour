@@ -56,4 +56,12 @@ export class FilterTourDto {
   @IsOptional()
   @IsString()
   status?: string; // 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED'
+
+  @IsOptional()
+  @IsString()
+  startDateFrom?: string; // ISO date string: lọc tour có startDate >= giá trị này
+
+  @IsOptional()
+  @IsString()
+  startDateTo?: string; // ISO date string: lọc tour có startDate <= giá trị này
 }

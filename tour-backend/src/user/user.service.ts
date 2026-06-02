@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
-import { Role } from '@prisma/client';
+import { PaymentStatus, Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const ADMIN_VISIBLE_USER_ROLES: Role[] = [Role.CUSTOMER, Role.STAFF];
@@ -82,18 +82,26 @@ export class UserService {
     search?: string;
     role?: string;
     status?: string;
+    bookingFilter?: string;
+    segmentFilter?: string;
+    sortBy?: string;
+    sortDir?: string;
     page?: number;
     limit?: number;
   }, requesterRole?: Role) {
-    const { search, role, status, page = 1, limit = 10 } = query;
+    const { search, role, status, bookingFilter, segmentFilter, sortBy, sortDir, page = 1, limit = 10 } = query;
 
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
+    const andConditions: Prisma.UserWhereInput[] = [];
 
     // Tìm kiếm theo tên hoặc email
     if (search) {
+      const numericSearch = Number(search);
       where.OR = [
         { fullName: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+        ...(Number.isInteger(numericSearch) ? [{ id: numericSearch }] : []),
       ];
     }
 
@@ -157,6 +165,43 @@ export class UserService {
       where.deletedAt = { not: null };
     }
 
+    if (bookingFilter === 'has_bookings') {
+      where.bookings = { some: { deletedAt: null } };
+    } else if (bookingFilter === 'no_bookings') {
+      where.bookings = { none: { deletedAt: null } };
+    }
+
+    const now = new Date();
+    if (segmentFilter === 'new_7_days') {
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      andConditions.push({ createdAt: { gte: sevenDaysAgo } });
+    } else if (segmentFilter === 'new_30_days') {
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(now.getDate() - 30);
+      andConditions.push({ createdAt: { gte: thirtyDaysAgo } });
+    } else if (segmentFilter === 'has_phone') {
+      andConditions.push({ phone: { not: null } }, { phone: { not: '' } });
+    } else if (segmentFilter === 'missing_phone') {
+      andConditions.push({ OR: [{ phone: null }, { phone: '' }] });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
+    }
+
+    const direction: Prisma.SortOrder = sortDir === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.UserOrderByWithRelationInput = { createdAt: direction };
+    if (sortBy === 'fullName') {
+      orderBy = { fullName: direction };
+    } else if (sortBy === 'bookingCount') {
+      orderBy = { bookings: { _count: direction } };
+    } else if (sortBy === 'reviewCount') {
+      orderBy = { reviews: { _count: direction } };
+    } else if (sortBy === 'status') {
+      orderBy = { deletedAt: direction };
+    }
+
     const [users, totalItems] = await Promise.all([
       this.prisma.user.findMany({
         where,
@@ -177,12 +222,39 @@ export class UserService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       }),
       this.prisma.user.count({ where }),
     ]);
+
+    const userIds = users.map((u) => u.id);
+    const [spendSummary, recentBookingSummary] = userIds.length
+      ? await Promise.all([
+          this.prisma.booking.groupBy({
+            by: ['userId'],
+            where: {
+              userId: { in: userIds },
+              deletedAt: null,
+              paymentStatus: PaymentStatus.PAID,
+            },
+            _sum: { totalPrice: true },
+          }),
+          this.prisma.booking.groupBy({
+            by: ['userId'],
+            where: { userId: { in: userIds }, deletedAt: null },
+            _max: { createdAt: true },
+          }),
+        ])
+      : [[], []];
+
+    const spendByUser = new Map(
+      spendSummary.map((item) => [item.userId, Number(item._sum.totalPrice ?? 0)]),
+    );
+    const lastBookingByUser = new Map(
+      recentBookingSummary.map((item) => [item.userId, item._max.createdAt]),
+    );
 
     return {
       data: users.map((u) => ({
@@ -190,6 +262,8 @@ export class UserService {
         status: u.deletedAt ? 'Deactivated' : 'Active',
         bookingCount: u._count.bookings,
         reviewCount: u._count.reviews,
+        totalSpent: spendByUser.get(u.id) ?? 0,
+        lastBookingAt: lastBookingByUser.get(u.id) ?? null,
       })),
       meta: {
         totalItems,
@@ -241,25 +315,42 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    const recentBookings = await this.prisma.booking.findMany({
-      where: { userId: id },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: {
-        id: true,
-        bookingCode: true,
-        totalPrice: true,
-        status: true,
-        createdAt: true,
-        tour: { select: { name: true } },
-      },
-    });
+    const [recentBookings, paidBookingSummary, lastBookingSummary] =
+      await Promise.all([
+        this.prisma.booking.findMany({
+          where: { userId: id },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            bookingCode: true,
+            totalPrice: true,
+            status: true,
+            createdAt: true,
+            tour: { select: { name: true } },
+          },
+        }),
+        this.prisma.booking.aggregate({
+          where: {
+            userId: id,
+            deletedAt: null,
+            paymentStatus: PaymentStatus.PAID,
+          },
+          _sum: { totalPrice: true },
+        }),
+        this.prisma.booking.aggregate({
+          where: { userId: id, deletedAt: null },
+          _max: { createdAt: true },
+        }),
+      ]);
 
     return {
       ...user,
       status: user.deletedAt ? 'Deactivated' : 'Active',
       bookingCount: user._count.bookings,
       reviewCount: user._count.reviews,
+      totalSpent: Number(paidBookingSummary._sum.totalPrice ?? 0),
+      lastBookingAt: lastBookingSummary._max.createdAt ?? null,
       recentBookings,
     };
   }
@@ -394,6 +485,66 @@ export class UserService {
     };
   }
 
+  async bulkUpdateCustomerStatus(
+    ids: number[],
+    status: 'active' | 'deactivated',
+    requesterId: number,
+    requesterRole: Role,
+  ) {
+    const uniqueIds = [...new Set(ids)].filter((id) => Number.isInteger(id) && id > 0);
+    if (uniqueIds.length === 0) {
+      return { updatedCount: 0, skippedCount: 0, status };
+    }
+
+    if (uniqueIds.includes(requesterId)) {
+      throw new ForbiddenException('You cannot change your own account status');
+    }
+
+    if (requesterRole !== Role.SUPER_ADMIN && requesterRole !== Role.ADMIN) {
+      throw new ForbiddenException('Only Admin and Super Admin can update customer status');
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, role: true, deletedAt: true },
+    });
+
+    const disallowed = users.find((user) => user.role !== Role.CUSTOMER);
+    if (disallowed) {
+      throw new ForbiddenException('Bulk customer actions only support CUSTOMER accounts');
+    }
+
+    const targetIds = users
+      .filter((user) => (status === 'active' ? user.deletedAt !== null : user.deletedAt === null))
+      .map((user) => user.id);
+
+    if (targetIds.length === 0) {
+      return {
+        updatedCount: 0,
+        skippedCount: uniqueIds.length,
+        status,
+      };
+    }
+
+    await this.prisma.user.updateMany({
+      where: { id: { in: targetIds }, role: Role.CUSTOMER },
+      data:
+        status === 'active'
+          ? { deletedAt: null }
+          : {
+              deletedAt: new Date(),
+              authTokenVersion: { increment: 1 },
+              authRevokedAt: new Date(),
+            },
+    });
+
+    return {
+      updatedCount: targetIds.length,
+      skippedCount: uniqueIds.length - targetIds.length,
+      status,
+    };
+  }
+
   /**
    * Thu hồi tất cả token hiện tại của một tài khoản quản trị.
    */
@@ -441,11 +592,14 @@ export class UserService {
     const customerWhere = { role: 'CUSTOMER' as any };
 
     if (requesterRole === Role.STAFF) {
-      const [totalUsers, activeUsers, newThisMonth] = await Promise.all([
+      const [totalUsers, activeUsers, newThisMonth, customersWithBookings] = await Promise.all([
         this.prisma.user.count({ where: customerWhere }),
         this.prisma.user.count({ where: { ...customerWhere, deletedAt: null } }),
         this.prisma.user.count({
           where: { ...customerWhere, createdAt: { gte: firstDayOfMonth } },
+        }),
+        this.prisma.user.count({
+          where: { ...customerWhere, bookings: { some: { deletedAt: null } } },
         }),
       ]);
 
@@ -453,6 +607,7 @@ export class UserService {
         totalUsers,
         activeUsers,
         newThisMonth,
+        customersWithBookings,
         staffAndAdmin: 0,
         staffActive: 0,
         staffNewThisMonth: 0,
@@ -464,12 +619,15 @@ export class UserService {
       requesterRole === Role.SUPER_ADMIN ? [Role.ADMIN, Role.STAFF] : [Role.STAFF];
     const staffWhere = { role: { in: internalRoles } };
 
-    const [totalUsers, activeUsers, newThisMonth, roleBreakdown, staffAndAdmin, staffActive, staffNewThisMonth] =
+    const [totalUsers, activeUsers, newThisMonth, customersWithBookings, roleBreakdown, staffAndAdmin, staffActive, staffNewThisMonth] =
       await Promise.all([
         this.prisma.user.count({ where: customerWhere }),
         this.prisma.user.count({ where: { ...customerWhere, deletedAt: null } }),
         this.prisma.user.count({
           where: { ...customerWhere, createdAt: { gte: firstDayOfMonth } },
+        }),
+        this.prisma.user.count({
+          where: { ...customerWhere, bookings: { some: { deletedAt: null } } },
         }),
         this.prisma.user.groupBy({
           by: ['role'],
@@ -486,6 +644,7 @@ export class UserService {
       totalUsers,
       activeUsers,
       newThisMonth,
+      customersWithBookings,
       staffAndAdmin,
       staffActive,
       staffNewThisMonth,

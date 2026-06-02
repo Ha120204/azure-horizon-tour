@@ -16,7 +16,9 @@ interface ActiveTourRowProps {
     isStaff: boolean;
     isAdmin: boolean;
     submittingTourId: number | null;
+    canSelectTour: (tour: Tour) => boolean;
     onToggleSelect: (id: number) => void;
+    onOpenDetail: (tour: Tour) => void;
     onOpenContent: (tour: Tour) => void;
     onEdit: (tour: Tour) => void;
     onSubmit: (tour: Tour) => void;
@@ -34,7 +36,9 @@ export function ActiveTourRow({
     isStaff,
     isAdmin,
     submittingTourId,
+    canSelectTour,
     onToggleSelect,
+    onOpenDetail,
     onOpenContent,
     onEdit,
     onSubmit,
@@ -47,6 +51,8 @@ export function ActiveTourRow({
     const canStaffSubmit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
     const canStaffDeleteDraft = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
     const canAdminReview = isAdmin && tour.status === 'PENDING_REVIEW';
+    const canSelect = canSelectTour(tour);
+    const bulkSelectHint = canSelect ? `Chọn tour ${tour.name}` : 'Bạn không có quyền chọn tour này';
     const stt = (page - 1) * pageSize + rowIndex + 1;
 
     return (
@@ -55,10 +61,12 @@ export function ActiveTourRow({
                 <input
                     type="checkbox"
                     checked={isChecked}
+                    disabled={!canSelect}
                     onChange={() => onToggleSelect(tour.id)}
                     onClick={e => e.stopPropagation()}
-                    className="w-4 h-4 rounded border-outline-variant accent-primary cursor-pointer"
-                    aria-label={`Chọn tour ${tour.name}`}
+                    className="w-4 h-4 rounded border-outline-variant accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-35"
+                    aria-label={bulkSelectHint}
+                    title={bulkSelectHint}
                 />
             </td>
             <td className="py-3 px-3 text-center">
@@ -67,7 +75,12 @@ export function ActiveTourRow({
                 </span>
             </td>
             <td className="py-3 px-5">
-                <div className="flex items-center gap-3 min-w-0">
+                <button
+                    type="button"
+                    onClick={() => onOpenDetail(tour)}
+                    className="group/tour flex min-w-0 items-center gap-3 rounded-xl text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+                    title={`Xem chi tiết tour ${tour.name}`}
+                >
                     <div className="w-14 h-14 rounded-xl overflow-hidden bg-surface-container shrink-0">
                         {tour.imageUrl ? (
                             <Image
@@ -86,14 +99,14 @@ export function ActiveTourRow({
                         )}
                     </div>
                     <div className="min-w-0">
-                        <p className="font-semibold text-sm text-on-surface truncate max-w-[200px]">{tour.name}</p>
+                        <p className="font-semibold text-sm text-on-surface line-clamp-2 max-w-[260px] group-hover/tour:text-primary" title={tour.name}>{tour.name}</p>
                         <p className="text-xs text-on-surface-variant mt-0.5">
                             <span translate="no" className="font-mono">#{tour.id}</span>
                             {' · '}
                             <span className="inline-flex items-center px-1.5 py-0.5 bg-surface-container rounded text-[10px] font-medium">{tour.tourType || 'Tour'}</span>
                         </p>
                     </div>
-                </div>
+                </button>
             </td>
             <td className="py-3 px-5 text-sm text-on-surface-variant whitespace-nowrap">{tour.destination?.name ?? '—'}</td>
             <td className="py-3 px-5 whitespace-nowrap">
@@ -101,7 +114,26 @@ export function ActiveTourRow({
             </td>
             <td className="py-3 px-5 text-sm text-on-surface-variant whitespace-nowrap">{tour.startDate ? formatDate(tour.startDate) : '—'}</td>
             <td className="py-3 px-5 text-sm text-on-surface-variant whitespace-nowrap">{tour.duration ?? '—'}</td>
-            <td className="py-3 px-5 text-sm font-semibold text-on-surface whitespace-nowrap">{tour.availableSeats}</td>
+            <td className="py-3 px-5 whitespace-nowrap">
+                {(() => {
+                    const booked = tour.bookedSeats ?? 0;
+                    const total = tour.totalSeats ?? tour.availableSeats;
+                    const fillRate = total > 0 ? (booked / total) : 0;
+                    const seatsColor = fillRate >= 0.95
+                        ? 'text-error font-bold'
+                        : fillRate >= 0.80
+                            ? 'text-amber-600 font-semibold'
+                            : 'text-on-surface font-semibold';
+                    return (
+                        <div>
+                            <p className={`text-sm ${seatsColor}`}>Còn {tour.availableSeats.toLocaleString('vi-VN')}</p>
+                            {booked > 0 && (
+                                <p className="text-[11px] text-on-surface-variant mt-0.5">{booked.toLocaleString('vi-VN')}/{total.toLocaleString('vi-VN')} đã đặt</p>
+                            )}
+                        </div>
+                    );
+                })()}
+            </td>
             <td className="py-3 px-5 whitespace-nowrap">
                 {tour.averageRating > 0 ? (
                     <div className="flex items-center gap-1.5">
@@ -132,12 +164,18 @@ export function ActiveTourRow({
             </td>
             <td className="py-3 px-5 text-right whitespace-nowrap">
                 <div className="flex justify-end gap-1">
+                    <div className="relative group/tip">
+                        <button onClick={() => onOpenDetail(tour)} aria-label={`Xem chi tiết tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
+                            <span className="material-symbols-outlined text-[18px]">visibility</span>
+                        </button>
+                        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Xem chi tiết<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
+                    </div>
                     {tour.status === 'PUBLISHED' && (
                         <div className="relative group/tip">
                             <button onClick={() => window.open(`/vi/tour/${tour.id}`, '_blank')} aria-label={`Xem tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
                                 <span className="material-symbols-outlined text-[18px]">open_in_new</span>
                             </button>
-                            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">Xem trang khách<span className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-on-surface" /></span>
+                            <span className="pointer-events-none absolute -top-8 right-0 z-[120] whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100">Xem trang khách<span className="absolute right-3 top-full border-4 border-transparent border-t-on-surface" /></span>
                         </div>
                     )}
                     {(isAdmin || isMyTour) && tour.status === 'PUBLISHED' && (

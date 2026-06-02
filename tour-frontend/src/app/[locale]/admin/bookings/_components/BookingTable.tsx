@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { SkeletonRow } from './SkeletonRow';
@@ -23,6 +24,9 @@ interface BookingTableProps {
   onResetFilters: () => void;
   onCopyPaymentRequest: (booking: Booking) => void;
   onResendPaymentRequest: (booking: Booking) => void;
+  onBulkResendPaymentRequests: (bookings: Booking[]) => Promise<void>;
+  onCancelBooking: (booking: Booking, reason: string) => void | Promise<void>;
+  onSaveBookingNote: (booking: Booking, note: string) => void | Promise<void>;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }
@@ -38,15 +42,102 @@ export function BookingTable({
   onResetFilters,
   onCopyPaymentRequest,
   onResendPaymentRequest,
+  onBulkResendPaymentRequests,
+  onCancelBooking,
+  onSaveBookingNote,
   onPageChange,
   onPageSizeChange,
 }: BookingTableProps) {
+  const [noteTarget, setNoteTarget] = useState<Booking | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBulkReminding, setIsBulkReminding] = useState(false);
+  const selectedBookings = bookings.filter(booking => selectedIds.has(booking.id));
+  const payableSelectedBookings = selectedBookings.filter(canRemindPayment);
+  const selectedCount = selectedBookings.length;
+  const allCurrentPageSelected = bookings.length > 0 && bookings.every(booking => selectedIds.has(booking.id));
+
+  useEffect(() => {
+    const currentIds = new Set(bookings.map(booking => booking.id));
+    setSelectedIds(prev => new Set([...prev].filter(id => currentIds.has(id))));
+  }, [bookings]);
+
+  const toggleSelected = (bookingId: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(bookingId)) next.delete(bookingId);
+      else next.add(bookingId);
+      return next;
+    });
+  };
+
+  const toggleCurrentPage = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allCurrentPageSelected) bookings.forEach(booking => next.delete(booking.id));
+      else bookings.forEach(booking => next.add(booking.id));
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkRemind = async () => {
+    if (payableSelectedBookings.length === 0) return;
+    setIsBulkReminding(true);
+    try {
+      await onBulkResendPaymentRequests(payableSelectedBookings);
+      clearSelection();
+    } finally {
+      setIsBulkReminding(false);
+    }
+  };
+
   return (
-    <div id="bookings-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
+    <>
+      <div id="bookings-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/10 bg-primary/5 px-5 py-3">
+          <div>
+            <p className="text-sm font-bold text-on-surface">Đã chọn {selectedCount} đơn</p>
+            <p className="text-xs text-on-surface-variant">{payableSelectedBookings.length} đơn có thể nhắc thanh toán PayOS</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBulkRemind}
+              disabled={payableSelectedBookings.length === 0 || isBulkReminding}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className={`material-symbols-outlined text-[16px] ${isBulkReminding ? 'animate-spin' : ''}`}>
+                {isBulkReminding ? 'progress_activity' : 'notifications_active'}
+              </span>
+              {isBulkReminding ? 'Đang gửi...' : 'Nhắc thanh toán'}
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="rounded-xl border border-outline-variant/20 px-4 py-2 text-sm font-semibold text-on-surface-variant hover:bg-surface-container"
+            >
+              Bỏ chọn
+            </button>
+          </div>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-outline-variant/15 bg-surface-container/40">
+              <th className="w-11 py-3.5 pl-5 pr-2">
+                <input
+                  type="checkbox"
+                  checked={allCurrentPageSelected}
+                  disabled={bookings.length === 0 || isLoading}
+                  onChange={toggleCurrentPage}
+                  className="h-4 w-4 rounded border-outline-variant/40 text-primary focus:ring-primary"
+                  aria-label="Chọn tất cả đơn trên trang hiện tại"
+                />
+              </th>
               {(() => {
                 const baseHeaders = ['Mã Đặt Tour', 'Khách Hàng', 'Tour', 'Giá Trị', 'Trạng Thái', 'Phương Thức'];
                 const tailHeaders = statusFilter === 'CANCELLED'
@@ -54,7 +145,7 @@ export function BookingTable({
                   : ['Thanh Toán', 'Ngày Đặt', 'Thao Tác'];
                 const allHeaders = [...baseHeaders, ...tailHeaders];
                 return allHeaders.map((header, index) => (
-                  <th key={header} className={`py-3.5 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider whitespace-nowrap ${index === 7 ? 'text-right' : ''}`}>{header}</th>
+                  <th key={header} className={`py-3.5 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider whitespace-nowrap ${index === allHeaders.length - 1 ? 'w-[168px] text-right' : ''}`}>{header}</th>
                 ));
               })()}
             </tr>
@@ -64,7 +155,7 @@ export function BookingTable({
               Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
             ) : bookings.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-24 text-center">
+                <td colSpan={10} className="py-24 text-center">
                   <div className="flex flex-col items-center">
                     <div className="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center mb-4">
                       <span className="material-symbols-outlined text-3xl text-outline">receipt_long</span>
@@ -90,6 +181,10 @@ export function BookingTable({
                   onOpenBooking={onOpenBooking}
                   onCopyPaymentRequest={onCopyPaymentRequest}
                   onResendPaymentRequest={onResendPaymentRequest}
+                  isSelected={selectedIds.has(booking.id)}
+                  onToggleSelected={toggleSelected}
+                  onOpenNote={setNoteTarget}
+                  onOpenCancel={setCancelTarget}
                 />
               ))
             )}
@@ -108,7 +203,30 @@ export function BookingTable({
           itemLabel="đơn"
         />
       </div>
-    </div>
+      </div>
+
+      {noteTarget && (
+        <BookingNoteDialog
+          booking={noteTarget}
+          onClose={() => setNoteTarget(null)}
+          onSave={async (booking, note) => {
+            await onSaveBookingNote(booking, note);
+            setNoteTarget(null);
+          }}
+        />
+      )}
+
+      {cancelTarget && (
+        <BookingCancelDialog
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onCancel={async (booking, reason) => {
+            await onCancelBooking(booking, reason);
+            setCancelTarget(null);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -118,6 +236,26 @@ interface BookingTableRowProps {
   onOpenBooking: (booking: Booking) => void;
   onCopyPaymentRequest: (booking: Booking) => void;
   onResendPaymentRequest: (booking: Booking) => void;
+  isSelected: boolean;
+  onToggleSelected: (bookingId: number) => void;
+  onOpenNote: (booking: Booking) => void;
+  onOpenCancel: (booking: Booking) => void;
+}
+
+function toTelHref(phone?: string | null) {
+  return phone?.replace(/[^\d+]/g, '') ?? '';
+}
+
+function toZaloPhone(phone?: string | null) {
+  const digits = phone?.replace(/\D/g, '') ?? '';
+  if (!digits) return '';
+  if (digits.startsWith('84')) return digits;
+  if (digits.startsWith('0')) return `84${digits.slice(1)}`;
+  return digits;
+}
+
+function canRemindPayment(booking: Booking) {
+  return booking.status === 'PENDING' && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS';
 }
 
 function BookingTableRow({
@@ -126,6 +264,10 @@ function BookingTableRow({
   onOpenBooking,
   onCopyPaymentRequest,
   onResendPaymentRequest,
+  isSelected,
+  onToggleSelected,
+  onOpenNote,
+  onOpenCancel,
 }: BookingTableRowProps) {
   const statusConfig = STATUS_CFG[booking.status] ?? STATUS_CFG.PENDING;
   const paymentConfig = PAY_CFG[booking.paymentStatus] ?? PAY_CFG.UNPAID;
@@ -134,12 +276,39 @@ function BookingTableRow({
   const latestPaymentRequest = booking.paymentMethod === 'PAYOS' && booking.paymentStatus !== 'PAID'
     ? booking.notifications?.[0]
     : undefined;
+  const contactPhone = booking.contactPhone ?? booking.user.phone ?? '';
+  const telHref = toTelHref(contactPhone);
+  const zaloPhone = toZaloPhone(contactPhone);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isActionMenuOpen) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!actionMenuRef.current?.contains(event.target as Node)) {
+        setIsActionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [isActionMenuOpen]);
 
   return (
     <tr
-      className={`hover:bg-primary/[0.025] transition-colors group cursor-pointer ${isPending ? 'border-l-2 border-amber-400' : ''}`}
+      className={`hover:bg-primary/[0.025] transition-colors group cursor-pointer ${isPending ? 'border-l-2 border-amber-400' : ''} ${isSelected ? 'bg-primary/[0.035]' : ''}`}
       onClick={() => onOpenBooking(booking)}
     >
+      <td className="py-4 pl-5 pr-2" onClick={event => event.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelected(booking.id)}
+          className="h-4 w-4 rounded border-outline-variant/40 text-primary focus:ring-primary"
+          aria-label={`Chọn đơn ${booking.bookingCode}`}
+        />
+      </td>
       <td className="py-4 px-5">
         <span className="font-mono text-sm font-bold text-primary">{booking.bookingCode}</span>
         {booking.voucherCode && (
@@ -180,6 +349,12 @@ function BookingTableRow({
               <p className="text-xs text-on-surface-variant/60 flex items-center gap-0.5 mt-0.5">
                 <span className="material-symbols-outlined text-[12px]">location_on</span>
                 {booking.tour.destination.name}
+              </p>
+            )}
+            {booking.departureDate && (
+              <p className="text-xs text-on-surface-variant/60 flex items-center gap-0.5 mt-0.5">
+                <span className="material-symbols-outlined text-[12px]">event</span>
+                Khởi hành {fmtDate(booking.departureDate)}
               </p>
             )}
           </div>
@@ -262,48 +437,313 @@ function BookingTableRow({
         </td>
       )}
 
-      <td className="py-4 px-5 text-right" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-2">
-          {isPending && (
-            <button
-              onClick={() => onOpenBooking(booking)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors outline-none"
-              aria-label="Xác nhận thủ công"
-            >
-              <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-              Xác nhận
-            </button>
-          )}
-          {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && latestPaymentRequest?.content && (
-            <button
-              onClick={() => onCopyPaymentRequest(booking)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors outline-none"
-              aria-label={`Copy noi dung thanh toan ${booking.bookingCode}`}
-            >
-              <span className="material-symbols-outlined text-[14px]">content_copy</span>
-              Copy
-            </button>
-          )}
-          {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && (
-            <button
-              onClick={() => onResendPaymentRequest(booking)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors outline-none"
-              aria-label={`Tao lai yeu cau thanh toan ${booking.bookingCode}`}
-            >
-              <span className="material-symbols-outlined text-[14px]">send</span>
-              Gửi lại
-            </button>
-          )}
+      <td className="w-[168px] min-w-[168px] py-4 pl-3 pr-5 text-right" onClick={e => e.stopPropagation()}>
+        <div ref={actionMenuRef} className="relative inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
           <button
             onClick={() => onOpenBooking(booking)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-white px-3 text-xs font-bold text-on-surface-variant outline-none transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={`Xem chi tiết ${booking.bookingCode}`}
           >
             <span className="material-symbols-outlined text-[15px]">visibility</span>
-            Chi tiết
+            Xem
           </button>
+          {telHref && (
+            <span className="group/tip relative inline-flex">
+              <a
+                href={`tel:${telHref}`}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 outline-none transition-colors hover:bg-sky-100 focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label={`Gọi khách ${booking.bookingCode}`}
+              >
+                <span className="material-symbols-outlined text-[14px]">call</span>
+              </a>
+              <span className="pointer-events-none absolute -top-8 right-0 z-[120] whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100">
+                Gọi khách
+                <span className="absolute right-3 top-full border-4 border-transparent border-t-on-surface" />
+              </span>
+            </span>
+          )}
+          <span className="group/tip relative inline-flex">
+            <button
+              type="button"
+              onClick={() => setIsActionMenuOpen(open => !open)}
+              aria-haspopup="menu"
+              aria-expanded={isActionMenuOpen}
+              aria-label={`Mở thêm thao tác cho ${booking.bookingCode}`}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+                isActionMenuOpen
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-outline-variant/20 bg-white text-on-surface-variant hover:border-primary/30 hover:bg-primary/10 hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">more_horiz</span>
+            </button>
+            {!isActionMenuOpen && (
+              <span className="pointer-events-none absolute -top-8 right-0 z-[120] whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100">
+                Thêm thao tác
+                <span className="absolute right-3 top-full border-4 border-transparent border-t-on-surface" />
+              </span>
+            )}
+          </span>
+
+          {isActionMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-10 z-[80] w-52 overflow-hidden rounded-2xl border border-outline-variant/15 bg-white p-1.5 text-left shadow-2xl shadow-slate-900/12"
+            >
+              {isPending && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    onOpenBooking(booking);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                  Xác nhận thủ công
+                </button>
+              )}
+              {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && latestPaymentRequest?.content && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    onCopyPaymentRequest(booking);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                  Copy thanh toán
+                </button>
+              )}
+              {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    onResendPaymentRequest(booking);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]">notifications_active</span>
+                  Nhắc thanh toán
+                </button>
+              )}
+              {zaloPhone && (
+                <a
+                  role="menuitem"
+                  href={`https://zalo.me/${zaloPhone}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setIsActionMenuOpen(false)}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-50"
+                  aria-label={`Mở Zalo khách ${booking.bookingCode}`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                  Mở Zalo
+                </a>
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsActionMenuOpen(false);
+                  onOpenNote(booking);
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
+                  booking.adminNote
+                    ? 'text-amber-700 hover:bg-amber-50'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+                aria-label={`Ghi chú nội bộ ${booking.bookingCode}`}
+              >
+                <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                {booking.adminNote ? 'Sửa ghi chú' : 'Thêm ghi chú'}
+              </button>
+              {booking.status !== 'CANCELLED' && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    onOpenCancel(booking);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-50"
+                  aria-label={`Hủy đơn ${booking.bookingCode}`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">cancel</span>
+                  Hủy đơn
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </td>
     </tr>
+  );
+}
+
+interface BookingNoteDialogProps {
+  booking: Booking;
+  onClose: () => void;
+  onSave: (booking: Booking, note: string) => void | Promise<void>;
+}
+
+function BookingNoteDialog({ booking, onClose, onSave }: BookingNoteDialogProps) {
+  const [note, setNote] = useState(booking.adminNote ?? '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(booking, note);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl bg-surface-container-lowest shadow-2xl border border-outline-variant/20"
+        onMouseDown={event => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-outline-variant/10 px-5 py-4">
+          <div>
+            <p className="text-sm font-bold text-on-surface">Ghi chú nội bộ</p>
+            <p className="mt-1 text-xs text-on-surface-variant">{booking.bookingCode} · {booking.user.fullName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container outline-none"
+            aria-label="Đóng ghi chú"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div className="px-5 py-4">
+          <textarea
+            value={note}
+            onChange={event => setNote(event.target.value)}
+            rows={5}
+            maxLength={1000}
+            className="w-full resize-none rounded-xl border border-outline-variant/30 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            placeholder="Ví dụ: khách cần gọi lại trước ngày khởi hành, ưu tiên ghế đầu..."
+          />
+          <p className="mt-2 text-right text-[11px] text-on-surface-variant/70">{note.length}/1000</p>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-outline-variant/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-outline-variant/20 px-4 py-2 text-sm font-semibold text-on-surface-variant hover:bg-surface-container"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90 disabled:opacity-60"
+          >
+            {isSaving ? 'Đang lưu...' : 'Lưu ghi chú'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface BookingCancelDialogProps {
+  booking: Booking;
+  onClose: () => void;
+  onCancel: (booking: Booking, reason: string) => void | Promise<void>;
+}
+
+function BookingCancelDialog({ booking, onClose, onCancel }: BookingCancelDialogProps) {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCancel = async () => {
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 10) {
+      setError('Lý do hủy cần ít nhất 10 ký tự.');
+      return;
+    }
+
+    setError('');
+    setIsSubmitting(true);
+    try {
+      await onCancel(booking, trimmedReason);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl bg-surface-container-lowest shadow-2xl border border-red-200"
+        onMouseDown={event => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-outline-variant/10 px-5 py-4">
+          <div>
+            <p className="text-sm font-bold text-red-700">Hủy đơn đặt tour</p>
+            <p className="mt-1 text-xs text-on-surface-variant">{booking.bookingCode} · {booking.user.fullName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container outline-none"
+            aria-label="Đóng hủy đơn"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div className="space-y-3 px-5 py-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Hệ thống sẽ chuyển đơn sang đã hủy, giải phóng số chỗ và hủy link PayOS nếu đơn chưa thanh toán.
+          </div>
+          <textarea
+            value={reason}
+            onChange={event => {
+              setReason(event.target.value);
+              if (error) setError('');
+            }}
+            rows={4}
+            maxLength={1000}
+            className="w-full resize-none rounded-xl border border-outline-variant/30 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/15"
+            placeholder="Nhập lý do hủy để lưu lịch sử xử lý..."
+          />
+          {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-outline-variant/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-outline-variant/20 px-4 py-2 text-sm font-semibold text-on-surface-variant hover:bg-surface-container"
+          >
+            Quay lại
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            {isSubmitting ? 'Đang hủy...' : 'Xác nhận hủy'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -25,10 +25,15 @@ const TOUR_EXPORT_STATUS_LABEL: Record<string, string> = {
 
 const quoteCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
-export async function exportToursCsv(): Promise<number> {
-    const res = await fetchWithAuth(`${API_BASE_URL}/tour?limit=9999&sortBy=recommended`);
-    const json = await res.json();
-    const tours: Tour[] = json.data ?? [];
+export async function exportToursCsv(selectedTours?: Tour[]): Promise<number> {
+    let tours: Tour[];
+    if (selectedTours) {
+        tours = selectedTours;
+    } else {
+        const res = await fetchWithAuth(`${API_BASE_URL}/tour?limit=9999&sortBy=recommended`);
+        const json = await res.json();
+        tours = json.data ?? [];
+    }
     const rows = tours.map(tour => [
         tour.id,
         quoteCsv(tour.name),

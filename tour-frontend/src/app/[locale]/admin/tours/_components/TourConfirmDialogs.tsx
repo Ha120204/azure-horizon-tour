@@ -11,33 +11,36 @@ interface BulkHideConfirmDialogProps {
 
 export function BulkHideConfirmDialog({ selectedCount, isBulkDeleting, onCancel, onConfirm }: BulkHideConfirmDialogProps) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-            <div className="relative bg-surface rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-labelledby="bulk-hide-dialog-title">
+            <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={isBulkDeleting ? undefined : onCancel} />
+            <div className="relative w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
                 <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <span className="material-symbols-outlined text-amber-500 text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>hide_source</span>
                 </div>
-                <h3 className="text-lg font-bold text-on-surface text-center mb-2">Xác nhận ẩn tour?</h3>
-                <p className="text-sm text-on-surface-variant text-center leading-relaxed mb-5">
-                    Bạn sắp ẩn <strong className="text-amber-600">{selectedCount} tour</strong> khỏi khách hàng.
-                    <br />Các tour này sẽ được chuyển vào <strong>Thùng rác</strong> và có thể khôi phục sau.
+                <h3 id="bulk-hide-dialog-title" className="mb-2 text-center text-lg font-bold text-on-surface">Chuyển tour vào thùng rác?</h3>
+                <p className="mb-3 text-center text-sm leading-relaxed text-on-surface-variant">
+                    Bạn sắp ẩn <strong className="text-amber-700">{selectedCount} tour</strong> khỏi trang khách hàng.
+                    Các tour này sẽ nằm trong <strong className="text-on-surface">Thùng rác</strong> và có thể khôi phục.
+                </p>
+                <p className="mb-5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+                    Nếu bạn là nhân viên, chỉ bản nháp hoặc tour bị từ chối do bạn tạo mới được chọn để thao tác.
                 </p>
                 <div className="flex gap-3">
                     <button
                         onClick={onCancel}
                         disabled={isBulkDeleting}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors disabled:opacity-50"
+                        className="flex-1 rounded-xl border border-outline-variant/20 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary outline-none"
                     >
                         Hủy bỏ
                     </button>
                     <button
                         onClick={onConfirm}
                         disabled={isBulkDeleting}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+                        className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600 disabled:opacity-60 flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
                     >
                         {isBulkDeleting
-                            ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span> Đang ẩn...</>
-                            : <><span className="material-symbols-outlined text-base">hide_source</span> Xác nhận ẩn</>
+                            ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span> Đang chuyển...</>
+                            : <><span className="material-symbols-outlined text-base">hide_source</span> Chuyển vào thùng rác</>
                         }
                     </button>
                 </div>

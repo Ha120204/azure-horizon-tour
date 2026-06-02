@@ -27,13 +27,6 @@ export default function AdminToursPage() {
                 onCreate={tour.openCreateModal}
             />
 
-            <TourBulkActionBar
-                selectedCount={tour.selectedIds.size}
-                isBulkDeleting={tour.isBulkDeleting}
-                onClear={() => tour.setSelectedIds(new Set())}
-                onConfirm={() => tour.setShowBulkConfirm(true)}
-            />
-
             {tour.isAdmin && (
                 <PendingReviewBanner
                     pendingCount={tour.pendingCount}
@@ -61,12 +54,34 @@ export default function AdminToursPage() {
                     filterDest={tour.filterDest}
                     sortBy={tour.sortBy}
                     filterStatus={tour.filterStatus}
+                    filterDateFrom={tour.filterDateFrom}
+                    filterDateTo={tour.filterDateTo}
+                    filterSeats={tour.filterSeats}
                     isAdmin={tour.isAdmin}
                     isStaff={tour.isStaff}
                     onSearchInputChange={tour.setSearchInput}
                     onFilterDestChange={tour.changeFilterDest}
                     onSortByChange={tour.changeSortBy}
                     onFilterStatusChange={tour.changeFilterStatus}
+                    onFilterDateFromChange={tour.changeFilterDateFrom}
+                    onFilterDateToChange={tour.changeFilterDateTo}
+                    onFilterSeatsChange={tour.changeFilterSeats}
+                />
+            )}
+
+            {tour.activeTab === 'active' && (
+                <TourBulkActionBar
+                    selectedCount={tour.selectedIds.size}
+                    submitCount={tour.selectedBulkSubmitCount}
+                    hideCount={tour.selectedBulkHideCount}
+                    isStaff={tour.isStaff}
+                    isAdmin={tour.isAdmin}
+                    isBulkDeleting={tour.isBulkDeleting}
+                    isBulkSubmitting={tour.isBulkSubmitting}
+                    onClear={() => tour.setSelectedIds(new Set())}
+                    onConfirm={() => tour.setShowBulkConfirm(true)}
+                    onBulkSubmit={tour.isStaff ? tour.handleBulkSubmit : undefined}
+                    onBulkExport={tour.handleExportSelectedCSV}
                 />
             )}
 
@@ -118,9 +133,11 @@ export default function AdminToursPage() {
                     submittingTourId={tour.isSubmitting}
                     onToggleSelectAll={tour.toggleSelectAll}
                     onToggleSelect={tour.toggleSelectOne}
+                    canSelectTour={tour.canSelectTour}
+                    onOpenDetail={tour.handleOpenDetail}
                     onOpenContent={tour.handleOpenContent}
                     onEdit={tour.handleEdit}
-                    onSubmit={tour.setSubmitTarget}
+                    onSubmit={tour.handleOpenSubmitForReview}
                     onReview={tour.setReviewTarget}
                     onDelete={tour.setDeleteTarget}
                     onPageChange={tour.setPage}
@@ -146,6 +163,10 @@ export default function AdminToursPage() {
                 contentDrawerTour={tour.contentDrawerTour}
                 onCloseContentDrawer={() => tour.setContentDrawerTour(null)}
                 onContentSuccess={tour.handleContentSuccess}
+                detailDrawerTour={tour.detailDrawerTour}
+                isDetailLoading={tour.isDetailLoading}
+                onCloseDetailDrawer={() => tour.setDetailDrawerTour(null)}
+                onCreateDraftFromReference={tour.handleCreateDraftFromReference}
                 submitTarget={tour.submitTarget}
                 submittingTourId={tour.isSubmitting}
                 onConfirmSubmit={tour.handleSubmitForReview}

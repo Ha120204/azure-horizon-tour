@@ -120,7 +120,7 @@ function buildDescription(intro: string, focus: string, suitableFor: string) {
 function packageData(basePrice: number) {
   return [
     {
-      name: 'Goi Tieu Chuan',
+      name: 'Gói Tiêu Chuẩn',
       description:
         'Goi can bang chi phi, phu hop khach muon lich trinh tron goi voi dich vu co ban ro rang.',
       price: basePrice,
@@ -141,7 +141,7 @@ function packageData(basePrice: number) {
       sortOrder: 0,
     },
     {
-      name: 'Goi Cao Cap',
+      name: 'Gói Cao Cấp',
       description:
         'Nang cap khach san, bua an va ho tro thu tuc de hanh trinh thoai mai hon.',
       price: Math.round(basePrice * 1.25),
@@ -163,7 +163,7 @@ function packageData(basePrice: number) {
       sortOrder: 1,
     },
     {
-      name: 'Goi Rieng Tu',
+      name: 'Gói Riêng Tư',
       description:
         'Dich vu linh hoat hon cho gia dinh hoac nhom nho muon rieng tu va chu dong thoi gian.',
       price: Math.round(basePrice * 1.62),

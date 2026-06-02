@@ -4,23 +4,36 @@ interface CustomerKpiGridProps {
     kpis: CustomerKpiItem[];
 }
 
+const numberFormatter = new Intl.NumberFormat('vi-VN');
+
+function formatKpiValue(value: CustomerKpiItem['value']) {
+    return typeof value === 'number' ? numberFormatter.format(value) : value;
+}
+
 export function CustomerKpiGrid({ kpis }: CustomerKpiGridProps) {
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <dl className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             {kpis.map(kpi => (
-                <div key={kpi.label} className={`bg-gradient-to-br ${kpi.color} rounded-2xl p-5 border border-outline-variant/10 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5`}>
-                    <div className="flex items-center justify-between mb-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${kpi.iconColor}`}>
-                            <span className="material-symbols-outlined text-xl" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>{kpi.icon}</span>
+                <div
+                    key={kpi.label}
+                    className="rounded-lg border border-outline-variant/20 bg-surface-container-lowest p-4 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md"
+                >
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <dt className="truncate text-xs font-semibold text-on-surface-variant">{kpi.label}</dt>
+                            <dd className="mt-2 text-2xl font-bold leading-none text-on-surface">
+                                {formatKpiValue(kpi.value)}
+                            </dd>
                         </div>
-                        {kpi.trend && (
-                            <span className="text-xs font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">{kpi.trend}</span>
-                        )}
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpi.iconColor}`}>
+                            <span className="material-symbols-outlined text-[20px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>{kpi.icon}</span>
+                        </div>
                     </div>
-                    <p className="text-2xl font-bold text-on-surface leading-tight">{kpi.value}</p>
-                    <p className="text-xs text-on-surface-variant font-medium mt-1">{kpi.label}</p>
+                    {kpi.helper && (
+                        <p className="mt-3 truncate text-[11px] font-medium text-on-surface-variant/70">{kpi.helper}</p>
+                    )}
                 </div>
             ))}
-        </div>
+        </dl>
     );
 }

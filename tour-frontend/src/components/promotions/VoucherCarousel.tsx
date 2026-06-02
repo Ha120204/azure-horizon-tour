@@ -24,6 +24,7 @@ interface VoucherCarouselProps {
     onSave: (voucherId: number) => void;
     isModalOpen: boolean;
     setIsModalOpen: (v: boolean) => void;
+    highlightedCode?: string | null;
     t: (key: string, params?: Record<string, string | number>) => string;
     formatPrice: (price: number) => string;
     language: string;
@@ -38,10 +39,10 @@ const ACCENT_STYLES = [
 ];
 
 // ── Single Ticket Card (horizontal layout) ──
-function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, onCopy, onSave, t, formatPrice, language, compact }: {
+function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, onCopy, onSave, t, formatPrice, language, compact, isHighlighted }: {
     v: Voucher; idx: number; copiedCode: string | null; savedIds: Set<number>; savingId: number | null;
     onCopy: (code: string) => void; onSave: (id: number) => void;
-    t: (key: string, params?: Record<string, string | number>) => string; formatPrice: (price: number) => string; language: string; compact?: boolean;
+    t: (key: string, params?: Record<string, string | number>) => string; formatPrice: (price: number) => string; language: string; compact?: boolean; isHighlighted?: boolean;
 }) {
     const { formatDate } = useLocale();
     const v = getLocalizedVoucher(originalVoucher, language);
@@ -58,9 +59,15 @@ function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, o
 
     return (
         <div
-            className={`group relative flex rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 ${s.accent} ${s.text}`}
+            id={`voucher-${v.code}`}
+            className={`group relative flex rounded-2xl overflow-hidden shadow-md transition-[box-shadow,transform] duration-300 hover:-translate-y-1 hover:shadow-xl ${s.accent} ${s.text} ${isHighlighted ? 'ring-4 ring-secondary-fixed/80 ring-offset-4 ring-offset-surface shadow-2xl scale-[1.01]' : ''}`}
             style={{ minHeight: compact ? '140px' : '164px' }}
         >
+            {isHighlighted && (
+                <div className="absolute right-3 top-3 z-20 rounded-full bg-white/95 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary shadow-lg">
+                    {language === 'vi' ? 'Mã được chia sẻ' : 'Shared code'}
+                </div>
+            )}
             {/* ══ Left: Discount Info ══ */}
             <div className={`flex-[7] ${compact ? 'p-4' : 'p-5 md:p-6'} flex flex-col justify-between relative`}>
                 <div>
@@ -121,11 +128,19 @@ function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, o
 
 // ── Main Component ──
 export default function VoucherCarousel({
-    vouchers, copiedCode, savedIds, savingId, onCopy, onSave, isModalOpen, setIsModalOpen, t, formatPrice, language,
+    vouchers, copiedCode, savedIds, savingId, onCopy, onSave, isModalOpen, setIsModalOpen, highlightedCode, t, formatPrice, language,
 }: VoucherCarouselProps) {
     const INITIAL_COUNT = 4;
     const MODAL_PAGE_SIZE = 6;
     const [modalPage, setModalPage] = useState(1);
+    const normalizedHighlightedCode = highlightedCode?.toUpperCase() ?? null;
+    const highlightedIndex = normalizedHighlightedCode
+        ? vouchers.findIndex(voucher => voucher.code.toUpperCase() === normalizedHighlightedCode)
+        : -1;
+    const highlightedModalPage = highlightedIndex >= INITIAL_COUNT
+        ? Math.floor(highlightedIndex / MODAL_PAGE_SIZE) + 1
+        : null;
+    const activeModalPage = highlightedModalPage && modalPage === 1 ? highlightedModalPage : modalPage;
 
     const displayedVouchers = vouchers.slice(0, INITIAL_COUNT);
     const hasMore = vouchers.length > INITIAL_COUNT;
@@ -133,8 +148,8 @@ export default function VoucherCarousel({
     // Modal pagination
     const totalPages = Math.ceil(vouchers.length / MODAL_PAGE_SIZE);
     const modalVouchers = vouchers.slice(
-        (modalPage - 1) * MODAL_PAGE_SIZE,
-        modalPage * MODAL_PAGE_SIZE
+        (activeModalPage - 1) * MODAL_PAGE_SIZE,
+        activeModalPage * MODAL_PAGE_SIZE
     );
 
     const handleCloseModal = () => {
@@ -174,6 +189,7 @@ export default function VoucherCarousel({
                                 v={v} idx={idx} copiedCode={copiedCode} savedIds={savedIds}
                                 savingId={savingId} onCopy={onCopy} onSave={onSave}
                                 t={t} formatPrice={formatPrice} language={language}
+                                isHighlighted={normalizedHighlightedCode === v.code.toUpperCase()}
                             />
                         </div>
                     ))}
@@ -215,8 +231,8 @@ export default function VoucherCarousel({
                                 </h2>
                                 <p className="text-xs text-on-surface-variant mt-1">
                                     {language === 'vi'
-                                        ? `Hiển thị ${(modalPage - 1) * MODAL_PAGE_SIZE + 1}–${Math.min(modalPage * MODAL_PAGE_SIZE, vouchers.length)} / ${vouchers.length} voucher`
-                                        : `Showing ${(modalPage - 1) * MODAL_PAGE_SIZE + 1}–${Math.min(modalPage * MODAL_PAGE_SIZE, vouchers.length)} of ${vouchers.length} vouchers`
+                                        ? `Hiển thị ${(activeModalPage - 1) * MODAL_PAGE_SIZE + 1}–${Math.min(activeModalPage * MODAL_PAGE_SIZE, vouchers.length)} / ${vouchers.length} voucher`
+                                        : `Showing ${(activeModalPage - 1) * MODAL_PAGE_SIZE + 1}–${Math.min(activeModalPage * MODAL_PAGE_SIZE, vouchers.length)} of ${vouchers.length} vouchers`
                                     }
                                 </p>
                             </div>
@@ -234,7 +250,7 @@ export default function VoucherCarousel({
                                 <TicketCard
                                     key={v.id}
                                     v={v}
-                                    idx={(modalPage - 1) * MODAL_PAGE_SIZE + idx}
+                                    idx={(activeModalPage - 1) * MODAL_PAGE_SIZE + idx}
                                     copiedCode={copiedCode}
                                     savedIds={savedIds}
                                     savingId={savingId}
@@ -244,6 +260,7 @@ export default function VoucherCarousel({
                                     formatPrice={formatPrice}
                                     language={language}
                                     compact
+                                    isHighlighted={normalizedHighlightedCode === v.code.toUpperCase()}
                                 />
                             ))}
                         </div>
@@ -253,8 +270,8 @@ export default function VoucherCarousel({
                             <div className="p-4 md:p-5 border-t border-outline-variant/20 flex items-center justify-center gap-2 bg-surface-container-lowest shrink-0">
                                 {/* Previous */}
                                 <button
-                                    onClick={() => setModalPage(p => Math.max(1, p - 1))}
-                                    disabled={modalPage === 1}
+                                    onClick={() => setModalPage(Math.max(1, activeModalPage - 1))}
+                                    disabled={activeModalPage === 1}
                                     className="w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/10 text-primary"
                                 >
                                     <span className="material-symbols-outlined text-lg">chevron_left</span>
@@ -266,7 +283,7 @@ export default function VoucherCarousel({
                                         key={page}
                                         onClick={() => setModalPage(page)}
                                         className={`w-9 h-9 rounded-full text-sm font-bold transition-all ${
-                                            page === modalPage
+                                            page === activeModalPage
                                                 ? 'bg-primary text-white shadow-md'
                                                 : 'text-on-surface-variant hover:bg-primary/10'
                                         }`}
@@ -277,8 +294,8 @@ export default function VoucherCarousel({
 
                                 {/* Next */}
                                 <button
-                                    onClick={() => setModalPage(p => Math.min(totalPages, p + 1))}
-                                    disabled={modalPage === totalPages}
+                                    onClick={() => setModalPage(Math.min(totalPages, activeModalPage + 1))}
+                                    disabled={activeModalPage === totalPages}
                                     className="w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/10 text-primary"
                                 >
                                     <span className="material-symbols-outlined text-lg">chevron_right</span>

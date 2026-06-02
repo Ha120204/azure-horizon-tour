@@ -27,13 +27,13 @@ export class TourWorkflowService {
         },
       },
     });
-    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
 
     if (tour.createdById !== requesterId)
-      throw new ForbiddenException('Ban khong co quyen gui duyet tour nay');
+      throw new ForbiddenException('Bạn không có quyền gửi duyệt tour này');
 
     if (tour.status !== TourStatus.DRAFT && tour.status !== TourStatus.REJECTED) {
-      throw new BadRequestException(`Tour dang o trang thai "${tour.status}", khong the gui duyet`);
+      throw new BadRequestException(`Tour đang ở trạng thái "${tour.status}", không thể gửi duyệt`);
     }
 
     requirePublishableTour(tour, { requireDepartures: true });
@@ -46,13 +46,13 @@ export class TourWorkflowService {
 
   async reviewTour(id: number, reviewerId: number, action: 'approve' | 'reject', note?: string) {
     const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
-    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
 
     if (tour.status !== TourStatus.PENDING_REVIEW) {
-      throw new BadRequestException(`Tour dang o trang thai "${tour.status}", khong the duyet`);
+      throw new BadRequestException(`Tour đang ở trạng thái "${tour.status}", không thể duyệt`);
     }
     if (action === 'reject' && !note?.trim()) {
-      throw new BadRequestException('Vui long nhap ly do tu choi');
+      throw new BadRequestException('Vui lòng nhập lý do từ chối');
     }
 
     const newStatus = action === 'approve' ? TourStatus.PUBLISHED : TourStatus.REJECTED;
@@ -79,10 +79,10 @@ export class TourWorkflowService {
         },
       },
     });
-    if (!tour) throw new NotFoundException(`Tour with ID ${id} not found`);
+    if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
 
     if (tour.status === TourStatus.COMPLETED)
-      throw new BadRequestException('Tour da ket thuc, khong the publish lai');
+      throw new BadRequestException('Tour đã kết thúc, không thể public lại');
 
     requirePublishableTour(tour, { requireDepartures: true });
 

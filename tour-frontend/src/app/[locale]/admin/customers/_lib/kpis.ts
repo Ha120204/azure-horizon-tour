@@ -4,44 +4,46 @@ export interface CustomerKpiItem {
     icon: string;
     label: string;
     value: number | string;
-    color: string;
+    helper: string | null;
     iconColor: string;
-    trend: string | null;
 }
 
 export function buildCustomerKpis(stats: Stats | null): CustomerKpiItem[] {
+    const totalUsers = stats?.totalUsers ?? 0;
+    const activeUsers = stats?.activeUsers ?? 0;
+    const inactiveUsers = Math.max(totalUsers - activeUsers, 0);
+    const activeRate = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
+    const customersWithBookings = stats?.customersWithBookings ?? 0;
+    const bookingRate = totalUsers > 0 ? Math.round((customersWithBookings / totalUsers) * 100) : 0;
+
     return [
         {
             icon: 'group',
-            label: 'Tổng Khách Hàng',
+            label: 'Tổng khách hàng',
             value: stats?.totalUsers ?? '—',
-            color: 'from-blue-500/20 to-blue-600/5',
-            iconColor: 'text-blue-600 bg-blue-500/10',
-            trend: null,
+            helper: stats ? `${inactiveUsers} vô hiệu` : null,
+            iconColor: 'text-primary bg-primary/10',
         },
         {
             icon: 'verified_user',
-            label: 'Đang Hoạt Động',
+            label: 'Đang hoạt động',
             value: stats?.activeUsers ?? '—',
-            color: 'from-emerald-500/20 to-emerald-600/5',
+            helper: stats ? `${activeRate}% trong tổng khách` : null,
             iconColor: 'text-emerald-600 bg-emerald-500/10',
-            trend: stats ? `${Math.round(((stats.activeUsers ?? 0) / (stats.totalUsers || 1)) * 100)}%` : null,
         },
         {
             icon: 'person_add',
-            label: 'Mới Tháng Này',
+            label: 'Mới tháng này',
             value: stats?.newThisMonth ?? '—',
-            color: 'from-violet-500/20 to-violet-600/5',
-            iconColor: 'text-violet-600 bg-violet-500/10',
-            trend: null,
+            helper: 'Tài khoản đăng ký mới',
+            iconColor: 'text-indigo-600 bg-indigo-500/10',
         },
         {
-            icon: 'block',
-            label: 'Đã Vô Hiệu',
-            value: stats ? (Number(stats.totalUsers || 0) - Number(stats.activeUsers || 0)) : '—',
-            color: 'from-red-500/20 to-red-600/5',
-            iconColor: 'text-red-500 bg-red-500/10',
-            trend: null,
+            icon: 'luggage',
+            label: 'Đã đặt tour',
+            value: stats?.customersWithBookings ?? '—',
+            helper: stats ? `${bookingRate}% có lịch sử booking` : null,
+            iconColor: 'text-secondary bg-secondary/10',
         },
     ];
 }

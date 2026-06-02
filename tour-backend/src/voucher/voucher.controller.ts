@@ -49,14 +49,18 @@ const VOUCHER_STATUSES: readonly VoucherStatus[] = [
   'expired',
   'depleted',
   'inactive',
+  'scheduled',
   'expiringSoon',
   'expiredThisMonth',
   'redeemed',
 ];
 const VOUCHER_SORT_FIELDS: readonly VoucherSortBy[] = [
   'createdAt',
+  'startsAt',
   'expiresAt',
   'usedCount',
+  'discountValue',
+  'minOrderValue',
 ];
 const SORT_ORDERS: readonly SortOrder[] = ['asc', 'desc'];
 
@@ -97,6 +101,24 @@ function optionalNumber(value: unknown, fieldName: string): number | undefined {
     throw new BadRequestException(`${fieldName} khong hop le`);
   }
   return numberValue;
+}
+
+function optionalNumberArray(value: unknown, fieldName: string): number[] | undefined {
+  if (value == null) return undefined;
+  const rawValues = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [value];
+  const numbers = rawValues
+    .map((item) => Number(typeof item === 'string' ? item.trim() : item))
+    .filter((item) => Number.isInteger(item) && item > 0);
+  if (numbers.length === 0 && rawValues.some((item) => String(item).trim())) {
+    throw new BadRequestException(`${fieldName} khong hop le`);
+  }
+  return Array.from(new Set(numbers));
+}
+
+function optionalStringArray(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  const rawValues = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [value];
+  return Array.from(new Set(rawValues.map((item) => String(item).trim()).filter(Boolean)));
 }
 
 function requiredNumber(value: unknown, fieldName: string): number {
@@ -232,7 +254,7 @@ export class VoucherController {
   /** POST /voucher/validate — Kiểm tra mã */
   @Post('validate')
   @UseGuards(AuthGuard('jwt'))
-  async validateVoucher(@Body() body: RawInput) {
+  async validateVoucher(@Req() req: AuthenticatedRequest, @Body() body: RawInput) {
     if (!body.code || body.totalPrice === undefined) {
       throw new BadRequestException('Thiếu thông tin code hoặc totalPrice');
     }
@@ -240,6 +262,7 @@ export class VoucherController {
       requiredString(body.code, 'code'),
       requiredNumber(body.totalPrice, 'totalPrice'),
       {
+        userId: getAuthenticatedUserId(req),
         tourId: optionalNumber(body.tourId, 'tourId') ?? null,
         departureId: optionalNumber(body.departureId, 'departureId') ?? null,
       },
@@ -290,10 +313,17 @@ export class VoucherController {
       description: optionalString(body.description) ?? '',
       discountType: requiredEnum(body.discountType, DISCOUNT_TYPES, 'discountType'),
       discountValue: requiredNumber(body.discountValue, 'discountValue'),
+      maxDiscountAmount: optionalNumber(body.maxDiscountAmount, 'maxDiscountAmount') ?? null,
       minOrderValue: optionalNumber(body.minOrderValue, 'minOrderValue') ?? 0,
       maxUses: optionalNumber(body.maxUses, 'maxUses') ?? null,
+      usageLimitPerUser: optionalNumber(body.usageLimitPerUser, 'usageLimitPerUser') ?? null,
+      startsAt: optionalString(body.startsAt) ?? null,
       expiresAt: optionalString(body.expiresAt) ?? null,
       isActive: optionalBoolean(body.isActive, 'isActive') ?? true,
+      isStackable: optionalBoolean(body.isStackable, 'isStackable') ?? false,
+      eligibleTourIds: optionalNumberArray(body.eligibleTourIds, 'eligibleTourIds') ?? [],
+      eligibleDestinationIds: optionalNumberArray(body.eligibleDestinationIds, 'eligibleDestinationIds') ?? [],
+      eligibleCustomerSegments: optionalStringArray(body.eligibleCustomerSegments) ?? [],
     });
   }
 
@@ -314,17 +344,38 @@ export class VoucherController {
     if (hasOwn(body, 'discountValue')) {
       dto.discountValue = optionalNumber(body.discountValue, 'discountValue');
     }
+    if (hasOwn(body, 'maxDiscountAmount')) {
+      dto.maxDiscountAmount = optionalNumber(body.maxDiscountAmount, 'maxDiscountAmount') ?? null;
+    }
     if (hasOwn(body, 'minOrderValue')) {
       dto.minOrderValue = optionalNumber(body.minOrderValue, 'minOrderValue');
     }
     if (hasOwn(body, 'maxUses')) {
       dto.maxUses = optionalNumber(body.maxUses, 'maxUses') ?? null;
     }
+    if (hasOwn(body, 'usageLimitPerUser')) {
+      dto.usageLimitPerUser = optionalNumber(body.usageLimitPerUser, 'usageLimitPerUser') ?? null;
+    }
+    if (hasOwn(body, 'startsAt')) {
+      dto.startsAt = optionalString(body.startsAt) ?? null;
+    }
     if (hasOwn(body, 'expiresAt')) {
       dto.expiresAt = optionalString(body.expiresAt) ?? null;
     }
     if (hasOwn(body, 'isActive')) {
       dto.isActive = optionalBoolean(body.isActive, 'isActive');
+    }
+    if (hasOwn(body, 'isStackable')) {
+      dto.isStackable = optionalBoolean(body.isStackable, 'isStackable');
+    }
+    if (hasOwn(body, 'eligibleTourIds')) {
+      dto.eligibleTourIds = optionalNumberArray(body.eligibleTourIds, 'eligibleTourIds') ?? [];
+    }
+    if (hasOwn(body, 'eligibleDestinationIds')) {
+      dto.eligibleDestinationIds = optionalNumberArray(body.eligibleDestinationIds, 'eligibleDestinationIds') ?? [];
+    }
+    if (hasOwn(body, 'eligibleCustomerSegments')) {
+      dto.eligibleCustomerSegments = optionalStringArray(body.eligibleCustomerSegments) ?? [];
     }
 
     return this.voucherService.adminUpdate(id, dto);

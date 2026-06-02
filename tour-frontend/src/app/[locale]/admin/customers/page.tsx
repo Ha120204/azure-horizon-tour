@@ -1,5 +1,6 @@
 'use client';
 
+import { CustomerBulkActionBar } from './_components/CustomerBulkActionBar';
 import { CustomerDetailModal } from './_components/CustomerDetailModal';
 import { CustomerFilters } from './_components/CustomerFilters';
 import { CustomerKpiGrid } from './_components/CustomerKpiGrid';
@@ -11,6 +12,7 @@ import { useCustomerManagement } from './_hooks/useCustomerManagement';
 
 export default function CustomerManagementPage() {
     const customer = useCustomerManagement();
+    const canManageCustomers = customer.currentUserRole === 'ADMIN' || customer.currentUserRole === 'SUPER_ADMIN';
 
     return (
         <main className="flex-1 pt-8 px-8 pb-12 overflow-y-auto w-full max-w-[1600px] mx-auto" style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -29,9 +31,26 @@ export default function CustomerManagementPage() {
             <CustomerFilters
                 search={customer.search}
                 filterStatus={customer.filterStatus}
+                bookingFilter={customer.bookingFilter}
+                segmentFilter={customer.segmentFilter}
                 totalItems={customer.meta.totalItems}
                 onSearchChange={customer.setSearch}
                 onStatusChange={customer.changeStatusFilter}
+                onBookingFilterChange={customer.changeBookingFilter}
+                onSegmentFilterChange={customer.changeSegmentFilter}
+                onResetFilters={customer.resetFilters}
+            />
+
+            <CustomerBulkActionBar
+                selectedCount={customer.selectedCustomers.length}
+                activeCount={customer.selectedActiveCount}
+                deactivatedCount={customer.selectedDeactivatedCount}
+                canManage={canManageCustomers}
+                isBulkUpdating={customer.isBulkUpdating}
+                onExport={customer.exportSelectedCustomers}
+                onBulkDeactivate={customer.bulkDeactivateSelected}
+                onBulkActivate={customer.bulkActivateSelected}
+                onClear={customer.clearSelection}
             />
 
             <CustomerTable
@@ -40,8 +59,16 @@ export default function CustomerManagementPage() {
                 meta={customer.meta}
                 pageSize={customer.pageSize}
                 currentUserRole={customer.currentUserRole}
+                sortBy={customer.sortBy}
+                sortDir={customer.sortDir}
+                selectedCustomerIds={customer.selectedCustomerIds}
+                allCurrentPageSelected={customer.allCurrentPageSelected}
+                someCurrentPageSelected={customer.someCurrentPageSelected}
                 onOpenDetail={customer.openDetail}
                 onToggleStatus={customer.setToggleTarget}
+                onSortChange={customer.changeSort}
+                onToggleSelected={customer.toggleSelectedCustomer}
+                onToggleCurrentPage={customer.toggleCurrentPageSelection}
                 onPageChange={customer.setPage}
                 onPageSizeChange={customer.changePageSize}
             />
@@ -53,6 +80,7 @@ export default function CustomerManagementPage() {
                     isEditing={customer.isEditing}
                     editForm={customer.editForm}
                     isSaving={customer.isSaving}
+                    canManage={canManageCustomers}
                     onClose={customer.closeDetail}
                     onStartEditing={customer.startEditing}
                     onCancelEditing={() => customer.setIsEditing(false)}

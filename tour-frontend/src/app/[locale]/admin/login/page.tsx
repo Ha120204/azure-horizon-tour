@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from '@/i18n/routing';
 import './login.css';
 import { API_BASE_URL } from '@/lib/constants';
-import { clearClientUserStorage, fetchOptionalAuth } from '@/lib/authSession';
+import { clearClientUserStorage, fetchOptionalAuth, logoutAuthSession, saveClientUserStorage } from '@/lib/authSession';
 
 export default function AdminLoginPage() {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -16,19 +19,40 @@ export default function AdminLoginPage() {
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [focusedField, setFocusedField] = useState<string | null>(null);
     const emailRef = useRef<HTMLInputElement>(null);
+    const skipExistingAuthCheck = searchParams.get('loggedOut') === '1' || searchParams.get('switch') === '1';
+
+    const getAdminHomePath = () => {
+        const match = (pathname ?? '').match(/^\/(vi|en)(?=\/|$)/);
+        const localePrefix = match ? `/${match[1]}` : '';
+        return `${localePrefix}/admin`;
+    };
 
     // Auto-redirect nếu đã đăng nhập với role hợp lệ
     useEffect(() => {
         const checkExistingAuth = async () => {
+            if (skipExistingAuthCheck) {
+                clearClientUserStorage();
+                setIsCheckingAuth(false);
+                return;
+            }
+
             try {
                 const res = await fetchOptionalAuth(`${API_BASE_URL}/auth/profile`);
                 if (res.ok) {
-                    const user = await res.json();
-                    const role = user.role || user.data?.role;
+                    const payload = await res.json();
+                    // Backend trả về { data: { role } } — không phải { role } trực tiếp
+                    const profile = payload.data ?? payload;
+                    const role = profile.role;
+
                     if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'STAFF') {
+                        // Đã đăng nhập với quyền admin → vào dashboard
                         router.replace('/admin');
                         return;
                     }
+
+                    // Đang đăng nhập bằng tài khoản Customer → auto-logout
+                    // Tránh trường hợp user đã đăng nhập frontend rồi vào admin
+                    await logoutAuthSession();
                 }
             } catch {
                 // Token không hợp lệ — cho phép hiển thị form
@@ -38,7 +62,7 @@ export default function AdminLoginPage() {
         };
 
         checkExistingAuth();
-    }, [router]);
+    }, [router, skipExistingAuthCheck]);
 
     // Focus email input khi trang sẵn sàng
     useEffect(() => {
@@ -68,36 +92,26 @@ export default function AdminLoginPage() {
             }
 
             const payload = await res.json();
-            const data = payload.data || payload;
+            const data = payload.data ?? payload;
 
-            // Lưu token + thông tin user
-            clearClientUserStorage();
-            localStorage.setItem('userName', data.user?.fullName || '');
-            localStorage.setItem('userRole', data.user?.role || '');
-            if (data.user?.email) localStorage.setItem('userEmail', data.user.email);
-            if (data.user?.avatarUrl) localStorage.setItem('userAvatarUrl', data.user.avatarUrl);
-            else localStorage.removeItem('userAvatarUrl');
-
-            // Kiểm tra role — chặn CUSTOMER
+            // Kiểm tra role — chặn CUSTOMER trước khi lưu
             const role = data.user?.role;
             if (role !== 'ADMIN' && role !== 'SUPER_ADMIN' && role !== 'STAFF') {
-                // Xóa token vừa lưu — không cho phép truy cập
-                clearClientUserStorage();
-                // Logout phiên vừa tạo
-                await fetch(`${API_BASE_URL}/auth/logout`, {
-                    method: 'POST',
-                    credentials: 'include',
-                }).catch(() => {});
+                // Logout phiên vừa tạo ngay lập tức
+                await logoutAuthSession();
                 setError('Tài khoản của bạn không có đặc quyền quản trị. Vui lòng liên hệ quản trị viên.');
                 setIsLoading(false);
                 return;
             }
 
+            // Lưu thông tin user hợp lệ
+            saveClientUserStorage(data.user ?? {}, { clearExisting: true, markLogin: true });
+
             // Phát sự kiện auth
             window.dispatchEvent(new Event('auth-change'));
 
             // Chuyển hướng vào dashboard
-            router.replace('/admin');
+            window.location.assign(getAdminHomePath());
         } catch {
             setError('Lỗi kết nối đến máy chủ. Vui lòng thử lại sau.');
             setIsLoading(false);

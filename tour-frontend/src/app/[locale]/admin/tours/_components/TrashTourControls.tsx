@@ -1,5 +1,7 @@
 'use client';
 
+import { TourFilterSelect, type TourFilterSelectOption } from './TourFilterSelect';
+
 interface TrashTourControlsProps {
     searchInput: string;
     status: string;
@@ -14,6 +16,21 @@ interface TrashTourControlsProps {
     onBulkRestore: () => void;
     onBulkDelete: () => void;
 }
+
+const TRASH_STATUS_OPTIONS: TourFilterSelectOption[] = [
+    { value: '', label: 'Tất cả trạng thái', description: 'Không giới hạn trạng thái', icon: 'filter_list' },
+    { value: 'DRAFT', label: 'Bản nháp', description: 'Tour đang soạn nội dung', icon: 'edit_note' },
+    { value: 'PENDING_REVIEW', label: 'Chờ duyệt', description: 'Đang chờ admin kiểm tra', icon: 'hourglass_top' },
+    { value: 'PUBLISHED', label: 'Đã duyệt', description: 'Tour đã từng hiển thị cho khách', icon: 'verified' },
+    { value: 'REJECTED', label: 'Bị từ chối', description: 'Tour cần chỉnh sửa', icon: 'cancel' },
+    { value: 'COMPLETED', label: 'Đã kết thúc', description: 'Tour đã qua ngày khởi hành', icon: 'flag' },
+];
+
+const DELETABLE_OPTIONS: TourFilterSelectOption[] = [
+    { value: '', label: 'Tất cả khả năng xóa', description: 'Hiển thị mọi tour trong thùng rác', icon: 'delete_outline' },
+    { value: 'true', label: 'Có thể xóa vĩnh viễn', description: 'Tour chưa phát sinh booking', icon: 'delete_forever' },
+    { value: 'false', label: 'Đã có booking', description: 'Chỉ có thể giữ hoặc khôi phục', icon: 'lock' },
+];
 
 export function TrashTourControls({
     searchInput,
@@ -31,9 +48,9 @@ export function TrashTourControls({
 }: TrashTourControlsProps) {
     return (
         <div className="mb-4 space-y-3">
-            <div className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/10 shadow-sm flex flex-wrap gap-3 items-center">
-                <div className="flex-1 min-w-[220px] relative">
-                    <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg pointer-events-none" aria-hidden="true">search</span>
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-4 shadow-sm">
+                <div className="relative min-w-[220px] flex-1">
+                    <span className="material-symbols-outlined pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant" aria-hidden="true">search</span>
                     <label htmlFor="search-trash-tours" className="sr-only">Tìm kiếm tour trong thùng rác</label>
                     <input
                         id="search-trash-tours"
@@ -41,51 +58,46 @@ export function TrashTourControls({
                         autoComplete="off"
                         placeholder="Tìm theo tên, ID hoặc điểm đến..."
                         value={searchInput}
-                        onChange={e => onSearchInputChange(e.target.value)}
-                        className="w-full bg-surface-container-low border border-outline-variant/15 rounded-xl pl-11 pr-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+                        onChange={event => onSearchInputChange(event.target.value)}
+                        className="w-full rounded-xl border border-outline-variant/15 bg-surface-container-low py-2.5 pl-11 pr-4 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
                     />
                 </div>
-                <select
+                <TourFilterSelect
                     value={status}
-                    onChange={e => onStatusChange(e.target.value)}
-                    className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
-                    aria-label="Lọc trạng thái trong thùng rác"
-                >
-                    <option value="">Tất cả trạng thái</option>
-                    <option value="DRAFT">Bản nháp</option>
-                    <option value="PENDING_REVIEW">Chờ duyệt</option>
-                    <option value="PUBLISHED">Đã duyệt</option>
-                    <option value="REJECTED">Bị từ chối</option>
-                    <option value="COMPLETED">Đã kết thúc</option>
-                </select>
-                <select
+                    options={TRASH_STATUS_OPTIONS}
+                    onChange={onStatusChange}
+                    ariaLabel="Lọc trạng thái trong thùng rác"
+                    active={Boolean(status)}
+                    className="w-[220px] max-w-full"
+                />
+                <TourFilterSelect
                     value={deletable}
-                    onChange={e => onDeletableChange(e.target.value)}
-                    className="bg-surface-container-low border border-outline-variant/15 rounded-xl py-2.5 pl-4 pr-9 text-sm focus-visible:ring-2 focus-visible:ring-primary text-on-surface appearance-none cursor-pointer outline-none transition-colors"
-                    aria-label="Lọc khả năng xóa vĩnh viễn"
-                >
-                    <option value="">Tất cả khả năng xóa</option>
-                    <option value="true">Có thể xóa vĩnh viễn</option>
-                    <option value="false">Đã có booking</option>
-                </select>
+                    options={DELETABLE_OPTIONS}
+                    onChange={onDeletableChange}
+                    ariaLabel="Lọc khả năng xóa vĩnh viễn"
+                    active={Boolean(deletable)}
+                    className="w-[240px] max-w-full"
+                />
             </div>
 
             {selectedCount > 0 && (
-                <div className="flex items-center gap-3 px-5 py-3.5 bg-error/5 border border-error/20 rounded-2xl">
-                    <span className="material-symbols-outlined text-error text-[20px]">delete_sweep</span>
-                    <span className="text-sm font-semibold text-on-surface flex-1">
+                <div className="flex items-center gap-3 rounded-2xl border border-error/20 bg-error/5 px-5 py-3.5">
+                    <span className="material-symbols-outlined text-[20px] text-error">delete_sweep</span>
+                    <span className="flex-1 text-sm font-semibold text-on-surface">
                         Đã chọn <strong className="text-error">{selectedCount}</strong> tour trong thùng rác
                     </span>
                     <button
+                        type="button"
                         onClick={onClearSelection}
-                        className="text-xs text-on-surface-variant hover:text-on-surface font-medium px-3 py-1.5 rounded-lg hover:bg-surface-container transition-colors"
+                        className="rounded-lg px-3 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface"
                     >
                         Bỏ chọn
                     </button>
                     <button
+                        type="button"
                         onClick={onBulkRestore}
                         disabled={isBulkRestoring || isBulkDeleting}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                        className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
                     >
                         <span className={`material-symbols-outlined text-[16px] ${isBulkRestoring ? 'animate-spin' : ''}`}>
                             {isBulkRestoring ? 'progress_activity' : 'restore'}
@@ -93,9 +105,10 @@ export function TrashTourControls({
                         Khôi phục
                     </button>
                     <button
+                        type="button"
                         onClick={onBulkDelete}
                         disabled={isBulkRestoring || isBulkDeleting}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-error text-on-error rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+                        className="flex items-center gap-2 rounded-xl bg-error px-4 py-1.5 text-sm font-semibold text-on-error transition-opacity hover:opacity-90 disabled:opacity-50"
                     >
                         <span className="material-symbols-outlined text-[16px]">delete_forever</span>
                         Xóa vĩnh viễn

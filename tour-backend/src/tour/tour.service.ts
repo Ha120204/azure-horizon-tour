@@ -18,7 +18,7 @@ import {
   parseTravelScope,
 } from './tour-helpers';
 
-const DRAFT_DESTINATION_NAME = 'Chua xac dinh';
+const DRAFT_DESTINATION_NAME = 'Chưa xác định';
 
 @Injectable()
 export class TourService {
@@ -73,7 +73,7 @@ export class TourService {
         price: createTourDto.price ?? 0,
         destination: { connect: { id: resolvedDestinationId } },
         startDate: createTourDto.startDate ?? getTomorrow(),
-        duration: createTourDto.duration?.trim() || 'Chua xac dinh',
+        duration: createTourDto.duration?.trim() || 'Chưa xác định',
         durationEn: createTourDto.durationEn?.trim() || null,
         availableSeats: createTourDto.availableSeats ?? 0,
         imageUrl: createTourDto.imageUrl?.trim() || null,
@@ -107,6 +107,8 @@ export class TourService {
       types,
       sortBy,
       status,
+      startDateFrom,
+      startDateTo,
       page = '1',
       limit = '10',
     } = query;
@@ -214,6 +216,17 @@ export class TourService {
       }
     }
 
+    // ══ Admin date range filter: startDateFrom / startDateTo ══
+    if (startDateFrom || startDateTo) {
+      const dateFilter: Prisma.TourWhereInput = {
+        startDate: {
+          ...(startDateFrom ? { gte: new Date(startDateFrom) } : {}),
+          ...(startDateTo ? { lte: new Date(new Date(startDateTo).setHours(23, 59, 59, 999)) } : {}),
+        },
+      };
+      appendAndFilter(where, dateFilter);
+    }
+
     // ══ Điểm khởi hành filter ══
     if (departure?.trim()) {
       appendAndFilter(where, {
@@ -254,10 +267,14 @@ export class TourService {
       where.tourType = { in: types.split(',') };
     }
 
-    let orderBy: Prisma.TourOrderByWithRelationInput = { id: 'asc' };
+    let orderBy: Prisma.TourOrderByWithRelationInput = { createdAt: 'desc' };
     if (sortBy === 'priceLowHigh') orderBy = { price: 'asc' };
     else if (sortBy === 'priceHighLow') orderBy = { price: 'desc' };
     else if (sortBy === 'recommended') orderBy = { averageRating: 'desc' };
+    else if (sortBy === 'startDateAsc') orderBy = { startDate: 'asc' };
+    else if (sortBy === 'startDateDesc') orderBy = { startDate: 'desc' };
+    else if (sortBy === 'ratingDesc') orderBy = { averageRating: 'desc' };
+    else if (sortBy === 'seatsAsc') orderBy = { availableSeats: 'asc' };
 
     const [tours, totalItems] = await Promise.all([
       this.prisma.tour.findMany({
@@ -273,6 +290,10 @@ export class TourService {
           },
           createdBy: { select: { id: true, fullName: true } },
           _count: { select: { reviews: { where: { isHidden: false } } } },
+          bookings: {
+            select: { numberOfPeople: true },
+            where: { status: { in: ['CONFIRMED', 'PENDING'] }, deletedAt: null },
+          },
         },
       }),
       this.prisma.tour.count({ where }),
@@ -282,10 +303,14 @@ export class TourService {
       data: tours.map((tour) => {
         const localizedTour = localizeTour(tour, locale);
         const reviewCount = localizedTour._count?.reviews ?? 0;
+        const bookedSeats = (tour.bookings ?? []).reduce((sum: number, b: { numberOfPeople: number }) => sum + b.numberOfPeople, 0);
+        const totalSeats = tour.availableSeats + bookedSeats;
         return {
           ...localizedTour,
           reviewCount,
           averageRating: reviewCount > 0 ? localizedTour.averageRating : 0,
+          bookedSeats,
+          totalSeats,
         };
       }),
       meta: {
@@ -318,9 +343,10 @@ export class TourService {
   // ─── Content ─── delegated to TourContentService ────────────────────────────
   async addGalleryImages(tourId: number, urls: string[], requesterId?: number, requesterRole?: string) { return this.contentService.addGalleryImages(tourId, urls, requesterId, requesterRole); }
   async removeGalleryImage(tourId: number, imageId: number, requesterId?: number, requesterRole?: string) { return this.contentService.removeGalleryImage(tourId, imageId, requesterId, requesterRole); }
-  async upsertHighlights(tourId: number, highlights: any[], requesterId?: number, requesterRole?: string) { return this.contentService.upsertHighlights(tourId, highlights, requesterId, requesterRole); }
-  async upsertFaqs(tourId: number, faqs: any[], requesterId?: number, requesterRole?: string) { return this.contentService.upsertFaqs(tourId, faqs, requesterId, requesterRole); }
-  async updateItineraryDay(tourId: number, dayId: number, data: any, requesterId?: number, requesterRole?: string) { return this.contentService.updateItineraryDay(tourId, dayId, data, requesterId, requesterRole); }
+  async upsertHighlights(tourId: number, highlights: Parameters<TourContentService['upsertHighlights']>[1], requesterId?: number, requesterRole?: string) { return this.contentService.upsertHighlights(tourId, highlights, requesterId, requesterRole); }
+  async upsertFaqs(tourId: number, faqs: Parameters<TourContentService['upsertFaqs']>[1], requesterId?: number, requesterRole?: string) { return this.contentService.upsertFaqs(tourId, faqs, requesterId, requesterRole); }
+  async upsertItinerary(tourId: number, itinerary: Parameters<TourContentService['upsertItinerary']>[1], requesterId?: number, requesterRole?: string) { return this.contentService.upsertItinerary(tourId, itinerary, requesterId, requesterRole); }
+  async updateItineraryDay(tourId: number, dayId: number, data: Parameters<TourContentService['updateItineraryDay']>[2], requesterId?: number, requesterRole?: string) { return this.contentService.updateItineraryDay(tourId, dayId, data, requesterId, requesterRole); }
 
   // ─── Query ─── delegated to TourQueryService ─────────────────────────────────
   async getAdminStats(requesterId?: number, requesterRole?: string) { return this.queryService.getAdminStats(requesterId, requesterRole); }

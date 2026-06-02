@@ -1,22 +1,24 @@
 import type { TourFormData, SaleCategory } from './types';
 
+export const getTodayDateString = (): string => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // ── Form Default ────────────────────────────────────────────────────────
 export const EMPTY_FORM: TourFormData = {
     name: '', nameEn: '', description: '', descriptionEn: '', price: '', destinationId: '',
-    startDate: '', duration: '', durationEn: '', availableSeats: '',
+    startDate: getTodayDateString(), duration: '', durationEn: '', availableSeats: '',
     tourType: 'Tour Gia Đình', imageUrl: '', departurePoint: '', departurePointEn: '',
 };
 
 export const DRAFT_DESTINATION_NAME = 'Chưa xác định';
 
 // ── Date Helpers ─────────────────────────────────────────────────────────
-const getTomorrowDateString = (): string => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-};
-
-export const MIN_START_DATE = getTomorrowDateString();
+export const MIN_START_DATE = getTodayDateString();
 
 export const isBookableDepartureDate = (value: string): boolean => value >= MIN_START_DATE;
 

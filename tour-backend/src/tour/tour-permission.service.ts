@@ -21,7 +21,7 @@ export class TourPermissionService {
     });
 
     if (!tour) {
-      throw new NotFoundException(`Tour with ID ${tourId} not found`);
+      throw new NotFoundException(`Không tìm thấy tour #${tourId}`);
     }
 
     if (
@@ -32,11 +32,11 @@ export class TourPermissionService {
     }
 
     if (requesterRole !== Role.STAFF) {
-      throw new ForbiddenException('Ban khong co quyen thao tac tour nay');
+      throw new ForbiddenException('Bạn không có quyền thao tác tour này');
     }
 
     if (!requesterId || tour.createdById !== requesterId) {
-      throw new ForbiddenException('Ban khong co quyen thao tac tour nay');
+      throw new ForbiddenException('Bạn không có quyền thao tác tour này');
     }
 
     if (
@@ -44,7 +44,7 @@ export class TourPermissionService {
       tour.status !== TourStatus.REJECTED
     ) {
       throw new ForbiddenException(
-        'Chi co the thao tac tour o trang thai Ban nhap hoac Bi tu choi',
+        'Chỉ có thể thao tác tour ở trạng thái Bản nháp hoặc Bị từ chối',
       );
     }
 

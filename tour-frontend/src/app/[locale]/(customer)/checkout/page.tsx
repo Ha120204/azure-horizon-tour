@@ -14,8 +14,7 @@ import { API_BASE_URL } from '@/lib/constants';
 import ConfirmBookingModal from '@/components/checkout/ConfirmBookingModal';
 import { buildLocalizedLoginPath } from '@/lib/authRedirect';
 import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
-
-type PassengerType = 'Adult (12+)' | 'Child (4-11)' | 'Infant (<4)';
+import type { PassengerType } from '@/lib/passengerDetails';
 
 interface Passenger {
     type: PassengerType;
@@ -358,7 +357,7 @@ function CheckoutContent() {
             }
         };
         fetchInitialData();
-    }, [tourIdStr, packageIdStr, departureIdStr, language]);
+    }, [tourIdStr, packageIdStr, departureIdStr, language, router]);
 
     // 3. THIẾT LẬP BẢNG GIÁ ĐỘNG DỰA TRÊN GIÁ TOUR TRONG DATABASE
     const basePrice = (() => {

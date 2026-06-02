@@ -17,11 +17,13 @@ export type AuthProfile = {
 const CLIENT_USER_STORAGE_KEYS = [
   'accessToken',
   'refreshToken',
+  'userId',
   'userName',
   'userEmail',
   'userRole',
   'userAvatarUrl',
   'userAvatar',
+  'lastLoginAt',
 ];
 
 function isBrowser() {
@@ -31,6 +33,51 @@ function isBrowser() {
 export function clearClientUserStorage() {
   if (!isBrowser()) return;
   CLIENT_USER_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+}
+
+export function saveClientUserStorage(
+  profile: AuthProfile,
+  options: { clearExisting?: boolean; markLogin?: boolean } = {},
+) {
+  if (!isBrowser()) return;
+
+  if (options.clearExisting) {
+    clearClientUserStorage();
+  }
+
+  const userId = profile.id ?? profile.userId;
+  if (userId) localStorage.setItem('userId', String(userId));
+  if (profile.fullName !== undefined) localStorage.setItem('userName', profile.fullName || '');
+  if (profile.email) localStorage.setItem('userEmail', profile.email);
+  if (profile.role) localStorage.setItem('userRole', profile.role);
+  if (profile.avatarUrl !== undefined) {
+    if (profile.avatarUrl) {
+      localStorage.setItem('userAvatarUrl', profile.avatarUrl);
+      localStorage.setItem('userAvatar', profile.avatarUrl);
+    } else {
+      localStorage.removeItem('userAvatarUrl');
+      localStorage.removeItem('userAvatar');
+    }
+  }
+
+  if (options.markLogin) {
+    localStorage.setItem('lastLoginAt', new Date().toISOString());
+  }
+}
+
+export async function logoutAuthSession() {
+  clearClientUserStorage();
+  try {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+    });
+  } catch {
+    // Logout should still clear client state even when the network call fails.
+  } finally {
+    clearClientUserStorage();
+  }
 }
 
 export async function refreshAuthSession(): Promise<boolean> {

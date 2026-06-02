@@ -348,8 +348,12 @@ export class BookingQueryService {
     dateFrom?: string, dateTo?: string, page = 1, limit = 10,
     paymentMethod?: 'PAYOS' | 'IN_STORE',
     needsReconciliation = false,
+    departureFrom?: string,
+    departureTo?: string,
+    needsCustomerCall = false,
   ) {
     const where: Prisma.BookingWhereInput = { deletedAt: null };
+    const andFilters: Prisma.BookingWhereInput[] = [];
 
     if (status && status !== 'ALL') {
       const normalizedStatus = status.toUpperCase();
@@ -376,6 +380,10 @@ export class BookingQueryService {
         },
       };
     }
+    if (needsCustomerCall) {
+      where.status = 'PENDING';
+      where.paymentStatus = 'UNPAID';
+    }
     // ────────────────────────────────────────────────────────────────────────
     if (search) {
       where.OR = [
@@ -391,14 +399,43 @@ export class BookingQueryService {
       if (dateTo) { const end = new Date(dateTo); end.setHours(23, 59, 59, 999); createdAt.lte = end; }
       where.createdAt = createdAt;
     }
+    if (departureFrom || departureTo) {
+      const departureDate: Prisma.DateTimeFilter<'TourDeparture'> = {};
+      const tourStartDate: Prisma.DateTimeFilter<'Tour'> = {};
+      if (departureFrom) {
+        const start = new Date(departureFrom);
+        departureDate.gte = start;
+        tourStartDate.gte = start;
+      }
+      if (departureTo) {
+        const end = new Date(departureTo);
+        end.setHours(23, 59, 59, 999);
+        departureDate.lte = end;
+        tourStartDate.lte = end;
+      }
+      const matchingDepartures = await this.prisma.tourDeparture.findMany({
+        where: { departureDate },
+        select: { id: true },
+      });
+      const departureIds = matchingDepartures.map(departure => departure.id);
+      andFilters.push({
+        OR: [
+          ...(departureIds.length > 0 ? [{ departureId: { in: departureIds } }] : []),
+          { departureId: null, tour: { startDate: tourStartDate } },
+        ],
+      });
+    }
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
+    }
 
     const skip = (page - 1) * limit;
     const [bookings, total] = await Promise.all([
       this.prisma.booking.findMany({
         where,
         include: {
-          tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, destination: { select: { name: true } } } },
-          user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+          tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, startDate: true, destination: { select: { name: true } } } },
+          user: { select: { id: true, fullName: true, email: true, phone: true, avatarUrl: true } },
           notifications: { where: { type: 'PAYMENT_REQUEST' }, orderBy: { createdAt: 'desc' }, take: 1 },
           transactions: {
             select: {
@@ -434,9 +471,32 @@ export class BookingQueryService {
     for (const s of paymentStats) paymentMap[s.paymentStatus] = s._count.paymentStatus;
     const assistedDraftMap: Record<string, number> = {};
     for (const s of assistedDraftStats) assistedDraftMap[s.status] = s._count.status;
+    const departureIds = bookings
+      .map(booking => booking.departureId)
+      .filter((id): id is number => typeof id === 'number');
+    const departures = departureIds.length > 0
+      ? await this.prisma.tourDeparture.findMany({
+          where: { id: { in: departureIds } },
+          select: { id: true, departureDate: true },
+        })
+      : [];
+    const departureMap = new Map(departures.map(departure => [departure.id, departure.departureDate]));
 
     return {
-      bookings: bookings.map((b) => ({ ...b, totalPrice: Number(b.totalPrice), unitPriceAtBooking: Number(b.unitPriceAtBooking), discountAmount: Number(b.discountAmount) })),
+      bookings: bookings.map((b) => {
+        const contactInfo = b.contactInfo && typeof b.contactInfo === 'object' && !Array.isArray(b.contactInfo)
+          ? b.contactInfo as Record<string, unknown>
+          : {};
+        return {
+          ...b,
+          contactPhone: typeof contactInfo.phone === 'string' ? contactInfo.phone : b.user.phone ?? null,
+          adminNote: typeof contactInfo.adminNote === 'string' ? contactInfo.adminNote : null,
+          departureDate: b.departureId ? departureMap.get(b.departureId) ?? b.tour.startDate : b.tour.startDate,
+          totalPrice: Number(b.totalPrice),
+          unitPriceAtBooking: Number(b.unitPriceAtBooking),
+          discountAmount: Number(b.discountAmount),
+        };
+      }),
       stats: {
         pending: statsMap['PENDING'] || 0, confirmed: statsMap['CONFIRMED'] || 0,
         cancelRequested: statsMap['CANCEL_REQUESTED'] || 0, cancelled: statsMap['CANCELLED'] || 0,

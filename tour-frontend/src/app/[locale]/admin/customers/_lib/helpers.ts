@@ -30,7 +30,7 @@ export const formatDateToISOInputValue = (d: string | null | undefined) => {
 };
 
 export const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
 
 export const getInitials = (name?: string | null) => {
     if (!name) return 'U';

@@ -60,6 +60,12 @@ type ItineraryDayUpdateBody = {
   timelineEn?: unknown[];
 };
 
+type ItineraryDayUpsertBody = ItineraryDayUpdateBody & {
+  dayNumber?: number;
+  title: string;
+  description: string;
+};
+
 const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
   const rawId = req.user?.id ?? req.user?.userId ?? req.user?.sub;
   return rawId == null ? undefined : Number(rawId);
@@ -399,6 +405,22 @@ export class TourController {
   }
 
   // ── Itinerary ───────────────────────────────────────────────────────
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+  @Put(':id/itinerary')
+  upsertItinerary(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: { itinerary?: ItineraryDayUpsertBody[] },
+  ) {
+    return this.tourService.upsertItinerary(
+      +id,
+      body.itinerary ?? [],
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
+  }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')

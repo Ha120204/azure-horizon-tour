@@ -6,12 +6,17 @@ export interface QuickStats {
     total: number;
     publishedTours: number;
     unpaidCount?: number;
+    pendingOverdue?: number;
+    cancelRequestedOverdue?: number;
     assistedDraftPending?: number;
     tourDraft?: number;
     tourPending?: number;
     articleDraft?: number;
     articlePending?: number;
     supportOpen?: number;
+    supportAssignedToMeOpen?: number;
+    supportUnassignedOpen?: number;
+    supportOverdue?: number;
 }
 
 export interface MyTour {
@@ -29,6 +34,7 @@ export interface MyTicket {
     customerName: string;
     status: string;
     category: string;
+    assignedStaffId?: number | null;
     createdAt: string;
 }
 

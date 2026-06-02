@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
@@ -8,16 +8,23 @@ import {
     formatDateToISOInputValue,
     getErrorMessage,
 } from '../_lib/helpers';
+import { exportCustomersCsv } from '../_lib/exportCsv';
 import { buildCustomerKpis } from '../_lib/kpis';
 import type {
     CustomerEditForm,
+    CustomerBookingFilter,
     CustomerListPayload,
+    CustomerSegmentFilter,
+    CustomerSortKey,
     Meta,
     ProfilePayload,
+    SortDirection,
     Stats,
     ToastState,
     User,
 } from '../_lib/types';
+
+const digitsOnly = (value: string | null | undefined) => (value ?? '').replace(/\D/g, '');
 
 export function useCustomerManagement() {
     const [users, setUsers] = useState<User[]>([]);
@@ -28,8 +35,12 @@ export function useCustomerManagement() {
 
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
+    const [bookingFilter, setBookingFilter] = useState<CustomerBookingFilter>('');
+    const [segmentFilter, setSegmentFilter] = useState<CustomerSegmentFilter>('');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState<CustomerSortKey>('createdAt');
+    const [sortDir, setSortDir] = useState<SortDirection>('desc');
     const [debouncedSearch, setDebouncedSearch] = useState('');
 
     const [toast, setToast] = useState<ToastState | null>(null);
@@ -37,6 +48,8 @@ export function useCustomerManagement() {
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
     const [toggleTarget, setToggleTarget] = useState<User | null>(null);
     const [isToggling, setIsToggling] = useState(false);
+    const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set());
+    const [isBulkUpdating, setIsBulkUpdating] = useState(false);
     const [hasFreshData, setHasFreshData] = useState(false);
     const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
@@ -84,6 +97,8 @@ export function useCustomerManagement() {
             deletedAt: user.deletedAt,
             bookingCount: user.bookingCount,
             reviewCount: user.reviewCount,
+            totalSpent: user.totalSpent,
+            lastBookingAt: user.lastBookingAt,
             createdAt: user.createdAt,
         })),
     }), []);
@@ -93,6 +108,10 @@ export function useCustomerManagement() {
         if (debouncedSearch) params.append('search', debouncedSearch);
         params.append('role', 'CUSTOMER');
         if (filterStatus) params.append('status', filterStatus);
+        if (bookingFilter) params.append('bookingFilter', bookingFilter);
+        if (segmentFilter) params.append('segmentFilter', segmentFilter);
+        params.append('sortBy', sortBy);
+        params.append('sortDir', sortDir);
         params.append('page', String(page));
         params.append('limit', String(pageSize));
 
@@ -104,7 +123,7 @@ export function useCustomerManagement() {
 
         const payload = await response.json();
         return { users: payload.data ?? [], meta: payload.meta };
-    }, [debouncedSearch, filterStatus, page, pageSize]);
+    }, [bookingFilter, debouncedSearch, filterStatus, page, pageSize, segmentFilter, sortBy, sortDir]);
 
     const fetchUsers = useCallback(async () => {
         setIsLoading(true);
@@ -125,6 +144,11 @@ export function useCustomerManagement() {
     useEffect(() => {
         fetchUsers();
     }, [fetchUsers]);
+
+    useEffect(() => {
+        const currentIds = new Set(users.map(user => user.id));
+        setSelectedCustomerIds(previous => new Set([...previous].filter(id => currentIds.has(id))));
+    }, [users]);
 
     useEffect(() => {
         const checkForFreshData = async () => {
@@ -195,7 +219,7 @@ export function useCustomerManagement() {
     const startEditing = useCallback((user: User) => {
         setEditForm({
             fullName: user.fullName || '',
-            phone: user.phone || '',
+            phone: digitsOnly(user.phone),
             dob: user.dob ? formatDateToISOInputValue(user.dob) : '',
             gender: user.gender || '',
         });
@@ -242,7 +266,7 @@ export function useCustomerManagement() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fullName: editForm.fullName || '',
-                    phone: editForm.phone || '',
+                    phone: digitsOnly(editForm.phone),
                     dob: editForm.dob ? new Date(editForm.dob).toISOString() : '',
                     gender: editForm.gender || '',
                 }),
@@ -300,22 +324,142 @@ export function useCustomerManagement() {
         setPage(1);
     }, []);
 
+    const changeBookingFilter = useCallback((value: CustomerBookingFilter) => {
+        setBookingFilter(value);
+        setPage(1);
+    }, []);
+
+    const changeSegmentFilter = useCallback((value: CustomerSegmentFilter) => {
+        setSegmentFilter(value);
+        setPage(1);
+    }, []);
+
+    const resetFilters = useCallback(() => {
+        setSearch('');
+        setDebouncedSearch('');
+        setFilterStatus('');
+        setBookingFilter('');
+        setSegmentFilter('');
+        setPage(1);
+    }, []);
+
     const changePageSize = useCallback((size: number) => {
         setPageSize(size);
         setPage(1);
     }, []);
 
+    const changeSort = useCallback((key: CustomerSortKey) => {
+        if (sortBy === key) {
+            setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(key);
+            setSortDir(key === 'fullName' ? 'asc' : 'desc');
+        }
+        setPage(1);
+    }, [sortBy, sortDir]);
+
     const updateEditForm = useCallback((patch: Partial<CustomerEditForm>) => {
         setEditForm(form => ({ ...form, ...patch }));
     }, []);
+
+    const selectedCustomers = useMemo(
+        () => users.filter(user => selectedCustomerIds.has(user.id)),
+        [selectedCustomerIds, users],
+    );
+    const selectedActiveCount = selectedCustomers.filter(user => user.status === 'Active').length;
+    const selectedDeactivatedCount = selectedCustomers.filter(user => user.status === 'Deactivated').length;
+    const allCurrentPageSelected = users.length > 0 && users.every(user => selectedCustomerIds.has(user.id));
+    const someCurrentPageSelected = users.some(user => selectedCustomerIds.has(user.id));
+
+    const toggleSelectedCustomer = useCallback((userId: number) => {
+        setSelectedCustomerIds(previous => {
+            const next = new Set(previous);
+            if (next.has(userId)) next.delete(userId);
+            else next.add(userId);
+            return next;
+        });
+    }, []);
+
+    const toggleCurrentPageSelection = useCallback(() => {
+        setSelectedCustomerIds(previous => {
+            const next = new Set(previous);
+            if (users.length > 0 && users.every(user => next.has(user.id))) {
+                users.forEach(user => next.delete(user.id));
+            } else {
+                users.forEach(user => next.add(user.id));
+            }
+            return next;
+        });
+    }, [users]);
+
+    const clearSelection = useCallback(() => {
+        setSelectedCustomerIds(new Set());
+    }, []);
+
+    const exportSelectedCustomers = useCallback(() => {
+        const exportedCount = exportCustomersCsv(selectedCustomers);
+        if (exportedCount === 0) {
+            showToast('Chưa có khách hàng nào để xuất.', 'error');
+            return;
+        }
+        showToast(`Đã xuất ${exportedCount} khách hàng ra CSV.`);
+    }, [selectedCustomers, showToast]);
+
+    const bulkUpdateStatus = useCallback(async (status: 'active' | 'deactivated') => {
+        const targets = selectedCustomers.filter(user => (
+            status === 'active' ? user.status === 'Deactivated' : user.status === 'Active'
+        ));
+        if (targets.length === 0) return;
+
+        const actionLabel = status === 'active' ? 'mở khóa' : 'khóa';
+        const confirmed = window.confirm(`Xác nhận ${actionLabel} ${targets.length} tài khoản khách hàng?`);
+        if (!confirmed) return;
+
+        setIsBulkUpdating(true);
+        try {
+            const response = await fetchWithAuth(`${API_BASE_URL}/user/bulk-status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ids: targets.map(user => user.id),
+                    status,
+                }),
+            });
+
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.message || 'Không thể cập nhật hàng loạt.');
+            }
+
+            const result = payload?.data ?? payload;
+            showToast(`Đã ${actionLabel} ${result?.updatedCount ?? targets.length} tài khoản.`);
+            clearSelection();
+            await refreshCustomers();
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Thao tác hàng loạt thất bại.'), 'error');
+        } finally {
+            setIsBulkUpdating(false);
+        }
+    }, [clearSelection, refreshCustomers, selectedCustomers, showToast]);
 
     return {
         users,
         meta,
         isLoading,
         currentUserRole,
+        selectedCustomerIds,
+        selectedCustomers,
+        selectedActiveCount,
+        selectedDeactivatedCount,
+        allCurrentPageSelected,
+        someCurrentPageSelected,
+        isBulkUpdating,
         search,
         filterStatus,
+        bookingFilter,
+        segmentFilter,
+        sortBy,
+        sortDir,
         pageSize,
         toast,
         detailUser,
@@ -334,6 +478,12 @@ export function useCustomerManagement() {
         setIsEditing,
         setToast,
         refreshCustomers,
+        toggleSelectedCustomer,
+        toggleCurrentPageSelection,
+        clearSelection,
+        exportSelectedCustomers,
+        bulkActivateSelected: () => bulkUpdateStatus('active'),
+        bulkDeactivateSelected: () => bulkUpdateStatus('deactivated'),
         openDetail,
         closeDetail,
         startEditing,
@@ -341,6 +491,10 @@ export function useCustomerManagement() {
         handleSaveInfo,
         handleToggleStatus,
         changeStatusFilter,
+        changeBookingFilter,
+        changeSegmentFilter,
+        resetFilters,
         changePageSize,
+        changeSort,
     };
 }

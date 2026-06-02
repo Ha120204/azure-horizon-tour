@@ -37,6 +37,9 @@ export function TourKpiGrid({ isAdmin, filterStatus, kpis }: TourKpiGridProps) {
                                 {kpi.unit && (
                                     <p className="text-[10px] text-on-surface-variant/60 mt-0.5 font-medium tracking-wider">{kpi.unit}</p>
                                 )}
+                                {kpi.subtitle && (
+                                    <p className="text-[10px] text-on-surface-variant/70 mt-0.5 font-medium leading-snug">{kpi.subtitle}</p>
+                                )}
                             </div>
                             {kpi.onClick && (
                                 <span className={`material-symbols-outlined text-[18px] shrink-0 ${isActive ? 'text-amber-600' : 'text-amber-400'}`}>arrow_forward</span>

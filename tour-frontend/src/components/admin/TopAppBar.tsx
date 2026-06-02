@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { clearClientUserStorage } from '@/lib/authSession';
+import { logoutAuthSession, saveClientUserStorage } from '@/lib/authSession';
 import type { AdminRole } from '@/lib/adminAccess';
 import type { SearchTourResult, SearchDestinationResult } from './topAppBar/types';
 import {
@@ -67,11 +67,14 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
                         setUserAvatarUrl(avatarUrl);
                         if (profile.email) setUserEmail(profile.email);
                         if (profile.role) setUserRole(profile.role);
-                        localStorage.setItem('userName', fullName);
-                        if (profile.email) localStorage.setItem('userEmail', profile.email);
-                        if (profile.role) localStorage.setItem('userRole', profile.role);
-                        if (avatarUrl) localStorage.setItem('userAvatarUrl', avatarUrl);
-                        else localStorage.removeItem('userAvatarUrl');
+                        saveClientUserStorage({
+                            id: profile.id,
+                            userId: profile.userId,
+                            fullName,
+                            email: profile.email,
+                            role: profile.role,
+                            avatarUrl,
+                        });
                     })
                     .catch(() => {})
             );
@@ -154,13 +157,21 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
             void fetchWithAuth(`${API_BASE_URL}/admin/notifications/read-all`, { method: 'PATCH' }).catch(() => {});
         }
     };
+    const getAdminLoginPath = () => {
+        const match = (pathname ?? '').match(/^\/(vi|en)(?=\/|$)/);
+        const localePrefix = match ? `/${match[1]}` : '';
+        return `${localePrefix}/admin/login?loggedOut=1`;
+    };
+
     const handleLogout = async () => {
-        try { await fetch(`${API_BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' }); } catch { }
-        finally {
-            clearClientUserStorage();
-            window.dispatchEvent(new Event('auth-change'));
-            router.replace('/admin/login');
-        }
+        await logoutAuthSession();
+        setShowProfileMenu(false);
+        setUserName('Admin');
+        setUserInitials('A');
+        setUserEmail('');
+        setUserRole('');
+        setUserAvatarUrl('');
+        window.location.assign(getAdminLoginPath());
     };
 
     const baseMeta = getPageMeta(pathname ?? '');

@@ -6,6 +6,7 @@ import { AdminNotificationService } from '../admin-notification/admin-notificati
 type TicketStatus   = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
 type BookingMatchStatus = 'NO_REFERENCE' | 'MATCHED' | 'NOT_FOUND';
+const SUPPORT_SLA_OVERDUE_MS = 2 * 60 * 60 * 1000;
 
 type BookingSummary = {
   id: number;
@@ -128,10 +129,20 @@ export class SupportService {
   }
 
   // ─── [ADMIN/STAFF] Danh sách tickets với filter + phân trang ────────────────
-  async getStats() {
-    const overdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  async getStats(staffId?: number) {
+    const overdueSince = new Date(Date.now() - SUPPORT_SLA_OVERDUE_MS);
+    const openWhere: Prisma.SupportTicketWhereInput = {
+      status: { in: ['NEW', 'IN_PROGRESS'] },
+    };
 
-    const [statusRows, total, overdue, firstStaffReplies] = await Promise.all([
+    const [
+      statusRows,
+      total,
+      overdue,
+      assignedToMeOpen,
+      unassignedOpen,
+      firstStaffReplies,
+    ] = await Promise.all([
       this.prisma.supportTicket.groupBy({
         by: ['status'],
         _count: { status: true },
@@ -141,6 +152,20 @@ export class SupportService {
         where: {
           status: { in: ['NEW', 'IN_PROGRESS'] },
           createdAt: { lt: overdueSince },
+        },
+      }),
+      staffId
+        ? this.prisma.supportTicket.count({
+            where: {
+              ...openWhere,
+              assignedStaffId: staffId,
+            },
+          })
+        : Promise.resolve(0),
+      this.prisma.supportTicket.count({
+        where: {
+          ...openWhere,
+          assignedStaffId: null,
         },
       }),
       this.prisma.supportTicket.findMany({
@@ -181,6 +206,8 @@ export class SupportService {
       inProgress,
       resolved,
       open: newCount + inProgress,
+      assignedToMeOpen,
+      unassignedOpen,
       overdue,
       avgFirstResponseMinutes,
     };
@@ -197,7 +224,7 @@ export class SupportService {
     const page  = Math.max(1, query.page  ?? 1);
     const limit = Math.min(50, query.limit ?? 20);
     const skip  = (page - 1) * limit;
-    const overdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const overdueSince = new Date(Date.now() - SUPPORT_SLA_OVERDUE_MS);
 
     const where: Prisma.SupportTicketWhereInput = {};
     if (query.view === 'open') {

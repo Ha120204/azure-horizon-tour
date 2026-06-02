@@ -72,8 +72,8 @@ export class SupportController {
   constructor(private readonly supportService: SupportService) {}
 
   @Get('stats')
-  async getStats() {
-    return this.supportService.getStats();
+  async getStats(@Request() req: AuthenticatedRequest) {
+    return this.supportService.getStats(getAuthUserId(req));
   }
 
   // GET /support/tickets?status=NEW&category=booking&search=...&page=1&limit=20

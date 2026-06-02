@@ -8,9 +8,12 @@ describe('UserService authorization filters', () => {
       findMany: jest.fn(),
       count: jest.fn(),
       findUnique: jest.fn(),
+      updateMany: jest.fn(),
     },
     booking: {
       findMany: jest.fn(),
+      groupBy: jest.fn(),
+      aggregate: jest.fn(),
     },
   };
   const mailService = {};
@@ -18,6 +21,8 @@ describe('UserService authorization filters', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.booking.groupBy.mockResolvedValue([]);
+    prisma.booking.aggregate.mockResolvedValue({ _sum: { totalPrice: 0 }, _max: { createdAt: null } });
     service = new UserService(prisma as any, mailService as any);
   });
 
@@ -150,14 +155,16 @@ describe('UserService authorization filters', () => {
     prisma.user.count.mockResolvedValueOnce(12);
     prisma.user.count.mockResolvedValueOnce(10);
     prisma.user.count.mockResolvedValueOnce(3);
+    prisma.user.count.mockResolvedValueOnce(7);
 
     await expect(service.getStats(Role.STAFF)).resolves.toMatchObject({
       totalUsers: 12,
       activeUsers: 10,
       newThisMonth: 3,
+      customersWithBookings: 7,
       staffAndAdmin: 0,
       roleBreakdown: [{ role: Role.CUSTOMER, count: 12 }],
     });
-    expect(prisma.user.count).toHaveBeenCalledTimes(3);
+    expect(prisma.user.count).toHaveBeenCalledTimes(4);
   });
 });

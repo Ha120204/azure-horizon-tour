@@ -13,6 +13,7 @@ import {
 import type {
   Booking,
   BookingListPayload,
+  BookingSavedViewKey,
   Meta,
   PaymentStats,
   Stats,
@@ -38,7 +39,12 @@ const initialMeta: Meta = {
 };
 
 function getTodayDateInputValue() {
+  return getDateInputValue(0);
+}
+
+function getDateInputValue(offsetDays: number) {
   const today = new Date();
+  today.setDate(today.getDate() + offsetDays);
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
@@ -61,8 +67,11 @@ export function useBookingManagement() {
   const [paymentFilter, setPaymentFilter] = useState('');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('');
   const [needsReconciliation, setNeedsReconciliation] = useState(false);
+  const [needsCustomerCall, setNeedsCustomerCall] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [departureFrom, setDepartureFrom] = useState('');
+  const [departureTo, setDepartureTo] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -71,6 +80,8 @@ export function useBookingManagement() {
   const [hasFreshData, setHasFreshData] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
+  const [isPaymentStatsLoading, setIsPaymentStatsLoading] = useState(true);
+  const [paymentStatsError, setPaymentStatsError] = useState('');
   const [statsDateFrom, setStatsDateFrom] = useState('');
   const [statsDateTo, setStatsDateTo] = useState(() => getTodayDateInputValue());
   const defaultStatsDateTo = getTodayDateInputValue();
@@ -97,11 +108,14 @@ export function useBookingManagement() {
     if (paymentFilter) qs.set('paymentStatus', paymentFilter);
     if (paymentMethodFilter) qs.set('paymentMethod', paymentMethodFilter);
     if (needsReconciliation) qs.set('needsReconciliation', 'true');
+    if (needsCustomerCall) qs.set('needsCustomerCall', 'true');
     if (dateFrom) qs.set('dateFrom', dateFrom);
     if (dateTo) qs.set('dateTo', dateTo);
+    if (departureFrom) qs.set('departureFrom', departureFrom);
+    if (departureTo) qs.set('departureTo', departureTo);
     Object.entries(overrides).forEach(([key, value]) => qs.set(key, value));
     return qs.toString();
-  }, [debouncedSearch, statusFilter, paymentFilter, paymentMethodFilter, needsReconciliation, dateFrom, dateTo]);
+  }, [debouncedSearch, statusFilter, paymentFilter, paymentMethodFilter, needsReconciliation, needsCustomerCall, dateFrom, dateTo, departureFrom, departureTo]);
 
   const buildBookingSignature = useCallback((payload: BookingListPayload) => JSON.stringify({
     total: payload.meta?.totalItems ?? 0,
@@ -118,6 +132,7 @@ export function useBookingManagement() {
       status: booking.status,
       paymentStatus: booking.paymentStatus,
       createdAt: booking.createdAt,
+      departureDate: booking.departureDate,
       latestPaymentRequest: booking.notifications?.[0]
         ? `${booking.notifications[0].id}:${booking.notifications[0].status}`
         : '',
@@ -188,15 +203,21 @@ export function useBookingManagement() {
   }, [buildBookingSignature, getBookingsPayload, selectedBooking]);
 
   const fetchPaymentStats = useCallback(async () => {
+    setIsPaymentStatsLoading(true);
+    setPaymentStatsError('');
     try {
       const qs = new URLSearchParams();
       if (statsDateFrom) qs.set('dateFrom', statsDateFrom);
       if (statsDateTo) qs.set('dateTo', statsDateTo);
       const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/payment-stats?${qs}`);
       const json = await res.json();
-      if (res.ok) setPaymentStats(json?.data ?? null);
-    } catch {
+      if (!res.ok) throw new Error(getApiErrorMessage(json, 'Không tải được thống kê doanh thu'));
+      setPaymentStats(json?.data ?? null);
+    } catch (error: unknown) {
+      setPaymentStatsError(getErrorMessage(error, 'Không tải được thống kê doanh thu'));
       // Payment stats are supplementary; keep the booking list usable.
+    } finally {
+      setIsPaymentStatsLoading(false);
     }
   }, [statsDateFrom, statsDateTo]);
 
@@ -268,12 +289,40 @@ export function useBookingManagement() {
 
   const resetFilters = useCallback(() => {
     setSearch('');
+    setDebouncedSearch('');
     setStatusFilter('');
     setPaymentFilter('');
     setPaymentMethodFilter('');
     setNeedsReconciliation(false);
+    setNeedsCustomerCall(false);
     setDateFrom('');
     setDateTo('');
+    setDepartureFrom('');
+    setDepartureTo('');
+    setPage(1);
+  }, []);
+
+  const applySavedView = useCallback((view: BookingSavedViewKey) => {
+    setSearch('');
+    setDebouncedSearch('');
+    setStatusFilter('');
+    setPaymentFilter('');
+    setPaymentMethodFilter('');
+    setNeedsReconciliation(false);
+    setNeedsCustomerCall(false);
+    setDateFrom('');
+    setDateTo('');
+    setDepartureFrom('');
+    setDepartureTo('');
+
+    if (view === 'pending') setStatusFilter('PENDING');
+    if (view === 'unpaid') setPaymentFilter('UNPAID');
+    if (view === 'upcoming') {
+      setDepartureFrom(getDateInputValue(0));
+      setDepartureTo(getDateInputValue(7));
+    }
+    if (view === 'cancelled') setStatusFilter('CANCELLED');
+    if (view === 'needsCall') setNeedsCustomerCall(true);
     setPage(1);
   }, []);
 
@@ -311,6 +360,77 @@ export function useBookingManagement() {
       showToast(getErrorMessage(error, 'Không gửi lại được yêu cầu thanh toán'), false);
     }
   }, [fetchBookings, showToast]);
+
+  const bulkResendPaymentRequests = useCallback(async (targets: Booking[]) => {
+    const eligibleBookings = targets.filter(booking =>
+      booking.status === 'PENDING' &&
+      booking.paymentStatus === 'UNPAID' &&
+      booking.paymentMethod === 'PAYOS',
+    );
+
+    if (eligibleBookings.length === 0) {
+      showToast('Không có đơn PayOS chờ thanh toán trong danh sách đã chọn', false);
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      eligibleBookings.map(async (booking) => {
+        const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/resend-payment-request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ forceEmail: false }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(getApiErrorMessage(json, `Không gửi được ${booking.bookingCode}`));
+        return booking.bookingCode;
+      }),
+    );
+
+    await fetchBookings();
+
+    const successCount = results.filter(result => result.status === 'fulfilled').length;
+    const failedCount = results.length - successCount;
+    if (failedCount > 0) {
+      showToast(`Đã nhắc ${successCount}/${results.length} đơn, ${failedCount} đơn lỗi`, false);
+      return;
+    }
+    showToast(`Đã nhắc thanh toán ${successCount} đơn`);
+  }, [fetchBookings, showToast]);
+
+  const cancelBooking = useCallback(async (booking: Booking, reason: string) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(getApiErrorMessage(json, 'Không hủy được booking'));
+      await fetchBookings();
+      await fetchPaymentStats();
+      showToast(`Đã hủy đơn ${booking.bookingCode}`);
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, 'Không hủy được booking'), false);
+      throw error;
+    }
+  }, [fetchBookings, fetchPaymentStats, showToast]);
+
+  const saveBookingNote = useCallback(async (booking: Booking, note: string) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/note`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(getApiErrorMessage(json, 'Không lưu được ghi chú'));
+      setBookings(prev => prev.map(item => item.id === booking.id ? { ...item, adminNote: note.trim() } : item));
+      showToast(`Đã lưu ghi chú cho ${booking.bookingCode}`);
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, 'Không lưu được ghi chú'), false);
+      throw error;
+    }
+  }, [showToast]);
 
   const filterByStatus = useCallback((nextStatus: Booking['status']) => {
     setStatusFilter(current => current === nextStatus ? '' : nextStatus);
@@ -362,7 +482,21 @@ export function useBookingManagement() {
     setStatsDateTo(getTodayDateInputValue());
   }, []);
 
-  const hasFilter = !!(search || statusFilter || paymentFilter || paymentMethodFilter || needsReconciliation || dateFrom || dateTo);
+  const hasFilter = !!(search || statusFilter || paymentFilter || paymentMethodFilter || needsReconciliation || needsCustomerCall || dateFrom || dateTo || departureFrom || departureTo);
+  const activeSavedView: BookingSavedViewKey | null = (() => {
+    const noSearch = !search && !debouncedSearch;
+    const noCreatedDate = !dateFrom && !dateTo;
+    const noPaymentMethod = !paymentMethodFilter;
+    const noSpecialFlags = !needsReconciliation && !needsCustomerCall;
+    const noDeparture = !departureFrom && !departureTo;
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && !statusFilter && !paymentFilter) return 'all';
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'PENDING' && !paymentFilter) return 'pending';
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && !statusFilter && paymentFilter === 'UNPAID') return 'unpaid';
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && !statusFilter && !paymentFilter && departureFrom === getDateInputValue(0) && departureTo === getDateInputValue(7)) return 'upcoming';
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'CANCELLED' && !paymentFilter) return 'cancelled';
+    if (noSearch && noCreatedDate && noPaymentMethod && needsCustomerCall && !needsReconciliation && noDeparture && !statusFilter && !paymentFilter) return 'needsCall';
+    return null;
+  })();
 
   return {
     bookings,
@@ -375,18 +509,24 @@ export function useBookingManagement() {
     paymentFilter,
     paymentMethodFilter,
     needsReconciliation,
+    needsCustomerCall,
     dateFrom,
     dateTo,
+    departureFrom,
+    departureTo,
     pageSize,
     selectedBooking,
     toast,
     hasFreshData,
     lastSyncedAt,
     paymentStats,
+    isPaymentStatsLoading,
+    paymentStatsError,
     statsDateFrom,
     statsDateTo,
     defaultStatsDateTo,
     hasFilter,
+    activeSavedView,
     setSearch,
     setPage,
     setSelectedBooking,
@@ -398,8 +538,12 @@ export function useBookingManagement() {
     handleConfirmSuccess,
     handleExport,
     resetFilters,
+    applySavedView,
     copyPaymentRequest,
     resendPaymentRequest,
+    bulkResendPaymentRequests,
+    cancelBooking,
+    saveBookingNote,
     filterByStatus,
     filterByPayment,
     changeStatusFilter,

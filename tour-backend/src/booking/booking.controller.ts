@@ -31,6 +31,8 @@ import {
   RequestCancellationDto,
   ApproveCancellationDto,
   RejectCancellationDto,
+  AdminCancelBookingDto,
+  UpdateBookingNoteDto,
 } from './dto/cancel-booking.dto';
 import {
   ConfirmInStoreDto,
@@ -260,6 +262,9 @@ export class BookingController {
     @Query('limit') limit?: string,
     @Query('paymentMethod') paymentMethod?: string,
     @Query('needsReconciliation') needsReconciliation?: string,
+    @Query('departureFrom') departureFrom?: string,
+    @Query('departureTo') departureTo?: string,
+    @Query('needsCustomerCall') needsCustomerCall?: string,
   ) {
     const validPaymentMethod =
       paymentMethod === 'PAYOS' || paymentMethod === 'IN_STORE'
@@ -275,6 +280,9 @@ export class BookingController {
       limit ? Number(limit) : 10,
       validPaymentMethod,
       needsReconciliation === 'true',
+      departureFrom,
+      departureTo,
+      needsCustomerCall === 'true',
     );
     return { message: 'Success', ...result };
   }
@@ -389,6 +397,37 @@ export class BookingController {
       dto.forceEmail ?? false,
     );
     return { message: 'Success', data };
+  }
+
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Patch('admin/:id/note')
+  @AuditLog('UPDATE', 'Booking')
+  async updateAdminNote(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateBookingNoteDto,
+  ) {
+    const data = await this.bookingService.updateAdminNote(
+      Number(id),
+      getAuthUserId(req),
+      dto.note,
+    );
+    return { message: 'Success', data };
+  }
+
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Post('admin/:id/cancel')
+  @AuditLog('CANCEL_BOOKING', 'Booking')
+  async adminCancelBooking(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: AdminCancelBookingDto,
+  ) {
+    return this.bookingService.adminCancelBooking(
+      Number(id),
+      getAuthUserId(req),
+      dto.reason.trim(),
+    );
   }
 
   @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)

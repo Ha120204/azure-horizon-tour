@@ -10,6 +10,7 @@ import { API_BASE_URL } from '@/lib/constants';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/publicSettings';
 import { getDestinationDisplay } from '@/lib/formatDestination';
 import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
+import { getDefaultAdminPathForRole, isAdminRole } from '@/lib/adminAccess';
 import { toastEmitter } from '@/lib/toastEmitter';
 
 interface SearchResult {
@@ -50,6 +51,8 @@ export default function Header() {
     const { t, language, currency, formatPrice } = useLocale();
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [userName, setUserName] = useState('');
+    const [userEmail, setUserEmail] = useState('');
+    const [userRole, setUserRole] = useState('');
     const [userAvatar, setUserAvatar] = useState('');
     const [isScrolled, setIsScrolled] = useState(false);
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
@@ -70,6 +73,8 @@ export default function Header() {
     // Scroll-aware header (transparent only on homepage)
     const isHomepage = pathname === '/';
     const isSolidHeader = isScrolled || !isHomepage;
+    const canAccessAdmin = isAdminRole(userRole);
+    const defaultAdminPath = canAccessAdmin ? getDefaultAdminPathForRole(userRole) : null;
 
     useEffect(() => {
         const onScroll = () => setIsScrolled(window.scrollY > 60);
@@ -104,18 +109,26 @@ export default function Header() {
             if (!profile) {
                 setIsLoggedIn(false);
                 setUserName('');
+                setUserEmail('');
+                setUserRole('');
                 setUserAvatar('');
                 return;
             }
 
             const fullName = profile.fullName || '';
+            const email = profile.email || '';
+            const role = profile.role || '';
             const avatarUrl = profile.avatarUrl || '';
             setIsLoggedIn(true);
             setUserName(fullName);
+            setUserEmail(email);
+            setUserRole(role);
             setUserAvatar(avatarUrl);
             localStorage.setItem('userName', fullName);
-            if (profile.email) localStorage.setItem('userEmail', profile.email);
-            if (profile.role) localStorage.setItem('userRole', profile.role);
+            if (email) localStorage.setItem('userEmail', email);
+            else localStorage.removeItem('userEmail');
+            if (role) localStorage.setItem('userRole', role);
+            else localStorage.removeItem('userRole');
             if (avatarUrl) localStorage.setItem('userAvatarUrl', avatarUrl);
             else localStorage.removeItem('userAvatarUrl');
         };
@@ -230,6 +243,59 @@ export default function Header() {
 
     // Label hiển thị trên nút Globe: "EN · $" hoặc "VI · ₫"
     const localeLabel = `${language.toUpperCase()} · ${currency === 'VND' ? '₫' : '$'}`;
+    const navLinks = [
+        { href: '/destinations', key: 'nav.destinations' },
+        { href: '/promotions', key: 'nav.promotions' },
+        { href: '/journal', key: 'nav.journal' },
+        { href: '/about', key: 'nav.about' },
+        { href: '/contact', key: 'nav.contact' },
+    ];
+    const translatedRole = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || userRole === 'STAFF' || userRole === 'CUSTOMER'
+        ? userRole
+        : null;
+    const roleLabel = translatedRole ? t(`nav.account.roles.${translatedRole}`) : userRole;
+    const adminDescription = canAccessAdmin
+        ? t(`nav.account.adminDescriptions.${userRole}`)
+        : '';
+    const rolePresentation = userRole === 'SUPER_ADMIN'
+        ? {
+            badgeIcon: 'shield_with_heart',
+            badgeClass: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200/70',
+            workspaceIcon: 'shield_with_heart',
+            workspaceClass: 'bg-amber-50/80 hover:bg-amber-100/80 hover:shadow-amber-500/10',
+            workspaceIconClass: 'bg-amber-600 text-white shadow-amber-600/20',
+            workspaceTextClass: 'text-amber-800',
+            workspaceArrowClass: 'text-amber-700',
+        }
+        : userRole === 'ADMIN'
+            ? {
+                badgeIcon: 'admin_panel_settings',
+                badgeClass: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200/70',
+                workspaceIcon: 'admin_panel_settings',
+                workspaceClass: 'bg-violet-50/80 hover:bg-violet-100/80 hover:shadow-violet-500/10',
+                workspaceIconClass: 'bg-violet-600 text-white shadow-violet-600/20',
+                workspaceTextClass: 'text-violet-800',
+                workspaceArrowClass: 'text-violet-700',
+            }
+            : userRole === 'STAFF'
+                ? {
+                    badgeIcon: 'support_agent',
+                    badgeClass: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200/70',
+                    workspaceIcon: 'support_agent',
+                    workspaceClass: 'bg-sky-50/80 hover:bg-sky-100/80 hover:shadow-sky-500/10',
+                    workspaceIconClass: 'bg-sky-600 text-white shadow-sky-600/20',
+                    workspaceTextClass: 'text-sky-800',
+                    workspaceArrowClass: 'text-sky-700',
+                }
+                : {
+                    badgeIcon: 'person',
+                    badgeClass: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200/70',
+                    workspaceIcon: 'person',
+                    workspaceClass: '',
+                    workspaceIconClass: '',
+                    workspaceTextClass: '',
+                    workspaceArrowClass: '',
+                };
 
     return (
         <>
@@ -265,17 +331,29 @@ export default function Header() {
                     </Link>
 
                     {/* 2. MAIN NAVIGATION */}
-                    <div className="hidden md:flex items-center gap-7 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight" suppressHydrationWarning>
-                        {[{ href: '/destinations', key: 'nav.destinations' }, { href: '/promotions', key: 'nav.promotions' }, { href: '/journal', key: 'nav.journal' }, { href: '/about', key: 'nav.about' }, { href: '/contact', key: 'nav.contact' }].map(link => (
-                            <Link key={link.href} href={link.href} className={`transition-all duration-300 relative group py-2 ${
-                                pathname.includes(link.href)
-                                    ? ((isScrolled || !isHomepage) ? 'text-blue-800' : 'text-white')
-                                    : ((isScrolled || !isHomepage) ? 'text-slate-600 hover:text-blue-800' : 'text-white/80 hover:text-white')
-                            }`}>
-                                {t(link.key)}
-                                <span className={`absolute bottom-0 left-0 h-0.5 transition-all duration-300 ${(isScrolled || !isHomepage) ? 'bg-blue-800' : 'bg-white'} ${pathname.includes(link.href) ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
-                            </Link>
-                        ))}
+                    <div className="hidden md:flex items-center gap-1.5 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight" suppressHydrationWarning>
+                        {navLinks.map(link => {
+                            const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                            const solidStateClass = isActive
+                                ? 'bg-primary/10 text-primary shadow-sm shadow-primary/5'
+                                : 'text-slate-600 hover:bg-surface-container-low hover:text-primary';
+                            const transparentStateClass = isActive
+                                ? 'bg-white/20 text-white shadow-sm shadow-black/10'
+                                : 'text-white/80 hover:bg-white/15 hover:text-white';
+
+                            return (
+                                <Link
+                                    key={link.href}
+                                    href={link.href}
+                                    aria-current={isActive ? 'page' : undefined}
+                                    className={`group inline-flex min-h-[42px] items-center rounded-full px-4 py-2 text-sm transition-[transform,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none ${
+                                        isSolidHeader ? solidStateClass : transparentStateClass
+                                    }`}
+                                >
+                                    <span className="whitespace-nowrap">{t(link.key)}</span>
+                                </Link>
+                            );
+                        })}
                     </div>
 
                     {/* 3. USER TOOLS */}
@@ -434,7 +512,10 @@ export default function Header() {
                         {isLoggedIn ? (
                             <div className="flex items-center gap-2.5 relative group">
                                 {/* Username — adapts to scrolled state */}
-                                <span className={`text-sm font-semibold transition-colors duration-300 ${(isScrolled || !isHomepage) ? 'text-slate-700' : 'text-white drop-shadow-sm'}`}>
+                                <span
+                                    title={userEmail || userName}
+                                    className={`text-sm font-semibold transition-colors duration-300 ${(isScrolled || !isHomepage) ? 'text-slate-700' : 'text-white drop-shadow-sm'}`}
+                                >
                                     {userName}
                                 </span>
 
@@ -453,32 +534,80 @@ export default function Header() {
                                 </div>
 
                                 {/* Dropdown — slide + fade entrance */}
-                                <div className="absolute top-full right-0 w-52 pt-3 z-30
-                                    opacity-0 group-hover:opacity-100 invisible group-hover:visible
-                                    transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]">
-                                    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100/80 p-1.5 translate-y-1 group-hover:translate-y-0 transition-transform duration-200">
-                                    {/* User info header */}
-                                    <div className="px-3 py-2.5 mb-1">
-                                        <p className="text-xs font-bold text-slate-800 truncate">{userName}</p>
-                                        <p className="text-[10px] text-slate-400 mt-0.5">{t('nav.memberLabel')}</p>
-                                    </div>
-                                    <div className="h-px bg-slate-100 mx-1 mb-1"></div>
-                                    <button onClick={() => router.push('/profile')}
-                                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm text-slate-600 hover:text-blue-800 hover:bg-blue-50/60 font-medium rounded-xl transition-colors duration-150">
-                                        <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
-                                        {t('nav.profile')}
-                                    </button>
-                                    <button onClick={() => router.push('/my-bookings')}
-                                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm text-slate-600 hover:text-blue-800 hover:bg-blue-50/60 font-medium rounded-xl transition-colors duration-150">
-                                        <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>luggage</span>
-                                        {t('nav.myBookings')}
-                                    </button>
-                                    <div className="h-px bg-slate-100 mx-1 my-1"></div>
-                                    <button onClick={handleLogout}
-                                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors duration-150">
-                                        <span className="material-symbols-outlined text-[16px]">logout</span>
-                                        {t('nav.signOut')}
-                                    </button>
+                                <div className="absolute top-full right-0 z-30 w-72 pt-3 opacity-0 invisible transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:visible group-hover:opacity-100">
+                                    <div className="translate-y-1 overflow-hidden rounded-2xl border border-slate-100/80 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.16)] transition-transform duration-200 group-hover:translate-y-0">
+                                        <div className="flex items-center gap-3 px-4 py-4">
+                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-extrabold text-white shadow-sm">
+                                                {userAvatar ? (
+                                                    <Image className="h-full w-full object-cover" src={userAvatar} alt={userName} width={44} height={44} sizes="44px" />
+                                                ) : (
+                                                    userName ? userName.charAt(0).toUpperCase() : '?'
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-sm font-extrabold text-slate-900">{userName}</p>
+                                                <p className="mt-0.5 truncate text-xs text-slate-500">{userEmail || t('nav.memberLabel')}</p>
+                                                {roleLabel && (
+                                                    <span className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${rolePresentation.badgeClass}`}>
+                                                        <span className="material-symbols-outlined text-[12px]">
+                                                            {rolePresentation.badgeIcon}
+                                                        </span>
+                                                        {roleLabel}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t border-slate-100 px-2 py-2">
+                                            <p className="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('nav.account.personalSection')}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push('/profile')}
+                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-600 transition-[transform,background-color,color] duration-150 hover:translate-x-0.5 hover:bg-blue-50/70 hover:text-primary active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
+                                                {t('nav.profile')}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push('/my-bookings')}
+                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-600 transition-[transform,background-color,color] duration-150 hover:translate-x-0.5 hover:bg-blue-50/70 hover:text-primary active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>luggage</span>
+                                                {t('nav.myBookings')}
+                                            </button>
+                                        </div>
+
+                                        {canAccessAdmin && defaultAdminPath && (
+                                            <div className="border-t border-slate-100 px-2 py-2">
+                                                <p className="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('nav.account.adminSection')}</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => router.push(defaultAdminPath)}
+                                                    className={`group/admin flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-[transform,background-color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none ${rolePresentation.workspaceClass}`}
+                                                >
+                                                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm ${rolePresentation.workspaceIconClass}`}>
+                                                        <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>{rolePresentation.workspaceIcon}</span>
+                                                    </span>
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className={`block text-sm font-extrabold ${rolePresentation.workspaceTextClass}`}>{t('nav.account.adminTitle')}</span>
+                                                        <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-500">{adminDescription}</span>
+                                                    </span>
+                                                    <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 group-hover/admin:translate-x-1 motion-reduce:transform-none ${rolePresentation.workspaceArrowClass}`}>arrow_forward</span>
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        <div className="border-t border-slate-100 p-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleLogout}
+                                                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-red-500 transition-[transform,background-color] duration-150 hover:translate-x-0.5 hover:bg-red-50 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">logout</span>
+                                                {t('nav.signOut')}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

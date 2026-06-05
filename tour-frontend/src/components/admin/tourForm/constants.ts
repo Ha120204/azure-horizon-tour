@@ -152,6 +152,14 @@ export const INCLUDE_PRESETS = [
   "Rượu vang chào mừng tại phòng",
 ];
 
+// ── Currency Helpers ──────────────────────────────────────────────────────
+export const stripCurrencyInput = (value: string) =>
+  value.replace(/[^\d]/g, "");
+export const formatCurrencyInput = (value: string) => {
+  const digits = stripCurrencyInput(value);
+  return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+};
+
 export const EXCLUDE_PRESETS = [
   // ── Chi phí cá nhân ───────────────────────────────────
   "Chi phí cá nhân (điện thoại, giặt ủi, minibar...)",

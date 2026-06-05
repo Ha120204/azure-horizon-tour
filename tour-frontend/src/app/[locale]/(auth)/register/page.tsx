@@ -9,6 +9,7 @@ import Footer from '@/components/layout/Footer';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/constants';
 import { getSafeRedirectPath } from '@/lib/authRedirect';
+import { toastEmitter } from '@/lib/toastEmitter';
 
 export default function RegisterPage() {
     const [fullName, setFullName] = useState('');
@@ -21,7 +22,7 @@ export default function RegisterPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -34,7 +35,6 @@ export default function RegisterPage() {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setSuccess('');
 
         if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(password)) {
             setError('Mật khẩu ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt');
@@ -47,6 +47,7 @@ export default function RegisterPage() {
         }
 
         try {
+            setIsSubmitting(true);
             const res = await fetch(`${API_BASE_URL}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -54,13 +55,16 @@ export default function RegisterPage() {
             });
 
             if (res.ok) {
-                setTimeout(() => router.push(loginHref), 500);
+                toastEmitter.success(t('auth.regSuccess'), t('auth.regSuccessMessage'));
+                router.push(loginHref);
             } else {
                 const errData = await res.json();
                 setError(errData.message || t('auth.regFailed'));
             }
         } catch {
             setError(t('auth.serverError'));
+        } finally {
+            setIsSubmitting(false);
         }
     };
     const handleGoogleRegister = () => {
@@ -122,17 +126,6 @@ export default function RegisterPage() {
                                 <span>{error}</span>
                             </div>
                         )}
-                        {/* HIỂN THỊ THÀNH CÔNG */}
-                        {success && (
-                            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 flex items-start gap-3 shadow-sm">
-                                <span className="material-symbols-outlined text-emerald-600 text-[20px]">task_alt</span>
-                                <div>
-                                    <h4 className="text-sm font-bold text-emerald-800 font-headline">{t('auth.regSuccess')}</h4>
-                                    <p className="text-xs text-emerald-600 mt-1">{success}</p>
-                                </div>
-                            </div>
-                        )}
-
                         <div className="space-y-2">
                             <label className="block text-[11px] font-semibold tracking-wider uppercase text-on-surface-variant px-1">{t('auth.fullNameLbl')}</label>
                             <div className="relative">
@@ -255,9 +248,15 @@ export default function RegisterPage() {
 
                         </div>
 
-                        <button className="w-full hero-gradient text-on-primary py-4 rounded-full font-headline font-semibold text-lg hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4" type="submit">
-                            {t('auth.createAccountBtn')}
-                            <span className="material-symbols-outlined">arrow_forward</span>
+                        <button
+                            className="w-full hero-gradient text-on-primary py-4 rounded-full font-headline font-semibold text-lg hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 disabled:cursor-wait disabled:opacity-70 disabled:active:scale-100"
+                            type="submit"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? t('auth.creatingAccount') : t('auth.createAccountBtn')}
+                            <span className={`material-symbols-outlined ${isSubmitting ? 'animate-spin' : ''}`}>
+                                {isSubmitting ? 'progress_activity' : 'arrow_forward'}
+                            </span>
                         </button>
                     </form>
 

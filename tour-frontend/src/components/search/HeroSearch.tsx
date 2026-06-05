@@ -17,8 +17,6 @@ const removeAccents = (str: string) =>
         .replace(/đ/g, 'd')
         .replace(/Đ/g, 'D');
 
-const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 // Kiểu dữ liệu từ API
 interface Destination {
     id: number;
@@ -274,8 +272,6 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
     // Dynamic label to correctly react to locale changes
     const currentBudgetLabel = budget ? BUDGET_OPTIONS.find(o => o.value === budget)?.label : '';
-    const currentBudgetShortLabel = budget ? BUDGET_OPTIONS.find(o => o.value === budget)?.shortLabel : '';
-
     // ═══ Quyết định hiển thị gì trong dropdown ═══
     // Nếu user chưa gõ gì: hiện tất cả destinations
     // Nếu user đã gõ: hiện kết quả search (destinations + tours)
@@ -315,13 +311,13 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 type="button"
                                 aria-pressed={active}
                                 onClick={() => handleTravelScopeChange(option.value)}
-                                className={`relative z-10 flex min-w-[7.25rem] items-center justify-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-bold transition-[color,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98] motion-reduce:transition-none ${
+                                className={`group relative z-10 flex min-w-[7.25rem] items-center justify-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-bold transition-[color,transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none ${
                                     active
-                                        ? 'text-primary'
+                                        ? 'text-primary shadow-sm'
                                         : 'text-white/80 hover:text-white'
                                 }`}
                             >
-                                <span className={`material-symbols-outlined text-[17px] transition-transform duration-300 motion-reduce:transition-none ${active ? 'scale-110' : 'scale-100'}`}>{option.icon}</span>
+                                <span className={`material-symbols-outlined text-[17px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-0.5 motion-reduce:transform-none motion-reduce:transition-none ${active ? 'scale-110' : 'scale-100'}`}>{option.icon}</span>
                                 {option.label}
                             </button>
                         );
@@ -333,8 +329,8 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:grid md:grid-cols-[230px_1px_1fr_1px_200px_1px_260px_auto] items-center p-2 border border-slate-100 w-full"
         >
             {/* 0. Điểm khởi hành */}
-            <div ref={departureRef} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative" onClick={() => { departureInputRef.current?.focus(); setIsDepartureOpen(true); }}>
-                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform flex-shrink-0">flight_takeoff</span>
+            <div ref={departureRef} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { departureInputRef.current?.focus(); setIsDepartureOpen(true); }}>
+                <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 motion-reduce:transform-none">flight_takeoff</span>
                 <div className="flex flex-col min-w-0 flex-1">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">
                         {language === 'vi' ? 'Khởi hành từ' : 'Departure'}
@@ -350,7 +346,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); setDeparture(''); setIsAllDepartureSelected(false); setIsDepartureOpen(false); }}
                                     aria-label={language === 'vi' ? 'Xóa bộ lọc khởi hành' : 'Clear departure filter'}
-                                    className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:text-slate-600"
+                                    className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none"
                                 >
                                     <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                                 </button>
@@ -372,7 +368,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); setDeparture(''); setIsAllDepartureSelected(false); setIsDepartureOpen(false); }}
                                         aria-label={language === 'vi' ? 'Xóa điểm khởi hành' : 'Clear departure'}
-                                        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:text-slate-600"
+                                        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none"
                                     >
                                         <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                                     </button>
@@ -405,7 +401,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 <button
                                     type="button"
                                     onClick={() => { setDeparture(''); setIsAllDepartureSelected(true); setIsDepartureOpen(false); }}
-                                    className={`mb-2 flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-50/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                                    className={`group mb-2 flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-blue-50/70 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none ${
                                         isAllDepartureSelected && !departure ? 'bg-blue-50 text-primary' : 'text-slate-700'
                                     }`}
                                 >
@@ -440,7 +436,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                                     key={idx}
                                                     type="button"
                                                     onClick={() => { setDeparture(pt.label); setIsAllDepartureSelected(false); setIsDepartureOpen(false); }}
-                                                    className={`flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                                                    className={`group flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none ${
                                                         departure === pt.label ? 'text-primary bg-blue-50/70' : 'text-slate-700'
                                                     }`}
                                                 >
@@ -473,8 +469,8 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <div className="hidden md:block w-px h-10 bg-slate-200"></div>
 
             {/* 1. Destination */}
-            <div ref={destRef} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative min-w-0" onClick={() => { destInputRef.current?.focus(); setIsDestFocused(true); }}>
-                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform text-[18px] flex-shrink-0">location_on</span>
+            <div ref={destRef} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative min-w-0 motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { destInputRef.current?.focus(); setIsDestFocused(true); }}>
+                <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] text-[18px] flex-shrink-0 motion-reduce:transform-none">location_on</span>
 
                 <div className="flex flex-col flex-1 min-w-0">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center w-full">{t('search.destination')}</label>
@@ -485,7 +481,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     <span className="material-symbols-outlined text-[14px] flex-shrink-0">travel_explore</span>
                                     {language === 'vi' ? 'Tất cả điểm' : 'All cities'}
                                 </span>
-                                <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setIsAllDestinationsSelected(false); }} aria-label="Xóa điểm đến" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:text-slate-600">
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setIsAllDestinationsSelected(false); }} aria-label="Xóa điểm đến" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none">
                                     <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                                 </button>
                             </>
@@ -502,7 +498,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none placeholder:text-slate-300 text-center flex-1 min-w-0 max-w-[160px]"
                                 />
                                 {destination && (
-                                    <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setSearchDestinations([]); setSearchTours([]); }} aria-label="Xóa điểm đến" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:text-slate-600">
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setSearchDestinations([]); setSearchTours([]); }} aria-label="Xóa điểm đến" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none">
                                         <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                                     </button>
                                 )}
@@ -520,7 +516,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 <p className="mt-1 text-xs font-medium text-slate-500">{t('search.destinationHint')}</p>
                             </div>
                             <div className="max-h-[360px] overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
-                                <button type="button" onClick={handleSelectAllDestinations} className={`mb-2 flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-blue-50/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isAllDestinationsSelected ? 'bg-blue-50 text-primary' : 'text-slate-700'}`}>
+                                <button type="button" onClick={handleSelectAllDestinations} className={`group mb-2 flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-blue-50/70 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none ${isAllDestinationsSelected ? 'bg-blue-50 text-primary' : 'text-slate-700'}`}>
                                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-sm shadow-primary/20">
                                         <span className="material-symbols-outlined text-[22px]" aria-hidden="true">travel_explore</span>
                                     </span>
@@ -544,7 +540,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                         {displayDestinations.map(item => {
                                             const display = getDestinationDisplay(item, language);
                                             return (
-                                                <button key={`dest-${item.id}`} type="button" onClick={() => handleSelectSuggestion(display.name)} className="flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                                                <button key={`dest-${item.id}`} type="button" onClick={() => handleSelectSuggestion(display.name)} className="group flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none">
                                                     {item.imageUrl ? (
                                                         <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100 shadow-sm">
                                                             <Image src={item.imageUrl} alt={display.name} fill sizes="48px" unoptimized className="object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=100&q=80'; }} />
@@ -556,7 +552,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                                         <span className="block truncate text-sm font-extrabold text-slate-800">{display.name}</span>
                                                         {display.region && <span className="text-[11px] text-slate-400">{display.region}</span>}
                                                     </span>
-                                                    <span className="material-symbols-outlined text-[18px] text-slate-300" aria-hidden="true">arrow_forward</span>
+                                                    <span className="material-symbols-outlined text-[18px] text-slate-300 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-primary motion-reduce:transform-none" aria-hidden="true">arrow_forward</span>
                                                 </button>
                                             );
                                         })}
@@ -567,7 +563,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     <div className="border-t border-slate-100 pt-2">
                                         <div className="px-3 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{t('search.attractions')}</div>
                                         {displayTours.map(item => (
-                                            <button key={`tour-${item.id}`} type="button" onClick={() => handleSelectSuggestion(item.name)} className="flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                                            <button key={`tour-${item.id}`} type="button" onClick={() => handleSelectSuggestion(item.name)} className="group flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none">
                                                 <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-200">
                                                     <span className="material-symbols-outlined text-slate-500 text-[20px]">pin_drop</span>
                                                 </div>
@@ -599,8 +595,8 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <div className="hidden md:block w-px h-10 bg-slate-200"></div>
 
             {/* 2. Dates */}
-            <div className="flex items-center gap-3 px-4 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group" onClick={() => { const btn = document.getElementById('date-picker-trigger'); btn?.click(); }}>
-                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform text-[18px] flex-shrink-0">calendar_today</span>
+            <div className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { const btn = document.getElementById('date-picker-trigger'); btn?.click(); }}>
+                <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] text-[18px] flex-shrink-0 motion-reduce:transform-none">calendar_today</span>
                 <div className="flex flex-col flex-1 min-w-0">
                     <DatePickerDropdown
                         value={date}
@@ -617,8 +613,8 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <div className="hidden md:block w-px h-10 bg-slate-200"></div>
 
             {/* 3. Budget (CUSTOM DROPDOWN) */}
-            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full hover:bg-slate-50 rounded-full transition-colors cursor-pointer group relative">
-                <span className="material-symbols-outlined text-primary group-hover:scale-110 transition-transform flex-shrink-0">account_balance_wallet</span>
+            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none">
+                <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 motion-reduce:transform-none">account_balance_wallet</span>
                 <div className="flex flex-col flex-1 min-w-0">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{t('search.budget')}</label>
                     <div className="flex items-center gap-2 min-w-0">
@@ -630,7 +626,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); setBudget(''); setIsBudgetOpen(false); }}
                                 aria-label={language === 'vi' ? 'Xóa ngân sách' : 'Clear budget'}
-                                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-colors hover:text-slate-600"
+                                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none"
                             >
                                 <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                             </button>
@@ -648,7 +644,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     e.stopPropagation();
                                     handleSelectBudget(opt.value);
                                 }}
-                                className={`px-5 py-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-colors ${budget === opt.value ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
+                                className={`px-5 py-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-1 active:translate-x-0 motion-reduce:transform-none ${budget === opt.value ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
                             >
                                 <span className="text-sm font-bold">{opt.label}</span>
                                 {budget === opt.value && (
@@ -664,13 +660,14 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <button
                 type="submit"
                 disabled={!canSearch}
-                className={`w-full md:w-auto mt-2 md:mt-0 rounded-full px-8 py-4 font-bold tracking-wide transition-all whitespace-nowrap shadow-md
+                className={`group w-full md:w-auto mt-2 md:mt-0 inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 font-bold tracking-wide transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] whitespace-nowrap shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
                     ${canSearch
-                        ? 'bg-primary text-white hover:bg-primary-container active:scale-95 shadow-primary/20'
+                        ? 'bg-primary text-white hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] shadow-primary/20 motion-reduce:transform-none'
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                     }`}
             >
-                {t('search.searchPath')}
+                <span>{t('search.searchPath')}</span>
+                <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${canSearch ? 'group-hover:translate-x-1' : ''} motion-reduce:transform-none`} aria-hidden="true">arrow_forward</span>
             </button>
         </form>
         </div>

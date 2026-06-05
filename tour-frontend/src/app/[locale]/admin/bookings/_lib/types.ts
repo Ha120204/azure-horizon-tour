@@ -214,3 +214,11 @@ export type AssistedDraftForm = {
 };
 
 export type AssistedDraftFormErrors = Partial<Record<keyof AssistedDraftForm, string>>;
+
+export type DraftSelectOption = {
+  value: string;
+  label: string;
+  description?: string;
+  icon?: string;
+  disabled?: boolean;
+};

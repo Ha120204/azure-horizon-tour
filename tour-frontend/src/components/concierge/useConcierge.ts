@@ -25,6 +25,14 @@ export function useConcierge() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const isMountedRef = useRef(false);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     // ── Auto-scroll ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -36,20 +44,24 @@ export function useConcierge() {
     // ── Focus input khi mở ────────────────────────────────────────────────
     useEffect(() => {
         if (isOpen) {
-            setTimeout(() => inputRef.current?.focus(), 300);
+            const timer = window.setTimeout(() => inputRef.current?.focus(), 300);
+            return () => window.clearTimeout(timer);
         }
     }, [isOpen]);
 
     // ── Sync auth state ───────────────────────────────────────────────────
     useEffect(() => {
+        let isActive = true;
         const syncAuthState = async () => {
             const profile = await fetchAuthProfile();
+            if (!isActive || !isMountedRef.current) return;
             setHasAccessToken(Boolean(profile));
         };
         void syncAuthState();
         window.addEventListener('auth-change', syncAuthState);
         window.addEventListener('storage', syncAuthState);
         return () => {
+            isActive = false;
             window.removeEventListener('auth-change', syncAuthState);
             window.removeEventListener('storage', syncAuthState);
         };
@@ -63,9 +75,11 @@ export function useConcierge() {
     }, []);
 
     const loadSessions = useCallback(async () => {
+        if (!isMountedRef.current) return;
         setIsLoadingSessions(true);
         try {
             const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/sessions`);
+            if (!isMountedRef.current) return;
             if (res.status === 401) {
                 setSessions([]);
                 setHasAccessToken(false);
@@ -73,24 +87,29 @@ export function useConcierge() {
             }
             if (!res.ok) return;
             const json = await res.json();
+            if (!isMountedRef.current) return;
             const data = (json.data ?? json) as { sessions?: ChatSessionSummary[] };
             setSessions(data.sessions ?? []);
         } catch (e) {
             console.error('[AI] Loi tai danh sach lich su:', e);
         } finally {
+            if (!isMountedRef.current) return;
             setIsLoadingSessions(false);
         }
     }, []);
 
     const loadSessionById = useCallback(async (sessionId: string) => {
+        if (!isMountedRef.current) return false;
         setIsLoadingHistory(true);
         try {
             const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/${sessionId}`);
+            if (!isMountedRef.current) return false;
             if (!res.ok) {
                 if (res.status === 404) localStorage.removeItem('aiSessionId');
                 return false;
             }
             const json = await res.json();
+            if (!isMountedRef.current) return false;
             const data = (json.data ?? json) as { sessionId?: string; messages?: Message[] };
             if (data.sessionId) {
                 localStorage.setItem('aiSessionId', data.sessionId);
@@ -105,24 +124,30 @@ export function useConcierge() {
             console.error('[AI] Loi tai lich su:', e);
             return false;
         } finally {
+            if (!isMountedRef.current) return;
             setIsLoadingHistory(false);
         }
     }, []);
 
     // ── Load lịch sử chat từ server khi mount ─────────────────────────────
     useEffect(() => {
+        let isActive = true;
         const loadHistory = async () => {
             const sessionId = localStorage.getItem('aiSessionId');
             const profile = await fetchAuthProfile();
+            if (!isActive || !isMountedRef.current) return;
 
             await loadSessions();
+            if (!isActive || !isMountedRef.current) return;
 
             if (profile) {
                 setIsLoadingHistory(true);
                 try {
                     const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/me/latest`);
+                    if (!isActive || !isMountedRef.current) return;
                     if (res.ok) {
                         const json = await res.json();
+                        if (!isActive || !isMountedRef.current) return;
                         const data = (json.data ?? json) as { sessionId?: string; messages?: Message[] };
                         if (data.sessionId) {
                             localStorage.setItem('aiSessionId', data.sessionId);
@@ -136,6 +161,7 @@ export function useConcierge() {
                 } catch (e) {
                     console.error('[AI] Loi tai lich su tai khoan:', e);
                 } finally {
+                    if (!isActive || !isMountedRef.current) return;
                     setIsLoadingHistory(false);
                 }
             }
@@ -145,9 +171,12 @@ export function useConcierge() {
             }
         };
 
-        loadHistory();
+        void loadHistory();
         window.addEventListener('auth-change', loadHistory);
-        return () => window.removeEventListener('auth-change', loadHistory);
+        return () => {
+            isActive = false;
+            window.removeEventListener('auth-change', loadHistory);
+        };
     }, [loadSessionById, loadSessions]);
 
     // ── Gửi tin nhắn ──────────────────────────────────────────────────────
@@ -161,7 +190,9 @@ export function useConcierge() {
             setIsTyping(true);
             setCooldown(true);
 
-            setTimeout(() => setCooldown(false), 3000);
+            window.setTimeout(() => {
+                if (isMountedRef.current) setCooldown(false);
+            }, 3000);
 
             try {
                 const sessionId = localStorage.getItem('aiSessionId');
@@ -172,6 +203,7 @@ export function useConcierge() {
                     headers,
                     body: JSON.stringify({ message: text, sessionId: sessionId || undefined }),
                 });
+                if (!isMountedRef.current) return;
 
                 if (!res.ok) {
                     const errJson = await res.json().catch(() => ({}));
@@ -186,6 +218,7 @@ export function useConcierge() {
                 }
 
                 const json = await res.json();
+                if (!isMountedRef.current) return;
                 const data = (json.data ?? json) as { reply?: string; sessionId?: string; tourCard?: Message['tourCard'] };
 
                 if (data.sessionId) {
@@ -206,6 +239,7 @@ export function useConcierge() {
                 if (hasAccessToken) await loadSessions();
             } catch (error) {
                 console.error('[AI] Chat Error:', error);
+                if (!isMountedRef.current) return;
                 setIsTyping(false);
                 setMessages((prev) => [
                     ...prev,

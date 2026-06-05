@@ -7,7 +7,6 @@ import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { EMPTY_ADMIN_STATS } from '../_lib/config';
-import { exportReviewsCsv } from '../_lib/exportCsv';
 import type { AdminStats, Meta, Review, ReviewKpiItem } from '../_lib/types';
 
 const REVIEW_REALTIME_TYPES = ['review_good', 'review_bad'] as const;
@@ -241,15 +240,6 @@ export function useReviewManagement() {
         }
     }, [clearSelection, fetchReviews, fetchStats, selected, showToast]);
 
-    const handleExportSelected = useCallback(() => {
-        const exportedCount = exportReviewsCsv(selectedReviews);
-        if (exportedCount === 0) {
-            showToast('Chưa có đánh giá nào để xuất', false);
-            return;
-        }
-        showToast(`Đã xuất ${exportedCount} đánh giá`);
-    }, [selectedReviews, showToast]);
-
     const resetFilters = useCallback(() => {
         setSearch('');
         setRatingFilter('');
@@ -443,7 +433,6 @@ export function useReviewManagement() {
         handleDelete,
         handleReply,
         handleBulkVisibility,
-        handleExportSelected,
         resetFilters,
         filterByRating,
         applyQuickFilter,

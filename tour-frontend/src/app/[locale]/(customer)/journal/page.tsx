@@ -166,26 +166,27 @@ export default function JournalPage() {
                 </header>
 
                 {/* Category Filter Navigation */}
-                <nav className="sticky top-[80px] z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm transition-all duration-300">
-                    <div className="max-w-[1440px] mx-auto px-8 md:px-16 flex justify-start md:justify-center items-center h-[60px] gap-x-8 md:gap-x-12 overflow-x-auto hide-scrollbar relative">
-                        {CATEGORIES.map((cat) => (
-                            <button
-                                key={cat}
-                                onClick={() => setActiveCategory(cat)}
-                                className={`relative group text-[11px] font-bold tracking-[0.18em] transition-all duration-300 whitespace-nowrap py-4 uppercase ${activeCategory === cat
-                                    ? 'text-blue-800'
-                                    : 'text-slate-400 hover:text-slate-700'
+                <nav className="sticky top-[80px] z-40 border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur-xl transition-all duration-300">
+                    <div className="mx-auto flex h-[60px] max-w-[1440px] items-center justify-start gap-1.5 overflow-x-auto px-8 font-['Plus_Jakarta_Sans'] md:justify-center md:px-16">
+                        {CATEGORIES.map((cat) => {
+                            const isActive = activeCategory === cat;
+
+                            return (
+                                <button
+                                    key={cat}
+                                    type="button"
+                                    aria-pressed={isActive}
+                                    onClick={() => setActiveCategory(cat)}
+                                    className={`group inline-flex min-h-[42px] shrink-0 items-center rounded-full px-4 py-2 text-sm font-semibold tracking-tight transition-[transform,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 motion-reduce:transform-none motion-reduce:transition-none ${
+                                        isActive
+                                            ? 'bg-primary/10 text-primary shadow-sm shadow-primary/5'
+                                            : 'text-slate-600 hover:bg-surface-container-low hover:text-primary'
                                     }`}
-                            >
-                                {t(`journal.categories.${cat}`)}
-                                <span
-                                    className={`absolute bottom-0 left-0 w-full h-[2px] bg-blue-700 rounded-t-full transition-transform duration-300 ease-out origin-left ${activeCategory === cat
-                                        ? 'scale-x-100'
-                                        : 'scale-x-0 group-hover:scale-x-75'
-                                        }`}
-                                />
-                            </button>
-                        ))}
+                                >
+                                    <span className="whitespace-nowrap">{t(`journal.categories.${cat}`)}</span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </nav>
 
@@ -297,57 +298,104 @@ export default function JournalPage() {
                             )}
                         </section>
 
-                        {/* ═══ Newsletter Section ═══ */}
-                        <section className="mx-8 md:mx-16 mb-24 relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
-                            <div className="absolute inset-0 opacity-10">
-                                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-400 rounded-full blur-[120px]"></div>
-                                <div className="absolute bottom-0 left-0 w-72 h-72 bg-indigo-400 rounded-full blur-[100px]"></div>
-                            </div>
-                            <div className="relative z-10 flex flex-col items-center text-center py-20 px-8">
-                                <span className="material-symbols-outlined text-4xl text-blue-300 mb-6">mail</span>
-                                <h2 className="text-3xl md:text-4xl font-bold text-white font-headline mb-4">
-                                    {t('journal.newsletterTitle')}
-                                </h2>
-                                <p className="text-blue-200/80 max-w-lg mb-10 text-lg">
-                                    {t('journal.newsletterDesc')}
-                                </p>
-                                <form onSubmit={handleSubscribe} className="flex flex-col w-full max-w-md gap-3">
-                                    <div className="flex w-full gap-3">
-                                        <input
-                                            type="email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            disabled={subscribeStatus === 'loading'}
-                                            placeholder={t('journal.newsletterPlaceholder')}
-                                            className="flex-grow bg-white/10 border border-white/20 rounded-xl px-5 py-3.5 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 backdrop-blur-sm text-sm disabled:opacity-50"
-                                        />
-                                        <button 
-                                            disabled={subscribeStatus === 'loading'}
-                                            className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-200 active:scale-95 text-sm whitespace-nowrap shadow-lg shadow-blue-600/25 disabled:opacity-50 flex items-center justify-center gap-2"
-                                            type="submit"
-                                        >
-                                            {subscribeStatus === 'loading' ? <span className="material-symbols-outlined animate-spin inline-block text-[18px]">progress_activity</span> : t('journal.newsletterBtn')}
-                                        </button>
+                        {/* Newsletter Section */}
+                        <section className="mb-24 bg-[#0d1d49] px-6 py-16 md:px-16 md:py-20">
+                            <div className="mx-auto grid max-w-6xl items-center gap-10 md:grid-cols-[1.05fr_0.95fr]">
+                                <div>
+                                    <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-blue-100">
+                                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">mail</span>
+                                        {language === 'vi' ? 'Ấn phẩm tuyển chọn' : 'Curated dispatch'}
                                     </div>
-                                    {subscribeStatus === 'success' && (
-                                        <p className="text-emerald-400 text-sm font-semibold mt-1 flex items-center justify-center gap-1 animate-fade-in-up">
-                                            <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                                            {language === 'vi' ? 'Đăng ký nhận tin thành công!' : 'Successfully subscribed!'}
-                                        </p>
-                                    )}
-                                    {subscribeStatus === 'exists' && (
-                                        <p className="text-blue-300 text-sm font-semibold mt-1 flex items-center justify-center gap-1 animate-fade-in-up">
-                                            <span className="material-symbols-outlined text-[16px]">info</span>
-                                            {language === 'vi' ? 'Email này đã được đăng ký trước đó!' : 'This email is already subscribed!'}
-                                        </p>
-                                    )}
-                                    {subscribeStatus === 'error' && (
-                                        <p className="text-red-400 text-sm font-semibold mt-1 flex items-center justify-center gap-1 animate-fade-in-up">
-                                            <span className="material-symbols-outlined text-[16px]">error</span>
-                                            {language === 'vi' ? 'Email không hợp lệ hoặc có lỗi.' : 'Invalid email or an error occurred.'}
-                                        </p>
-                                    )}
-                                </form>
+                                    <h2 className="max-w-xl font-headline text-4xl font-extrabold leading-tight tracking-tight text-white md:text-5xl">
+                                        {t('journal.newsletterTitle')}
+                                    </h2>
+                                    <p className="mt-5 max-w-2xl text-base leading-8 text-blue-100/85 md:text-lg">
+                                        {t('journal.newsletterDesc')}
+                                    </p>
+                                    <div className="mt-8 flex flex-wrap gap-3 text-sm font-semibold text-white">
+                                        {(language === 'vi'
+                                            ? ['Câu chuyện mới mỗi tháng', 'Ưu đãi riêng', 'Gợi ý điểm đến']
+                                            : ['Monthly stories', 'Private offers', 'Destination notes']
+                                        ).map((item) => (
+                                            <span key={item} className="inline-flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2 ring-1 ring-white/10">
+                                                <span className="material-symbols-outlined text-[16px] text-[#ffd8b5]" aria-hidden="true">check</span>
+                                                {item}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="relative">
+                                    <div className="absolute inset-x-8 -top-5 h-10 rounded-t-[2rem] bg-[#ffd8b5]" aria-hidden="true" />
+                                    <div className="relative rounded-[1.5rem] bg-white p-5 shadow-[0_18px_44px_rgba(3,18,45,0.28)] md:p-6">
+                                        <div className="mb-5 flex items-start justify-between gap-4">
+                                            <div>
+                                                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Journal Letter</p>
+                                                <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
+                                                    {language === 'vi' ? 'Nhận bản tin du lịch' : 'Receive the travel letter'}
+                                                </p>
+                                            </div>
+                                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                                                <span className="material-symbols-outlined" aria-hidden="true">mark_email_unread</span>
+                                            </div>
+                                        </div>
+
+                                        <form onSubmit={handleSubscribe} className="space-y-3">
+                                            <label htmlFor="journal-newsletter-email" className="sr-only">{t('journal.newsletterPlaceholder')}</label>
+                                            <div className="flex flex-col gap-3 lg:flex-row">
+                                                <input
+                                                    id="journal-newsletter-email"
+                                                    type="email"
+                                                    value={email}
+                                                    onChange={(e) => setEmail(e.target.value)}
+                                                    disabled={subscribeStatus === 'loading'}
+                                                    placeholder={t('journal.newsletterPlaceholder')}
+                                                    className="min-h-14 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-5 text-sm font-semibold text-slate-900 outline-none transition-[background-color,border-color,box-shadow] placeholder:text-slate-400 focus:border-primary/40 focus:bg-white focus:ring-4 focus:ring-primary/10 disabled:opacity-50"
+                                                />
+                                                <button
+                                                    disabled={subscribeStatus === 'loading'}
+                                                    className="group inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-7 text-sm font-extrabold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 motion-reduce:transform-none"
+                                                    type="submit"
+                                                >
+                                                    {subscribeStatus === 'loading' ? (
+                                                        <span className="material-symbols-outlined animate-spin text-[18px]" aria-hidden="true">progress_activity</span>
+                                                    ) : (
+                                                        <>
+                                                            {t('journal.newsletterBtn')}
+                                                            <span className="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true">arrow_forward</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+                                            <span className="rounded-full bg-slate-100 px-3 py-1.5">{language === 'vi' ? 'Không spam' : 'No spam'}</span>
+                                            <span className="rounded-full bg-slate-100 px-3 py-1.5">{language === 'vi' ? 'Có thể hủy bất cứ lúc nào' : 'Unsubscribe anytime'}</span>
+                                        </div>
+
+                                        <div aria-live="polite">
+                                            {subscribeStatus === 'success' && (
+                                                <p className="mt-5 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 animate-fade-in-up">
+                                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">check_circle</span>
+                                                    {language === 'vi' ? 'Đăng ký nhận tin thành công!' : 'Successfully subscribed!'}
+                                                </p>
+                                            )}
+                                            {subscribeStatus === 'exists' && (
+                                                <p className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 animate-fade-in-up">
+                                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">info</span>
+                                                    {language === 'vi' ? 'Email này đã được đăng ký trước đó!' : 'This email is already subscribed!'}
+                                                </p>
+                                            )}
+                                            {subscribeStatus === 'error' && (
+                                                <p className="mt-5 flex items-center gap-2 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 animate-fade-in-up">
+                                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">error</span>
+                                                    {language === 'vi' ? 'Email không hợp lệ hoặc có lỗi.' : 'Invalid email or an error occurred.'}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </section>
                     </>

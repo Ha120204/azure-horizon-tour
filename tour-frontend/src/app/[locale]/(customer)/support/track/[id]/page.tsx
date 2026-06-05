@@ -51,7 +51,7 @@ export default function GuestSupportTicketPage() {
   const fetchTicket = async (code: string) => {
     const trimmedCode = code.trim();
     if (!trimmedCode) {
-      setError('Vui long nhap ma truy cap.');
+      setError('Vui lòng nhập mã truy cập.');
       return;
     }
 
@@ -63,14 +63,14 @@ export default function GuestSupportTicketPage() {
       const payload = (await res.json()) as TicketResponse;
 
       if (!res.ok) {
-        setError(resolveMessage(payload) ?? 'Khong the tai yeu cau ho tro.');
+        setError(resolveMessage(payload) ?? 'Không thể tải yêu cầu hỗ trợ.');
         setTicket(null);
         return;
       }
 
       const resolvedTicket = resolveTicket(payload);
       if (!resolvedTicket) {
-        setError('Khong tim thay yeu cau ho tro.');
+        setError('Không tìm thấy yêu cầu hỗ trợ.');
         setTicket(null);
         return;
       }
@@ -78,7 +78,7 @@ export default function GuestSupportTicketPage() {
       setTicket(resolvedTicket);
       setAccessCode(trimmedCode);
     } catch {
-      setError('Loi ket noi, vui long thu lai.');
+      setError('Lỗi kết nối, vui lòng thử lại.');
       setTicket(null);
     } finally {
       setIsLoading(false);
@@ -110,16 +110,16 @@ export default function GuestSupportTicketPage() {
             <span className="material-symbols-outlined text-3xl">support_agent</span>
           </div>
           <h1 className="font-headline text-3xl font-extrabold text-on-surface">
-            Theo doi yeu cau ho tro
+            Theo dõi yêu cầu hỗ trợ
           </h1>
           <p className="mt-3 text-sm leading-6 text-on-surface-variant">
-            Nhap ma truy cap trong email xac nhan de xem trao doi voi doi ngu ho tro.
+            Nhập mã truy cập trong email xác nhận để xem trao đổi với đội ngũ hỗ trợ.
           </p>
 
           <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="support-access-code" className="text-xs font-bold uppercase tracking-widest text-primary">
-                Ma truy cap
+                Mã truy cập
               </label>
               <input
                 id="support-access-code"
@@ -138,12 +138,12 @@ export default function GuestSupportTicketPage() {
               className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isLoading && <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>}
-              Xem yeu cau
+              Xem yêu cầu
             </button>
           </form>
 
           <Link href="/contact" className="mt-5 inline-flex text-sm font-semibold text-primary hover:underline">
-            Quay lai trang lien he
+            Quay lại trang liên hệ
           </Link>
         </div>
       </main>

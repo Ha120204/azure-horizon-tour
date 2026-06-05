@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { CheckoutSelect } from './CheckoutSelect';
 
 interface ContactInfo {
     fullName: string;
@@ -107,18 +108,21 @@ export default function ContactInfoForm({
                             {t('checkout.identityDocument')} <span className="text-error">*</span>
                         </label>
                         <div className="flex gap-2">
-                            <select
-                                className="bg-surface-container-low border-none rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none text-sm font-semibold text-on-surface w-36 flex-shrink-0"
+                            <CheckoutSelect
+                                className="w-36 flex-shrink-0"
+                                buttonClassName="border-transparent bg-surface-container-low shadow-none"
+                                menuClassName="right-auto w-56"
+                                ariaLabel={t('checkout.identityDocument')}
                                 value={contactInfo.identityType}
-                                onChange={(e) => {
-                                    const newType = e.target.value;
+                                options={[
+                                    { value: 'CCCD', label: t('checkout.citizenId'), icon: 'badge' },
+                                    { value: 'PASSPORT', label: t('checkout.passport'), icon: 'id_card' },
+                                ]}
+                                onChange={(newType) => {
                                     setContactInfo({ ...contactInfo, identityType: newType, identityNo: '' });
                                     if (isBookForMyself) setLeadTraveler(prev => ({ ...prev, identityType: newType, identityNo: '' }));
                                 }}
-                            >
-                                <option value="CCCD">{t('checkout.citizenId')}</option>
-                                <option value="PASSPORT">{t('checkout.passport')}</option>
-                            </select>
+                            />
                             <div className="flex-1">
                                 <input
                                     className={`w-full bg-surface-container-low border-none rounded-lg p-3 md:p-4 focus:ring-1 outline-none ${identityError ? 'ring-1 ring-error/60 bg-error/5 focus:ring-error' : 'focus:ring-primary'}`}

@@ -755,6 +755,16 @@ function CheckoutContent() {
                 contactInfo={contactInfo}
                 leadTraveler={leadTraveler}
                 passengers={passengers}
+                tourData={tourData}
+                selectedPackage={selectedPackage}
+                departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
+                adultCount={adultCount}
+                childCount={childCount}
+                infantCount={infantCount}
+                prices={PRICES}
+                subtotal={subtotal}
+                discountAmount={discountAmount}
+                totalPrice={totalPrice}
                 t={t}
             />
         </main>

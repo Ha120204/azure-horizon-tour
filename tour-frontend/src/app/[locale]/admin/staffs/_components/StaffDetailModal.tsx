@@ -1,9 +1,18 @@
 'use client';
 
 import Image from 'next/image';
-import { bookingStatusStyle, roleConfig, statusConfig } from '../_lib/config';
-import { formatCurrency, formatDate, getInitials } from '../_lib/helpers';
+import { roleConfig, statusConfig } from '../_lib/config';
+import { formatDate, getInitials } from '../_lib/helpers';
 import type { StaffEditForm, User } from '../_lib/types';
+import { StaffSelect } from './StaffSelect';
+import { useAccessibleDialog } from '../_hooks/useAccessibleDialog';
+
+const genderOptions = [
+    { value: '', label: 'Chọn giới tính' },
+    { value: 'Nam', label: 'Nam' },
+    { value: 'Nữ', label: 'Nữ' },
+    { value: 'Khác', label: 'Khác' },
+];
 
 interface StaffDetailModalProps {
     user: User | null;
@@ -36,14 +45,31 @@ export function StaffDetailModal({
     onChangeRole,
     onToggleStatus,
 }: StaffDetailModalProps) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    const dialogRef = useAccessibleDialog({ onClose, canClose: !isSaving });
 
-            <div className="relative bg-surface-container-lowest rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-slide-up">
+    return (
+        <div
+            ref={dialogRef}
+            data-accessible-dialog="true"
+            tabIndex={-1}
+            className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="detail-title"
+            aria-describedby={user ? 'detail-description' : undefined}
+            aria-busy={isLoading || isSaving}
+            onMouseDown={event => {
+                if (event.target === event.currentTarget && !isSaving) onClose();
+            }}
+        >
+            <div className="pointer-events-none absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+
+            <div className="relative flex max-h-[calc(100dvh-0.75rem)] w-full max-w-4xl flex-col overflow-hidden overscroll-contain rounded-t-3xl bg-surface-container-lowest shadow-2xl animate-fade-slide-up sm:max-h-[90vh] sm:rounded-3xl">
                 {isLoading && !user ? (
                     <div className="flex items-center justify-center py-32">
-                        <span className="material-symbols-outlined text-5xl text-primary animate-spin">progress_activity</span>
+                        <h2 id="detail-title" className="sr-only">Đang tải chi tiết tài khoản</h2>
+                        <span className="material-symbols-outlined text-5xl text-primary animate-spin" aria-hidden="true">progress_activity</span>
+                        <span className="sr-only" role="status">Đang tải chi tiết tài khoản…</span>
                     </div>
                 ) : user && (
                     <>
@@ -53,9 +79,10 @@ export function StaffDetailModal({
                             onStartEditing={onStartEditing}
                             onCancelEditing={onCancelEditing}
                             onClose={onClose}
+                            canClose={!isSaving}
                         />
-                        <StaffDetailStats user={user} />
-                        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+                        {!isEditing && <StaffDetailStats user={user} />}
+                        <div className={`flex-1 overflow-y-auto ${isEditing ? 'px-4 py-5 sm:px-8 sm:py-7 lg:px-10' : 'space-y-6 px-4 py-5 sm:px-8 sm:py-6'}`}>
                             {isEditing ? (
                                 <StaffEditPanel
                                     user={user}
@@ -88,70 +115,92 @@ interface StaffDetailHeroProps {
     onStartEditing: (user: User) => void;
     onCancelEditing: () => void;
     onClose: () => void;
+    canClose: boolean;
 }
 
-function StaffDetailHero({ user, isEditing, onStartEditing, onCancelEditing, onClose }: StaffDetailHeroProps) {
+function StaffDetailHero({ user, isEditing, onStartEditing, onCancelEditing, onClose, canClose }: StaffDetailHeroProps) {
     const role = roleConfig[user.role] || roleConfig.CUSTOMER;
     const status = statusConfig[user.status] || statusConfig.Active;
+    const heroContentClass = isEditing
+        ? 'relative z-[1] flex items-center gap-4 px-5 py-5 pr-28 text-left sm:px-8 sm:py-6'
+        : 'relative z-[1] px-4 pb-12 pt-6 text-center sm:px-8 sm:pb-14 sm:pt-8';
+    const avatarImageClass = isEditing
+        ? 'h-14 w-14 flex-shrink-0 rounded-2xl object-cover ring-4 ring-white/25 shadow-lg sm:h-16 sm:w-16'
+        : 'h-20 w-20 rounded-2xl object-cover ring-4 ring-white/30 shadow-lg mx-auto';
+    const avatarFallbackClass = isEditing
+        ? 'h-14 w-14 flex-shrink-0 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-xl ring-4 ring-white/20 shadow-lg sm:h-16 sm:w-16'
+        : 'w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white/20 shadow-lg mx-auto';
+    const titleClass = isEditing
+        ? 'font-headline text-lg font-bold text-white sm:text-xl'
+        : 'font-headline text-xl font-bold text-white mt-4';
+    const badgeRowClass = isEditing
+        ? 'mt-2 flex flex-wrap items-center gap-2'
+        : 'flex items-center justify-center gap-2 mt-3';
 
     return (
         <div className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary-container to-primary/80" />
             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize: '60px 60px, 40px 40px' }} />
 
-            <div className="absolute top-4 right-4 z-10 flex gap-2">
+            <div className="absolute right-3 top-3 z-10 flex gap-2 sm:right-4 sm:top-4">
                 {!isEditing ? (
                     <button
+                        type="button"
                         onClick={() => onStartEditing(user)}
-                        aria-label="Sửa thông tin người dùng"
-                        className="w-10 h-10 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors"
+                        aria-label="Sửa thông tin tài khoản"
+                        className="w-10 h-10 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                         title="Sửa thông tin"
                     >
                         <span className="material-symbols-outlined text-[20px]" aria-hidden="true">edit</span>
                     </button>
                 ) : (
                     <button
+                        type="button"
                         onClick={onCancelEditing}
-                        className="px-4 h-10 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors text-sm font-semibold"
+                        className="px-4 h-10 flex items-center justify-center rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >
                         Hủy sửa
                     </button>
                 )}
                 <button
+                    type="button"
                     onClick={onClose}
-                    aria-label="Đóng chi tiết người dùng"
-                    className="w-10 h-10 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-sm text-white hover:bg-black/30 transition-colors"
+                    disabled={!canClose}
+                    aria-label="Đóng chi tiết tài khoản"
+                    className="w-10 h-10 flex items-center justify-center rounded-full bg-black/20 backdrop-blur-sm text-white hover:bg-black/30 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     title="Đóng"
                 >
                     <span className="material-symbols-outlined text-lg" aria-hidden="true">close</span>
                 </button>
             </div>
 
-            <div className="relative z-[1] px-8 pt-8 pb-14 text-center">
+            <div className={heroContentClass}>
                 {user.avatarUrl ? (
-                    <Image src={user.avatarUrl} alt={user.fullName || ''} width={80} height={80} sizes="80px" className="h-20 w-20 rounded-2xl object-cover ring-4 ring-white/30 shadow-lg mx-auto" />
+                    <Image src={user.avatarUrl} alt={user.fullName || ''} width={80} height={80} sizes="80px" className={avatarImageClass} />
                 ) : (
-                    <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white/20 shadow-lg mx-auto">
+                    <div className={avatarFallbackClass}>
                         {getInitials(user.fullName)}
                     </div>
                 )}
-                <h2 id="detail-title" className="font-headline text-xl font-bold text-white mt-4">
-                    {user.fullName || 'Chưa cập nhật'}
-                </h2>
-                <p className="text-white/70 text-sm mt-1">{user.email}</p>
+                <div className="min-w-0">
+                    <h2 id="detail-title" className={titleClass}>
+                        {user.fullName || 'Chưa cập nhật'}
+                    </h2>
+                    <p id="detail-description" className="mt-1 truncate text-sm text-white/70">{user.email}</p>
 
-                <div className="flex items-center justify-center gap-2 mt-3">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-white/20 backdrop-blur-sm text-white">
-                        <span className="material-symbols-outlined text-[13px]">{role.icon}</span>
-                        {role.label}
-                    </span>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${user.status === 'Active'
-                        ? 'bg-emerald-400/20 text-emerald-200'
-                        : 'bg-red-400/20 text-red-200'
-                    }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
-                        {status.label}
-                    </span>
+                    <div className={badgeRowClass}>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-white/20 backdrop-blur-sm text-white">
+                            <span className="material-symbols-outlined text-[13px]" aria-hidden="true">{role.icon}</span>
+                            {role.label}
+                        </span>
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${user.status === 'Active'
+                            ? 'bg-emerald-400/20 text-emerald-200'
+                            : 'bg-red-400/20 text-red-200'
+                        }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
+                            {status.label}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -160,21 +209,16 @@ function StaffDetailHero({ user, isEditing, onStartEditing, onCancelEditing, onC
 
 function StaffDetailStats({ user }: { user: User }) {
     return (
-        <div className="px-8 -mt-7 relative z-[2]">
-            <div className="grid grid-cols-3 gap-3">
-                <div className="bg-surface-container-lowest rounded-2xl p-4 text-center shadow-md border border-outline-variant/10">
-                    <span className="material-symbols-outlined text-primary text-xl mb-1 block">confirmation_number</span>
-                    <p className="text-2xl font-bold text-on-surface">{user.bookingCount ?? 0}</p>
-                    <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider mt-0.5">Bookings</p>
+        <div className="relative z-[2] -mt-7 px-3 sm:px-8">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-2.5 text-center shadow-md sm:p-4">
+                    <span className="material-symbols-outlined text-amber-500 text-xl mb-1 block" aria-hidden="true">star</span>
+                    <p className="text-xl font-bold text-on-surface sm:text-2xl">{user.reviewCount ?? 0}</p>
+                    <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider mt-0.5">Đánh giá</p>
                 </div>
-                <div className="bg-surface-container-lowest rounded-2xl p-4 text-center shadow-md border border-outline-variant/10">
-                    <span className="material-symbols-outlined text-amber-500 text-xl mb-1 block">star</span>
-                    <p className="text-2xl font-bold text-on-surface">{user.reviewCount ?? 0}</p>
-                    <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider mt-0.5">Reviews</p>
-                </div>
-                <div className="bg-surface-container-lowest rounded-2xl p-4 text-center shadow-md border border-outline-variant/10">
-                    <span className="material-symbols-outlined text-violet-500 text-xl mb-1 block">calendar_month</span>
-                    <p className="text-sm font-bold text-on-surface">{formatDate(user.createdAt)}</p>
+                <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-2.5 text-center shadow-md sm:p-4">
+                    <span className="material-symbols-outlined text-violet-500 text-xl mb-1 block" aria-hidden="true">calendar_month</span>
+                    <p className="text-xs font-bold text-on-surface sm:text-sm">{formatDate(user.createdAt)}</p>
                     <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider mt-0.5">Ngày tạo</p>
                 </div>
             </div>
@@ -200,105 +244,165 @@ function StaffEditPanel({
     onSaveInfo,
 }: StaffEditPanelProps) {
     return (
-        <div>
-            <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs uppercase tracking-widest text-on-surface-variant font-bold flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm text-primary">edit_note</span>
-                    Chỉnh sửa thông tin cơ bản
-                </h4>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/8 text-primary text-[11px] font-bold">
-                    <span className="material-symbols-outlined text-[13px]">badge</span>
+        <div className="mx-auto w-full max-w-3xl">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                        <span className="material-symbols-outlined text-sm text-primary" aria-hidden="true">edit_note</span>
+                        Chỉnh sửa thông tin cơ bản
+                    </h4>
+                    <p className="mt-1 text-sm text-on-surface-variant">Cập nhật nhanh các thông tin nhận diện chính của nhân viên.</p>
+                </div>
+                <span className="inline-flex w-fit items-center gap-1 rounded-lg bg-primary/8 px-2.5 py-1 text-[11px] font-bold text-primary">
+                    <span className="material-symbols-outlined text-[13px]" aria-hidden="true">badge</span>
                     ID #{user.id}
                 </span>
             </div>
 
-            <div className="bg-surface-container-low rounded-2xl p-5 border border-outline-variant/10 space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StaffEditSummaryStrip user={user} />
+
+            <div className="mt-5 space-y-6 rounded-3xl border border-outline-variant/10 bg-surface-container-low p-5 shadow-sm sm:p-6 lg:p-7">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <div>
-                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Họ và tên</label>
+                        <label htmlFor="staff-edit-name" className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Họ và tên</label>
                         <div className="relative">
-                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">person</span>
+                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none" aria-hidden="true">person</span>
                             <input
+                                id="staff-edit-name"
+                                name="fullName"
                                 type="text"
+                                autoComplete="off"
                                 value={editForm.fullName}
                                 onChange={e => onEditFormChange({ fullName: e.target.value })}
-                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl pl-11 pr-4 py-3 text-sm font-medium text-on-surface focus-visible:ring-2 focus-visible:ring-primary focus:border-primary/30 outline-none transition-all"
+                                className="w-full rounded-2xl border border-outline-variant/20 bg-surface-container-lowest py-3.5 pl-11 pr-4 text-sm font-semibold text-on-surface outline-none transition-colors focus:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary"
                                 placeholder="Nhập họ và tên"
                             />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Số điện thoại</label>
+                        <label htmlFor="staff-edit-phone" className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Số điện thoại</label>
                         <div className="relative">
-                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">call</span>
+                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none" aria-hidden="true">call</span>
                             <input
+                                id="staff-edit-phone"
+                                name="phone"
                                 type="tel"
+                                autoComplete="off"
                                 value={editForm.phone}
                                 onChange={e => onEditFormChange({ phone: e.target.value })}
-                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl pl-11 pr-4 py-3 text-sm font-medium text-on-surface focus-visible:ring-2 focus-visible:ring-primary focus:border-primary/30 outline-none transition-all"
+                                className="w-full rounded-2xl border border-outline-variant/20 bg-surface-container-lowest py-3.5 pl-11 pr-4 text-sm font-semibold text-on-surface outline-none transition-colors focus:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary"
                                 placeholder="0901234567"
                             />
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <div>
-                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Giới tính</label>
+                        <label htmlFor="staff-edit-gender" className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Giới tính</label>
                         <div className="relative">
-                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">wc</span>
-                            <select
+                            <StaffSelect
+                                id="staff-edit-gender"
+                                label="Chọn giới tính"
                                 value={editForm.gender}
-                                onChange={e => onEditFormChange({ gender: e.target.value })}
-                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl pl-11 pr-9 py-3 text-sm font-medium text-on-surface focus-visible:ring-2 focus-visible:ring-primary focus:border-primary/30 outline-none appearance-none cursor-pointer transition-all"
-                            >
-                                <option value="">Chọn giới tính</option>
-                                <option value="Nam">Nam</option>
-                                <option value="Nữ">Nữ</option>
-                                <option value="Khác">Khác</option>
-                            </select>
-                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 text-base pointer-events-none">expand_more</span>
+                                options={genderOptions}
+                                onChange={gender => onEditFormChange({ gender })}
+                                icon="wc"
+                                placement="top"
+                                size="comfortable"
+                            />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Ngày sinh</label>
+                        <label htmlFor="staff-edit-dob" className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-wider mb-2">Ngày sinh</label>
                         <div className="relative">
-                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">cake</span>
+                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none" aria-hidden="true">cake</span>
                             <input
+                                id="staff-edit-dob"
+                                name="dob"
                                 type="date"
                                 value={editForm.dob}
                                 onChange={e => onEditFormChange({ dob: e.target.value })}
-                                className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl pl-11 pr-4 py-3 text-sm font-medium text-on-surface focus-visible:ring-2 focus-visible:ring-primary focus:border-primary/30 outline-none transition-all"
+                                className="w-full rounded-2xl border border-outline-variant/20 bg-surface-container-lowest py-3.5 pl-11 pr-4 text-sm font-semibold text-on-surface outline-none transition-colors focus:border-primary/30 focus-visible:ring-2 focus-visible:ring-primary"
                             />
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 mt-5 pt-4 border-t border-outline-variant/10">
+            <div className="mt-5 flex flex-col-reverse gap-3 border-t border-outline-variant/10 pt-4 sm:flex-row sm:items-center sm:justify-end">
                 <button
+                    type="button"
                     onClick={onCancelEditing}
-                    className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+                    disabled={isSaving}
+                    className="rounded-xl px-4 py-3 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-5"
                 >
                     Hủy bỏ
                 </button>
                 <button
+                    type="button"
                     onClick={onSaveInfo}
                     disabled={isSaving}
-                    className="px-6 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center gap-2 shadow-sm"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-6"
                 >
                     {isSaving ? (
                         <>
-                            <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                            <span className="material-symbols-outlined text-base animate-spin" aria-hidden="true">progress_activity</span>
                             Đang lưu…
                         </>
                     ) : (
                         <>
-                            <span className="material-symbols-outlined text-base">save</span>
+                            <span className="material-symbols-outlined text-base" aria-hidden="true">save</span>
                             Lưu thay đổi
                         </>
                     )}
                 </button>
+            </div>
+        </div>
+    );
+}
+
+function StaffEditSummaryStrip({ user }: { user: User }) {
+    return (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <StaffEditSummaryItem
+                icon="calendar_month"
+                label="Ngày tạo"
+                value={formatDate(user.createdAt)}
+                tone="bg-violet-500/8 text-violet-600"
+            />
+            <StaffEditSummaryItem
+                icon="star"
+                label="Đánh giá"
+                value={`${user.reviewCount ?? 0}`}
+                tone="bg-amber-500/8 text-amber-600"
+            />
+            <StaffEditSummaryItem
+                icon="mail"
+                label="Email"
+                value={user.email}
+                tone="bg-primary/8 text-primary"
+            />
+        </div>
+    );
+}
+
+interface StaffEditSummaryItemProps {
+    icon: string;
+    label: string;
+    value: string;
+    tone: string;
+}
+
+function StaffEditSummaryItem({ icon, label, value, tone }: StaffEditSummaryItemProps) {
+    return (
+        <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-3">
+            <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{icon}</span>
+            </div>
+            <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</p>
+                <p className="mt-0.5 truncate text-sm font-semibold text-on-surface">{value}</p>
             </div>
         </div>
     );
@@ -329,7 +433,6 @@ function StaffReadonlyPanel({
                 onChangeRole={onChangeRole}
                 onToggleStatus={onToggleStatus}
             />
-            <StaffRecentBookings user={user} />
         </>
     );
 }
@@ -338,10 +441,10 @@ function StaffPersonalInfo({ user }: { user: User }) {
     return (
         <div>
             <h4 className="text-xs uppercase tracking-widest text-on-surface-variant font-bold mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-primary">person</span>
+                <span className="material-symbols-outlined text-sm text-primary" aria-hidden="true">person</span>
                 Thông tin cá nhân
             </h4>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:gap-3">
                 <InfoTile icon="call" label="Điện thoại" value={user.phone || '—'} tone="bg-primary/8 text-primary" />
                 <InfoTile icon="cake" label="Ngày sinh" value={user.dob ? formatDate(user.dob) : '—'} tone="bg-amber-500/8 text-amber-600" />
                 <InfoTile icon="wc" label="Giới tính" value={user.gender || '—'} tone="bg-violet-500/8 text-violet-600" />
@@ -363,7 +466,7 @@ function InfoTile({ icon, label, value, tone, monospace = false }: InfoTileProps
     return (
         <div className="bg-surface-container-low rounded-xl p-3.5 flex items-center gap-3">
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${tone}`}>
-                <span className="material-symbols-outlined text-base">{icon}</span>
+                <span className="material-symbols-outlined text-base" aria-hidden="true">{icon}</span>
             </div>
             <div className="min-w-0">
                 <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider">{label}</p>
@@ -391,89 +494,43 @@ function StaffQuickActions({
     return (
         <div>
             <h4 className="text-xs uppercase tracking-widest text-on-surface-variant font-bold mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-primary">tune</span>
+                <span className="material-symbols-outlined text-sm text-primary" aria-hidden="true">tune</span>
                 Thao tác nhanh
             </h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:flex sm:flex-wrap">
                 <button
+                    type="button"
                     onClick={() => onStartEditing(user)}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-outline-variant/20 text-on-surface-variant hover:bg-amber-500/8 hover:text-amber-700 hover:border-amber-500/30 transition-all"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-outline-variant/20 px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:border-amber-500/30 hover:bg-amber-500/8 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                 >
-                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span>
                     Sửa thông tin
                 </button>
                 {canEditRoles && (
                     <button
+                        type="button"
                         onClick={() => onChangeRole(user)}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-outline-variant/20 text-on-surface-variant hover:bg-violet-500/8 hover:text-violet-700 hover:border-violet-500/30 transition-all"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-outline-variant/20 px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:border-violet-500/30 hover:bg-violet-500/8 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
                     >
-                        <span className="material-symbols-outlined text-[18px]">shield</span>
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">shield</span>
                         Đổi quyền
                     </button>
                 )}
                 <button
+                    type="button"
                     onClick={() => onToggleStatus(user)}
-                    aria-label={user.status === 'Active' ? `Khóa tài khoản ${user.fullName}` : `Mở khóa tài khoản ${user.fullName}`}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-outline-variant/20 transition-all ${
+                    aria-label={user.status === 'Active' ? `Vô hiệu hóa tài khoản ${user.fullName}` : `Kích hoạt tài khoản ${user.fullName}`}
+                    className={`inline-flex items-center justify-center gap-2 rounded-xl border border-outline-variant/20 px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 ${
                         user.status === 'Active'
-                            ? 'text-on-surface-variant hover:bg-red-500/8 hover:text-red-600 hover:border-red-500/30'
-                            : 'text-on-surface-variant hover:bg-emerald-500/8 hover:text-emerald-600 hover:border-emerald-500/30'
+                            ? 'text-on-surface-variant hover:bg-red-500/8 hover:text-red-600 hover:border-red-500/30 focus-visible:ring-red-500'
+                            : 'text-on-surface-variant hover:bg-emerald-500/8 hover:text-emerald-600 hover:border-emerald-500/30 focus-visible:ring-emerald-500'
                     }`}
                 >
                     <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                         {user.status === 'Active' ? 'block' : 'lock_open'}
                     </span>
-                    {user.status === 'Active' ? 'Khóa tài khoản' : 'Mở khóa'}
+                    {user.status === 'Active' ? 'Vô hiệu hóa' : 'Kích hoạt'}
                 </button>
-            </div>
-        </div>
-    );
-}
-
-function StaffRecentBookings({ user }: { user: User }) {
-    if (!user.recentBookings || user.recentBookings.length === 0) {
-        return (
-            <div className="text-center py-6 bg-surface-container-low rounded-2xl">
-                <span className="material-symbols-outlined text-3xl text-outline mb-2 block">luggage</span>
-                <p className="text-sm font-semibold text-on-surface-variant">Chưa có booking nào</p>
-                <p className="text-xs text-outline mt-1">Người dùng này chưa thực hiện đặt tour.</p>
-            </div>
-        );
-    }
-
-    return (
-        <div>
-            <h4 className="text-xs uppercase tracking-widest text-on-surface-variant font-bold mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-primary">receipt_long</span>
-                Booking gần đây
-            </h4>
-            <div className="space-y-2">
-                {user.recentBookings.map(booking => {
-                    const bookingStatus = bookingStatusStyle[booking.status];
-                    return (
-                        <div key={booking.id} className="flex items-center justify-between p-3.5 bg-surface-container-low rounded-xl hover:bg-surface-container transition-colors">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-9 h-9 rounded-lg bg-primary/8 flex items-center justify-center flex-shrink-0">
-                                    <span className="material-symbols-outlined text-primary text-base">flight_takeoff</span>
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-on-surface truncate">{booking.tour.name}</p>
-                                    <p className="text-xs text-on-surface-variant mt-0.5">
-                                        <span className="font-mono">{booking.bookingCode.substring(0, 14)}</span>
-                                        {' · '}
-                                        {formatDate(booking.createdAt)}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                                <span className="text-sm font-bold text-on-surface">{formatCurrency(booking.totalPrice)}</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${bookingStatus?.className ?? 'bg-surface-container text-on-surface-variant'}`}>
-                                    {bookingStatus?.label ?? booking.status}
-                                </span>
-                            </div>
-                        </div>
-                    );
-                })}
             </div>
         </div>
     );

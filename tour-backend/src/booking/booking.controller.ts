@@ -473,6 +473,19 @@ export class BookingController {
   }
 
   /**
+   * Khách hàng chủ động hỏi PayOS đã nhận tiền chưa — dùng cho inline QR modal.
+   * POST /booking/:id/check-payment
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post(':id/check-payment')
+  async checkPayment(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.bookingPaymentService.customerCheckPayment(Number(id), getAuthUserId(req));
+  }
+
+  /**
    * Khách hàng thanh toán lại booking PENDING chưa hết hạn 15 phút
    * POST /booking/:id/retry-payment
    */

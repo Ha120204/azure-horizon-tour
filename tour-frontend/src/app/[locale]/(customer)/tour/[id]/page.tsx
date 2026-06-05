@@ -368,10 +368,15 @@ export default function TourDetailPage() {
                                     <h2 className="text-2xl font-bold font-headline mb-1">{t('tour_detail.storiesTitle')}</h2>
                                     <p className="text-on-surface-variant text-sm md:text-base">{t('tour_detail.storiesSub')}</p>
                                 </div>
-                                <button onClick={() => setIsReviewModalOpen(true)}
-                                    className="group relative inline-flex items-center text-[15px] font-semibold text-on-surface hover:text-primary transition-colors pb-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsReviewModalOpen(true)}
+                                    className="group inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[transform,box-shadow,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+                                >
+                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-rotate-6 motion-reduce:transform-none" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                        rate_review
+                                    </span>
                                     {t('tour_detail.writeReview')}
-                                    <span className="absolute bottom-0 left-0 w-full h-[1.5px] bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left ease-out" />
                                 </button>
                             </div>
                             {/* Rating Breakdown */}

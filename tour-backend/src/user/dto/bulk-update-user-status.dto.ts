@@ -1,4 +1,5 @@
-import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsIn, IsInt } from 'class-validator';
+import { Role } from '@prisma/client';
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsEnum, IsIn, IsInt, IsOptional } from 'class-validator';
 
 export class BulkUpdateUserStatusDto {
   @IsArray()
@@ -9,4 +10,8 @@ export class BulkUpdateUserStatusDto {
 
   @IsIn(['active', 'deactivated'])
   status: 'active' | 'deactivated';
+
+  @IsOptional()
+  @IsEnum(Role)
+  role?: Role;
 }

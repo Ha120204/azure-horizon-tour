@@ -78,7 +78,17 @@ const successDict = {
         bankTransferPayOS: "Chuyển khoản (PayOS)",
         onlinePayment: "Thanh toán trực tuyến",
         unpaid: "Chưa thanh toán",
-        passengerUnit: "Hành khách"
+        passengerUnit: "Hành khách",
+        paidHeroTitle: "Hành trình của bạn đã sẵn sàng, {name}!",
+        paidHeroSubtitle: "Thanh toán thành công và đặt chỗ của bạn đã được xác nhận. Chúng tôi đã gửi chi tiết hành trình đến email của bạn.",
+        guestName: "Quý khách",
+        unknownTour: "Chưa có tên tour",
+        toBeAnnounced: "Đang cập nhật",
+        leadTravelerFallback: "Khách VIP",
+        tourImageAlt: "Ảnh tour",
+        scanAtCheckIn: "Quét khi check-in",
+        pdfError: "Không thể tạo PDF vé. Vui lòng thử lại!",
+        loadingData: "Đang tải dữ liệu..."
     },
     en: {
         bookingSuccessTitle: "Booking Successful!",
@@ -119,7 +129,17 @@ const successDict = {
         bankTransferPayOS: "Bank Transfer (PayOS)",
         onlinePayment: "Online Payment",
         unpaid: "Unpaid",
-        passengerUnit: "Passenger"
+        passengerUnit: "Passenger",
+        paidHeroTitle: "Your journey awaits, {name}!",
+        paidHeroSubtitle: "Payment successful and your booking is confirmed. We've sent the itinerary details to your email.",
+        guestName: "Guest",
+        unknownTour: "Unknown Tour",
+        toBeAnnounced: "TBA",
+        leadTravelerFallback: "VIP Guest",
+        tourImageAlt: "Tour Image",
+        scanAtCheckIn: "Scan at Check-in",
+        pdfError: "Error generating PDF ticket. Please try again!",
+        loadingData: "Loading data..."
     }
 };
 
@@ -192,7 +212,7 @@ function SuccessTicketContent() {
 
         } catch (error) {
             console.error("Lỗi khi tạo PDF:", error);
-            alert("Error generating PDF ticket. Please try again!");
+            alert(sd.pdfError);
         } finally {
             setIsDownloading(false);
 
@@ -225,6 +245,8 @@ function SuccessTicketContent() {
             </div>
         );
     }
+
+    const travelerName = ticketData.leadTravelerName || ticketData.user?.fullName || sd.guestName;
 
     return (
         <div className="bg-surface font-body text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed min-h-screen flex flex-col">
@@ -268,10 +290,10 @@ function SuccessTicketContent() {
                                 <span className="material-symbols-outlined text-emerald-600 text-5xl" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
                             </div>
                             <h1 className="font-headline text-4xl md:text-5xl font-extrabold tracking-tight text-on-surface mb-4">
-                                Your journey awaits, {ticketData.leadTravelerName || ticketData.user?.fullName || 'Guest'}!
+                                {sd.paidHeroTitle.replace('{name}', travelerName)}
                             </h1>
                             <p className="text-on-surface-variant text-base md:text-lg max-w-xl mx-auto leading-relaxed">
-                                Payment successful and your booking is confirmed. We&apos;ve sent the itinerary details to your email.
+                                {sd.paidHeroSubtitle}
                             </p>
                         </>
                     )}
@@ -288,7 +310,7 @@ function SuccessTicketContent() {
                         <div className="md:w-1/3 h-48 md:h-auto overflow-hidden">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                                alt="Tour Image"
+                                alt={sd.tourImageAlt}
                                 className="w-full h-full object-cover"
                                 src={ticketData.tour?.imageUrl || "https://images.unsplash.com/photo-1561956021-947f09ae0101?w=800&auto=format&fit=crop&q=60"}
                                 crossOrigin="anonymous" // Cấp phép bảo mật cho ảnh Unsplash
@@ -324,19 +346,19 @@ function SuccessTicketContent() {
                                     <div className="sm:col-span-2">
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">{sd.tourName}</p>
                                         <p className="font-headline font-bold text-base md:text-lg leading-tight">
-                                            {ticketData.tour?.name || 'Unknown Tour'}
+                                            {ticketData.tour?.name || sd.unknownTour}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">{sd.dateTime}</p>
                                         <p className="font-semibold text-sm md:text-base">
-                                            {ticketData.tour?.startDate ? formatDateTime(ticketData.tour.startDate, { dateStyle: 'medium', timeStyle: 'short' }) : 'TBA'}
+                                            {ticketData.tour?.startDate ? formatDateTime(ticketData.tour.startDate, { dateStyle: 'medium', timeStyle: 'short' }) : sd.toBeAnnounced}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">{sd.duration}</p>
                                         <p className="font-semibold text-sm md:text-base">
-                                            {ticketData.tour?.duration || 'TBA'}
+                                            {ticketData.tour?.duration || sd.toBeAnnounced}
                                         </p>
                                     </div>
 
@@ -346,7 +368,7 @@ function SuccessTicketContent() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">{sd.leadTraveler}</p>
-                                        <p className="font-semibold text-sm md:text-base">{ticketData.leadTravelerName || ticketData.user?.fullName || 'VIP Guest'}</p>
+                                        <p className="font-semibold text-sm md:text-base">{ticketData.leadTravelerName || ticketData.user?.fullName || sd.leadTravelerFallback}</p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">{sd.paymentMethod}</p>
@@ -373,7 +395,7 @@ function SuccessTicketContent() {
                                         level="M"
                                     />
                                 </div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-outline text-center">Scan at Check-in</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-outline text-center">{sd.scanAtCheckIn}</p>
                             </div>
                         </div>
                     </div>
@@ -395,7 +417,7 @@ function SuccessTicketContent() {
                             <div className="bg-amber-50/80 rounded-xl p-4 border border-amber-100 text-right min-w-[250px]">
                                 <span className="block text-[10px] font-bold uppercase text-amber-800 tracking-wider">{sd.deadlineLabel}</span>
                                 <span className="block font-mono font-bold text-base text-amber-900 mt-1">
-                                    {ticketData.createdAt ? formatDateTime(new Date(new Date(ticketData.createdAt).getTime() + 24 * 60 * 60 * 1000), { dateStyle: 'medium', timeStyle: 'short' }) : 'TBA'}
+                                    {ticketData.createdAt ? formatDateTime(new Date(new Date(ticketData.createdAt).getTime() + 24 * 60 * 60 * 1000), { dateStyle: 'medium', timeStyle: 'short' }) : sd.toBeAnnounced}
                                 </span>
                             </div>
                         </div>
@@ -456,15 +478,28 @@ function SuccessTicketContent() {
                     <button
                         onClick={handleDownloadPDF}
                         disabled={isDownloading}
-                        className={`w-full sm:w-auto px-10 py-4 rounded-full bg-primary text-white font-headline font-bold text-sm tracking-tight shadow-lg hover:opacity-90 transition-all duration-300 flex items-center justify-center gap-2 ${isDownloading ? 'opacity-70 cursor-wait' : 'active:scale-95'}`}
+                        className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-primary px-10 py-4 font-headline text-sm font-bold tracking-tight text-white shadow-lg shadow-primary/20 outline-none transition-[background-color,box-shadow,transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-2xl hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:bg-primary disabled:hover:shadow-lg disabled:hover:shadow-primary/20 motion-reduce:transform-none sm:w-auto"
                     >
-                        <span className="material-symbols-outlined text-lg">
+                        <span
+                            className="pointer-events-none absolute inset-y-0 -left-1/3 z-0 w-1/3 -skew-x-12 bg-white/25 opacity-0 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[420%] group-hover:opacity-100 group-disabled:opacity-0 motion-reduce:hidden"
+                            aria-hidden="true"
+                        />
+                        <span className={`material-symbols-outlined relative z-10 text-lg transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${isDownloading ? 'animate-pulse motion-reduce:animate-none' : 'group-hover:translate-y-0.5 motion-reduce:transform-none'}`}>
                             {isDownloading ? 'hourglass_empty' : 'download'}
                         </span>
-                        {isDownloading ? sd.exportingPdf : sd.downloadTicket}
+                        <span className="relative z-10">{isDownloading ? sd.exportingPdf : sd.downloadTicket}</span>
                     </button>
-                    <Link href="/my-bookings" className="w-full sm:w-auto px-10 py-4 rounded-full border border-outline-variant text-primary font-headline font-bold text-sm tracking-tight hover:bg-surface-container-low transition-all text-center">
-                        {sd.viewProfile}
+                    <Link
+                        href="/my-bookings"
+                        className="group inline-flex w-full items-center justify-center gap-2 rounded-full border border-outline-variant bg-white/60 px-10 py-4 text-center font-headline text-sm font-bold tracking-tight text-primary outline-none transition-[background-color,border-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-primary/35 hover:bg-surface-container-low hover:shadow-lg hover:shadow-slate-900/8 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none sm:w-auto"
+                    >
+                        <span>{sd.viewProfile}</span>
+                        <span
+                            className="material-symbols-outlined translate-x-[-0.35rem] text-[18px] opacity-0 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:translate-x-0 motion-reduce:opacity-100"
+                            aria-hidden="true"
+                        >
+                            arrow_forward
+                        </span>
                     </Link>
                 </section>
             </main>
@@ -474,9 +509,20 @@ function SuccessTicketContent() {
     );
 }
 
+function SuccessFallback() {
+    const { language } = useLocale();
+    const lang = (language === 'vi' || language === 'en') ? language : 'vi';
+
+    return (
+        <div className="min-h-screen flex items-center justify-center font-bold text-primary">
+            {successDict[lang].loadingData}
+        </div>
+    );
+}
+
 export default function SuccessPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-primary">Loading data...</div>}>
+        <Suspense fallback={<SuccessFallback />}>
             <SuccessTicketContent />
         </Suspense>
     );

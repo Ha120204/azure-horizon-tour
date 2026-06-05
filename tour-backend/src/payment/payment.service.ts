@@ -10,6 +10,9 @@ export type PaymentLinkResult = {
   checkoutUrl: string;
   paymentLinkId?: string;
   qrCode?: string;
+  accountNumber?: string;
+  accountName?: string;
+  bin?: string;
 };
 
 @Injectable()
@@ -34,7 +37,7 @@ export class PaymentService {
       description: normalizedDescription,
       returnUrl: `${backendUrl}/booking/payos-return`,
       cancelUrl: `${backendUrl}/booking/payos-return`,
-    })) as { checkoutUrl: string; id?: string; qrCode?: string };
+    })) as { checkoutUrl: string; id?: string; qrCode?: string; accountNumber?: string; accountName?: string; bin?: string };
 
     return {
       orderCode,
@@ -43,6 +46,9 @@ export class PaymentService {
       checkoutUrl: paymentLink.checkoutUrl,
       paymentLinkId: paymentLink.id,
       qrCode: paymentLink.qrCode,
+      accountNumber: paymentLink.accountNumber,
+      accountName: paymentLink.accountName,
+      bin: paymentLink.bin,
     };
   }
 

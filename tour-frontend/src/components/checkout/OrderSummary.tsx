@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useLocale } from '@/context/LocaleContext';
 import { getLocalizedVoucher } from '@/lib/i18n/vouchers';
@@ -67,6 +68,47 @@ interface OrderSummaryProps {
     formatPrice: (price: number) => string;
 }
 
+type VoucherListItem = {
+    walletVoucher: WalletVoucher;
+    voucher: WalletVoucher['voucher'];
+    reason?: string;
+};
+
+const voucherModalCopy = {
+    vi: {
+        choose: 'Chọn phiếu',
+        change: 'Đổi phiếu',
+        title: 'Chọn phiếu giảm giá',
+        subtitle: 'Chọn phiếu phù hợp để áp dụng cho đơn đặt tour.',
+        eligible: 'Có thể áp dụng',
+        ineligible: 'Không đủ điều kiện',
+        empty: 'Không có phiếu giảm giá nào khả dụng',
+        noEligible: 'Không có voucher nào đủ điều kiện cho đơn này.',
+        select: 'Áp dụng',
+        expired: 'Voucher đã hết hạn',
+        minOrder: 'Cần đặt tối thiểu',
+        close: 'Đóng',
+        expires: 'Hết hạn',
+        noExpiry: 'Không giới hạn thời hạn',
+    },
+    en: {
+        choose: 'Choose voucher',
+        change: 'Change voucher',
+        title: 'Choose a voucher',
+        subtitle: 'Select the best voucher for this booking.',
+        eligible: 'Available',
+        ineligible: 'Not eligible',
+        empty: 'No vouchers available',
+        noEligible: 'No voucher is eligible for this order.',
+        select: 'Apply',
+        expired: 'Voucher has expired',
+        minOrder: 'Minimum order',
+        close: 'Close',
+        expires: 'Expires',
+        noExpiry: 'No expiry limit',
+    },
+};
+
 export default function OrderSummary({
     tourData,
     selectedPackage,
@@ -96,6 +138,70 @@ export default function OrderSummary({
     formatPrice,
 }: OrderSummaryProps) {
     const { language, formatDate } = useLocale();
+    const voucherText = language === 'vi' ? voucherModalCopy.vi : voucherModalCopy.en;
+
+    const voucherGroups = useMemo(() => {
+        const applicable: VoucherListItem[] = [];
+        const notApplicable: VoucherListItem[] = [];
+
+        myWalletVouchers.forEach((walletVoucher) => {
+            const localizedVoucher = getLocalizedVoucher(walletVoucher.voucher, language);
+            const minOrder = localizedVoucher?.minOrderValue ?? 0;
+            const expiryDate = localizedVoucher?.expiryDate ? new Date(localizedVoucher.expiryDate) : null;
+            const isExpired = Boolean(expiryDate && expiryDate < new Date());
+
+            if (isExpired) {
+                notApplicable.push({
+                    walletVoucher,
+                    voucher: localizedVoucher,
+                    reason: voucherText.expired,
+                });
+                return;
+            }
+
+            if (minOrder > 0 && subtotal < minOrder) {
+                notApplicable.push({
+                    walletVoucher,
+                    voucher: localizedVoucher,
+                    reason: `${voucherText.minOrder} ${formatPrice(minOrder)}`,
+                });
+                return;
+            }
+
+            applicable.push({
+                walletVoucher,
+                voucher: localizedVoucher,
+            });
+        });
+
+        return { applicable, notApplicable };
+    }, [formatPrice, language, myWalletVouchers, subtotal, voucherText.expired, voucherText.minOrder]);
+
+    useEffect(() => {
+        if (!showWalletDropdown) return;
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setShowWalletDropdown(false);
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [setShowWalletDropdown, showWalletDropdown]);
+
+    const handleSelectWalletVoucher = (code: string) => {
+        setVoucherCode(code);
+        setVoucherError('');
+        onApplyVoucher(code);
+        setShowWalletDropdown(false);
+    };
+
+    const formatVoucherDiscount = (voucher: WalletVoucher['voucher']) => (
+        voucher.discountType === 'PERCENTAGE' ? `-${voucher.discountValue}%` : `-${formatPrice(voucher.discountValue)}`
+    );
+
+    const formatVoucherExpiry = (expiryDate?: string | null) => (
+        expiryDate ? `${voucherText.expires}: ${formatDate(expiryDate)}` : voucherText.noExpiry
+    );
 
     return (
         <div className="lg:col-span-4 sticky top-28">
@@ -166,12 +272,24 @@ export default function OrderSummary({
                         )}
                     </div>
 
-                    {/* ═══ Voucher Section ═══ */}
+                    {/* Voucher Section */}
                     <div className="pt-4 border-t border-dashed border-outline-variant/40">
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-sm text-primary">confirmation_number</span>
-                            {t('checkout.voucherTitle')}
-                        </p>
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+                                <span className="material-symbols-outlined text-sm text-primary">confirmation_number</span>
+                                {t('checkout.voucherTitle')}
+                            </p>
+                            {!isSaleDeparture && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowWalletDropdown(true)}
+                                    className="group inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold text-primary transition-[transform,background-color,color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary/10 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+                                >
+                                    <span className="material-symbols-outlined text-[15px] transition-transform duration-200 group-hover:-rotate-6 motion-reduce:transform-none">confirmation_number</span>
+                                    {appliedVoucher ? voucherText.change : voucherText.choose}
+                                </button>
+                            )}
+                        </div>
 
                         {isSaleDeparture ? (
                             <div className="bg-amber-50 border border-amber-200/70 rounded-xl p-4 flex items-start gap-3">
@@ -202,9 +320,9 @@ export default function OrderSummary({
                                 </div>
                             </div>
                         ) : (
-                            <div className="relative">
+                            <div className="space-y-2.5">
                                 <div className="flex gap-2">
-                                    <div className="relative flex-grow">
+                                    <div className="relative min-w-0 flex-grow">
                                         <input
                                             type="text"
                                             value={voucherCode}
@@ -213,164 +331,46 @@ export default function OrderSummary({
                                                 if (voucherError) setVoucherError('');
                                             }}
                                             placeholder={t('checkout.enterVoucher')}
-                                            className="w-full bg-surface-container-low border border-outline-variant/20 rounded-lg pl-4 pr-10 py-3 text-sm font-mono focus:ring-1 focus:ring-primary outline-none uppercase"
+                                            className="h-12 w-full rounded-xl border border-outline-variant/20 bg-surface-container-low px-4 pr-10 text-sm font-semibold uppercase outline-none transition-[border-color,box-shadow,background-color] duration-200 placeholder:text-[11px] placeholder:font-bold placeholder:tracking-wider focus:border-primary/40 focus:bg-white focus:ring-2 focus:ring-primary/15"
                                             onKeyDown={(e) => e.key === 'Enter' && onApplyVoucher()}
                                         />
                                         {voucherCode && (
                                             <button
+                                                type="button"
                                                 onClick={() => {
                                                     setVoucherCode('');
                                                     setVoucherError('');
                                                 }}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-outline hover:text-error transition-colors flex items-center justify-center p-1 rounded-full"
+                                                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-outline transition-colors hover:bg-surface-container hover:text-error"
                                             >
                                                 <span className="material-symbols-outlined text-base">close</span>
                                             </button>
                                         )}
                                     </div>
                                     <button
+                                        type="button"
                                         onClick={() => onApplyVoucher()}
                                         disabled={isValidating || !voucherCode.trim()}
-                                        className="px-5 py-3 bg-primary text-white rounded-lg font-bold text-sm hover:opacity-90 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                                        className="h-12 shrink-0 rounded-xl bg-primary px-5 text-sm font-bold text-white shadow-md shadow-primary/15 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-lg hover:shadow-primary/20 active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-primary motion-reduce:transform-none motion-reduce:transition-none"
                                     >
                                         {isValidating ? '...' : t('checkout.apply')}
                                     </button>
                                 </div>
                                 {voucherError && (() => {
-                                    // Chọn icon + màu phù hợp theo nội dung lỗi
-                                    const isExpired  = voucherError.includes('hết hạn');
+                                    const isExpired = voucherError.includes('hết hạn') || voucherError.includes('expired');
                                     const isDepleted = voucherError.includes('dùng hết') || voucherError.includes('muộn');
-                                    const isMinOrder = voucherError.includes('Cần đặt') || voucherError.includes('đạt');
+                                    const isMinOrder = voucherError.includes('Cần đặt') || voucherError.includes('đạt') || voucherError.includes('Minimum');
                                     const icon = isExpired ? 'event_busy'
-                                               : isDepleted ? 'sentiment_dissatisfied'
-                                               : isMinOrder ? 'shopping_cart'
-                                               : 'info';
+                                        : isDepleted ? 'sentiment_dissatisfied'
+                                            : isMinOrder ? 'shopping_cart'
+                                                : 'info';
                                     return (
-                                        <div className="mt-2.5 flex items-start gap-2.5 bg-amber-50 border border-amber-200/60 rounded-xl px-3.5 py-3">
-                                            <span className="material-symbols-outlined text-amber-500 text-base mt-0.5 shrink-0">{icon}</span>
-                                            <p className="text-amber-800 text-xs leading-relaxed font-medium">{voucherError}</p>
+                                        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200/60 bg-amber-50 px-3.5 py-3">
+                                            <span className="material-symbols-outlined mt-0.5 shrink-0 text-base text-amber-500">{icon}</span>
+                                            <p className="text-xs font-medium leading-relaxed text-amber-800">{voucherError}</p>
                                         </div>
                                     );
                                 })()}
-
-                                {myWalletVouchers.length > 0 && (
-                                    <div className="mt-3">
-                                        <button
-                                            onClick={() => setShowWalletDropdown(!showWalletDropdown)}
-                                            className="text-xs text-primary font-bold flex items-center gap-1 hover:underline underline-offset-4"
-                                        >
-                                            <span className="material-symbols-outlined text-sm">wallet</span>
-                                            {t('checkout.chooseFromWallet')} ({myWalletVouchers.length})
-                                            <span className={`material-symbols-outlined text-sm transition-transform ${showWalletDropdown ? 'rotate-180' : ''}`}>expand_more</span>
-                                        </button>
-
-                                        {showWalletDropdown && (() => {
-                                            const applicable: WalletVoucher[] = [];
-                                            const notApplicable: { uv: WalletVoucher; reason: string }[] = [];
-
-                                            myWalletVouchers.forEach((uv) => {
-                                                const minOrder = uv.voucher?.minOrderValue ?? 0;
-                                                const expDate = uv.voucher?.expiryDate ? new Date(uv.voucher.expiryDate) : null;
-                                                const isExpired = expDate && expDate < new Date();
-
-                                                if (isExpired) {
-                                                    notApplicable.push({ uv, reason: 'Voucher đã hết hạn' });
-                                                } else if (minOrder > 0 && subtotal < minOrder) {
-                                                    notApplicable.push({ uv, reason: `Cần đặt tối thiểu ${formatPrice(minOrder)}` });
-                                                } else {
-                                                    applicable.push(uv);
-                                                }
-                                            });
-
-                                            return (
-                                                <div className="mt-2 border border-outline-variant/20 rounded-xl overflow-hidden bg-white shadow-sm">
-                                                    {applicable.length > 0 && (
-                                                        <div>
-                                                            <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-100">
-                                                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest flex items-center gap-1">
-                                                                    <span className="material-symbols-outlined text-[13px]">check_circle</span>
-                                                                    Có thể áp dụng ({applicable.length})
-                                                                </span>
-                                                            </div>
-                                                            <div className="divide-y divide-outline-variant/10">
-                                                                {applicable.map((uv) => {
-                                                                    const v = getLocalizedVoucher(uv.voucher, language);
-                                                                    return (
-                                                                        <button
-                                                                            key={uv.id}
-                                                                            onClick={() => {
-                                                                                setVoucherCode(v.code);
-                                                                                onApplyVoucher(v.code);
-                                                                            }}
-                                                                            className="w-full text-left px-4 py-3.5 hover:bg-primary/5 transition-all flex items-center gap-3 group"
-                                                                        >
-                                                                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                                                                                <span className="material-symbols-outlined text-primary text-[18px]">confirmation_number</span>
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <div className="flex justify-between items-center gap-2">
-                                                                                    <span className="font-mono font-bold text-xs text-primary">{v.code}</span>
-                                                                                    <span className="text-[11px] font-bold text-emerald-600 shrink-0">
-                                                                                        {v.discountType === 'PERCENTAGE' ? `-${v.discountValue}%` : `-${formatPrice(v.discountValue)}`}
-                                                                                    </span>
-                                                                                </div>
-                                                                                <p className="text-[11px] text-outline mt-0.5 truncate">{v.label}</p>
-                                                                            </div>
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {notApplicable.length > 0 && (
-                                                        <div>
-                                                            <div className="px-3 py-2 bg-slate-50 border-t border-b border-slate-100">
-                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                                                    <span className="material-symbols-outlined text-[13px]">block</span>
-                                                                    Không đủ điều kiện ({notApplicable.length})
-                                                                </span>
-                                                            </div>
-                                                            <div className="divide-y divide-outline-variant/10">
-                                                                {notApplicable.map(({ uv, reason }) => {
-                                                                    const v = getLocalizedVoucher(uv.voucher, language);
-                                                                    return (
-                                                                        <div
-                                                                            key={uv.id}
-                                                                            className="px-4 py-3.5 flex items-center gap-3 opacity-50 cursor-not-allowed select-none"
-                                                                        >
-                                                                            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                                                                                <span className="material-symbols-outlined text-slate-400 text-[18px]">confirmation_number</span>
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <div className="flex justify-between items-center gap-2">
-                                                                                    <span className="font-mono font-bold text-xs text-slate-500 line-through">{v.code}</span>
-                                                                                    <span className="text-[11px] font-bold text-slate-400 shrink-0">
-                                                                                        {v.discountType === 'PERCENTAGE' ? `-${v.discountValue}%` : `-${formatPrice(v.discountValue)}`}
-                                                                                    </span>
-                                                                                </div>
-                                                                                <p className="text-[10px] text-error/70 mt-0.5 flex items-center gap-0.5">
-                                                                                    <span className="material-symbols-outlined text-[11px]">info</span>
-                                                                                    {reason}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {applicable.length === 0 && notApplicable.length > 0 && (
-                                                        <div className="px-4 py-3 text-center text-xs text-outline italic">
-                                                            Không có voucher nào đủ điều kiện cho đơn này.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
@@ -399,13 +399,135 @@ export default function OrderSummary({
                     <button
                         onClick={onPayment}
                         disabled={isPaymentLoading}
-                        className={`w-full bg-primary text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 hover:opacity-90 transition-all shadow-lg shadow-primary/20 active:scale-95 text-base ${isPaymentLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        className={`group flex min-h-[56px] w-full items-center justify-center gap-3 rounded-xl bg-primary px-5 py-4 text-base font-bold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none ${isPaymentLoading ? 'cursor-not-allowed opacity-60 hover:translate-y-0 hover:bg-primary hover:shadow-lg active:scale-100' : ''}`}
                     >
                         <span>{isPaymentLoading ? t('checkout.redirecting') : t('checkout.secureCheckout')}</span>
-                        <span className="material-symbols-outlined text-xl">{isPaymentLoading ? 'hourglass_empty' : 'lock'}</span>
+                        <span className="material-symbols-outlined text-xl transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5 motion-reduce:transform-none">{isPaymentLoading ? 'hourglass_empty' : 'lock'}</span>
                     </button>
                 </div>
             </div>
+            {showWalletDropdown && !isSaleDeparture && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm"
+                    onClick={(event) => {
+                        if (event.target === event.currentTarget) setShowWalletDropdown(false);
+                    }}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="voucher-wallet-title"
+                        className="flex max-h-[calc(100vh-48px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in duration-200 md:max-h-[760px]"
+                    >
+                        <div className="flex items-start justify-between gap-4 border-b border-outline-variant/15 px-5 py-5 md:px-6">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="material-symbols-outlined text-primary text-[22px]">confirmation_number</span>
+                                    <h3 id="voucher-wallet-title" className="font-headline text-xl font-extrabold text-on-surface">
+                                        {voucherText.title}
+                                    </h3>
+                                </div>
+                                <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
+                                    {voucherText.subtitle}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowWalletDropdown(false)}
+                                aria-label={voucherText.close}
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-outline-variant/25 text-on-surface-variant transition-[transform,background-color,color,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:text-primary active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+
+                        <div className="min-h-[260px] overflow-y-auto px-5 py-5 md:px-6">
+                            {myWalletVouchers.length === 0 ? (
+                                <div className="flex min-h-[220px] flex-col items-center justify-center text-center">
+                                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container-low text-outline">
+                                        <span className="material-symbols-outlined text-4xl">local_offer</span>
+                                    </div>
+                                    <p className="mt-4 text-sm font-semibold text-on-surface-variant">{voucherText.empty}</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-5">
+                                    {voucherGroups.applicable.length > 0 && (
+                                        <section className="space-y-2.5">
+                                            <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-emerald-700">
+                                                <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                                                {voucherText.eligible} ({voucherGroups.applicable.length})
+                                            </p>
+                                            <div className="space-y-2.5">
+                                                {voucherGroups.applicable.map(({ walletVoucher, voucher }) => (
+                                                    <button
+                                                        key={walletVoucher.id}
+                                                        type="button"
+                                                        onClick={() => handleSelectWalletVoucher(voucher.code)}
+                                                        className="group flex w-full items-center gap-3 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3.5 text-left transition-[transform,background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-primary/30 hover:bg-white hover:shadow-lg hover:shadow-primary/10 active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none motion-reduce:transition-none"
+                                                    >
+                                                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-sm transition-colors group-hover:bg-primary group-hover:text-white">
+                                                            <span className="material-symbols-outlined text-[20px]">confirmation_number</span>
+                                                        </span>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="flex items-center justify-between gap-3">
+                                                                <span className="truncate text-sm font-extrabold text-on-surface">{voucher.code}</span>
+                                                                <span className="shrink-0 text-sm font-extrabold text-emerald-700">{formatVoucherDiscount(voucher)}</span>
+                                                            </span>
+                                                            <span className="mt-1 block truncate text-xs font-medium text-on-surface-variant">{voucher.label}</span>
+                                                            <span className="mt-1 block text-[11px] text-outline">{formatVoucherExpiry(voucher.expiryDate)}</span>
+                                                        </span>
+                                                        <span className="hidden shrink-0 rounded-full bg-primary px-3 py-1.5 text-[11px] font-bold text-white sm:inline-flex">
+                                                            {voucherText.select}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </section>
+                                    )}
+
+                                    {voucherGroups.notApplicable.length > 0 && (
+                                        <section className="space-y-2.5">
+                                            <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-outline">
+                                                <span className="material-symbols-outlined text-[15px]">block</span>
+                                                {voucherText.ineligible} ({voucherGroups.notApplicable.length})
+                                            </p>
+                                            <div className="space-y-2.5">
+                                                {voucherGroups.notApplicable.map(({ walletVoucher, voucher, reason }) => (
+                                                    <div
+                                                        key={walletVoucher.id}
+                                                        className="flex items-center gap-3 rounded-xl border border-outline-variant/15 bg-surface-container-low/60 px-4 py-3.5 opacity-70"
+                                                    >
+                                                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-outline shadow-sm">
+                                                            <span className="material-symbols-outlined text-[20px]">confirmation_number</span>
+                                                        </span>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="flex items-center justify-between gap-3">
+                                                                <span className="truncate text-sm font-extrabold text-on-surface-variant line-through">{voucher.code}</span>
+                                                                <span className="shrink-0 text-sm font-extrabold text-outline">{formatVoucherDiscount(voucher)}</span>
+                                                            </span>
+                                                            <span className="mt-1 block truncate text-xs font-medium text-on-surface-variant">{voucher.label}</span>
+                                                            <span className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-error/75">
+                                                                <span className="material-symbols-outlined text-[13px]">info</span>
+                                                                {reason}
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </section>
+                                    )}
+
+                                    {voucherGroups.applicable.length === 0 && voucherGroups.notApplicable.length > 0 && (
+                                        <p className="rounded-xl bg-surface-container-low px-4 py-3 text-center text-xs font-medium italic text-on-surface-variant">
+                                            {voucherText.noEligible}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

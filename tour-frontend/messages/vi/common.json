@@ -15,7 +15,23 @@
     "noResults": "Không tìm thấy kết quả cho",
     "goodbye": "Tạm biệt!",
     "logoutSuccessTitle": "Đã đăng xuất",
-    "memberLabel": "Thành viên Azure Horizon"
+    "memberLabel": "Thành viên Azure Horizon",
+    "account": {
+      "personalSection": "Tài khoản cá nhân",
+      "adminSection": "Không gian làm việc",
+      "adminTitle": "Không gian quản trị",
+      "adminDescriptions": {
+        "SUPER_ADMIN": "Toàn quyền quản trị hệ thống",
+        "ADMIN": "Quản lý vận hành Azure Horizon",
+        "STAFF": "Không gian làm việc nhân viên"
+      },
+      "roles": {
+        "SUPER_ADMIN": "Super Admin",
+        "ADMIN": "Quản trị viên",
+        "STAFF": "Nhân viên",
+        "CUSTOMER": "Thành viên"
+      }
+    }
   },
   "footer": {
     "tagline": "Tái định nghĩa kiến trúc du lịch hiện đại. Trải nghiệm toàn cầu, tâm hồn bản địa.",
@@ -77,6 +93,12 @@
     "apply": "Áp Dụng Bộ Lọc",
     "show": "Hiện bộ lọc",
     "hide": "Ẩn bộ lọc"
+  },
+  "admin": {
+    "topBar": {
+      "viewWebsite": "Xem website",
+      "backToCustomerSite": "Về trang khách hàng"
+    }
   },
   "search": {
     "destination": "Điểm đến",

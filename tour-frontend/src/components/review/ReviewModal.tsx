@@ -231,14 +231,14 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}
-                                    className="flex-1 py-3 px-4 rounded-full font-bold text-sm text-on-surface-variant bg-surface-container-high hover:bg-surface-variant transition-colors"
+                                    className="flex-1 rounded-full bg-surface-container-high px-4 py-3 text-sm font-bold text-on-surface-variant transition-[transform,background-color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-surface-variant hover:shadow-md active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
                                 >
                                     {t('reviews.cancel')}
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className="flex-1 py-3 px-4 rounded-full font-bold text-sm text-on-primary bg-primary hover:bg-primary/90 transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
+                                    className="group flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-bold text-on-primary shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-primary disabled:hover:shadow-lg motion-reduce:transform-none motion-reduce:transition-none"
                                 >
                                     {isSubmitting && <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>}
                                     {t('reviews.submit')}

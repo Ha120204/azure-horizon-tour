@@ -7,6 +7,7 @@ import {
     validatePassengerIdentityNo,
     type PassengerType,
 } from '@/lib/passengerDetails';
+import { CheckoutSelect } from './CheckoutSelect';
 
 interface Passenger {
     type: PassengerType;
@@ -205,6 +206,16 @@ export default function PassengerSection({
     const ageLabel = (p: Passenger) => {
         return getPassengerAgeLabel(p.dob, t('checkout.yearsOld'));
     };
+    const genderOptions = [
+        { value: '', label: t('checkout.selectGender'), icon: 'person' },
+        { value: 'Male', label: t('checkout.male'), icon: 'male' },
+        { value: 'Female', label: t('checkout.female'), icon: 'female' },
+        { value: 'Other', label: t('checkout.other'), icon: 'diversity_1' },
+    ];
+    const leadIdentityOptions = [
+        { value: 'CCCD', label: t('checkout.citizenId'), icon: 'badge' },
+        { value: 'PASSPORT', label: t('checkout.passport'), icon: 'id_card' },
+    ];
 
     return (
         <section className="bg-white rounded-xl p-6 md:p-8 ambient-shadow ghost-border">
@@ -242,16 +253,12 @@ export default function PassengerSection({
                         </div>
                         <div>
                             <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.gender')} <span className="text-error">*</span></label>
-                            <select
-                                className="w-full bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm appearance-none"
+                            <CheckoutSelect
+                                ariaLabel={t('checkout.gender')}
                                 value={leadTraveler.gender}
-                                onChange={(e) => setLeadTraveler({ ...leadTraveler, gender: e.target.value })}
-                            >
-                                <option value="">{t('checkout.selectGender')}</option>
-                                <option value="Male">{t('checkout.male')}</option>
-                                <option value="Female">{t('checkout.female')}</option>
-                                <option value="Other">{t('checkout.other')}</option>
-                            </select>
+                                options={genderOptions}
+                                onChange={(value) => setLeadTraveler({ ...leadTraveler, gender: value })}
+                            />
                         </div>
 
                         {/* Identity Document (Lead Traveler — Required) */}
@@ -260,14 +267,14 @@ export default function PassengerSection({
                                 {t('checkout.identityDocument')} <span className="text-error">*</span>
                             </label>
                             <div className="flex gap-2">
-                                <select
-                                    className="bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm text-sm font-semibold w-36 flex-shrink-0 appearance-none"
+                                <CheckoutSelect
+                                    className="w-36 flex-shrink-0"
+                                    menuClassName="right-auto w-56"
+                                    ariaLabel={t('checkout.identityDocument')}
                                     value={leadTraveler.identityType || 'CCCD'}
-                                    onChange={(e) => setLeadTraveler({ ...leadTraveler, identityType: e.target.value, identityNo: '' })}
-                                >
-                                    <option value="CCCD">{t('checkout.citizenId')}</option>
-                                    <option value="PASSPORT">{t('checkout.passport')}</option>
-                                </select>
+                                    options={leadIdentityOptions}
+                                    onChange={(value) => setLeadTraveler({ ...leadTraveler, identityType: value, identityNo: '' })}
+                                />
                                 <input
                                     className="flex-1 bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm"
                                     type="text"
@@ -343,10 +350,10 @@ export default function PassengerSection({
                                         onClick={() => handleEditPassenger(idx)}
                                         aria-label={`${t('checkout.edit')} ${p.fullName}`}
                                         title={t('checkout.edit')}
-                                        className={`rounded-lg p-2 transition-colors ${
+                                        className={`rounded-lg p-2 transition-[transform,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.92] motion-reduce:transform-none motion-reduce:transition-none ${
                                             editingPassengerIndex === idx
-                                                ? 'bg-primary text-white'
-                                                : 'text-primary hover:bg-primary/10'
+                                                ? 'bg-primary text-white shadow-md shadow-primary/20'
+                                                : 'text-primary hover:bg-primary/10 hover:shadow-sm'
                                         }`}
                                     >
                                         <span className="material-symbols-outlined text-[20px]">edit</span>
@@ -356,7 +363,7 @@ export default function PassengerSection({
                                         onClick={() => onRemovePassenger(idx)}
                                         aria-label={`${t('checkout.deletePassenger')} ${p.fullName}`}
                                         title={t('checkout.deletePassenger')}
-                                        className="rounded-lg p-2 text-error transition-colors hover:bg-error/10"
+                                        className="rounded-lg p-2 text-error transition-[transform,background-color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-error/10 hover:shadow-sm active:translate-y-0 active:scale-[0.92] motion-reduce:transform-none motion-reduce:transition-none"
                                     >
                                         <span className="material-symbols-outlined text-[20px]">delete</span>
                                     </button>
@@ -428,31 +435,32 @@ export default function PassengerSection({
                                 return (
                                     <div key={type} className="relative group">
                                         <button
+                                            type="button"
                                             disabled={isDisabled && !isActive}
                                             onClick={() => {
                                                 if (isDisabled && !isActive) return;
                                                 handleOpenForm(isActive ? null : type);
                                             }}
                                             aria-disabled={isDisabled && !isActive}
-                                            className={`w-full relative flex flex-col items-center justify-center gap-1.5 p-3 md:p-4 rounded-xl border-2 transition-all ${
+                                            className={`relative flex w-full min-h-[88px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 p-3 transition-[transform,background-color,border-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none md:p-4 ${
                                                 isDisabled && !isActive
                                                     ? 'border-outline-variant/20 bg-surface-container-low/50 cursor-not-allowed opacity-50'
                                                     : isActive
-                                                    ? 'border-primary bg-primary/5 shadow-sm'
-                                                    : 'border-outline-variant/30 hover:border-primary/50 bg-white'
+                                                    ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
+                                                    : 'border-outline-variant/30 bg-white hover:-translate-y-0.5 hover:border-primary/45 hover:bg-primary/5 hover:shadow-lg hover:shadow-primary/10'
                                             }`}
                                         >
                                             {isActive && (
-                                                <div className="absolute -top-2 -right-2 bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                                                <div className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white shadow-md shadow-primary/20">
                                                     <span className="material-symbols-outlined text-[12px] font-bold">check</span>
                                                 </div>
                                             )}
                                             {isDisabled && !isActive && (
-                                                <div className="absolute -top-2 -right-2 bg-amber-500 text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                                                <div className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-white shadow-md">
                                                     <span className="material-symbols-outlined text-[12px]">block</span>
                                                 </div>
                                             )}
-                                            <span className={`material-symbols-outlined ${
+                                            <span className={`material-symbols-outlined transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-0.5 motion-reduce:transform-none ${
                                                 isDisabled && !isActive ? 'text-outline-variant' : isActive ? 'text-primary' : 'text-on-surface-variant'
                                             }`}>{icon}</span>
                                             <span className={`text-[10px] md:text-xs font-bold uppercase tracking-tight ${
@@ -555,16 +563,12 @@ export default function PassengerSection({
                                 {/* Gender */}
                                 <div>
                                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.gender')} <span className="text-error">*</span></label>
-                                    <select
-                                        className="w-full bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm appearance-none"
+                                    <CheckoutSelect
+                                        ariaLabel={t('checkout.gender')}
                                         value={tempFormData.gender}
-                                        onChange={(e) => setTempFormData({ ...tempFormData, gender: e.target.value })}
-                                    >
-                                        <option value="">{t('checkout.selectGender')}</option>
-                                        <option value="Male">{t('checkout.male')}</option>
-                                        <option value="Female">{t('checkout.female')}</option>
-                                        <option value="Other">{t('checkout.other')}</option>
-                                    </select>
+                                        options={genderOptions}
+                                        onChange={(value) => setTempFormData({ ...tempFormData, gender: value })}
+                                    />
                                 </div>
 
                                 {/* Identity Document (Passenger — Optional) */}
@@ -576,15 +580,18 @@ export default function PassengerSection({
                                         </span>
                                     </label>
                                     <div className="flex gap-2">
-                                        <select
-                                            className="bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm text-sm font-semibold w-36 flex-shrink-0 appearance-none"
+                                        <CheckoutSelect
+                                            className="w-36 flex-shrink-0"
+                                            menuClassName="right-auto w-64"
+                                            ariaLabel={t('checkout.identityDocumentOptional')}
                                             value={tempFormData.identityType || (activeFormType === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD')}
-                                            onChange={(e) => setTempFormData({ ...tempFormData, identityType: e.target.value, identityNo: '' })}
-                                        >
-                                            {activeFormType && getIdentityDocTypes(activeFormType).map(opt => (
-                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                            ))}
-                                        </select>
+                                            options={(activeFormType ? getIdentityDocTypes(activeFormType) : []).map(opt => ({
+                                                value: opt.value,
+                                                label: opt.label,
+                                                icon: opt.value === 'CCCD' ? 'badge' : opt.value === 'PASSPORT' ? 'id_card' : 'history_edu',
+                                            }))}
+                                            onChange={(value) => setTempFormData({ ...tempFormData, identityType: value, identityNo: '' })}
+                                        />
                                         <input
                                             className={`flex-1 bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${
                                                 fieldErrors.identityNo ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'
@@ -627,9 +634,22 @@ export default function PassengerSection({
                                 </div>
                             </div>
                             <div className="mt-8 flex justify-end gap-3">
-                                <button onClick={() => handleOpenForm(null)} className="px-6 py-3 rounded-full font-bold text-sm text-outline hover:text-on-surface transition-colors">{t('checkout.cancel')}</button>
-                                <button onClick={handleValidatedSave} className="bg-primary text-white px-8 py-3 rounded-full font-bold text-sm hover:opacity-90 transition-all shadow-md shadow-primary/20 active:scale-95">
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenForm(null)}
+                                    className="min-h-[44px] rounded-full px-6 py-3 text-sm font-bold text-outline transition-[transform,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-surface-container hover:text-on-surface hover:shadow-sm active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+                                >
+                                    {t('checkout.cancel')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleValidatedSave}
+                                    className="group inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+                                >
                                     {isEditingPassenger ? t('checkout.updatePassenger') : t('checkout.savePassenger')}
+                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5 motion-reduce:transform-none">
+                                        person_add
+                                    </span>
                                 </button>
                             </div>
                         </div>

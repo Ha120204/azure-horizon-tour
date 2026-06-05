@@ -1,5 +1,7 @@
-import type { AssistedDraftStatus, PassengerType } from './types';
+import type { AssistedDraftFormErrors, AssistedDraftStatus, DraftSelectOption, PassengerType } from './types';
 import { PASSENGER_MULTIPLIERS } from '@/lib/passengerPricing';
+
+export type { DraftSelectOption };
 
 type StatusConfig = { label: string; dot: string; badge: string; icon: string };
 type BadgeConfig = { label: string; badge: string; icon: string };
@@ -54,3 +56,33 @@ export const ASSISTED_STATUS_CFG: Record<AssistedDraftStatus, BadgeConfig> = {
   REJECTED: { label: 'Từ chối', badge: 'bg-red-50 text-red-700 border-red-200', icon: 'block' },
   CONVERTED: { label: 'Đã tạo đơn', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'task_alt' },
 };
+
+export const SOURCE_CHANNEL_OPTIONS: DraftSelectOption[] = [
+  { value: 'LIVE_CHAT', label: 'Live chat', description: 'Khách nhắn qua widget chat', icon: 'forum' },
+  { value: 'ZALO', label: 'Zalo', description: 'Tư vấn qua Zalo OA hoặc cá nhân', icon: 'chat' },
+  { value: 'FACEBOOK', label: 'Facebook', description: 'Inbox fanpage hoặc comment', icon: 'public' },
+  { value: 'PHONE', label: 'Điện thoại', description: 'Khách gọi trực tiếp', icon: 'call' },
+  { value: 'WEBSITE', label: 'Website', description: 'Khách để lại thông tin trên website', icon: 'language' },
+  { value: 'WALK_IN', label: 'Khách trực tiếp', description: 'Khách đến văn phòng/quầy tư vấn', icon: 'storefront' },
+  { value: 'PARTNER', label: 'Đối tác / CTV', description: 'Booking được chuyển từ đối tác bán hàng', icon: 'handshake' },
+];
+
+export const CONFIRMATION_CHANNEL_OPTIONS: DraftSelectOption[] = [
+  { value: 'ZALO', label: 'Zalo / copy thủ công', description: 'Phù hợp khi đang tư vấn qua Zalo', icon: 'chat' },
+  { value: 'EMAIL', label: 'Email tự động', description: 'Gửi xác nhận qua email khách', icon: 'mail' },
+  { value: 'SMS', label: 'SMS', description: 'Gửi hoặc ghi nhận qua tin nhắn SMS', icon: 'sms' },
+  { value: 'PHONE', label: 'Gọi điện', description: 'Xác nhận trực tiếp qua cuộc gọi', icon: 'call' },
+  { value: 'MANUAL', label: 'Gửi thủ công', description: 'Nhân sự tự gửi qua kênh khác', icon: 'edit_note' },
+  { value: 'NO_SEND', label: 'Không gửi ngay', description: 'Chỉ tạo booking, chưa gửi yêu cầu thanh toán', icon: 'notifications_off' },
+];
+
+export const DRAFT_FIELD_ORDER: (keyof AssistedDraftFormErrors)[] = [
+  'customerName', 'customerEmail', 'customerPhone', 'tourId',
+  'adultCount', 'childCount', 'infantCount', 'departureId',
+  'customerIdentityNo', 'sourceChannel', 'confirmationChannel',
+  'emailForTicket', 'packageId', 'voucherCode', 'specialRequests', 'internalNote',
+];
+
+export function getSelectOptionLabel(options: DraftSelectOption[], value: string, fallback = 'Chưa chọn') {
+  return options.find(o => o.value === value)?.label ?? fallback;
+}

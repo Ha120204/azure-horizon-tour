@@ -224,6 +224,48 @@ export class BookingPaymentService {
   // ─── Luồng PayOS — Sync ───────────────────────────────────────────────────
 
   /**
+   * [CUSTOMER] Hỏi PayOS xem đã thanh toán chưa — dùng cho inline QR modal.
+   * Chỉ hoạt động khi booking thuộc về userId và đang PENDING+UNPAID.
+   */
+  async customerCheckPayment(bookingId: number, userId: number) {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.userId !== userId) throw new ForbiddenException('Không có quyền truy cập đơn này');
+    if (booking.paymentStatus === 'PAID') return { synced: true, status: 'PAID' };
+    if (booking.paymentMethod !== 'PAYOS' || booking.status !== 'PENDING')
+      return { synced: false, status: booking.paymentStatus };
+
+    const latestTx = await this.prisma.paymentTransaction.findFirst({
+      where: { bookingId, gateway: 'PAYOS' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const orderCode = latestTx?.transactionRef ? Number(latestTx.transactionRef) : Number.NaN;
+    if (!Number.isFinite(orderCode)) return { synced: false, status: 'NO_ORDER_CODE' };
+
+    let paymentInfo: Awaited<ReturnType<typeof this.paymentService.getPaymentInfo>>;
+    try {
+      paymentInfo = await this.paymentService.getPaymentInfo(orderCode);
+    } catch {
+      return { synced: false, status: 'PAYOS_ERROR' };
+    }
+
+    if (paymentInfo?.status === 'PAID') {
+      const txnRef = paymentInfo.transactions?.[0]?.reference || `PAYOS-QR-SYNC-${orderCode}`;
+      await this.confirmBookingAsPaid(bookingId, 'PAYOS_RETURN_SYNC', userId, {
+        gateway: 'PAYOS',
+        transactionRef: txnRef,
+        amount: paymentInfo.amount || Number(booking.totalPrice),
+        confirmedNote: `QR inline sync · User #${userId}`,
+        evidenceUrl: undefined,
+      });
+      await this.sendConfirmationEmail(bookingId);
+      return { synced: true, status: 'PAID' };
+    }
+
+    return { synced: false, status: paymentInfo?.status ?? 'UNKNOWN' };
+  }
+
+  /**
    * [ADMIN] Gọi lại PayOS API để đồng bộ trạng thái thực tế.
    * Dùng khi webhook chưa về hoặc cần xác nhận thủ công.
    */

@@ -1,16 +1,16 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import Image from 'next/image';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { logoutAuthSession, saveClientUserStorage } from '@/lib/authSession';
+import { saveClientUserStorage } from '@/lib/authSession';
 import type { AdminRole } from '@/lib/adminAccess';
 import type { SearchTourResult, SearchDestinationResult } from './topAppBar/types';
 import {
-    getPageMeta, getInitials, canAccessRole, filterActionsByRole,
+    getPageMeta, canAccessRole, filterActionsByRole,
     COMMAND_GROUPS, TABS, getReadIds, saveReadIds,
 } from './topAppBar/constants';
 import { fetchAllNotifs, asObject, unwrapPayload, getText, getNumber } from './topAppBar/fetchNotifs';
@@ -26,15 +26,10 @@ type TopAppBarProps = {
 export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: TopAppBarProps) {
     const pathname = usePathname();
     const router = useRouter();
+    const t = useTranslations('admin.topBar');
     const notifRef = useRef<HTMLDivElement>(null);
 
-    const [userName, setUserName] = useState('Admin');
-    const [userInitials, setUserInitials] = useState('A');
-    const [userEmail, setUserEmail] = useState('');
     const [userRole, setUserRole] = useState<string>(authenticatedRole);
-    const [userAvatarUrl, setUserAvatarUrl] = useState('');
-    const [loginTime] = useState(() => new Date());
-    const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showNotifPanel, setShowNotifPanel] = useState(false);
 
     const [notifs, setNotifs] = useState<Notif[]>([]);
@@ -42,42 +37,31 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
     const [notifLoading, setNotifLoading] = useState(false);
     const [notifError, setNotifError] = useState(false);
 
-    // Init user info
+    // Init role info for notifications and command visibility.
     useEffect(() => {
         setReadIds(getReadIds());
-        const applyLocalProfile = () => {
-            const name = localStorage.getItem('userName') || 'Admin';
-            const email = localStorage.getItem('userEmail') || '';
+        const applyLocalRole = () => {
             const role = localStorage.getItem('userRole') || '';
-            const avatarUrl = localStorage.getItem('userAvatarUrl') || '';
-            setUserName(name); setUserEmail(email); setUserRole(role);
-            setUserAvatarUrl(avatarUrl); setUserInitials(getInitials(name));
-            return name;
+            if (role) setUserRole(role);
         };
         const loadProfile = () => {
-            const fallbackName = applyLocalProfile();
-            import('@/lib/fetchWithAuth').then(({ fetchWithAuth }) =>
-                fetchWithAuth(`${API_BASE_URL}/auth/profile`)
-                    .then(r => r.json())
-                    .then(data => {
-                        const profile = data.data ?? data;
-                        const fullName = profile.fullName || fallbackName || 'Admin';
-                        const avatarUrl = profile.avatarUrl || '';
-                        setUserName(fullName); setUserInitials(getInitials(fullName));
-                        setUserAvatarUrl(avatarUrl);
-                        if (profile.email) setUserEmail(profile.email);
-                        if (profile.role) setUserRole(profile.role);
-                        saveClientUserStorage({
-                            id: profile.id,
-                            userId: profile.userId,
-                            fullName,
-                            email: profile.email,
-                            role: profile.role,
-                            avatarUrl,
-                        });
-                    })
-                    .catch(() => {})
-            );
+            applyLocalRole();
+            fetchWithAuth(`${API_BASE_URL}/auth/profile`)
+                .then(r => r.json())
+                .then(data => {
+                    const profile = data.data ?? data;
+                    const fullName = profile.fullName || localStorage.getItem('userName') || 'Admin';
+                    if (profile.role) setUserRole(profile.role);
+                    saveClientUserStorage({
+                        id: profile.id,
+                        userId: profile.userId,
+                        fullName,
+                        email: profile.email,
+                        role: profile.role,
+                        avatarUrl: profile.avatarUrl || '',
+                    });
+                })
+                .catch(() => {});
         };
         loadProfile();
         window.addEventListener('auth-change', loadProfile);
@@ -157,26 +141,9 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
             void fetchWithAuth(`${API_BASE_URL}/admin/notifications/read-all`, { method: 'PATCH' }).catch(() => {});
         }
     };
-    const getAdminLoginPath = () => {
-        const match = (pathname ?? '').match(/^\/(vi|en)(?=\/|$)/);
-        const localePrefix = match ? `/${match[1]}` : '';
-        return `${localePrefix}/admin/login?loggedOut=1`;
-    };
-
-    const handleLogout = async () => {
-        await logoutAuthSession();
-        setShowProfileMenu(false);
-        setUserName('Admin');
-        setUserInitials('A');
-        setUserEmail('');
-        setUserRole('');
-        setUserAvatarUrl('');
-        window.location.assign(getAdminLoginPath());
-    };
-
     const baseMeta = getPageMeta(pathname ?? '');
     const meta = (pathname ?? '').replace(/^\/(en|vi)/, '') === '/admin/staffs' && userRole === 'SUPER_ADMIN'
-        ? { title: 'Quản lý Admin', icon: 'manage_accounts', subtitle: 'Quản lý tài khoản Admin vận hành hệ thống' }
+        ? { title: 'Quản lý quản trị viên', icon: 'manage_accounts', subtitle: 'Quản lý tài khoản quản trị viên vận hành hệ thống' }
         : baseMeta;
     const visibleNotifTypes = new Set(
         TABS.filter(tab => tab.key !== 'all' && canAccessRole(userRole, tab.roles)).flatMap(tab => tab.types)
@@ -261,6 +228,23 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => router.push('/' as never)}
+                        title={t('backToCustomerSite')}
+                        aria-label={t('backToCustomerSite')}
+                        className="group flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-slate-600 transition-[transform,border-color,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm active:translate-y-0 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 motion-reduce:transform-none motion-reduce:transition-none"
+                    >
+                        <span
+                            className="material-symbols-outlined text-[19px] transition-transform duration-200 group-hover:-translate-x-0.5 motion-reduce:transform-none"
+                            aria-hidden="true"
+                        >
+                            travel_explore
+                        </span>
+                        <span className="hidden 2xl:block whitespace-nowrap text-xs font-bold">
+                            {t('viewWebsite')}
+                        </span>
+                    </button>
                     <div className="hidden xl:block px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl">
                         <LiveClock />
                     </div>
@@ -269,7 +253,7 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
                     {/* Notification Bell */}
                     <div ref={notifRef} className="relative">
                         <button
-                            onClick={() => { setShowNotifPanel(v => !v); setShowProfileMenu(false); }}
+                            onClick={() => setShowNotifPanel(v => !v)}
                             aria-label="Thông báo"
                             className={`relative p-2.5 rounded-xl transition-all ${showNotifPanel ? 'bg-blue-50 text-blue-600' : urgentUnread > 0 ? 'text-orange-500 hover:bg-orange-50' : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'}`}
                         >
@@ -293,77 +277,6 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
                                 onMarkRead={handleMarkRead} onMarkAllRead={handleMarkAllRead}
                                 onClose={() => setShowNotifPanel(false)}
                             />
-                        )}
-                    </div>
-
-                    {/* Profile */}
-                    <div className="relative">
-                        <button onClick={() => { setShowProfileMenu(v => !v); setShowNotifPanel(false); }} className={`flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl border transition-all ${showProfileMenu ? 'bg-blue-50 border-blue-200' : 'border-transparent hover:bg-slate-50 hover:border-slate-200'}`}>
-                            <div className="relative flex-shrink-0">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-sm overflow-hidden">
-                                    {userAvatarUrl ? <Image src={userAvatarUrl} alt="" width={32} height={32} sizes="32px" className="h-full w-full object-cover" /> : userInitials}
-                                </div>
-                                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full" />
-                            </div>
-                            <div className="hidden md:flex flex-col items-start leading-tight">
-                                <span className="text-sm font-bold text-slate-700 truncate max-w-[100px]">{userName}</span>
-                                <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider">
-                                    {userRole === 'SUPER_ADMIN' ? 'Siêu Quản Trị' : userRole === 'ADMIN' ? 'Quản Trị Viên' : userRole === 'STAFF' ? 'Nhân Viên' : 'Admin'}
-                                </span>
-                            </div>
-                            <span className={`material-symbols-outlined text-slate-400 text-[18px] transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`}>expand_more</span>
-                        </button>
-
-                        {showProfileMenu && (
-                            <div className="absolute right-0 top-[calc(100%+8px)] w-72 bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-200/60 overflow-hidden z-50" onClick={e => e.stopPropagation()}>
-                                <div className="px-4 pt-4 pb-3.5 border-b border-slate-100 bg-gradient-to-br from-slate-50 to-blue-50/30">
-                                    <div className="flex items-center gap-3">
-                                        <div className="relative flex-shrink-0">
-                                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-md overflow-hidden">
-                                                {userAvatarUrl ? <Image src={userAvatarUrl} alt="" width={44} height={44} sizes="44px" className="h-full w-full object-cover" /> : userInitials}
-                                            </div>
-                                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full" />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold text-slate-800 truncate">{userName}</p>
-                                            {userEmail && <p className="text-[11px] text-slate-500 truncate mt-0.5">{userEmail}</p>}
-                                            <div className="flex items-center gap-1.5 mt-1">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                                <span className="text-[10px] font-semibold text-emerald-600">Đang hoạt động</span>
-                                                <span className="text-[10px] text-slate-300 mx-0.5">·</span>
-                                                <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full">
-                                                    {userRole === 'SUPER_ADMIN' ? 'SIÊU QUẢN TRỊ' : userRole === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : userRole === 'STAFF' ? 'NHÂN VIÊN' : 'ADMIN'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 mt-3 px-1">
-                                        <span className="material-symbols-outlined text-[13px] text-slate-300">schedule</span>
-                                        <span className="text-[10px] text-slate-400">Đăng nhập lúc {loginTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, {loginTime.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</span>
-                                    </div>
-                                </div>
-                                <div className="py-1.5">
-                                    <button onClick={() => { setShowProfileMenu(false); router.push('/admin/profile' as never); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors group">
-                                        <span className="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-blue-500 transition-colors">manage_accounts</span>
-                                        <span className="flex-1 text-left">Hồ sơ cá nhân</span>
-                                        <kbd className="text-[9px] font-bold text-slate-300 bg-slate-100 px-1.5 py-0.5 rounded font-mono">⌘P</kbd>
-                                    </button>
-                                    {canAccessRole(userRole, ['SUPER_ADMIN', 'ADMIN']) && (
-                                        <button onClick={() => { setShowProfileMenu(false); router.push('/admin/settings' as never); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors group">
-                                            <span className="material-symbols-outlined text-[18px] text-slate-400 group-hover:text-blue-500 transition-colors">settings</span>
-                                            <span className="flex-1 text-left">Cài đặt hệ thống</span>
-                                            <kbd className="text-[9px] font-bold text-slate-300 bg-slate-100 px-1.5 py-0.5 rounded font-mono">⌘,</kbd>
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="border-t border-slate-100 py-1.5">
-                                    <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors font-medium group">
-                                        <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">logout</span>
-                                        <span className="flex-1 text-left">Đăng xuất</span>
-                                        <kbd className="text-[9px] font-bold text-red-200 bg-red-50 px-1.5 py-0.5 rounded font-mono">⇧⌘Q</kbd>
-                                    </button>
-                                </div>
-                            </div>
                         )}
                     </div>
                 </div>

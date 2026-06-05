@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { UserService } from './user.service';
 
@@ -104,6 +104,37 @@ describe('UserService authorization filters', () => {
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['fullName', 'asc', { fullName: 'asc' }],
+    ['createdAt', 'desc', { createdAt: 'desc' }],
+    ['bookingCount', 'desc', { bookings: { _count: 'desc' } }],
+    ['status', 'asc', { deletedAt: 'asc' }],
+  ])(
+    'applies server-side %s sorting',
+    async (sortBy, sortDir, expectedOrderBy) => {
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.user.count.mockResolvedValue(0);
+
+      await service.findAll(
+        {
+          role: 'STAFF',
+          sortBy,
+          sortDir,
+          page: 1,
+          limit: 10,
+        },
+        Role.ADMIN,
+      );
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { role: Role.STAFF },
+          orderBy: expectedOrderBy,
+        }),
+      );
+    },
+  );
+
   it('hides non-customer detail from STAFF', async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 2,
@@ -166,5 +197,114 @@ describe('UserService authorization filters', () => {
       roleBreakdown: [{ role: Role.CUSTOMER, count: 12 }],
     });
     expect(prisma.user.count).toHaveBeenCalledTimes(4);
+  });
+
+  it('returns scoped STAFF stats for ADMIN', async () => {
+    prisma.user.count.mockResolvedValueOnce(20);
+    prisma.user.count.mockResolvedValueOnce(17);
+    prisma.user.count.mockResolvedValueOnce(4);
+
+    await expect(service.getStats(Role.ADMIN, Role.STAFF)).resolves.toEqual({
+      scopeRole: Role.STAFF,
+      totalUsers: 20,
+      activeUsers: 17,
+      newThisMonth: 4,
+    });
+    expect(prisma.user.count).toHaveBeenNthCalledWith(1, {
+      where: { role: Role.STAFF },
+    });
+    expect(prisma.user.count).toHaveBeenNthCalledWith(2, {
+      where: { role: Role.STAFF, deletedAt: null },
+    });
+    expect(prisma.user.count).toHaveBeenNthCalledWith(3, {
+      where: {
+        role: Role.STAFF,
+        createdAt: { gte: expect.any(Date) },
+      },
+    });
+  });
+
+  it('returns scoped ADMIN stats for SUPER_ADMIN', async () => {
+    prisma.user.count.mockResolvedValueOnce(6);
+    prisma.user.count.mockResolvedValueOnce(5);
+    prisma.user.count.mockResolvedValueOnce(1);
+
+    await expect(
+      service.getStats(Role.SUPER_ADMIN, Role.ADMIN),
+    ).resolves.toMatchObject({
+      scopeRole: Role.ADMIN,
+      totalUsers: 6,
+      activeUsers: 5,
+      newThisMonth: 1,
+    });
+  });
+
+  it('blocks ADMIN from requesting ADMIN stats', async () => {
+    await expect(service.getStats(Role.ADMIN, Role.ADMIN)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.user.count).not.toHaveBeenCalled();
+  });
+
+  it('allows ADMIN to bulk deactivate STAFF accounts', async () => {
+    prisma.user.findMany.mockResolvedValue([
+      { id: 10, role: Role.STAFF, deletedAt: null },
+      { id: 11, role: Role.STAFF, deletedAt: null },
+    ]);
+    prisma.user.updateMany.mockResolvedValue({ count: 2 });
+
+    await expect(
+      service.bulkUpdateUserStatus(
+        [10, 11],
+        'deactivated',
+        1,
+        Role.ADMIN,
+        Role.STAFF,
+      ),
+    ).resolves.toMatchObject({
+      updatedCount: 2,
+      skippedCount: 0,
+      status: 'deactivated',
+      role: Role.STAFF,
+    });
+
+    expect(prisma.user.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: [10, 11] }, role: Role.STAFF },
+      }),
+    );
+  });
+
+  it('blocks ADMIN from bulk updating ADMIN accounts', async () => {
+    await expect(
+      service.bulkUpdateUserStatus(
+        [10],
+        'deactivated',
+        1,
+        Role.ADMIN,
+        Role.ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('blocks bulk updates when selected ids are outside the requested role scope', async () => {
+    prisma.user.findMany.mockResolvedValue([
+      { id: 10, role: Role.STAFF, deletedAt: null },
+      { id: 11, role: Role.CUSTOMER, deletedAt: null },
+    ]);
+
+    await expect(
+      service.bulkUpdateUserStatus(
+        [10, 11],
+        'deactivated',
+        1,
+        Role.ADMIN,
+        Role.STAFF,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 });

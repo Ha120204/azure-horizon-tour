@@ -363,6 +363,10 @@ export default function PromotionsPage() {
     };
 
     // ── Render ─────────────────────────────────────────────────────
+    const vipPerks = language === 'vi'
+        ? ['Ưu đãi kín trước khi công bố', 'Mã nâng hạng cho hội viên', 'Gợi ý kỳ nghỉ theo mùa']
+        : ['Private offers before release', 'Member upgrade vouchers', 'Seasonal escape alerts'];
+
     return (
         <div className="bg-surface font-body text-on-surface min-h-screen flex flex-col">
             <style dangerouslySetInnerHTML={{
@@ -440,51 +444,122 @@ export default function PromotionsPage() {
                         formatPrice={formatPrice}
                     />
                 </section>
-                <section className="bg-primary-container py-24 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-white/5 to-transparent skew-x-12 translate-x-20"></div>
-                    <div className="max-w-4xl mx-auto px-8 text-center relative z-10">
-                        <h2 className="text-4xl font-headline font-extrabold text-white mb-6">{t('unlockVIP')}</h2>
-                        <p className="text-lg mb-12 max-w-xl mx-auto text-white/80">{t('unlockVIPDesc')}</p>
-                        <form onSubmit={handleSubscribe} className="flex flex-col md:flex-row gap-4 max-w-2xl mx-auto">
-                            <input disabled={subscribeStatus === 'loading'} className="flex-grow px-8 py-4 rounded-full bg-white/10 border border-white/20 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-secondary-fixed/50 transition-all backdrop-blur-sm disabled:opacity-50" placeholder={t('emailPlaceholder')} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                            <button disabled={subscribeStatus === 'loading'} className="bg-secondary-fixed text-on-secondary-fixed font-bold px-10 py-4 rounded-full hover:scale-105 transition-all shadow-xl active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2" type="submit">
-                                {subscribeStatus === 'loading' ? <span className="material-symbols-outlined animate-spin inline-block">progress_activity</span> : t('subscribe')}
+                <section className="relative overflow-hidden bg-[#08245c] px-6 py-20 md:px-10 md:py-24">
+                    <div className="mx-auto max-w-6xl">
+                    <div className="grid items-center gap-10 md:grid-cols-[1.05fr_0.95fr]">
+                        <div>
+                            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-blue-100">
+                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">verified</span>
+                                VIP Access
+                            </div>
+                            <h2 className="max-w-xl font-headline text-4xl font-extrabold leading-[1.02] tracking-tight text-white md:text-5xl">{t('unlockVIP')}</h2>
+                            <p className="mt-5 max-w-xl text-base leading-8 text-blue-100/85 md:text-lg">{t('unlockVIPDesc')}</p>
+                            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                                {vipPerks.map((perk) => (
+                                    <div key={perk} className="flex items-center gap-2 rounded-2xl bg-white/[0.08] px-4 py-3 text-sm font-semibold text-white ring-1 ring-white/10">
+                                        <span className="material-symbols-outlined text-[18px] text-[#ffd8b5]" aria-hidden="true">check_circle</span>
+                                        <span>{perk}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="relative">
+                            <div className="absolute inset-x-8 -top-5 h-10 rounded-t-[2rem] bg-[#ffd8b5]" aria-hidden="true" />
+                            <div className="relative rounded-[1.5rem] bg-white p-5 shadow-[0_18px_44px_rgba(3,18,45,0.28)] md:p-6">
+                                <div className="mb-5 flex items-start justify-between gap-4">
+                                    <div>
+                                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Inner Circle</p>
+                                        <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-950">
+                                            {language === 'vi' ? 'Nhận ưu đãi riêng' : 'Get private deals'}
+                                        </p>
+                                    </div>
+                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                                        <span className="material-symbols-outlined" aria-hidden="true">confirmation_number</span>
+                                    </div>
+                                </div>
+                        <form onSubmit={handleSubscribe} className="space-y-3">
+                            <label htmlFor="vip-email" className="sr-only">{t('emailPlaceholder')}</label>
+                            <div className="flex flex-col gap-3 lg:flex-row">
+                            <input id="vip-email" disabled={subscribeStatus === 'loading'} className="min-h-14 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-5 text-sm font-semibold text-slate-900 outline-none transition-[background-color,border-color,box-shadow] placeholder:text-slate-400 focus:border-primary/40 focus:bg-white focus:ring-4 focus:ring-primary/10 disabled:opacity-50" placeholder={t('emailPlaceholder')} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                            <button disabled={subscribeStatus === 'loading'} className="group inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-7 text-sm font-extrabold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 motion-reduce:transform-none" type="submit">
+                                {subscribeStatus === 'loading' ? <span className="material-symbols-outlined animate-spin text-[18px]" aria-hidden="true">progress_activity</span> : <>{t('subscribe')}<span className="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true">arrow_forward</span></>}
                             </button>
+                            </div>
                         </form>
+                        <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+                            <span className="rounded-full bg-slate-100 px-3 py-1.5">{language === 'vi' ? 'Không spam' : 'No spam'}</span>
+                            <span className="rounded-full bg-slate-100 px-3 py-1.5">{language === 'vi' ? 'Hủy nhận tin bất cứ lúc nào' : 'Unsubscribe anytime'}</span>
+                        </div>
+                        <div aria-live="polite">
                         {subscribeStatus === 'success' && (
-                            <p className="mt-6 text-white/90 font-semibold flex items-center justify-center gap-2 animate-fade-slide-up">
-                                <span className="material-symbols-outlined text-tertiary-fixed">check_circle</span>
+                            <p className="mt-5 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 animate-fade-slide-up">
+                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">check_circle</span>
                                 {t('welcomeAboard')}
                             </p>
                         )}
                         {subscribeStatus === 'exists' && (
-                            <p className="mt-6 text-white/90 font-semibold flex items-center justify-center gap-2 animate-fade-slide-up">
-                                <span className="material-symbols-outlined text-secondary-fixed">info</span>
+                            <p className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 animate-fade-slide-up">
+                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">info</span>
                                 {language === 'vi' ? 'Email này đã được đăng ký trước đó!' : 'This email is already subscribed!'}
                             </p>
                         )}
                         {subscribeStatus === 'error' && (
-                            <p className="mt-6 text-error-container font-semibold flex items-center justify-center gap-2 animate-fade-slide-up">
-                                <span className="material-symbols-outlined">error</span>
+                            <p className="mt-5 flex items-center gap-2 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 animate-fade-slide-up">
+                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">error</span>
                                 {language === 'vi' ? 'Có lỗi xảy ra hoặc email không hợp lệ.' : 'An error occurred or invalid email.'}
                             </p>
                         )}
+                        </div>
+                            </div>
+                        </div>
+                    </div>
                     </div>
                 </section>
 
                 {/* ═══════ Terms & Conditions ═══════ */}
-                <section className="py-24 max-w-3xl mx-auto px-8">
-                    <h2 className="text-2xl font-headline font-bold text-primary mb-8 text-center">{t('termsConditions')}</h2>
-                    <div className="space-y-4">
-                        {T_AND_C.map((item, idx) => (
-                            <details key={idx} className="group bg-surface-container-low rounded-2xl overflow-hidden border border-outline-variant/10">
-                                <summary className="flex justify-between items-center p-6 cursor-pointer list-none font-bold text-primary font-headline">
-                                    <span>{item.title}</span>
-                                    <span className="material-symbols-outlined group-open:rotate-180 transition-transform">expand_more</span>
-                                </summary>
-                                <div className="p-6 pt-0 text-sm text-on-surface-variant leading-relaxed">{item.body}</div>
-                            </details>
-                        ))}
+                <section className="bg-[#f5f8ff] px-6 py-20 md:px-10 md:py-24">
+                    <div className="mx-auto max-w-4xl">
+                        <div className="mb-10 text-center">
+                            <span className="inline-flex items-center rounded-full bg-primary/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-primary">
+                                {language === 'vi' ? 'Minh bạch ưu đãi' : 'Offer clarity'}
+                            </span>
+                            <h2 className="mt-5 font-headline text-3xl font-extrabold tracking-tight text-primary md:text-4xl">
+                                {t('termsConditions')}
+                            </h2>
+                            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+                                {language === 'vi'
+                                    ? 'Mở từng mục để kiểm tra điều kiện áp dụng trước khi lưu voucher hoặc đặt tour.'
+                                    : 'Open each item to check eligibility before saving a voucher or booking a trip.'}
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            {T_AND_C.map((item, idx) => (
+                                <details
+                                    key={idx}
+                                    className="group overflow-hidden rounded-2xl border border-primary/10 bg-white shadow-sm shadow-primary/5 transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/10 motion-reduce:transform-none"
+                                >
+                                    <summary className="flex cursor-pointer list-none items-center gap-4 p-5 font-headline text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 md:p-6">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-black text-primary transition-[transform,background-color,color] duration-300 group-open:scale-95 group-open:bg-primary group-open:text-white">
+                                            {String(idx + 1).padStart(2, '0')}
+                                        </span>
+                                        <span className="min-w-0 flex-1 text-left text-base font-extrabold md:text-lg">
+                                            {item.title}
+                                        </span>
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-primary transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-open:rotate-180 group-open:bg-primary/10">
+                                            <span className="material-symbols-outlined text-[20px]">expand_more</span>
+                                        </span>
+                                    </summary>
+                                    <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-open:grid-rows-[1fr]">
+                                        <div className="overflow-hidden">
+                                            <div className="px-5 pb-6 pl-[4.75rem] text-sm leading-7 text-slate-600 md:px-6 md:pb-7 md:pl-[5.5rem]">
+                                                {item.body}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+                            ))}
+                        </div>
                     </div>
                 </section>
             </main>

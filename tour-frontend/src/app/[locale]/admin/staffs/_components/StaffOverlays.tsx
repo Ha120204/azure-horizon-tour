@@ -2,7 +2,7 @@
 
 import { CreateStaffModal } from './CreateStaffModal';
 import { StaffDetailModal } from './StaffDetailModal';
-import { StaffRoleDialog, StaffToggleStatusDialog } from './StaffDialogs';
+import { StaffBulkStatusDialog, StaffRoleDialog, StaffToggleStatusDialog } from './StaffDialogs';
 import { StaffToast } from './StaffPageSections';
 import type { useStaffManagement } from '../_hooks/useStaffManagement';
 
@@ -11,6 +11,11 @@ interface StaffOverlaysProps {
 }
 
 export function StaffOverlays({ model }: StaffOverlaysProps) {
+    const bulkTargetCount = model.bulkActionStatus === 'active'
+        ? model.selectedDeactivatedCount
+        : model.selectedActiveCount;
+    const itemLabel = model.isSuperAdminView ? 'quản trị viên' : 'nhân viên';
+
     return (
         <>
             {(model.detailUser || model.isLoadingDetail) && (
@@ -48,6 +53,17 @@ export function StaffOverlays({ model }: StaffOverlaysProps) {
                     isToggling={model.isToggling}
                     onCancel={() => model.setToggleTarget(null)}
                     onConfirm={model.handleToggleStatus}
+                />
+            )}
+
+            {model.bulkActionStatus && (
+                <StaffBulkStatusDialog
+                    status={model.bulkActionStatus}
+                    count={bulkTargetCount}
+                    itemLabel={itemLabel}
+                    isUpdating={model.isBulkUpdating}
+                    onCancel={() => model.setBulkActionStatus(null)}
+                    onConfirm={model.handleBulkStatusChange}
                 />
             )}
 

@@ -11,7 +11,7 @@ import {
     getErrorMessage,
     getProfileRole,
 } from '../_lib/helpers';
-import type { Meta, StaffCreateForm, StaffEditForm, StaffKpiItem, Stats, ToastState, User } from '../_lib/types';
+import type { BulkStatusAction, Meta, SortDirection, StaffCreateForm, StaffEditForm, StaffKpiItem, StaffSortKey, Stats, ToastState, User } from '../_lib/types';
 
 const createBlankStaffForm = (role: string): StaffCreateForm => ({
     email: '',
@@ -33,6 +33,8 @@ export function useStaffManagement() {
     const [filterStatus, setFilterStatus] = useState('');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState<StaffSortKey>('createdAt');
+    const [sortDir, setSortDir] = useState<SortDirection>('desc');
 
     const [toast, setToast] = useState<ToastState | null>(null);
     const [detailUser, setDetailUser] = useState<User | null>(null);
@@ -42,6 +44,9 @@ export function useStaffManagement() {
     const [isUpdatingRole, setIsUpdatingRole] = useState(false);
     const [toggleTarget, setToggleTarget] = useState<User | null>(null);
     const [isToggling, setIsToggling] = useState(false);
+    const [selectedStaffIds, setSelectedStaffIds] = useState<Set<number>>(new Set());
+    const [bulkActionStatus, setBulkActionStatus] = useState<BulkStatusAction | null>(null);
+    const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
     const [isEditing, setIsEditing] = useState(false);
     const [editForm, setEditForm] = useState<StaffEditForm>({ fullName: '', phone: '', dob: '', gender: '' });
@@ -57,14 +62,14 @@ export function useStaffManagement() {
 
     const isSuperAdminView = currentUserRole === 'SUPER_ADMIN';
     const managedRole = isSuperAdminView ? 'ADMIN' : 'STAFF';
-    const managedRoleLabel = isSuperAdminView ? 'Admin' : 'nhân viên';
-    const pageTitle = isSuperAdminView ? 'Quản lý Admin' : 'Danh sách Nhân Sự';
+    const managedRoleLabel = isSuperAdminView ? 'quản trị viên' : 'nhân viên';
+    const pageTitle = isSuperAdminView ? 'Quản lý quản trị viên' : 'Quản lý nhân viên';
     const pageDescription = isSuperAdminView
-        ? 'Quản lý các tài khoản Admin được phân quyền vận hành hệ thống.'
+        ? 'Quản lý các tài khoản quản trị viên vận hành hệ thống.'
         : 'Quản lý tài khoản nhân viên nội bộ của hệ thống.';
-    const createTitle = isSuperAdminView ? 'Thêm admin mới' : 'Thêm nhân viên mới';
-    const createDescription = isSuperAdminView ? 'Tạo tài khoản Admin nội bộ' : 'Tạo tài khoản nhân viên nội bộ';
-    const createButtonLabel = isSuperAdminView ? 'Thêm admin' : 'Thêm nhân viên';
+    const createTitle = isSuperAdminView ? 'Thêm quản trị viên mới' : 'Thêm nhân viên mới';
+    const createDescription = isSuperAdminView ? 'Tạo tài khoản quản trị viên nội bộ' : 'Tạo tài khoản nhân viên nội bộ';
+    const createButtonLabel = isSuperAdminView ? 'Thêm quản trị viên' : 'Thêm nhân viên';
     const canEditRoles = false;
 
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,6 +108,8 @@ export function useStaffManagement() {
             if (debouncedSearch) qs.append('search', debouncedSearch);
             qs.append('role', managedRole);
             if (filterStatus) qs.append('status', filterStatus);
+            qs.append('sortBy', sortBy);
+            qs.append('sortDir', sortDir);
             qs.append('page', String(page));
             qs.append('limit', String(pageSize));
 
@@ -112,17 +119,23 @@ export function useStaffManagement() {
             setUsers(json.data ?? []);
             if (json.meta) setMeta(json.meta);
         } catch {
-            showToast('Lỗi tải danh sách người dùng.', 'error');
+            showToast('Lỗi tải danh sách tài khoản.', 'error');
         } finally {
             setIsLoading(false);
         }
-    }, [currentUserRole, debouncedSearch, filterStatus, managedRole, page, pageSize, showToast]);
+    }, [currentUserRole, debouncedSearch, filterStatus, managedRole, page, pageSize, showToast, sortBy, sortDir]);
 
     useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
+    useEffect(() => {
+        const currentIds = new Set(users.map(user => user.id));
+        setSelectedStaffIds(previous => new Set([...previous].filter(id => currentIds.has(id))));
+    }, [users]);
+
     const fetchStats = useCallback(async () => {
+        if (!currentUserRole) return;
         try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/user/stats`);
+            const res = await fetchWithAuth(`${API_BASE_URL}/user/stats?role=${managedRole}`);
             if (res.ok) {
                 const json = await res.json();
                 setStats(json?.data ?? json);
@@ -130,7 +143,7 @@ export function useStaffManagement() {
         } catch {
             // Stats are supplementary; keep the user table usable.
         }
-    }, []);
+    }, [currentUserRole, managedRole]);
 
     useEffect(() => { fetchStats(); }, [fetchStats]);
 
@@ -142,7 +155,7 @@ export function useStaffManagement() {
         intervalMs: 120 * 1000,
         pause: Boolean(
             detailUser || roleEditUser || toggleTarget || showCreateModal ||
-            isSaving || isUpdatingRole || isToggling || isCreating
+            bulkActionStatus || isSaving || isUpdatingRole || isToggling || isCreating || isBulkUpdating
         ),
         onRefresh: refreshStaffData,
     });
@@ -173,7 +186,7 @@ export function useStaffManagement() {
                 startEditing(nextUser);
             }
         } catch {
-            showToast('Không thể tải thông tin người dùng.', 'error');
+            showToast('Không thể tải thông tin tài khoản.', 'error');
         } finally {
             setIsLoadingDetail(false);
         }
@@ -229,13 +242,13 @@ export function useStaffManagement() {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(getApiMessage(err, 'Failed'));
             }
-            showToast(`Đã đổi role của "${roleEditUser.fullName}" thành ${roleConfig[newRole]?.label || newRole}`);
+            showToast(`Đã đổi quyền của "${roleEditUser.fullName}" thành ${roleConfig[newRole]?.label || newRole}`);
             setRoleEditUser(null);
             setNewRole('');
             fetchUsers();
             fetchStats();
         } catch (error: unknown) {
-            showToast(getErrorMessage(error, 'Đổi role thất bại.'), 'error');
+            showToast(getErrorMessage(error, 'Đổi quyền thất bại.'), 'error');
         } finally {
             setIsUpdatingRole(false);
         }
@@ -335,10 +348,27 @@ export function useStaffManagement() {
         setPage(1);
     }, []);
 
+    const resetFilters = useCallback(() => {
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        setSearch('');
+        setDebouncedSearch('');
+        setFilterStatus('');
+        setPage(1);
+    }, []);
+
     const changePageSize = useCallback((size: number) => {
         setPageSize(size);
         setPage(1);
     }, []);
+
+    const changeSort = useCallback((key: StaffSortKey) => {
+        if (sortBy === key) {
+            return;
+        }
+        setSortBy(key);
+        setSortDir(key === 'fullName' ? 'asc' : 'desc');
+        setPage(1);
+    }, [sortBy]);
 
     const requestRoleChange = useCallback((target: User) => {
         setRoleEditUser(target);
@@ -349,35 +379,115 @@ export function useStaffManagement() {
         setEditForm(form => ({ ...form, ...patch }));
     }, []);
 
+    const selectedStaffUsers = useMemo(
+        () => users.filter(user => selectedStaffIds.has(user.id)),
+        [selectedStaffIds, users],
+    );
+    const selectedActiveCount = selectedStaffUsers.filter(user => user.status === 'Active').length;
+    const selectedDeactivatedCount = selectedStaffUsers.filter(user => user.status === 'Deactivated').length;
+    const allCurrentPageSelected = users.length > 0 && users.every(user => selectedStaffIds.has(user.id));
+    const someCurrentPageSelected = users.some(user => selectedStaffIds.has(user.id));
+
+    const toggleSelectedStaff = useCallback((userId: number) => {
+        setSelectedStaffIds(previous => {
+            const next = new Set(previous);
+            if (next.has(userId)) next.delete(userId);
+            else next.add(userId);
+            return next;
+        });
+    }, []);
+
+    const toggleCurrentPageSelection = useCallback(() => {
+        setSelectedStaffIds(previous => {
+            const next = new Set(previous);
+            if (users.length > 0 && users.every(user => next.has(user.id))) {
+                users.forEach(user => next.delete(user.id));
+            } else {
+                users.forEach(user => next.add(user.id));
+            }
+            return next;
+        });
+    }, [users]);
+
+    const clearSelection = useCallback(() => {
+        setSelectedStaffIds(new Set());
+    }, []);
+
+    const requestBulkStatusChange = useCallback((status: BulkStatusAction) => {
+        const targetCount = selectedStaffUsers.filter(user => (
+            status === 'active' ? user.status === 'Deactivated' : user.status === 'Active'
+        )).length;
+        if (targetCount === 0) return;
+        setBulkActionStatus(status);
+    }, [selectedStaffUsers]);
+
+    const handleBulkStatusChange = useCallback(async () => {
+        if (!bulkActionStatus) return;
+        const targets = selectedStaffUsers.filter(user => (
+            bulkActionStatus === 'active' ? user.status === 'Deactivated' : user.status === 'Active'
+        ));
+        if (targets.length === 0) {
+            setBulkActionStatus(null);
+            return;
+        }
+
+        setIsBulkUpdating(true);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/user/bulk-status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ids: targets.map(user => user.id),
+                    status: bulkActionStatus,
+                    role: managedRole,
+                }),
+            });
+            const payload = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(payload?.message || 'Không thể cập nhật hàng loạt.');
+
+            const result = payload?.data ?? payload;
+            const actionLabel = bulkActionStatus === 'active' ? 'kích hoạt' : 'vô hiệu hóa';
+            showToast(`Đã ${actionLabel} ${result?.updatedCount ?? targets.length} tài khoản.`);
+            setBulkActionStatus(null);
+            clearSelection();
+            await refreshStaffData();
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Thao tác hàng loạt thất bại.'), 'error');
+        } finally {
+            setIsBulkUpdating(false);
+        }
+    }, [bulkActionStatus, clearSelection, managedRole, refreshStaffData, selectedStaffUsers, showToast]);
+
     const currentMonth = new Date().toISOString().slice(0, 7);
     const currentMonthLabel = new Intl.DateTimeFormat('vi-VN', { month: '2-digit', year: 'numeric' }).format(new Date());
     const visibleActiveCount = users.filter(user => user.status === 'Active').length;
     const visibleNewThisMonth = users.filter(user => user.createdAt?.slice(0, 7) === currentMonth).length;
-    const activeManagedCount = isSuperAdminView ? visibleActiveCount : (stats?.staffActive ?? visibleActiveCount);
-    const newManagedCount = isSuperAdminView ? visibleNewThisMonth : (stats?.staffNewThisMonth ?? visibleNewThisMonth);
+    const totalManagedCount = stats?.totalUsers ?? meta.totalItems;
+    const activeManagedCount = stats?.activeUsers ?? visibleActiveCount;
+    const newManagedCount = stats?.newThisMonth ?? visibleNewThisMonth;
     const kpis = useMemo<StaffKpiItem[]>(() => [
         {
             icon: isSuperAdminView ? 'admin_panel_settings' : 'shield_person',
-            label: isSuperAdminView ? 'Tổng Admin' : 'Tổng nhân sự',
-            value: meta.totalItems,
-            helper: isSuperAdminView ? 'Tài khoản admin trong phạm vi quản lý' : 'Tài khoản nhân sự nội bộ',
+            label: isSuperAdminView ? 'Tổng quản trị viên' : 'Tổng nhân viên',
+            value: totalManagedCount,
+            helper: isSuperAdminView ? 'Tài khoản quản trị viên nội bộ' : 'Tài khoản nhân viên nội bộ',
             color: 'bg-amber-500/10 text-amber-600',
         },
         {
             icon: 'verified_user',
-            label: isSuperAdminView ? 'Đang hoạt động' : 'Nhân sự hoạt động',
+            label: isSuperAdminView ? 'Quản trị viên hoạt động' : 'Nhân viên hoạt động',
             value: activeManagedCount,
-            helper: `${activeManagedCount.toLocaleString('vi-VN')}/${meta.totalItems.toLocaleString('vi-VN')} tài khoản có thể đăng nhập`,
+            helper: `${activeManagedCount.toLocaleString('vi-VN')}/${totalManagedCount.toLocaleString('vi-VN')} tài khoản có thể đăng nhập`,
             color: 'bg-emerald-500/10 text-emerald-600',
         },
         {
             icon: 'person_add',
-            label: isSuperAdminView ? 'Admin mới tháng này' : 'Nhân sự mới tháng này',
+            label: isSuperAdminView ? 'Quản trị viên mới tháng này' : 'Nhân viên mới tháng này',
             value: newManagedCount,
             helper: `Tính trong tháng ${currentMonthLabel}`,
             color: 'bg-violet-500/10 text-violet-600',
         },
-    ], [activeManagedCount, currentMonthLabel, isSuperAdminView, meta.totalItems, newManagedCount]);
+    ], [activeManagedCount, currentMonthLabel, isSuperAdminView, newManagedCount, totalManagedCount]);
 
     return {
         users,
@@ -387,6 +497,8 @@ export function useStaffManagement() {
         search,
         filterStatus,
         pageSize,
+        sortBy,
+        sortDir,
         toast,
         detailUser,
         isLoadingDetail,
@@ -395,6 +507,14 @@ export function useStaffManagement() {
         isUpdatingRole,
         toggleTarget,
         isToggling,
+        selectedStaffIds,
+        selectedStaffUsers,
+        selectedActiveCount,
+        selectedDeactivatedCount,
+        allCurrentPageSelected,
+        someCurrentPageSelected,
+        bulkActionStatus,
+        isBulkUpdating,
         isEditing,
         editForm,
         isSaving,
@@ -425,6 +545,7 @@ export function useStaffManagement() {
         setNewRole,
         setRoleEditUser,
         setToggleTarget,
+        setBulkActionStatus,
         openDetail,
         closeDetail,
         startEditing,
@@ -434,7 +555,14 @@ export function useStaffManagement() {
         handleToggleStatus,
         handleCreateUser,
         changeStatusFilter,
+        resetFilters,
         changePageSize,
+        changeSort,
         requestRoleChange,
+        toggleSelectedStaff,
+        toggleCurrentPageSelection,
+        clearSelection,
+        requestBulkStatusChange,
+        handleBulkStatusChange,
     };
 }

@@ -399,10 +399,10 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
             </div>
             <button
               onClick={() => router.push('/destinations')}
-              className="group hidden md:flex items-center gap-2 text-primary font-headline font-semibold"
+              className="group hidden md:flex items-center gap-2 rounded-full px-3 py-2 text-primary font-headline font-semibold transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary/5 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none"
             >
               {t('featured.exploreAll')}
-              <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              <span className="material-symbols-outlined text-sm transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transform-none">arrow_forward</span>
             </button>
           </div>
 
@@ -530,14 +530,14 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/about"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-4 font-headline text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low"
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-4 font-headline text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[background-color,transform,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low motion-reduce:transform-none"
               >
                 {t('philosophy.cta')}
-                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+                <span className="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transform-none" aria-hidden="true">arrow_forward</span>
               </Link>
               <Link
                 href="/destinations"
-                className="inline-flex items-center justify-center rounded-full border border-primary/25 px-7 py-4 font-headline text-sm font-bold text-primary transition-[background-color,border-color,color] duration-200 hover:border-primary hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low"
+                className="inline-flex items-center justify-center rounded-full border border-primary/25 px-7 py-4 font-headline text-sm font-bold text-primary transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-primary hover:bg-white hover:shadow-lg hover:shadow-primary/10 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low motion-reduce:transform-none"
               >
                 {t('philosophy.secondaryCta')}
               </Link>

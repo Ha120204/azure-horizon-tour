@@ -49,8 +49,10 @@ export class ContactService {
     const publicSettings = await this.settingsService.getPublic();
     const companyName = publicSettings.company_name || 'Azure Horizon';
     const supportEmail =
-      publicSettings.company_email || adminEmail || 'support@azurehorizon.com';
-    const supportPhone = publicSettings.company_phone || '';
+      publicSettings.company_email ||
+      adminEmail ||
+      'azurehorizon.tech@gmail.com';
+    const supportPhone = publicSettings.company_phone || '0386761856';
     const mailSender = adminEmail ?? supportEmail;
     const subjectLabel = SUBJECT_LABELS[dto.subject] ?? dto.subject;
     const fullPhone = `${dto.phonePrefix} ${dto.phone}`;
@@ -191,9 +193,9 @@ export class ContactService {
                 accessCode
                   ? `
               <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;margin-bottom:24px;text-align:center;">
-                <p style="color:#9a3412;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Ma truy cap danh cho khach vang lai</p>
+                <p style="color:#9a3412;font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;">Mã truy cập dành cho khách vãng lai</p>
                 <p style="color:#7c2d12;font-size:18px;font-weight:800;margin:0;font-family:'Courier New',monospace;">${accessCode}</p>
-                ${ticketLookupUrl ? `<p style="margin:14px 0 0;"><a href="${ticketLookupUrl}" style="display:inline-block;background:#003f87;color:white;text-decoration:none;border-radius:999px;padding:10px 18px;font-size:13px;font-weight:700;">Xem yeu cau ho tro</a></p>` : ''}
+                ${ticketLookupUrl ? `<p style="margin:14px 0 0;"><a href="${ticketLookupUrl}" style="display:inline-block;background:#003f87;color:white;text-decoration:none;border-radius:999px;padding:10px 18px;font-size:13px;font-weight:700;">Xem yêu cầu hỗ trợ</a></p>` : ''}
               </div>
               `
                   : ''

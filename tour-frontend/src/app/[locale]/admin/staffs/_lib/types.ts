@@ -8,28 +8,21 @@ export interface User {
     createdAt: string;
     deletedAt: string | null;
     status: string;
-    bookingCount: number;
     reviewCount: number;
     dob?: string | null;
     gender?: string | null;
-    recentBookings?: {
-        id: number;
-        bookingCode: string;
-        totalPrice: number;
-        status: string;
-        createdAt: string;
-        tour: { name: string };
-    }[];
 }
 
 export interface Stats {
+    scopeRole?: string;
     totalUsers: number;
     activeUsers: number;
     newThisMonth: number;
-    staffAndAdmin: number;
-    staffActive: number;
-    staffNewThisMonth: number;
 }
+
+export type StaffSortKey = 'fullName' | 'createdAt' | 'status';
+export type SortDirection = 'asc' | 'desc';
+export type BulkStatusAction = 'active' | 'deactivated';
 
 export interface Meta {
     totalItems: number;

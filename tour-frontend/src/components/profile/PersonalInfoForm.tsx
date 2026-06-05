@@ -1,5 +1,7 @@
 'use client';
 
+import { CheckoutSelect } from '@/components/checkout/CheckoutSelect';
+
 interface PersonalInfoFormProps {
     name: string;
     setName: (v: string) => void;
@@ -31,6 +33,20 @@ export default function PersonalInfoForm({
     onSubmit, t,
 }: PersonalInfoFormProps) {
     const identityError = validateIdentity(identityType, identityNo, t);
+    const genderOptions = [
+        { value: '', label: t('checkout.selectGender'), icon: 'wc' },
+        { value: 'Male', label: t('checkout.male'), icon: 'male' },
+        { value: 'Female', label: t('checkout.female'), icon: 'female' },
+        { value: 'Other', label: t('checkout.other'), icon: 'diversity_1' },
+    ];
+    const identityOptions = [
+        { value: 'CCCD', label: t('checkout.citizenId'), icon: 'badge' },
+        { value: 'PASSPORT', label: t('checkout.passport'), icon: 'id_card' },
+    ];
+    const profileSelectButtonClass =
+        '!min-h-[48px] !rounded-lg !border-transparent !bg-surface-container-low !px-3 !py-3 !text-sm !shadow-none hover:!border-primary/35 hover:!bg-white focus-visible:!ring-2 focus-visible:!ring-primary/30';
+    const profileSelectMenuClass =
+        '!z-[120] !w-full !max-w-none !rounded-xl !border-outline-variant/20 !bg-white !shadow-xl !shadow-slate-900/10';
 
     return (
         <div className="space-y-6">
@@ -46,12 +62,15 @@ export default function PersonalInfoForm({
                 </div>
                 <div className="space-y-2">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.genderLbl')}</label>
-                    <select className="w-full bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none" value={gender} onChange={(e) => setGender(e.target.value)}>
-                        <option value="">{t('checkout.selectGender')}</option>
-                        <option value="Male">{t('checkout.male')}</option>
-                        <option value="Female">{t('checkout.female')}</option>
-                        <option value="Other">{t('checkout.other')}</option>
-                    </select>
+                    <CheckoutSelect
+                        value={gender}
+                        options={genderOptions}
+                        onChange={setGender}
+                        ariaLabel={t('profile.genderLbl')}
+                        placeholder={t('checkout.selectGender')}
+                        buttonClassName={profileSelectButtonClass}
+                        menuClassName={profileSelectMenuClass}
+                    />
                 </div>
                 <div className="space-y-2">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('profile.phoneLbl')}</label>
@@ -61,14 +80,18 @@ export default function PersonalInfoForm({
                 <div className="space-y-2">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-outline font-label">{t('checkout.identityDocument')}</label>
                     <div className="flex gap-2">
-                        <select
-                            className="bg-surface-container-low border-none rounded-lg p-3 text-sm font-semibold focus:ring-1 focus:ring-primary focus:bg-white transition-all outline-none w-32 flex-shrink-0"
+                        <CheckoutSelect
+                            className="w-32 flex-shrink-0"
+                            buttonClassName={`${profileSelectButtonClass} !font-bold`}
+                            menuClassName="!z-[120] !w-56 !max-w-56 !rounded-xl !border-outline-variant/20 !bg-white !shadow-xl !shadow-slate-900/10"
                             value={identityType}
-                            onChange={(e) => { setIdentityType(e.target.value); setIdentityNo(''); }}
-                        >
-                            <option value="CCCD">{t('checkout.citizenId')}</option>
-                            <option value="PASSPORT">{t('checkout.passport')}</option>
-                        </select>
+                            options={identityOptions}
+                            onChange={(nextType) => {
+                                setIdentityType(nextType);
+                                setIdentityNo('');
+                            }}
+                            ariaLabel={t('checkout.identityDocument')}
+                        />
                         <input
                             className={`flex-1 bg-surface-container-low border-none rounded-lg p-3 text-sm focus:ring-1 focus:bg-white transition-all outline-none ${identityError ? 'ring-1 ring-error/60 bg-error/5' : 'focus:ring-primary'}`}
                             type="text"

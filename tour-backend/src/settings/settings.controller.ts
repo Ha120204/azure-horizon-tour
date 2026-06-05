@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SettingsService } from './settings.service';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 type AuthenticatedSettingsRequest = {
   user: {
@@ -40,7 +42,8 @@ export class SettingsController {
   /**
    * GET /settings/health - Runtime health checks for the admin settings page
    */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Get('health')
   async getHealth() {
     const data = await this.settingsService.getHealth();
@@ -48,9 +51,10 @@ export class SettingsController {
   }
 
   /**
-   * GET /settings — Grouped settings (tất cả roles đều đọc được sau khi đăng nhập)
+   * GET /settings — Grouped settings (chỉ Admin và Super Admin)
    */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Get()
   async getAll() {
     const data = await this.settingsService.getAll();
@@ -69,7 +73,8 @@ export class SettingsController {
   /**
    * GET /settings/flat — Object phẳng key→value (dùng nhanh cho frontend)
    */
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Get('flat')
   async getFlat() {
     const data = await this.settingsService.getFlat();

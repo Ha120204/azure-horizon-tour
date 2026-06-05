@@ -113,7 +113,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
         <div className="bg-surface text-on-surface font-body antialiased min-h-screen flex w-full">
             <SideNavBar currentUserRole={currentUserRole} />
-            <div className="flex-1 ml-64 flex flex-col min-h-screen relative">
+            <div className="flex-1 ml-72 flex flex-col min-h-screen relative">
                 <TopAppBar currentUserRole={currentUserRole} />
                 {children}
             </div>

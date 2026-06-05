@@ -521,9 +521,9 @@ export default function FilterSidebar({
             <div className="px-6 py-5">
                 <button
                     onClick={onApplyFilters}
-                    className="w-full py-3.5 bg-gradient-to-br from-primary to-primary-container text-white font-headline font-semibold rounded-xl hover:shadow-lg hover:shadow-primary/15 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2"
+                    className="group w-full py-3.5 bg-gradient-to-br from-primary to-primary-container text-white font-headline font-semibold rounded-xl shadow-md shadow-primary/15 transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest"
                 >
-                    <span className="material-symbols-outlined text-lg">filter_list</span>
+                    <span className="material-symbols-outlined text-lg transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-y-0.5 group-hover:scale-110 motion-reduce:transform-none">filter_list</span>
                     {t('filter.apply')}
                 </button>
             </div>

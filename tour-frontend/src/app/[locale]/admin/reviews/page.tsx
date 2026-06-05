@@ -52,6 +52,15 @@ export default function ReviewManagementPage() {
                 onReset={review.resetFilters}
             />
 
+            <ReviewBulkActionBar
+                selectedCount={review.selected.length}
+                selectedReviews={review.selectedReviews}
+                bulkLoading={review.bulkLoading}
+                onBulkVisibility={review.handleBulkVisibility}
+                onBulkDelete={() => review.setDeleteTarget(review.selected)}
+                onClear={review.clearSelection}
+            />
+
             <ReviewList
                 reviews={review.reviews}
                 locale={review.locale}
@@ -71,17 +80,6 @@ export default function ReviewManagementPage() {
                 onResetFilters={review.resetFilters}
                 onPageChange={review.changePage}
                 onPageSizeChange={review.changePageSize}
-            />
-
-            <ReviewBulkActionBar
-                selectedCount={review.selected.length}
-                selectedReviews={review.selectedReviews}
-                statusFilter={review.statusFilter}
-                bulkLoading={review.bulkLoading}
-                onBulkVisibility={review.handleBulkVisibility}
-                onBulkDelete={() => review.setDeleteTarget(review.selected)}
-                onExport={review.handleExportSelected}
-                onClear={review.clearSelection}
             />
 
             {review.lightbox && (

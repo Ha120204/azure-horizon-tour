@@ -15,7 +15,7 @@ const adminUsers: AdminUserSeed[] = [
     password: 'Ha12022004@',
     fullName: 'Đào Thành Hà',
     phone: '0386761856',
-    role: Role.ADMIN,
+    role: Role.SUPER_ADMIN,
   },
   {
     email: 'phunghuyen23112004@gmail.com',

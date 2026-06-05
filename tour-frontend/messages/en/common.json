@@ -15,7 +15,23 @@
     "noResults": "No results found for",
     "goodbye": "Goodbye!",
     "logoutSuccessTitle": "Signed out",
-    "memberLabel": "Azure Horizon Member"
+    "memberLabel": "Azure Horizon Member",
+    "account": {
+      "personalSection": "Personal account",
+      "adminSection": "Workspace",
+      "adminTitle": "Admin workspace",
+      "adminDescriptions": {
+        "SUPER_ADMIN": "Full system administration",
+        "ADMIN": "Manage Azure Horizon operations",
+        "STAFF": "Staff workspace"
+      },
+      "roles": {
+        "SUPER_ADMIN": "Super Admin",
+        "ADMIN": "Administrator",
+        "STAFF": "Staff",
+        "CUSTOMER": "Member"
+      }
+    }
   },
   "footer": {
     "tagline": "Redefining the architecture of modern travel. Global experiences, local soul.",
@@ -77,6 +93,12 @@
     "apply": "Apply Filters",
     "show": "Show Filters",
     "hide": "Hide Filters"
+  },
+  "admin": {
+    "topBar": {
+      "viewWebsite": "View website",
+      "backToCustomerSite": "Back to customer website"
+    }
   },
   "search": {
     "destination": "Destination",

@@ -12,9 +12,6 @@ export const formatDateToISOInputValue = (d: string | null | undefined) => {
     return date.toISOString().split('T')[0];
 };
 
-export const formatCurrency = (n: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
-
 export const getInitials = (name?: string | null) => {
     if (!name) return 'U';
     const parts = name.trim().split(/\s+/);

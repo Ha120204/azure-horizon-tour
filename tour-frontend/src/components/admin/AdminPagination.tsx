@@ -68,7 +68,7 @@ export default function AdminPagination({
   return (
     <nav className="space-y-3" aria-label={`Phân trang ${itemLabel}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-3 text-sm text-on-surface-variant">
+          <div className="flex flex-col items-start gap-2 text-sm text-on-surface-variant min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:items-center min-[420px]:gap-3">
           <label className="inline-flex items-center gap-2">
             <span className="font-medium">Dòng mỗi trang</span>
             <select
@@ -97,7 +97,7 @@ export default function AdminPagination({
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
+          <div className="flex items-center justify-between gap-3 text-xs text-on-surface-variant lg:justify-start">
           <span className="inline-flex items-center gap-1.5 font-semibold">
             <span className="material-symbols-outlined text-[15px]" aria-hidden="true">auto_stories</span>
             Trang <span className="tabular-nums text-on-surface">{safeCurrentPage}</span>/<span className="tabular-nums">{safeTotalPages}</span>
@@ -110,7 +110,7 @@ export default function AdminPagination({
 
       {safeTotalPages > 1 && (
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center justify-between gap-1.5 sm:justify-start">
             <PaginationButton
               icon="first_page"
               label="Trang đầu"
@@ -125,7 +125,7 @@ export default function AdminPagination({
               showLabel
             />
 
-            <div className="flex items-center gap-1">
+            <div className="hidden items-center gap-1 sm:flex">
               {pageNums.map((page, index) => page === '...' ? (
                 <span key={`dots-${index}`} className="flex h-9 w-9 items-center justify-center text-sm text-on-surface-variant/60">
                   ...
@@ -214,12 +214,12 @@ function PaginationButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface px-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-primary outline-none ${showLabel ? 'min-w-[82px]' : 'w-9'}`}
+      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface px-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-primary outline-none ${showLabel ? 'min-w-9 min-[380px]:min-w-[82px]' : 'hidden w-9 sm:inline-flex'}`}
       aria-label={label}
       title={label}
     >
       <span className="material-symbols-outlined text-[17px]" aria-hidden="true">{icon}</span>
-      {showLabel && <span>{label}</span>}
+      {showLabel && <span className="hidden min-[380px]:inline">{label}</span>}
     </button>
   );
 }

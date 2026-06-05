@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { isValidPhoneNumber, CountryCode } from 'libphonenumber-js';
@@ -29,6 +29,62 @@ const COUNTRY_CODES = [
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const BOOKING_REF_REQUIRED_SUBJECTS = new Set(['payment', 'cancellation', 'complaint']);
+const SUBJECT_OPTIONS = [
+    {
+        value: 'booking',
+        labelKey: 'booking',
+        icon: 'confirmation_number',
+        description: {
+            vi: 'Tư vấn tour, lịch khởi hành và chỗ còn trống.',
+            en: 'Tour advice, departure dates, and availability.',
+        },
+    },
+    {
+        value: 'payment',
+        labelKey: 'payment',
+        icon: 'payments',
+        description: {
+            vi: 'Xử lý thanh toán, hoàn tiền hoặc hóa đơn.',
+            en: 'Payment, refund, or receipt support.',
+        },
+    },
+    {
+        value: 'cancellation',
+        labelKey: 'cancellation',
+        icon: 'event_busy',
+        description: {
+            vi: 'Đổi lịch, hủy tour hoặc kiểm tra điều kiện.',
+            en: 'Reschedule, cancel, or check conditions.',
+        },
+    },
+    {
+        value: 'complaint',
+        labelKey: 'complaint',
+        icon: 'support_agent',
+        description: {
+            vi: 'Báo sự cố dịch vụ trong hoặc sau chuyến đi.',
+            en: 'Report a service issue during or after travel.',
+        },
+    },
+    {
+        value: 'partnership',
+        labelKey: 'partnership',
+        icon: 'handshake',
+        description: {
+            vi: 'Đề xuất hợp tác, đại lý hoặc nhà cung cấp.',
+            en: 'Partnership, agency, or supplier inquiries.',
+        },
+    },
+    {
+        value: 'general',
+        labelKey: 'general',
+        icon: 'help_outline',
+        description: {
+            vi: 'Câu hỏi khác chưa thuộc các nhóm trên.',
+            en: 'Other questions that do not fit the list.',
+        },
+    },
+] as const;
 
 const getFlagUrl = (iso: string) => `https://flagcdn.com/24x18/${iso}.png`;
 
@@ -69,9 +125,19 @@ export default function ContactPage() {
     const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
     const [submittedAccessCode, setSubmittedAccessCode] = useState('');
     const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
+    const [activePhoneIndex, setActivePhoneIndex] = useState(5);
+    const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
+    const [activeSubjectIndex, setActiveSubjectIndex] = useState(0);
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
+    const phoneListboxId = useId();
+    const subjectListboxId = useId();
     const phoneDropdownRef = useRef<HTMLDivElement>(null);
+    const phoneButtonRef = useRef<HTMLButtonElement>(null);
+    const phoneOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+    const subjectDropdownRef = useRef<HTMLDivElement>(null);
+    const subjectButtonRef = useRef<HTMLButtonElement>(null);
+    const subjectOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -91,11 +157,26 @@ export default function ContactPage() {
             if (phoneDropdownRef.current && !phoneDropdownRef.current.contains(event.target as Node)) {
                 setIsPhoneDropdownOpen(false);
             }
+            if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(event.target as Node)) {
+                setIsSubjectDropdownOpen(false);
+            }
         }
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        if (!isSubjectDropdownOpen) return;
+
+        subjectOptionRefs.current[activeSubjectIndex]?.focus();
+    }, [activeSubjectIndex, isSubjectDropdownOpen]);
+
+    useEffect(() => {
+        if (!isPhoneDropdownOpen) return;
+
+        phoneOptionRefs.current[activePhoneIndex]?.focus();
+    }, [activePhoneIndex, isPhoneDropdownOpen]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -111,7 +192,13 @@ export default function ContactPage() {
     }, []);
 
     const selectedCountry = COUNTRY_CODES.find(country => country.code === formData.phonePrefix) ?? COUNTRY_CODES[5];
+    const selectedCountryIndex = Math.max(0, COUNTRY_CODES.findIndex(country => country.code === formData.phonePrefix));
+    const selectedSubject = SUBJECT_OPTIONS.find(option => option.value === formData.subject) ?? SUBJECT_OPTIONS[0];
+    const selectedSubjectIndex = Math.max(0, SUBJECT_OPTIONS.findIndex(option => option.value === formData.subject));
     const isBookingRefRequired = BOOKING_REF_REQUIRED_SUBJECTS.has(formData.subject);
+    const supportPhoneHref = `tel:${publicSettings.company_phone.replace(/\s+/g, '')}`;
+    const supportEmailHref = `mailto:${publicSettings.company_email}`;
+    const heroTitle = t('contact.howCanWeAssist');
     const bookingRefLabel = language === 'vi' ? 'Mã đặt chỗ' : 'Booking reference';
     const bookingRefHelp = isBookingRefRequired
         ? language === 'vi'
@@ -248,25 +335,256 @@ export default function ContactPage() {
     const minimalFieldClass =
         'w-full border-x-0 border-t-0 border-b border-outline-variant bg-transparent px-2 py-3.5 font-body text-on-surface outline-none transition-colors placeholder:text-outline/45 focus:border-primary focus:ring-0';
 
+    const openPhoneDropdown = (index = selectedCountryIndex) => {
+        setActivePhoneIndex(index);
+        setIsPhoneDropdownOpen(true);
+    };
+
+    const closePhoneDropdown = () => {
+        setIsPhoneDropdownOpen(false);
+        phoneButtonRef.current?.focus();
+    };
+
+    const movePhoneFocus = (nextIndex: number) => {
+        const optionCount = COUNTRY_CODES.length;
+        setActivePhoneIndex((nextIndex + optionCount) % optionCount);
+    };
+
+    const handlePhonePrefixChange = (nextPrefix: string) => {
+        const nextIndex = COUNTRY_CODES.findIndex(country => country.code === nextPrefix);
+
+        setFormData(current => ({ ...current, phonePrefix: nextPrefix }));
+        setIsPhoneDropdownOpen(false);
+        setActivePhoneIndex(Math.max(0, nextIndex));
+        phoneButtonRef.current?.focus();
+    };
+
+    const handlePhoneButtonKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key === 'Escape') {
+            setIsPhoneDropdownOpen(false);
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            openPhoneDropdown(Math.min(selectedCountryIndex + 1, COUNTRY_CODES.length - 1));
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            openPhoneDropdown(Math.max(selectedCountryIndex - 1, 0));
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openPhoneDropdown(selectedCountryIndex);
+        }
+    };
+
+    const handlePhoneOptionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, countryCode: string) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closePhoneDropdown();
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            movePhoneFocus(activePhoneIndex + 1);
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            movePhoneFocus(activePhoneIndex - 1);
+            return;
+        }
+
+        if (event.key === 'Home') {
+            event.preventDefault();
+            movePhoneFocus(0);
+            return;
+        }
+
+        if (event.key === 'End') {
+            event.preventDefault();
+            movePhoneFocus(COUNTRY_CODES.length - 1);
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handlePhonePrefixChange(countryCode);
+        }
+    };
+
+    const openSubjectDropdown = (index = selectedSubjectIndex) => {
+        setActiveSubjectIndex(index);
+        setIsSubjectDropdownOpen(true);
+    };
+
+    const closeSubjectDropdown = () => {
+        setIsSubjectDropdownOpen(false);
+        subjectButtonRef.current?.focus();
+    };
+
+    const moveSubjectFocus = (nextIndex: number) => {
+        const optionCount = SUBJECT_OPTIONS.length;
+        setActiveSubjectIndex((nextIndex + optionCount) % optionCount);
+    };
+
+    const handleSubjectChange = (nextSubject: string) => {
+        const nextIndex = SUBJECT_OPTIONS.findIndex(option => option.value === nextSubject);
+
+        setFormData(current => ({ ...current, subject: nextSubject }));
+        setIsSubjectDropdownOpen(false);
+        setActiveSubjectIndex(Math.max(0, nextIndex));
+        subjectButtonRef.current?.focus();
+        if (!BOOKING_REF_REQUIRED_SUBJECTS.has(nextSubject)) {
+            setErrors(current => {
+                const nextErrors = { ...current };
+                delete nextErrors.reference;
+                return nextErrors;
+            });
+        }
+    };
+
+    const handleSubjectButtonKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key === 'Escape') {
+            setIsSubjectDropdownOpen(false);
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            openSubjectDropdown(Math.min(selectedSubjectIndex + 1, SUBJECT_OPTIONS.length - 1));
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            openSubjectDropdown(Math.max(selectedSubjectIndex - 1, 0));
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openSubjectDropdown(selectedSubjectIndex);
+        }
+    };
+
+    const handleSubjectOptionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, optionValue: string) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeSubjectDropdown();
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            moveSubjectFocus(activeSubjectIndex + 1);
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            moveSubjectFocus(activeSubjectIndex - 1);
+            return;
+        }
+
+        if (event.key === 'Home') {
+            event.preventDefault();
+            moveSubjectFocus(0);
+            return;
+        }
+
+        if (event.key === 'End') {
+            event.preventDefault();
+            moveSubjectFocus(SUBJECT_OPTIONS.length - 1);
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleSubjectChange(optionValue);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-surface text-on-surface antialiased">
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                @keyframes contact-hero-up {
+                    from { opacity: 0; transform: translateY(24px); }
+                    to   { opacity: 1; transform: translateY(0); }
+                }
+                .contact-hero-enter {
+                    animation: contact-hero-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+                }
+                .contact-hero-enter-d1 { animation-delay: 80ms; }
+                .contact-hero-enter-d2 { animation-delay: 180ms; }
+                .contact-hero-enter-d3 { animation-delay: 280ms; }
+                .contact-hero-enter-d4 { animation-delay: 380ms; }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .contact-hero-enter {
+                        animation: none !important;
+                    }
+                }
+            `}} />
             <Header />
 
             <main className="mx-auto w-full max-w-7xl px-6 pb-24 pt-32">
-                <div className="mb-12 animate-fade-in-up">
-                    <span className="font-label text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-primary">
+                <div className="mb-12">
+                    <span className="contact-hero-enter contact-hero-enter-d1 inline-block font-label text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-primary">
                         {t('contact.guestRelations')}
                     </span>
-                    <h1 className="mt-3 max-w-4xl font-headline text-4xl font-extrabold leading-[1.02] tracking-tight text-primary md:text-6xl">
-                        {t('contact.howCanWeAssist')}
+                    <h1 className="contact-hero-enter contact-hero-enter-d2 mt-3 max-w-4xl font-headline text-4xl font-extrabold leading-[1.02] tracking-tight text-primary md:text-6xl">
+                        {heroTitle}
                     </h1>
                 </div>
 
                 <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-12 lg:gap-16">
-                    <section className="animate-fade-in-up space-y-14 lg:col-span-5">
-                        <p className="max-w-md font-body text-lg leading-8 text-on-surface-variant">
+                    <section className="space-y-14 lg:col-span-5">
+                        <p className="contact-hero-enter contact-hero-enter-d3 max-w-md font-body text-lg leading-8 text-on-surface-variant">
                             {t('contact.description')}
                         </p>
+
+                        <div className="contact-hero-enter contact-hero-enter-d4 flex flex-wrap gap-3">
+                            <a
+                                href={supportPhoneHref}
+                                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">call</span>
+                                {language === 'vi' ? 'Gọi ngay' : 'Call Now'}
+                            </a>
+                            <a
+                                href={supportEmailHref}
+                                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-outline-variant/60 bg-white px-5 py-2.5 text-sm font-bold text-primary transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">mail</span>
+                                {language === 'vi' ? 'Gửi email' : 'Email Us'}
+                            </a>
+                            {isLoggedIn ? (
+                                <Link
+                                    href="/profile"
+                                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-outline-variant/60 bg-white px-5 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">assignment</span>
+                                    {language === 'vi' ? 'Theo dõi yêu cầu' : 'Track Requests'}
+                                </Link>
+                            ) : (
+                                <a
+                                    href="#contact-request-form"
+                                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-outline-variant/60 bg-white px-5 py-2.5 text-sm font-bold text-on-surface-variant transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit_note</span>
+                                    {language === 'vi' ? 'Gửi yêu cầu' : 'Send Request'}
+                                </a>
+                            )}
+                        </div>
 
                         <div className="space-y-10">
                             {([
@@ -290,7 +608,7 @@ export default function ContactPage() {
                                 },
                                 {
                                     icon: 'location_on',
-                                    title: language === 'vi' ? 'Van phong' : 'Office',
+                                    title: language === 'vi' ? 'Văn phòng' : 'Office',
                                     body: publicSettings.company_address,
                                 },
                                 {
@@ -347,7 +665,7 @@ export default function ContactPage() {
                     </section>
 
                     <section className="animate-fade-in-up lg:col-span-7">
-                        <div className="rounded-[2rem] border border-slate-200/70 bg-white/80 p-7 shadow-2xl shadow-slate-900/10 backdrop-blur md:p-10 lg:p-12">
+                        <div className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-xl shadow-slate-900/5 md:p-10 lg:p-12">
                             {isSubmitted ? (
                                 <div className="mx-auto max-w-md py-8 text-center">
                                     <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -369,7 +687,7 @@ export default function ContactPage() {
                                             {!isLoggedIn && submittedAccessCode && (
                                                 <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
                                                     <p className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-amber-700">
-                                                        {language === 'vi' ? 'Ma truy cap' : 'Access code'}
+                                                        {language === 'vi' ? 'Mã truy cập' : 'Access code'}
                                                     </p>
                                                     <p className="mt-2 break-all font-mono text-sm font-bold text-amber-800">
                                                         {submittedAccessCode}
@@ -395,7 +713,7 @@ export default function ContactPage() {
                                                 className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-colors hover:bg-primary-container"
                                             >
                                                 <span className="material-symbols-outlined text-sm">support_agent</span>
-                                                {language === 'vi' ? 'Theo doi yeu cau' : 'Track request'}
+                                                {language === 'vi' ? 'Theo dõi yêu cầu' : 'Track request'}
                                             </Link>
                                         )}
                                         <button
@@ -408,7 +726,7 @@ export default function ContactPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <form className="space-y-8" onSubmit={handleSubmit} noValidate>
+                                <form id="contact-request-form" className="space-y-8 scroll-mt-28" onSubmit={handleSubmit} noValidate>
                                     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                                         <div className="space-y-2">
                                             <label htmlFor="contact-name" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
@@ -457,11 +775,22 @@ export default function ContactPage() {
                                             >
                                                 <div className="relative shrink-0" ref={phoneDropdownRef}>
                                                     <button
+                                                        ref={phoneButtonRef}
                                                         type="button"
                                                         aria-haspopup="listbox"
                                                         aria-expanded={isPhoneDropdownOpen}
-                                                        onClick={() => setIsPhoneDropdownOpen(value => !value)}
-                                                        className="flex h-full items-center gap-2 px-2 py-3.5 text-sm font-semibold text-on-surface transition-colors hover:text-primary"
+                                                        aria-controls={isPhoneDropdownOpen ? phoneListboxId : undefined}
+                                                        aria-label={language === 'vi' ? 'Chọn mã quốc gia' : 'Select country code'}
+                                                        onClick={() => {
+                                                            if (isPhoneDropdownOpen) {
+                                                                setIsPhoneDropdownOpen(false);
+                                                                return;
+                                                            }
+
+                                                            openPhoneDropdown(selectedCountryIndex);
+                                                        }}
+                                                        onKeyDown={handlePhoneButtonKeyDown}
+                                                        className="flex h-full items-center gap-2 px-2 py-3.5 text-sm font-semibold text-on-surface outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                                                     >
                                                         <Image
                                                             src={getFlagUrl(selectedCountry.iso)}
@@ -475,19 +804,38 @@ export default function ContactPage() {
                                                     </button>
 
                                                     {isPhoneDropdownOpen && (
-                                                        <div role="listbox" className="absolute left-0 top-full z-30 mt-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-outline-variant/30 bg-white py-1 shadow-xl">
-                                                            {COUNTRY_CODES.map(country => (
+                                                        <div
+                                                            id={phoneListboxId}
+                                                            role="listbox"
+                                                            aria-label={language === 'vi' ? 'Mã quốc gia' : 'Country code'}
+                                                            aria-activedescendant={`${phoneListboxId}-${COUNTRY_CODES[activePhoneIndex]?.code.replace('+', '') ?? selectedCountry.code.replace('+', '')}`}
+                                                            className="absolute left-0 top-full z-30 mt-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-outline-variant/30 bg-white py-1 shadow-xl"
+                                                        >
+                                                            {COUNTRY_CODES.map((country, index) => {
+                                                                const selected = formData.phonePrefix === country.code;
+                                                                const active = index === activePhoneIndex;
+
+                                                                return (
                                                                 <button
                                                                     key={country.code}
+                                                                    id={`${phoneListboxId}-${country.code.replace('+', '')}`}
+                                                                    ref={element => {
+                                                                        phoneOptionRefs.current[index] = element;
+                                                                    }}
                                                                     type="button"
                                                                     role="option"
-                                                                    aria-selected={formData.phonePrefix === country.code}
-                                                                    onClick={() => {
-                                                                        setFormData({ ...formData, phonePrefix: country.code });
-                                                                        setIsPhoneDropdownOpen(false);
-                                                                    }}
-                                                                    className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface-container-low ${
-                                                                        formData.phonePrefix === country.code ? 'bg-primary/5 font-bold text-primary' : 'text-on-surface'
+                                                                    aria-selected={selected}
+                                                                    tabIndex={active ? 0 : -1}
+                                                                    onClick={() => handlePhonePrefixChange(country.code)}
+                                                                    onFocus={() => setActivePhoneIndex(index)}
+                                                                    onMouseEnter={() => setActivePhoneIndex(index)}
+                                                                    onKeyDown={event => handlePhoneOptionKeyDown(event, country.code)}
+                                                                    className={`flex w-full items-center gap-3 px-4 py-3 text-sm outline-none transition-colors hover:bg-surface-container-low focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                                                                        selected
+                                                                            ? 'bg-primary/5 font-bold text-primary'
+                                                                            : active
+                                                                                ? 'bg-surface-container-low text-on-surface'
+                                                                                : 'text-on-surface'
                                                                     }`}
                                                                 >
                                                                     <Image
@@ -500,7 +848,8 @@ export default function ContactPage() {
                                                                     <span>{country.country}</span>
                                                                     <span className="ml-auto text-on-surface-variant">{country.code}</span>
                                                                 </button>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                     )}
                                                 </div>
@@ -548,36 +897,106 @@ export default function ContactPage() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label htmlFor="contact-subject" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
+                                        <label htmlFor="contact-subject" id="contact-subject-label" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
                                             {t('contact.subject')}
                                         </label>
-                                        <div className="relative">
-                                            <select
+                                        <div ref={subjectDropdownRef} className="relative">
+                                            <button
                                                 id="contact-subject"
-                                                className={`${minimalFieldClass} cursor-pointer appearance-none pr-10`}
-                                                value={formData.subject}
-                                                onChange={event => {
-                                                    const nextSubject = event.target.value;
-                                                    setFormData({ ...formData, subject: nextSubject });
-                                                    if (!BOOKING_REF_REQUIRED_SUBJECTS.has(nextSubject)) {
-                                                        setErrors(current => {
-                                                            const nextErrors = { ...current };
-                                                            delete nextErrors.reference;
-                                                            return nextErrors;
-                                                        });
+                                                ref={subjectButtonRef}
+                                                type="button"
+                                                aria-haspopup="listbox"
+                                                aria-expanded={isSubjectDropdownOpen}
+                                                aria-controls={isSubjectDropdownOpen ? subjectListboxId : undefined}
+                                                aria-labelledby="contact-subject-label"
+                                                onClick={() => {
+                                                    if (isSubjectDropdownOpen) {
+                                                        setIsSubjectDropdownOpen(false);
+                                                        return;
                                                     }
+
+                                                    openSubjectDropdown(selectedSubjectIndex);
                                                 }}
+                                                onKeyDown={handleSubjectButtonKeyDown}
+                                                className={`${minimalFieldClass} flex cursor-pointer items-center justify-between gap-3 pr-2 text-left focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20`}
                                             >
-                                                <option value="booking">{t('contact.subjectOptions.booking')}</option>
-                                                <option value="payment">{t('contact.subjectOptions.payment')}</option>
-                                                <option value="cancellation">{t('contact.subjectOptions.cancellation')}</option>
-                                                <option value="complaint">{t('contact.subjectOptions.complaint')}</option>
-                                                <option value="partnership">{t('contact.subjectOptions.partnership')}</option>
-                                                <option value="general">{t('contact.subjectOptions.general')}</option>
-                                            </select>
-                                            <span className="material-symbols-outlined pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-outline">
+                                                <span className="flex min-w-0 items-center gap-3">
+                                                    <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">
+                                                        {selectedSubject.icon}
+                                                    </span>
+                                                    <span className="truncate">
+                                                        {t(`contact.subjectOptions.${selectedSubject.labelKey}`)}
+                                                    </span>
+                                                </span>
+                                                <span
+                                                    className={`material-symbols-outlined shrink-0 text-outline transition-transform ${isSubjectDropdownOpen ? 'rotate-180 text-primary' : ''}`}
+                                                    aria-hidden="true"
+                                                >
                                                 expand_more
-                                            </span>
+                                                </span>
+                                            </button>
+
+                                            {isSubjectDropdownOpen && (
+                                                <div
+                                                    id={subjectListboxId}
+                                                    role="listbox"
+                                                    aria-labelledby="contact-subject-label"
+                                                    aria-activedescendant={`${subjectListboxId}-${SUBJECT_OPTIONS[activeSubjectIndex]?.value ?? selectedSubject.value}`}
+                                                    className="absolute left-0 right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-outline-variant/20 bg-white p-1.5 shadow-2xl shadow-slate-900/12"
+                                                >
+                                                    <div className="max-h-72 overflow-y-auto">
+                                                        {SUBJECT_OPTIONS.map((option, index) => {
+                                                            const selected = option.value === formData.subject;
+                                                            const active = index === activeSubjectIndex;
+
+                                                            return (
+                                                                <button
+                                                                    key={option.value}
+                                                                    id={`${subjectListboxId}-${option.value}`}
+                                                                    ref={element => {
+                                                                        subjectOptionRefs.current[index] = element;
+                                                                    }}
+                                                                    type="button"
+                                                                    role="option"
+                                                                    aria-selected={selected}
+                                                                    tabIndex={active ? 0 : -1}
+                                                                    onClick={() => handleSubjectChange(option.value)}
+                                                                    onFocus={() => setActiveSubjectIndex(index)}
+                                                                    onMouseEnter={() => setActiveSubjectIndex(index)}
+                                                                    onKeyDown={event => handleSubjectOptionKeyDown(event, option.value)}
+                                                                    className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                                                                        selected
+                                                                            ? 'bg-primary/10 text-primary ring-1 ring-primary/15'
+                                                                            : active
+                                                                                ? 'bg-surface-container-low text-on-surface'
+                                                                                : 'text-on-surface hover:bg-surface-container-low'
+                                                                    } outline-none focus-visible:ring-2 focus-visible:ring-primary/30`}
+                                                                >
+                                                                    <span
+                                                                        className={`material-symbols-outlined mt-0.5 text-[18px] ${selected ? 'text-primary' : 'text-on-surface-variant/70'}`}
+                                                                        aria-hidden="true"
+                                                                    >
+                                                                        {option.icon}
+                                                                    </span>
+                                                                    <span className="min-w-0 flex-1">
+                                                                        <span className="block whitespace-normal break-words text-sm font-bold leading-5">
+                                                                            {t(`contact.subjectOptions.${option.labelKey}`)}
+                                                                        </span>
+                                                                        <span className={`mt-0.5 block text-xs font-medium leading-5 ${selected ? 'text-primary/75' : 'text-on-surface-variant'}`}>
+                                                                            {language === 'vi' ? option.description.vi : option.description.en}
+                                                                        </span>
+                                                                    </span>
+                                                                    {selected && (
+                                                                        <span className="material-symbols-outlined mt-0.5 text-[18px] text-primary" aria-hidden="true">
+                                                                            done
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -649,15 +1068,29 @@ export default function ContactPage() {
                                     <button
                                         type="submit"
                                         disabled={isSubmitting}
-                                        className="w-full rounded-full bg-primary px-6 py-5 font-headline text-lg font-bold text-white shadow-[0_8px_24px_rgba(0,86,179,0.28)] transition-all hover:bg-primary-container hover:shadow-[0_12px_32px_rgba(0,86,179,0.36)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="group relative w-full overflow-hidden rounded-full bg-primary px-6 py-5 font-headline text-lg font-bold text-white shadow-[0_8px_24px_rgba(0,86,179,0.28)] outline-none transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-[0_16px_34px_rgba(0,86,179,0.34)] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-primary disabled:hover:shadow-[0_8px_24px_rgba(0,86,179,0.28)] motion-reduce:transform-none"
                                     >
+                                        <span
+                                            className="pointer-events-none absolute inset-y-0 -left-1/3 z-0 w-1/3 -skew-x-12 bg-white/25 opacity-0 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[420%] group-hover:opacity-100 group-disabled:opacity-0 motion-reduce:hidden"
+                                            aria-hidden="true"
+                                        />
                                         {isSubmitting ? (
-                                            <span className="flex items-center justify-center gap-2">
-                                                <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                                            <span className="relative z-10 flex items-center justify-center gap-2">
+                                                <span className="material-symbols-outlined animate-spin text-base motion-reduce:animate-none">progress_activity</span>
                                                 {t('contact.submitting')}
                                             </span>
                                         ) : (
-                                            t('contact.sendMsg')
+                                            <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                                                <span className="transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-1 motion-reduce:transform-none">
+                                                    {t('contact.sendMsg')}
+                                                </span>
+                                                <span
+                                                    className="material-symbols-outlined translate-x-[-0.5rem] text-[20px] opacity-0 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:translate-x-0 motion-reduce:opacity-100"
+                                                    aria-hidden="true"
+                                                >
+                                                    arrow_forward
+                                                </span>
+                                            </span>
                                         )}
                                     </button>
 

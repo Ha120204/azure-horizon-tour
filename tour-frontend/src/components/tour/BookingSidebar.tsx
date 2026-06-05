@@ -170,8 +170,11 @@ export default function BookingSidebarNew({
                         selectedPackage ? (
                             <a
                                 href={buildCheckoutUrl()}
-                                className="block w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white text-center font-bold rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-primary/20 text-sm"
+                                className="group inline-flex w-full min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-primary-container px-5 py-4 text-center text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[transform,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:opacity-95 hover:shadow-xl hover:shadow-primary/30 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
                             >
+                                <span className="material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5 motion-reduce:transform-none" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                    shopping_bag
+                                </span>
                                 {t('tour_detail.bookNowCta', { price: formatPrice(effectivePrice) })}
                             </a>
                         ) : (

@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import QRCode from 'react-qr-code';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
@@ -15,6 +16,16 @@ interface EBookedTour {
     imageUrl?: string | null;
     startDate: string;
     duration?: string | null;
+}
+
+interface QRPaymentData {
+    checkoutUrl: string;
+    qrCode?: string;
+    accountNumber?: string;
+    accountName?: string;
+    description: string;
+    amount: number;
+    expiresAt: string;
 }
 
 interface EBooking {
@@ -53,6 +64,15 @@ const dict = {
         cancelBtn: "Hủy giao dịch",
         payosBtn: "Thanh toán bằng mã QR",
         inStoreBtn: "Xác nhận đặt giữ chỗ",
+        qrModalTitle: "Thanh toán chuyển khoản",
+        qrAmount: "Số tiền",
+        qrAccount: "Số tài khoản",
+        qrAccountName: "Chủ tài khoản",
+        qrContent: "Nội dung CK",
+        qrNote: "Nhập {code} làm nội dung chuyển khoản để hệ thống tự động xác nhận. Trạng thái sẽ cập nhật sau khi ngân hàng xử lý.",
+        qrClose: "Đóng",
+        qrExpired: "Mã QR đã hết hạn",
+        qrChecking: "Đang kiểm tra thanh toán...",
         processing: "Đang xử lý...",
         orderSummary: "Tóm tắt đơn hàng",
         orderCode: "Mã đơn hàng",
@@ -85,6 +105,15 @@ const dict = {
         cancelBtn: "Cancel Transaction",
         payosBtn: "Pay with QR Code",
         inStoreBtn: "Confirm Reservation",
+        qrModalTitle: "Bank Transfer Payment",
+        qrAmount: "Amount",
+        qrAccount: "Account Number",
+        qrAccountName: "Account Name",
+        qrContent: "Transfer Content",
+        qrNote: "Enter {code} as transfer content for automatic confirmation. Status updates after bank processing.",
+        qrClose: "Close",
+        qrExpired: "QR code expired",
+        qrChecking: "Checking payment status...",
         processing: "Processing...",
         orderSummary: "Order Summary",
         orderCode: "Order Code",
@@ -111,6 +140,7 @@ function PaymentSelectorContent() {
     const [selectedMethod, setSelectedMethod] = useState<'PAYOS' | 'IN_STORE'>('PAYOS');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const [qrPaymentData, setQrPaymentData] = useState<QRPaymentData | null>(null);
 
     // Cuộn lên đầu trang khi component mount (kể cả khi bấm back/forward)
     useEffect(() => {
@@ -230,7 +260,31 @@ function PaymentSelectorContent() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // 3. Confirming and proceeding with payment
+    // 3. Poll PayOS directly while QR modal is open — webhook won't fire on localhost
+    useEffect(() => {
+        if (!qrPaymentData || !booking) return;
+
+        const poll = setInterval(async () => {
+            try {
+                const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/check-payment`, {
+                    method: 'POST',
+                });
+                const result = await res.json();
+                const data = result.data ?? result;
+                if (res.ok && data?.synced === true) {
+                    clearInterval(poll);
+                    setQrPaymentData(null);
+                    router.push(`/${language}/success?bookingId=${bookingCode}`);
+                }
+            } catch {
+                // ignore poll errors
+            }
+        }, 4000);
+
+        return () => clearInterval(poll);
+    }, [qrPaymentData, booking, bookingCode, language, router]);
+
+    // 4. Confirming and proceeding with payment
     const handleConfirmPayment = async () => {
         if (!booking) return;
 
@@ -242,10 +296,22 @@ function PaymentSelectorContent() {
                     method: 'POST',
                 });
                 const result = await res.json();
-                const payUrl = result.checkoutUrl || result.paymentUrl || result.data?.checkoutUrl || result.data?.paymentUrl;
+                const data = result.data ?? result;
 
-                if (res.ok && payUrl) {
-                    window.location.href = payUrl;
+                if (res.ok && data.checkoutUrl) {
+                    if (data.qrCode && data.accountNumber) {
+                        setQrPaymentData({
+                            checkoutUrl: data.checkoutUrl,
+                            qrCode: data.qrCode,
+                            accountNumber: data.accountNumber,
+                            accountName: data.accountName,
+                            description: data.description,
+                            amount: data.amount,
+                            expiresAt: data.expiresAt,
+                        });
+                    } else {
+                        window.location.href = data.checkoutUrl;
+                    }
                 } else {
                     alert(result.message && result.message !== 'Success' ? result.message : 'Error starting PayOS payment');
                 }
@@ -450,30 +516,46 @@ function PaymentSelectorContent() {
                         <div className="flex items-center justify-end gap-4">
                             <button
                                 onClick={() => setIsCancelConfirmOpen(true)}
-                                className="px-6 py-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 font-bold text-sm transition-all active:scale-95 text-on-surface-variant"
+                                className="group inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-on-surface-variant shadow-sm outline-none transition-[background-color,border-color,box-shadow,transform,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-on-surface hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none"
                             >
-                                {d.cancelBtn}
+                                <span
+                                    className="material-symbols-outlined text-[17px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-rotate-6 motion-reduce:transform-none"
+                                    aria-hidden="true"
+                                >
+                                    close
+                                </span>
+                                <span>{d.cancelBtn}</span>
                             </button>
                             <button
                                 onClick={handleConfirmPayment}
                                 disabled={isSubmitting || (selectedMethod === 'PAYOS' && isPayosExpired)}
-                                className="px-10 py-3.5 bg-primary text-white font-bold text-sm rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20 flex items-center gap-2 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="group relative inline-flex min-w-[250px] items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary px-10 py-3.5 text-sm font-bold text-white shadow-md shadow-primary/20 outline-none transition-[background-color,box-shadow,transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-primary disabled:hover:shadow-md disabled:hover:shadow-primary/20 motion-reduce:transform-none"
                             >
+                                <span
+                                    className="pointer-events-none absolute inset-y-0 -left-1/3 z-0 w-1/3 -skew-x-12 bg-white/25 opacity-0 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-[420%] group-hover:opacity-100 group-disabled:opacity-0 motion-reduce:hidden"
+                                    aria-hidden="true"
+                                />
                                 {isSubmitting ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                                        <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin motion-reduce:animate-none" />
                                         <span>{d.processing}</span>
-                                    </>
+                                    </span>
                                 ) : selectedMethod === 'PAYOS' ? (
-                                    <>
-                                        <span className="material-symbols-outlined text-base">qr_code_scanner</span>
+                                    <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                                        <span className="material-symbols-outlined text-base transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-110 group-hover:-translate-x-0.5 motion-reduce:transform-none">qr_code_scanner</span>
                                         <span>{d.payosBtn}</span>
-                                    </>
+                                        <span
+                                            className="material-symbols-outlined translate-x-[-0.35rem] text-[17px] opacity-0 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:translate-x-0 motion-reduce:opacity-100"
+                                            aria-hidden="true"
+                                        >
+                                            arrow_forward
+                                        </span>
+                                    </span>
                                 ) : (
-                                    <>
-                                        <span className="material-symbols-outlined text-base">verified</span>
+                                    <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                                        <span className="material-symbols-outlined text-base transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-110 motion-reduce:transform-none">verified</span>
                                         <span>{d.inStoreBtn}</span>
-                                    </>
+                                    </span>
                                 )}
                             </button>
                         </div>
@@ -532,14 +614,164 @@ function PaymentSelectorContent() {
                 </div>
             </main>
 
+            {qrPaymentData && (
+                <QRPaymentModal
+                    data={qrPaymentData}
+                    timeLeft={timeLeft}
+                    d={d}
+                    formatPrice={formatPrice}
+                    formatTime={formatTime}
+                    onClose={() => setQrPaymentData(null)}
+                />
+            )}
+
             <ConfirmCancelModal
                 isOpen={isCancelConfirmOpen}
                 onClose={() => setIsCancelConfirmOpen(false)}
                 onConfirm={handleActiveCancel}
                 isSubmitting={isSubmitting}
-                t={t}
             />
         </>
+    );
+}
+
+interface QRPaymentModalProps {
+    data: QRPaymentData;
+    timeLeft: number | null;
+    d: typeof dict['vi'];
+    formatPrice: (n: number) => string;
+    formatTime: (s: number) => string;
+    onClose: () => void;
+}
+
+function QRPaymentModal({ data, timeLeft, d, formatPrice, formatTime, onClose }: QRPaymentModalProps) {
+    const [copied, setCopied] = useState<string | null>(null);
+
+    const copy = (text: string, key: string) => {
+        navigator.clipboard.writeText(text);
+        setCopied(key);
+        setTimeout(() => setCopied(null), 2000);
+    };
+
+    const isExpired = timeLeft === 0;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+
+            <div className="relative z-10 bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-[440px] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-7 pt-7 pb-5">
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-xl">credit_card</span>
+                        <h3 className="font-bold text-on-surface text-lg">{d.qrModalTitle}</h3>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-outline hover:text-on-surface"
+                    >
+                        <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
+                </div>
+
+                {/* QR Code */}
+                <div className="flex flex-col items-center px-7 pb-5">
+                    <div className={`bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-opacity ${isExpired ? 'opacity-30 grayscale' : ''}`}>
+                        {data.qrCode ? (
+                            <QRCode
+                                value={data.qrCode}
+                                size={220}
+                                bgColor="#ffffff"
+                                fgColor="#000000"
+                                level="M"
+                            />
+                        ) : (
+                            <div className="w-[220px] h-[220px] flex items-center justify-center bg-slate-50 rounded-xl">
+                                <span className="material-symbols-outlined text-5xl text-outline">qr_code_2</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Timer */}
+                    {!isExpired && timeLeft !== null && timeLeft > 0 && (
+                        <div className="mt-3 inline-flex items-center gap-1.5 text-amber-700 text-sm font-bold">
+                            <span className="material-symbols-outlined text-sm animate-pulse">timer</span>
+                            <span>{d.payosTimer.replace('{time}', formatTime(timeLeft))}</span>
+                        </div>
+                    )}
+                    {isExpired && (
+                        <div className="mt-3 inline-flex items-center gap-1.5 text-red-600 text-sm font-bold">
+                            <span className="material-symbols-outlined text-sm">error</span>
+                            <span>{d.qrExpired}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Bank Info */}
+                <div className="mx-7 mb-4 border border-slate-100 rounded-2xl divide-y divide-slate-100 text-sm">
+                    <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-outline">{d.qrAmount}</span>
+                        <span className="font-black text-primary text-base">{formatPrice(data.amount)}</span>
+                    </div>
+
+                    {data.accountNumber && (
+                        <div className="flex items-center justify-between px-4 py-3">
+                            <span className="text-outline">{d.qrAccount}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="font-medium text-on-surface">{data.accountNumber}</span>
+                                <button
+                                    onClick={() => copy(data.accountNumber!, 'account')}
+                                    className="text-outline hover:text-primary transition-colors"
+                                    title="Sao chép"
+                                >
+                                    <span className="material-symbols-outlined text-base">
+                                        {copied === 'account' ? 'check' : 'content_copy'}
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {data.accountName && (
+                        <div className="flex items-center justify-between px-4 py-3">
+                            <span className="text-outline">{d.qrAccountName}</span>
+                            <span className="font-bold text-on-surface">{data.accountName}</span>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-outline">{d.qrContent}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-on-surface tracking-wide">{data.description}</span>
+                            <button
+                                onClick={() => copy(data.description, 'desc')}
+                                className="text-outline hover:text-primary transition-colors"
+                                title="Sao chép"
+                            >
+                                <span className="material-symbols-outlined text-base">
+                                    {copied === 'desc' ? 'check' : 'content_copy'}
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Note */}
+                <p className="mx-7 mb-5 text-xs text-outline text-center leading-relaxed">
+                    {d.qrNote.replace('{code}', data.description)}
+                </p>
+
+                {/* Footer */}
+                <div className="px-7 pb-7">
+                    <button
+                        onClick={onClose}
+                        className="w-full py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors"
+                    >
+                        {d.qrClose}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -548,10 +780,9 @@ interface ConfirmCancelModalProps {
     onClose: () => void;
     onConfirm: () => void;
     isSubmitting: boolean;
-    t: any;
 }
 
-function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting, t }: ConfirmCancelModalProps) {
+function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting }: ConfirmCancelModalProps) {
     if (!isOpen) return null;
 
     return (

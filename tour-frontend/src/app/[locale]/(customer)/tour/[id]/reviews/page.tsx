@@ -155,9 +155,13 @@ export default function ReviewsPage() {
                     {/* Right: Action */}
                     <div className="flex justify-center lg:justify-end">
                         <button
+                            type="button"
                             onClick={() => setIsModalOpen(true)}
-                            className="bg-gradient-to-br from-primary to-primary-container text-white px-8 py-4 rounded-full font-headline font-semibold text-sm hover:shadow-lg transition-all active:scale-95"
+                            className="group inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-container px-8 py-4 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[transform,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:opacity-95 hover:shadow-xl hover:shadow-primary/30 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
                         >
+                            <span className="material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-rotate-6 motion-reduce:transform-none" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                rate_review
+                            </span>
                             {t('reviews.writeReview')}
                         </button>
                     </div>

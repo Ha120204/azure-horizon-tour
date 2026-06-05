@@ -436,82 +436,97 @@ export function ReviewList({
 interface ReviewBulkActionBarProps {
     selectedCount: number;
     selectedReviews: Review[];
-    statusFilter: string;
     bulkLoading: boolean;
     onBulkVisibility: (isHidden: boolean) => void;
     onBulkDelete: () => void;
-    onExport: () => void;
     onClear: () => void;
 }
 
 export function ReviewBulkActionBar({
     selectedCount,
     selectedReviews,
-    statusFilter,
     bulkLoading,
     onBulkVisibility,
     onBulkDelete,
-    onExport,
     onClear,
 }: ReviewBulkActionBarProps) {
     if (selectedCount === 0) return null;
-    const shouldShowHidden = statusFilter === 'hidden';
     const lowRatingCount = selectedReviews.filter((review) => review.rating <= 2).length;
     const unrepliedCount = selectedReviews.filter((review) => !review.adminReply?.trim()).length;
+    const visibleCount = selectedReviews.filter((review) => !review.isHidden).length;
+    const hiddenCount = selectedReviews.filter((review) => review.isHidden).length;
+    const selectedLabel = `Đã chọn ${selectedCount} đánh giá`;
 
     return (
-        <div className="fixed bottom-6 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 animate-fade-in-up flex-col gap-3 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest/95 px-4 py-3.5 shadow-2xl backdrop-blur-md md:bottom-8 md:w-auto md:min-w-[720px] md:translate-x-[calc(-50%+128px)] md:flex-row md:items-center md:gap-4 md:rounded-full md:px-6">
-            <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-bold text-on-surface">
-                    {selectedCount} đã chọn
-                </span>
-                {lowRatingCount > 0 && (
-                    <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-700">
-                        {lowRatingCount} cần kiểm tra
+        <div
+            role="toolbar"
+            aria-label={selectedLabel}
+            className="sticky top-0 z-30 mb-3 rounded-xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 shadow-sm ring-1 ring-primary/5 backdrop-blur"
+        >
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden="true">
+                        <span className="material-symbols-outlined text-[18px]">checklist</span>
                     </span>
-                )}
-                {unrepliedCount > 0 && (
-                    <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-bold text-cyan-700">
-                        {unrepliedCount} chưa phản hồi
-                    </span>
-                )}
+                    <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-on-surface">
+                            Đã chọn <strong className="text-primary">{selectedCount}</strong> đánh giá
+                        </p>
+                        <p className="text-xs text-on-surface-variant">
+                            {lowRatingCount} cần kiểm tra · {unrepliedCount} chưa phản hồi
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    {visibleCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => onBulkVisibility(true)}
+                            disabled={bulkLoading}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        >
+                            <span className={`material-symbols-outlined text-[14px] ${bulkLoading ? 'animate-spin' : ''}`} aria-hidden="true">
+                                {bulkLoading ? 'progress_activity' : 'visibility_off'}
+                            </span>
+                            Ẩn ({visibleCount})
+                        </button>
+                    )}
+
+                    {hiddenCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => onBulkVisibility(false)}
+                            disabled={bulkLoading}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                        >
+                            <span className={`material-symbols-outlined text-[14px] ${bulkLoading ? 'animate-spin' : ''}`} aria-hidden="true">
+                                {bulkLoading ? 'progress_activity' : 'visibility'}
+                            </span>
+                            Hiện lại ({hiddenCount})
+                        </button>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={onBulkDelete}
+                        disabled={bulkLoading}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                    >
+                        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">delete</span>
+                        Xóa ({selectedCount})
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={onClear}
+                        disabled={bulkLoading}
+                        className="inline-flex h-8 items-center rounded-lg px-3 text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                        Bỏ chọn
+                    </button>
+                </div>
             </div>
-            <div className="hidden h-5 w-px bg-outline-variant/30 md:block" />
-            <button
-                type="button"
-                onClick={onExport}
-                disabled={bulkLoading}
-                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container disabled:opacity-50"
-            >
-                <span className="material-symbols-outlined text-[16px]">download</span>
-                Xuất CSV
-            </button>
-            <span className="hidden text-sm font-bold text-on-surface">
-                {selectedCount} đã chọn
-            </span>
-            <div className="hidden h-5 w-px bg-outline-variant/30" />
-            <button
-                onClick={() => onBulkVisibility(!shouldShowHidden)}
-                disabled={bulkLoading}
-                className="flex items-center gap-1.5 text-sm font-semibold text-on-surface-variant hover:bg-surface-container px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
-            >
-                <span className="material-symbols-outlined text-[16px]">{shouldShowHidden ? 'visibility' : 'visibility_off'}</span>
-                {shouldShowHidden ? 'Hiện lại' : 'Ẩn'}
-            </button>
-            <button
-                onClick={onBulkDelete}
-                disabled={bulkLoading}
-                className="flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
-            >
-                <span className="material-symbols-outlined text-[16px]">delete</span>
-                Xóa
-            </button>
-            <button
-                onClick={onClear}
-                className="w-8 h-8 rounded-full hover:bg-surface-variant flex items-center justify-center text-on-surface-variant transition-colors"
-            >
-                <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
         </div>
     );
 }

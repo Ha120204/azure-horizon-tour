@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { logoutAuthSession } from '@/lib/authSession';
 import { canAccessRole, getCleanAdminPath, type AdminRole } from '@/lib/adminAccess';
 import React, { useState } from 'react';
 
@@ -17,7 +18,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
     { href: '/admin/super',      icon: 'admin_panel_settings', label: 'Tổng quan cấp cao', roles: ['SUPER_ADMIN'], section: 'super' },
-    { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Quản lý Admin', roles: ['SUPER_ADMIN'], section: 'super' },
+    { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Quản lý quản trị viên', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/logs',       icon: 'history',              label: 'Nhật ký hành động', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/settings',   icon: 'settings',             label: 'Cấu hình hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
 
@@ -50,6 +51,7 @@ type SideNavBarProps = {
 export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: SideNavBarProps) {
     const pathname = usePathname();
     const [currentUserRole, setCurrentUserRole] = useState<string>(authenticatedRole);
+    const [currentUserName, setCurrentUserName] = useState('Admin');
 
     React.useEffect(() => {
         if (authenticatedRole) {
@@ -60,7 +62,9 @@ export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: 
     React.useEffect(() => {
         const applyLocalRole = () => {
             const savedRole = localStorage.getItem('userRole') || '';
+            const savedName = localStorage.getItem('userName') || '';
             if (savedRole) setCurrentUserRole(savedRole);
+            if (savedName) setCurrentUserName(savedName);
         };
 
         const loadProfile = async () => {
@@ -71,7 +75,9 @@ export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: 
                 const data = await res.json();
                 const profile = data.data ?? data;
                 const role = profile.role || '';
+                const fullName = profile.fullName || localStorage.getItem('userName') || 'Admin';
                 setCurrentUserRole(role);
+                setCurrentUserName(fullName);
                 if (profile.fullName) localStorage.setItem('userName', profile.fullName);
                 if (role) localStorage.setItem('userRole', role);
                 if (profile.email) localStorage.setItem('userEmail', profile.email);
@@ -104,10 +110,35 @@ export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: 
             items: visibleItems.filter(item => item.section === section),
         }))
         .filter(group => group.items.length > 0);
+    const currentUserRoleLabel = currentUserRole === 'SUPER_ADMIN'
+        ? 'Siêu quản trị'
+        : currentUserRole === 'ADMIN'
+            ? 'Quản trị viên'
+            : currentUserRole === 'STAFF'
+                ? 'Nhân viên'
+                : 'Admin';
+    const currentUserRoleIcon = currentUserRole === 'SUPER_ADMIN'
+        ? 'admin_panel_settings'
+        : currentUserRole === 'ADMIN'
+            ? 'verified_user'
+            : currentUserRole === 'STAFF'
+                ? 'badge'
+                : 'account_circle';
+    const getAdminLoginPath = () => {
+        const match = (pathname ?? '').match(/^\/(vi|en)(?=\/|$)/);
+        const localePrefix = match ? `/${match[1]}` : '';
+        return `${localePrefix}/admin/login?loggedOut=1`;
+    };
+    const handleLogout = async () => {
+        await logoutAuthSession();
+        setCurrentUserRole('');
+        setCurrentUserName('Admin');
+        window.location.assign(getAdminLoginPath());
+    };
 
     return (
         <aside
-            className="h-screen w-64 fixed left-0 top-0 bg-[#060e24] border-r border-white/5 shadow-[4px_0_32px_rgba(0,0,0,0.5)] flex flex-col z-50 font-body transition-all"
+            className="h-screen w-72 fixed left-0 top-0 bg-[#060e24] border-r border-white/5 shadow-[4px_0_32px_rgba(0,0,0,0.5)] flex flex-col z-50 font-body transition-all"
             aria-label="Sidebar Navigation"
         >
             {/* Logo Area */}
@@ -165,6 +196,40 @@ export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: 
                 ))}
             </nav>
 
+            <div className="flex-shrink-0 border-t border-white/10 bg-[#08132d] px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                        <p
+                            className="truncate text-[17px] font-extrabold leading-tight text-white"
+                            title={currentUserName}
+                        >
+                            {currentUserName}
+                        </p>
+                        <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-sky-300/12 px-2.5 py-1 text-[11px] font-bold text-sky-100 ring-1 ring-sky-300/15">
+                            <span
+                                className="material-symbols-outlined text-[14px]"
+                                aria-hidden="true"
+                                style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                                {currentUserRoleIcon}
+                            </span>
+                            <span className="truncate">{currentUserRoleLabel}</span>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="group inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-full border border-red-300/25 bg-red-400/12 px-3 text-[11px] font-extrabold text-red-100 shadow-[0_8px_22px_rgba(127,29,29,0.18)] transition-[background-color,border-color,color,transform] duration-200 hover:-translate-y-0.5 hover:border-red-200/45 hover:bg-red-400/20 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 active:translate-y-0 motion-reduce:transform-none"
+                        aria-label="Đăng xuất khỏi trang quản trị"
+                        title="Đăng xuất"
+                    >
+                        <span className="material-symbols-outlined text-[16px] transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden="true">
+                            logout
+                        </span>
+                        <span>Đăng xuất</span>
+                    </button>
+                </div>
+            </div>
         </aside>
     );
 }

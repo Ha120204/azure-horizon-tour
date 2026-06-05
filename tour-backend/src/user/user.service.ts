@@ -485,15 +485,16 @@ export class UserService {
     };
   }
 
-  async bulkUpdateCustomerStatus(
+  async bulkUpdateUserStatus(
     ids: number[],
     status: 'active' | 'deactivated',
     requesterId: number,
     requesterRole: Role,
+    targetRole: Role = Role.CUSTOMER,
   ) {
     const uniqueIds = [...new Set(ids)].filter((id) => Number.isInteger(id) && id > 0);
     if (uniqueIds.length === 0) {
-      return { updatedCount: 0, skippedCount: 0, status };
+      return { updatedCount: 0, skippedCount: 0, status, role: targetRole };
     }
 
     if (uniqueIds.includes(requesterId)) {
@@ -501,7 +502,18 @@ export class UserService {
     }
 
     if (requesterRole !== Role.SUPER_ADMIN && requesterRole !== Role.ADMIN) {
-      throw new ForbiddenException('Only Admin and Super Admin can update customer status');
+      throw new ForbiddenException('Only Admin and Super Admin can update account status');
+    }
+
+    if (targetRole === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('Bulk actions cannot update SUPER_ADMIN accounts');
+    }
+
+    if (
+      requesterRole !== Role.SUPER_ADMIN &&
+      !ADMIN_VISIBLE_USER_ROLES.includes(targetRole)
+    ) {
+      throw new ForbiddenException('Admin chi duoc thay doi trang thai tai khoan Customer/Staff');
     }
 
     const users = await this.prisma.user.findMany({
@@ -509,9 +521,9 @@ export class UserService {
       select: { id: true, role: true, deletedAt: true },
     });
 
-    const disallowed = users.find((user) => user.role !== Role.CUSTOMER);
+    const disallowed = users.find((user) => user.role !== targetRole);
     if (disallowed) {
-      throw new ForbiddenException('Bulk customer actions only support CUSTOMER accounts');
+      throw new ForbiddenException('Bulk actions only support accounts in the requested role scope');
     }
 
     const targetIds = users
@@ -523,11 +535,12 @@ export class UserService {
         updatedCount: 0,
         skippedCount: uniqueIds.length,
         status,
+        role: targetRole,
       };
     }
 
     await this.prisma.user.updateMany({
-      where: { id: { in: targetIds }, role: Role.CUSTOMER },
+      where: { id: { in: targetIds }, role: targetRole },
       data:
         status === 'active'
           ? { deletedAt: null }
@@ -542,6 +555,7 @@ export class UserService {
       updatedCount: targetIds.length,
       skippedCount: uniqueIds.length - targetIds.length,
       status,
+      role: targetRole,
     };
   }
 
@@ -584,12 +598,44 @@ export class UserService {
   /**
    * Thống kê KPI
    */
-  async getStats(requesterRole?: Role) {
+  async getStats(requesterRole?: Role, requestedRole?: Role) {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    if (requestedRole) {
+      const canViewRequestedRole =
+        requesterRole === Role.SUPER_ADMIN ||
+        (requesterRole === Role.ADMIN &&
+          ADMIN_VISIBLE_USER_ROLES.includes(requestedRole)) ||
+        (requesterRole === Role.STAFF && requestedRole === Role.CUSTOMER);
+
+      if (!canViewRequestedRole) {
+        throw new ForbiddenException(
+          'Không có quyền xem thống kê của nhóm tài khoản này',
+        );
+      }
+
+      const roleWhere: Prisma.UserWhereInput = { role: requestedRole };
+      const [totalUsers, activeUsers, newThisMonth] = await Promise.all([
+        this.prisma.user.count({ where: roleWhere }),
+        this.prisma.user.count({
+          where: { ...roleWhere, deletedAt: null },
+        }),
+        this.prisma.user.count({
+          where: { ...roleWhere, createdAt: { gte: firstDayOfMonth } },
+        }),
+      ]);
+
+      return {
+        scopeRole: requestedRole,
+        totalUsers,
+        activeUsers,
+        newThisMonth,
+      };
+    }
+
     // Chỉ thống kê CUSTOMER — đồng bộ với bảng danh sách
-    const customerWhere = { role: 'CUSTOMER' as any };
+    const customerWhere: Prisma.UserWhereInput = { role: Role.CUSTOMER };
 
     if (requesterRole === Role.STAFF) {
       const [totalUsers, activeUsers, newThisMonth, customersWithBookings] = await Promise.all([

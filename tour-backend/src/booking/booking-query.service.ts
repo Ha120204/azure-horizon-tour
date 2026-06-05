@@ -230,15 +230,15 @@ export class BookingQueryService {
     const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
     const orderCode = Number(booking.id.toString() + timeSuffix);
 
-    let checkoutUrl: string;
+    let paymentData: { checkoutUrl: string; qrCode?: string; accountNumber?: string; accountName?: string; bin?: string };
     try {
-      checkoutUrl = await this.paymentService.createPaymentLink(orderCode, amountVND, description);
+      paymentData = await this.paymentService.createPaymentRequest(orderCode, amountVND, description);
     } catch (payosError: unknown) {
       if (isPayosDuplicateError(payosError)) {
         this.logger.warn('[RETRY] PayOS order already exists, reusing checkout URL.');
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) throw new BadRequestException('Khong the lay lien ket thanh toan. Vui long dat tour moi.');
-        checkoutUrl = `https://pay.payos.vn/web/${existing.id}`;
+        paymentData = { checkoutUrl: `https://pay.payos.vn/web/${existing.id}` };
       } else {
         throw payosError;
       }
@@ -247,7 +247,15 @@ export class BookingQueryService {
     await this.replacePendingPayosTransaction(booking.id, String(orderCode), amountVND);
 
     this.logger.log(`[RETRY] Payment link recreated for bookingId=${booking.id}`);
-    return { checkoutUrl, expiresAt: expiryTime.toISOString() };
+    return {
+      checkoutUrl: paymentData.checkoutUrl,
+      qrCode: paymentData.qrCode,
+      accountNumber: paymentData.accountNumber,
+      accountName: paymentData.accountName,
+      description,
+      amount: amountVND,
+      expiresAt: expiryTime.toISOString(),
+    };
   }
 
   async findPublicByBookingCode(bookingCode: string, email: string) {

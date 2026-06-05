@@ -1,4 +1,5 @@
 import type { AssistedDraftStatus, PassengerType } from './types';
+import { PASSENGER_MULTIPLIERS } from '@/lib/passengerPricing';
 
 type StatusConfig = { label: string; dot: string; badge: string; icon: string };
 type BadgeConfig = { label: string; badge: string; icon: string };
@@ -10,9 +11,9 @@ export const AVATAR_COLORS = [
 ];
 
 export const PASSENGER_PRICING: Record<PassengerType, { label: string; age: string; icon: string; multiplier: number }> = {
-  'Adult (12+)': { label: 'Người lớn', age: '12+', icon: 'person', multiplier: 1 },
-  'Child (4-11)': { label: 'Trẻ em', age: '4-11', icon: 'child_care', multiplier: 0.7 },
-  'Infant (<4)': { label: 'Em bé', age: '<4', icon: 'baby_changing_station', multiplier: 0.1 },
+  'Adult (12+)': { label: 'Người lớn', age: '12+', icon: 'person',               multiplier: PASSENGER_MULTIPLIERS['Adult (12+)'] },
+  'Child (4-11)': { label: 'Trẻ em',  age: '4-11', icon: 'child_care',           multiplier: PASSENGER_MULTIPLIERS['Child (4-11)'] },
+  'Infant (<4)':  { label: 'Em bé',   age: '<4',   icon: 'baby_changing_station', multiplier: PASSENGER_MULTIPLIERS['Infant (<4)'] },
 };
 
 export const passengerTypeOrder: PassengerType[] = ['Adult (12+)', 'Child (4-11)', 'Infant (<4)'];

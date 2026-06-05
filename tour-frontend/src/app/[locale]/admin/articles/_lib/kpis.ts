@@ -21,9 +21,31 @@ export function buildArticleKpiCards({
   onFilterByStatus,
   onFilterFeatured,
 }: BuildArticleKpiCardsOptions): ArticleKpiCard[] {
+  const totalCard: ArticleKpiCard = isAdmin
+    ? {
+        icon: 'article',
+        label: 'Tổng bài viết',
+        value: articleStats.totalVisible,
+        sub: 'toàn bộ bài chưa xóa',
+        tone: 'blue',
+        onClick: onResetFilters,
+        active: !hasFilter,
+        resetCard: true,
+      }
+    : {
+        icon: 'article',
+        label: 'Tổng hiển thị',
+        value: articleStats.totalVisible,
+        sub: 'bài bạn có thể xem',
+        tone: 'blue',
+        onClick: onResetFilters,
+        active: !hasFilter,
+        resetCard: true,
+      };
+
   return isAdmin
     ? [
-        { icon: 'article', label: 'Tổng bài viết', value: articleStats.totalVisible, sub: 'toàn bộ bài chưa xóa', tone: 'blue', onClick: onResetFilters, active: !hasFilter },
+        totalCard,
         { icon: 'check_circle', label: 'Đã xuất bản', value: articleStats.published, sub: 'đang hiển thị với khách', tone: 'emerald', onClick: () => onFilterByStatus('PUBLISHED'), active: statusFilter === 'PUBLISHED' },
         { icon: 'pending_actions', label: 'Chờ duyệt', value: articleStats.pending, sub: 'cần Admin xử lý', tone: 'amber', onClick: () => onFilterByStatus('PENDING_REVIEW'), active: statusFilter === 'PENDING_REVIEW' },
         { icon: 'edit_note', label: 'Bản nháp', value: articleStats.draft, sub: 'chưa gửi duyệt', tone: 'slate', onClick: () => onFilterByStatus('DRAFT'), active: statusFilter === 'DRAFT' },
@@ -31,7 +53,7 @@ export function buildArticleKpiCards({
         { icon: 'star', label: 'Nổi bật', value: articleStats.featured, sub: 'đang được ghim đầu', tone: 'violet', onClick: onFilterFeatured, active: featuredFilter === 'true' },
       ]
     : [
-        { icon: 'article', label: 'Tổng hiển thị', value: articleStats.totalVisible, sub: 'bài bạn có thể xem', tone: 'blue', onClick: onResetFilters, active: !hasFilter },
+        totalCard,
         { icon: 'edit_note', label: 'Bản nháp của tôi', value: articleStats.draft, sub: 'đang soạn', tone: 'slate', onClick: () => onFilterByStatus('DRAFT'), active: statusFilter === 'DRAFT' },
         { icon: 'pending_actions', label: 'Chờ duyệt', value: articleStats.pending, sub: 'đã gửi Admin', tone: 'amber', onClick: () => onFilterByStatus('PENDING_REVIEW'), active: statusFilter === 'PENDING_REVIEW' },
         { icon: 'cancel', label: 'Cần chỉnh sửa', value: articleStats.rejected, sub: 'bị trả về', tone: 'red', onClick: () => onFilterByStatus('REJECTED'), active: statusFilter === 'REJECTED' },

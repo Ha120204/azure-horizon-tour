@@ -120,9 +120,9 @@ describe('TourWorkflowService', () => {
       publishableTour({ status: TourStatus.PENDING_REVIEW }),
     );
 
-    await expect(service.reviewTour(1, 11, 'reject', ' ')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.reviewTour(1, 11, 'reject', ' '),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.tour.update).not.toHaveBeenCalled();
   });
 

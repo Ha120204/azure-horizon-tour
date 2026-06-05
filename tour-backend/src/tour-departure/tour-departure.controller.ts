@@ -35,7 +35,10 @@ export class TourDepartureController {
 
   /** Public: customer-facing active upcoming departures. */
   @Get()
-  findAll(@Param('tourId', ParseIntPipe) tourId: number, @Query('locale') locale?: string) {
+  findAll(
+    @Param('tourId', ParseIntPipe) tourId: number,
+    @Query('locale') locale?: string,
+  ) {
     return this.tourDepartureService.findByTour(tourId, locale);
   }
 
@@ -54,4 +57,5 @@ export class TourDepartureController {
       req.user?.role,
     );
   }
+
 }

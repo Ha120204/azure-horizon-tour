@@ -49,6 +49,83 @@ export function normalizePassengers(
   return Array.from({ length: people }, () => ({ type: 'Adult (12+)' }));
 }
 
+/**
+ * Tính số ghế thực cần giữ từ danh sách passengers.
+ * Infant (<4) không chiếm ghế (ngồi lòng người lớn).
+ * Fallback về numberOfPeople nếu không có passengers (e.g. booking cũ).
+ */
+export function calcSeatCount(
+  passengers: unknown,
+  fallbackNumberOfPeople: number,
+): number {
+  const inputs = asPassengerInputs(passengers);
+  if (!inputs?.length) return fallbackNumberOfPeople;
+
+  const seatCount = inputs.filter((p) => {
+    const normalized = normalizePassengerType(p.type);
+    return normalized !== 'Infant (<4)';
+  }).length;
+
+  // Đảm bảo ít nhất 1 ghế
+  return Math.max(1, seatCount);
+}
+
+
+// ─── Age validation helpers ───────────────────────────────────────────────────
+
+/**
+ * Tính tuổi tại một mốc thời gian cụ thể.
+ * Mirror logic với frontend calcAge() để backend và frontend nhất quán.
+ */
+export function calcAgeAt(dob: string, referenceDate = new Date()): number | null {
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  let age = referenceDate.getFullYear() - birth.getFullYear();
+  const m = referenceDate.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && referenceDate.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+/**
+ * Validate tuổi thực tế (từ DOB) khớp với loại hành khách được khai báo.
+ * Chống lại payload forge: ai đó gửi type='Infant (<4)' cho người lớn
+ * để hưởng hệ số giá 10%.
+ *
+ * @param type   Loại hành khách khai báo trong payload (raw string)
+ * @param dob    Ngày sinh (YYYY-MM-DD). Bỏ qua nếu undefined/empty.
+ * @param departureDate  Mốc tính tuổi — nên là ngày khởi hành.
+ */
+export function validatePassengerAgeVsType(
+  type: string,
+  dob: string | null | undefined,
+  departureDate?: Date,
+): void {
+  // Không có DOB → bỏ qua (một số booking cũ không có DOB)
+  if (!dob || !dob.trim()) return;
+
+  const age = calcAgeAt(dob, departureDate);
+  // DOB không parse được → để backend tự handle ở chỗ khác
+  if (age === null) return;
+
+  const normalized = normalizePassengerType(type);
+
+  if (normalized === 'Adult (12+)' && age < 12) {
+    throw new BadRequestException(
+      `Hành khách khai báo là Người lớn (Adult) nhưng tuổi thực tại ngày khởi hành là ${age} tuổi. Vui lòng chọn đúng loại hành khách.`,
+    );
+  }
+  if (normalized === 'Child (4-11)' && (age < 4 || age > 11)) {
+    throw new BadRequestException(
+      `Hành khách khai báo là Trẻ em (Child) nhưng tuổi thực tại ngày khởi hành là ${age} tuổi. Vui lòng chọn đúng loại hành khách.`,
+    );
+  }
+  if (normalized === 'Infant (<4)' && age >= 4) {
+    throw new BadRequestException(
+      `Hành khách khai báo là Em bé (Infant) nhưng tuổi thực tại ngày khởi hành là ${age} tuổi. Vui lòng chọn đúng loại hành khách.`,
+    );
+  }
+}
+
 // ─── Payment helpers ──────────────────────────────────────────────────────────
 
 export function isPayosDuplicateError(error: unknown): error is PayosError {
@@ -234,29 +311,35 @@ export function isAssistedDraftStatus(value: string): boolean {
 
 // ─── Pricing helpers ──────────────────────────────────────────────────────────
 
+/**
+ * Nguồn sự thật duy nhất cho hệ số giá hành khách (backend).
+ * Gồm cả alias key (ADULT/CHILD/INFANT) để tương thích với nhiều format payload.
+ * Khi cần thay đổi giá, CHỈ sửa ở đây — không cần đụng vào getPassengerTotal.
+ */
+export const PASSENGER_MULTIPLIERS: Record<string, number> = {
+  'Adult (12+)': 1,
+  'Child (4-11)': 0.7,
+  'Infant (<4)': 0.1,
+  ADULT: 1,
+  CHILD: 0.7,
+  INFANT: 0.1,
+};
+
 export function getPassengerTotal(
   basePrice: number,
   people: number,
   passengers?: PassengerInput[],
 ): number {
-  const multipliers: Record<string, number> = {
-    'Adult (12+)': 1,
-    'Child (4-11)': 0.7,
-    'Infant (<4)': 0.1,
-    ADULT: 1,
-    CHILD: 0.7,
-    INFANT: 0.1,
-  };
-
   if (Array.isArray(passengers) && passengers.length > 0) {
     return passengers.reduce((sum, p) => {
       const type = String(p?.type ?? 'ADULT');
-      return sum + basePrice * (multipliers[type] ?? 1);
+      return sum + basePrice * (PASSENGER_MULTIPLIERS[type] ?? 1);
     }, 0);
   }
 
   return basePrice * people;
 }
+
 
 export function formatMoney(amount: number): string {
   return `${Math.round(amount).toLocaleString('vi-VN')} đ`;

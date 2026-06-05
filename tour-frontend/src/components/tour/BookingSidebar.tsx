@@ -41,16 +41,13 @@ export default function BookingSidebarNew({
         setSelectedDeparture(initialSelectedDeparture);
     }, [initialSelectedDeparture]);
 
-    // Calculate effective price: base_departure + package_addon
-    const effectivePrice = (() => {
-        const base = selectedDeparture?.price ?? tour?.price ?? 0;
-        const addon = selectedPackage?.price ?? 0;
-        return base + addon;
-    })();
+    // Giá hiện tại: package.price là giá toàn phần (mô hình Hướng A / Klook).
+    // Không cộng thêm departure.price nữa.
+    const effectivePrice = selectedPackage?.price ?? 0;
 
-    // Minimum price for "From X đ" display
-    const minPrice = hasDepartures
-        ? Math.min(...departures.map(d => d.price ?? tour?.price ?? 0))
+    // Giá thấp nhất (dùng cho "Từ X đ") = giá của package đầu tiên (sortOrder thấp nhất)
+    const minPackagePrice = tour?.packages?.length
+        ? Math.min(...(tour.packages.map((p: TourPackage) => p.price)))
         : tour?.price ?? 0;
 
     // Link to checkout
@@ -78,7 +75,10 @@ export default function BookingSidebarNew({
                         {selectedDeparture ? t('tour_detail.totalPerPerson') : (hasDepartures ? t('tour_detail.fromPerPerson') : t('tour_detail.listedPrice'))}
                     </p>
                     <p className="text-3xl font-extrabold leading-none">
-                        {formatPrice(selectedDeparture ? effectivePrice : (minPrice + (selectedPackage?.price ?? 0)))}
+                        {selectedPackage
+                            ? formatPrice(effectivePrice)
+                            : formatPrice(minPackagePrice)
+                        }
                     </p>
                     {hasDepartures && !selectedDeparture && (
                         <p className="text-xs opacity-60 mt-1">{t('tour_detail.chooseDateForPrice')}</p>
@@ -167,12 +167,21 @@ export default function BookingSidebarNew({
 
                     {/* ── Book CTA ── */}
                     {(!hasDepartures || selectedDeparture) ? (
-                        <a
-                            href={buildCheckoutUrl()}
-                            className="block w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white text-center font-bold rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-primary/20 text-sm"
-                        >
-                            {t('tour_detail.bookNowCta', { price: formatPrice(effectivePrice) })}
-                        </a>
+                        selectedPackage ? (
+                            <a
+                                href={buildCheckoutUrl()}
+                                className="block w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white text-center font-bold rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all shadow-lg shadow-primary/20 text-sm"
+                            >
+                                {t('tour_detail.bookNowCta', { price: formatPrice(effectivePrice) })}
+                            </a>
+                        ) : (
+                            <button
+                                disabled
+                                className="w-full py-4 bg-surface-container text-outline rounded-2xl font-bold text-sm cursor-not-allowed"
+                            >
+                                {t('tour_detail.selectPackageFirst')}
+                            </button>
+                        )
                     ) : (
                         <button
                             disabled
@@ -204,8 +213,6 @@ export default function BookingSidebarNew({
                 departures={departures}
                 selectedDeparture={selectedDeparture}
                 onSelectDeparture={handleSelectDeparture}
-                formatPrice={formatPrice}
-                tourPrice={tour?.price ?? 0}
                 t={t}
                 language={language}
             />

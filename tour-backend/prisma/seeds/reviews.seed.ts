@@ -125,6 +125,11 @@ function pastDate(daysAgo: number): Date {
   return d;
 }
 
+function seedPaymentSource(seed: number): string {
+  const sources = ['PAYOS_RETURN_SYNC', 'PAYOS_WEBHOOK', 'IN_STORE_BANK_TRANSFER', 'IN_STORE_CASH'];
+  return sources[seed % sources.length];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,26 +187,73 @@ export async function seedReviews(prisma: PrismaClient) {
       const userId = customerIds[reviewerIndices[ri]];
       const reviewSeed = ti * 100 + ri;
       const template = pickReview(reviewSeed);
-      const daysAgo = 30 + (reviewSeed % 120); // Đánh giá trong 30-150 ngày trước
+      const bookingDaysAgo = 1 + (reviewSeed % 28);
+      const bookingDate = pastDate(bookingDaysAgo);
+      const reviewDate = pastDate(Math.max(0, bookingDaysAgo - 1));
+      const numberOfPeople = 1 + (ri % 3);
+      const totalPrice = tour.price * numberOfPeople;
 
       // 3a. Upsert booking CONFIRMED+PAID ──────────────────────────────────
       const existingBooking = await prisma.booking.findFirst({
         where: { userId, tourId: tour.id, status: 'CONFIRMED', paymentStatus: 'PAID' },
       });
 
-      if (!existingBooking) {
-        await prisma.booking.create({
+      const booking = existingBooking
+        ? await prisma.booking.update({
+          where: { id: existingBooking.id },
+          data: {
+            numberOfPeople,
+            totalPrice,
+            unitPriceAtBooking: tour.price,
+            paymentMethod: 'PAYOS',
+            createdAt: bookingDate,
+            updatedAt: bookingDate,
+            deletedAt: null,
+          },
+        })
+        : await prisma.booking.create({
           data: {
             userId,
             tourId: tour.id,
-            numberOfPeople: 1 + (ri % 3),
-            totalPrice: tour.price * (1 + (ri % 3)),
+            numberOfPeople,
+            totalPrice,
             unitPriceAtBooking: tour.price,
             status: 'CONFIRMED',
             paymentStatus: 'PAID',
             paymentMethod: 'PAYOS',
-            createdAt: pastDate(daysAgo + 30),
-            updatedAt: pastDate(daysAgo + 30),
+            createdAt: bookingDate,
+            updatedAt: bookingDate,
+          },
+        });
+
+      const transactionRef = `SEED-PAID-${booking.id}`;
+      const paymentSource = seedPaymentSource(reviewSeed);
+      const existingTransaction = await prisma.paymentTransaction.findFirst({
+        where: { bookingId: booking.id, transactionRef },
+      });
+
+      const transactionData = {
+        gateway: paymentSource.startsWith('IN_STORE') ? 'MANUAL' : 'PAYOS',
+        transactionRef,
+        amount: totalPrice,
+        status: 'SUCCESS',
+        rawPayload: JSON.stringify({ source: 'review-seed', bookingId: booking.id }),
+        confirmedSource: paymentSource,
+        confirmedAt: bookingDate,
+        confirmedNote: 'Seed demo dashboard revenue',
+        createdAt: bookingDate,
+      };
+
+      if (existingTransaction) {
+        await prisma.paymentTransaction.update({
+          where: { id: existingTransaction.id },
+          data: transactionData,
+        });
+      } else {
+        await prisma.paymentTransaction.create({
+          data: {
+            bookingId: booking.id,
+            ...transactionData,
           },
         });
       }
@@ -225,8 +277,8 @@ export async function seedReviews(prisma: PrismaClient) {
           imageUrls: [],
           isHidden: false,
           adminReply: template.adminReply ?? null,
-          createdAt: pastDate(daysAgo),
-          updatedAt: pastDate(daysAgo),
+          createdAt: reviewDate,
+          updatedAt: reviewDate,
         },
       });
       totalReviews++;

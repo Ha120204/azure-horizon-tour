@@ -9,13 +9,39 @@ import LocaleSwitcher from './LocaleSwitcher';
 import { API_BASE_URL } from '@/lib/constants';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/publicSettings';
 import { getDestinationDisplay } from '@/lib/formatDestination';
-import { consumeLogoutSuccessToast, queueLogoutSuccessToast } from '@/lib/authFeedback';
 import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
 import { toastEmitter } from '@/lib/toastEmitter';
 
 interface SearchResult {
     destinations: { id: number; name: string; type?: string; region?: string }[];
     tours: { id: number; name: string; price: number }[];
+}
+
+function AzureHorizonBrandIcon({ solid }: { solid: boolean }) {
+    return (
+        <span
+            className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] transition-all duration-300 ${
+                solid
+                    ? 'bg-[#12bff0] shadow-[0_10px_24px_rgba(18,191,240,0.24)]'
+                    : 'bg-[#12bff0] shadow-[0_10px_28px_rgba(0,25,64,0.24)]'
+            }`}
+            aria-hidden="true"
+        >
+            <svg
+                viewBox="0 0 24 24"
+                className="relative h-6 w-6"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <circle cx="12" cy="12" r="7.25" stroke="#FFFFFF" strokeWidth="2" />
+                <path
+                    d="M14.9 8.6L12.9 13L8.6 15L10.6 10.6L14.9 8.6Z"
+                    fill="#FFFFFF"
+                />
+                <circle cx="12" cy="12" r="1.15" fill="#12BFF0" />
+            </svg>
+        </span>
+    );
 }
 
 export default function Header() {
@@ -43,6 +69,7 @@ export default function Header() {
 
     // Scroll-aware header (transparent only on homepage)
     const isHomepage = pathname === '/';
+    const isSolidHeader = isScrolled || !isHomepage;
 
     useEffect(() => {
         const onScroll = () => setIsScrolled(window.scrollY > 60);
@@ -199,6 +226,8 @@ export default function Header() {
         router.push(path);
     };
 
+    const brandSubtitle = language === 'vi' ? 'Nền tảng du lịch cao cấp' : 'Premium travel platform';
+
     // Label hiển thị trên nút Globe: "EN · $" hoặc "VI · ₫"
     const localeLabel = `${language.toUpperCase()} · ${currency === 'VND' ? '₫' : '$'}`;
 
@@ -206,13 +235,33 @@ export default function Header() {
         <>
 
 
-            <nav className={`fixed top-0 w-full z-50 font-body transition-all duration-500 ${(isScrolled || !isHomepage) ? 'bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-200/15' : 'bg-transparent border-transparent shadow-none'}`}
+            <nav className={`fixed top-0 w-full z-50 font-body transition-all duration-500 ${isSolidHeader ? 'bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-200/15' : 'bg-transparent border-transparent shadow-none'}`}
                 style={{ animation: 'headerSlideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}>
                 <div className="flex justify-between items-center px-6 md:px-12 py-4 max-w-screen-2xl mx-auto">
 
                     {/* 1. BRAND LOGO */}
-                    <Link href="/" className={`text-2xl font-bold tracking-tighter font-headline uppercase transition-colors duration-300 ${(isScrolled || !isHomepage) ? 'text-blue-900' : 'text-white drop-shadow-md'}`}>
-                        {publicSettings.company_name}
+                    <Link
+                        href="/"
+                        className="group flex min-w-0 items-center gap-3 transition-transform duration-300 hover:-translate-y-0.5"
+                        aria-label={`${publicSettings.company_name} home`}
+                    >
+                        <AzureHorizonBrandIcon solid={isSolidHeader} />
+                        <span className="hidden min-w-0 flex-col leading-none sm:flex">
+                            <span
+                                className={`font-headline text-[1.15rem] font-extrabold tracking-tight transition-colors duration-300 md:text-[1.25rem] ${
+                                    isSolidHeader ? 'text-slate-950' : 'text-white drop-shadow-md'
+                                }`}
+                            >
+                                {publicSettings.company_name}
+                            </span>
+                            <span
+                                className={`mt-1 text-[0.68rem] font-bold tracking-[0.14em] transition-colors duration-300 ${
+                                    isSolidHeader ? 'text-slate-500' : 'text-white/80 drop-shadow-sm'
+                                }`}
+                            >
+                                {brandSubtitle}
+                            </span>
+                        </span>
                     </Link>
 
                     {/* 2. MAIN NAVIGATION */}

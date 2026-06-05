@@ -1,10 +1,6 @@
 import { Prisma, PrismaClient, TourStatus } from '@prisma/client';
 
-type Region =
-  | 'Dong Nam A'
-  | 'Dong Bac A'
-  | 'Trung Dong'
-  | 'Chau Au';
+type Region = 'Đông Nam Á' | 'Đông Bắc Á' | 'Trung Đông' | 'Châu Âu';
 
 type DayPlan = {
   title: string;
@@ -111,9 +107,9 @@ function buildDescription(intro: string, focus: string, suitableFor: string) {
   return [
     intro,
     '',
-    `Hanh trinh duoc thiet ke theo nhip vua phai, tap trung vao ${focus}. Lich trinh uu tien cac diem bieu tuong, thoi gian nghi hop ly, bua an theo chuong trinh va huong dan vien theo doan.`,
+    `Hành trình duoc thiet ke theo nhip vừa phải, tap trung vao ${focus}. Lịch trình uu tien cac điểm biểu tượng, thời gian nghi hop ly, bua an theo chương trình va hướng dẫn viên theo đoàn.`,
     '',
-    `Tour phu hop voi ${suitableFor}. Gia seed co the hien thi tot cho demo dat tour, so sanh goi dich vu, ngay khoi hanh, voucher va quy trinh thanh toan.`,
+    `Tour phù hợp voi ${suitableFor}. Gia seed có thể hien thi tot cho demo đặt tour, so sảnh goi dịch vụ, ngày khởi hành, voucher va quy trinh thảnh toan.`,
   ].join('\n');
 }
 
@@ -122,64 +118,64 @@ function packageData(basePrice: number) {
     {
       name: 'Gói Tiêu Chuẩn',
       description:
-        'Goi can bang chi phi, phu hop khach muon lich trinh tron goi voi dich vu co ban ro rang.',
+        'Gói cân bằng chi phí, phù hợp khach muon lịch trình trọn gói voi dịch vụ co ban ro rang.',
       price: basePrice,
       badge: 'BEST VALUE',
       includes: [
-        'Ve may bay khu hoi theo chuong trinh',
-        'Khach san tieu chuan 3 sao hoac tuong duong',
-        'Xe dua don va tham quan theo lich trinh',
-        'Huong dan vien tieng Viet theo doan',
-        'Bua an va ve tham quan theo chuong trinh',
-        'Bao hiem du lich quoc te co ban',
+        'Vé máy bay khu hoi theo chương trình',
+        'Khách sạn tieu chuan 3 sao hoac tuong duong',
+        'Xe dua don va tham quan theo lịch trình',
+        'Hướng dẫn viên tieng Viet theo đoàn',
+        'Bua an va ve tham quan theo chương trình',
+        'Bảo hiểm du lịch quoc te co ban',
       ],
       excludes: [
-        'Ho chieu va chi phi ca nhan',
-        'Visa neu chuong trinh khong ghi bao gom',
-        'Hanh ly qua cuoc, tien tip va dich vu ngoai lich trinh',
+        'Hộ chiếu va chi phí ca nhan',
+        'Visa neu chương trình khong ghi bao gồm',
+        'Hành lý qua cuoc, tiền tip va dịch vụ ngoai lịch trình',
       ],
       sortOrder: 0,
     },
     {
       name: 'Gói Cao Cấp',
       description:
-        'Nang cap khach san, bua an va ho tro thu tuc de hanh trinh thoai mai hon.',
+        'Nâng cấp khách sạn, bua an va hỗ trợ thủ tục de hành trình thoai mai hon.',
       price: Math.round(basePrice * 1.25),
       badge: 'POPULAR',
       includes: [
-        'Ve may bay khu hoi gio bay dep hon theo tinh trang cho',
-        'Khach san tieu chuan 4 sao hoac tuong duong',
-        'Xe dua don va tham quan theo lich trinh',
-        'Huong dan vien kinh nghiem',
-        'Bua an nang cap va ve tham quan theo chuong trinh',
-        'Ho tro ho so visa neu can',
-        'Bao hiem du lich quoc te muc cao hon',
+        'Vé máy bay khu hoi gio bay đẹp hon theo tinh trang cho',
+        'Khách sạn tieu chuan 4 sao hoac tuong duong',
+        'Xe dua don va tham quan theo lịch trình',
+        'Hướng dẫn viên kinh nghiem',
+        'Bua an nâng cấp va ve tham quan theo chương trình',
+        'Hỗ trợ hồ sơ visa neu can',
+        'Bảo hiểm du lịch quoc te muc cao hon',
       ],
       excludes: [
-        'Ho chieu va chi phi ca nhan',
-        'Dich vu ngoai chuong trinh',
-        'Phu thu phong don neu co',
+        'Hộ chiếu va chi phí ca nhan',
+        'Dịch vụ ngoai chương trình',
+        'Phụ thu phong don neu co',
       ],
       sortOrder: 1,
     },
     {
       name: 'Gói Riêng Tư',
       description:
-        'Dich vu linh hoat hon cho gia dinh hoac nhom nho muon rieng tu va chu dong thoi gian.',
+        'Dịch vụ linh hoạt hon cho gia đình hoac nhom nho muon rieng tu va chu dong thời gian.',
       price: Math.round(basePrice * 1.62),
       badge: 'LUXURY',
       includes: [
-        'Ve may bay khu hoi theo tu van rieng',
-        'Khach san 4-5 sao tuy diem den',
-        'Xe rieng trong lich trinh tham quan',
-        'Huong dan vien rieng tai diem den neu phu hop',
-        'Ho tro dieu chinh lich trinh truoc khoi hanh',
-        'Bao hiem du lich quoc te muc cao',
+        'Vé máy bay khu hoi theo tư vấn rieng',
+        'Khách sạn 4-5 sao tuy điểm đến',
+        'Xe rieng trong lịch trình tham quan',
+        'Hướng dẫn viên rieng tai điểm đến neu phù hợp',
+        'Hỗ trợ điều chỉnh lịch trình truoc khởi hành',
+        'Bảo hiểm du lịch quoc te muc cao',
       ],
       excludes: [
-        'Ho chieu va chi phi ca nhan',
-        'Dich vu phat sinh ngoai hop dong',
-        'Nang hang ve may bay neu khach yeu cau',
+        'Hộ chiếu va chi phí ca nhan',
+        'Dịch vụ phat sinh ngoai hop dong',
+        'Nang hang ve máy bay neu khach yêu cầu',
       ],
       sortOrder: 2,
     },
@@ -188,11 +184,11 @@ function packageData(basePrice: number) {
 
 function buildTimeline(day: DayPlan): Prisma.InputJsonValue {
   return [
-    { time: '07:00', activity: 'Dung bua sang va chuan bi khoi hanh' },
-    { time: '09:00', activity: day.activities[0] ?? 'Tham quan diem chinh' },
-    { time: '12:00', activity: 'Dung bua trua theo chuong trinh' },
-    { time: '14:00', activity: day.activities[1] ?? 'Tiep tuc tham quan' },
-    { time: '19:00', activity: 'Dung bua toi va nghi ngoi' },
+    { time: '07:00', activity: 'Dung bữa sáng va chuan bi khởi hành' },
+    { time: '09:00', activity: day.activities[0] ?? 'Tham quan điểm chính' },
+    { time: '12:00', activity: 'Dung bữa trưa theo chương trình' },
+    { time: '14:00', activity: day.activities[1] ?? 'Tiếp tục tham quan' },
+    { time: '19:00', activity: 'Dung bữa tối va nghỉ ngơi' },
   ];
 }
 
@@ -201,73 +197,85 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Bangkok - Pattaya',
       slug: 'bangkok-pattaya',
-      region: 'Dong Nam A',
+      region: 'Đông Nam Á',
       countryCode: 'TH',
       description:
-        'Tuyen Thai Lan pho bien voi chua Wat Arun, city tour Bangkok, mua sam, Pattaya va cac hoat dong giai tri ven bien.',
+        'Tuyến Thái Lan phổ biến voi chua Wat Arun, city tour Bangkok, mua sắm, Pattaya va cac hoat dong giải trí ven biển.',
       imageUrl: IMAGES.bangkokPattaya[0],
     },
     tour: {
       tourCode: 'INT-THA-001',
-      name: 'Thai Lan Bangkok - Pattaya 5 Ngay 4 Dem',
+      name: 'Thái Lan Bangkok - Pattaya 5 Ngay 4 Dem',
       description: buildDescription(
-        'Tour Thai Lan kinh dien cho khach Viet, ket hop Bangkok, Pattaya, chua Wat Arun, mua sam va cac diem giai tri noi bat.',
-        'van hoa Thai Lan, city tour, mua sam va nghi duong ngan ngay',
-        'gia dinh, nhom ban, khach lan dau di nuoc ngoai va khach muon tour gia de tiep can',
+        'Tour Thái Lan kinh dien cho khach Viet, kết hợp Bangkok, Pattaya, chua Wat Arun, mua sắm va cac diem giải trí nổi bật.',
+        'văn hóa Thái Lan, city tour, mua sắm va nghỉ dưỡng ngắn ngày',
+        'gia đình, nhóm bạn, khach lần đầu di nuoc ngoai va khach muon tour giá dễ tiep can',
       ),
       price: 9_900_000,
       duration: '5 ngay 4 dem',
       availableSeats: 120,
       imageUrl: IMAGES.bangkokPattaya[0],
       tourType: 'Khám Phá',
-      departurePoint: 'Ha Noi',
+      departurePoint: 'Hà Nội',
       highlights: [
-        'Tham quan chua Wat Arun va cac diem bieu tuong Bangkok',
-        'Trai nghiem Pattaya va khong gian bien Thai Lan',
-        'Co thoi gian mua sam tai cac trung tam lon',
-        'Lich trinh de di, phu hop khach lan dau di tour nuoc ngoai',
+        'Tham quan chua Wat Arun va cac điểm biểu tượng Bangkok',
+        'Trải nghiệm Pattaya va khong gian biển Thái Lan',
+        'Co thời gian mua sắm tai cac trung tâm lon',
+        'Lịch trình de di, phù hợp khach lần đầu di tour nuoc ngoai',
       ],
       gallery: [...IMAGES.bangkokPattaya],
       itinerary: [
         {
-          title: 'Viet Nam - Bangkok',
+          title: 'Việt Nam - Bangkok',
           description:
-            'Lam thu tuc bay sang Bangkok, don khach tai san bay, dung bua toi va nhan phong nghi ngoi.',
-          accommodation: 'Khach san Bangkok theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay Viet Nam - Bangkok', 'Dung bua toi Thai Lan'],
+            'Lam thủ tục bay sang Bangkok, đón khách tai sân bay, dung bữa tối va nhận phòng nghỉ ngơi.',
+          accommodation: 'Khách sạn Bangkok theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay Việt Nam - Bangkok', 'Dung bữa tối Thái Lan'],
           imageUrl: IMAGES.bangkokPattaya[0],
         },
         {
           title: 'Bangkok city tour',
           description:
-            'Tham quan chua Wat Arun, cac diem trung tam Bangkok va tu do mua sam theo lich trinh.',
-          accommodation: 'Khach san Bangkok theo goi',
-          transport: 'Xe du lich',
-          activities: ['Wat Arun', 'City tour Bangkok', 'Mua sam'],
+            'Tham quan chua Wat Arun, cac diem trung tâm Bangkok va tự do mua sắm theo lịch trình.',
+          accommodation: 'Khách sạn Bangkok theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Wat Arun', 'City tour Bangkok', 'Mua sắm'],
           imageUrl: IMAGES.bangkokPattaya[1],
         },
         {
           title: 'Bangkok - Pattaya',
           description:
-            'Di chuyen den Pattaya, tham quan diem giai tri, nghi dem tai thanh pho bien.',
-          accommodation: 'Khach san Pattaya theo goi',
-          transport: 'Xe du lich',
-          activities: ['Di chuyen Bangkok - Pattaya', 'Bien Pattaya', 'Tu do buoi toi'],
+            'Di chuyển den Pattaya, tham quan diem giải trí, nghi dem tai thảnh phổ biến.',
+          accommodation: 'Khách sạn Pattaya theo goi',
+          transport: 'Xe du lịch',
+          activities: [
+            'Di chuyển Bangkok - Pattaya',
+            'Biển Pattaya',
+            'Tự do buổi tối',
+          ],
           imageUrl: IMAGES.bangkokPattaya[2],
         },
         {
           title: 'Pattaya - Bangkok',
           description:
-            'Tra phong, mua dac san, quay lai Bangkok va chuan bi hanh trinh ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Mua dac san', 'Bay ve Viet Nam'],
+            'Trả phòng, mua đặc sản, quay lai Bangkok va chuan bi hành trình ve Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Mua đặc sản', 'Bay về Việt Nam'],
           imageUrl: IMAGES.bangkokPattaya[0],
         },
       ],
       faqs: [
-        { question: 'Tour Thai Lan co can visa khong?', answer: 'Khach Viet Nam du lich ngan ngay tai Thai Lan thuong khong can visa, tuy nhien ho chieu phai con han theo quy dinh.' },
-        { question: 'Gia da bao gom ve may bay chua?', answer: 'Seed nay thiet ke theo tour tron goi, ve may bay nam trong danh sach bao gom cua tung goi.' },
+        {
+          question: 'Tour Thái Lan co can visa khong?',
+          answer:
+            'Khach Việt Nam du lịch ngắn ngày tai Thái Lan thuong khong can visa, tuy nhien hộ chiếu phai còn hạn theo quy định.',
+        },
+        {
+          question: 'Gia da bao gồm ve máy bay chua?',
+          answer:
+            'Seed nay thiet ke theo tour trọn gói, ve máy bay nam trong dảnh sach bao gồm cua tung goi.',
+        },
       ],
     },
   },
@@ -275,73 +283,85 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Singapore - Malaysia',
       slug: 'singapore-malaysia',
-      region: 'Dong Nam A',
+      region: 'Đông Nam Á',
       countryCode: 'SG-MY',
       description:
-        'Tuyen lien tuyen pho bien ket hop Singapore hien dai voi Kuala Lumpur, Genting va Malacca cua Malaysia.',
+        'Tuyến lien tuyến phổ biến kết hợp Singapore hien dai voi Kuala Lumpur, Genting va Malacca cua Malaysia.',
       imageUrl: IMAGES.singaporeMalaysia[0],
     },
     tour: {
       tourCode: 'INT-SGMY-002',
       name: 'Singapore - Malaysia 5 Ngay 4 Dem',
       description: buildDescription(
-        'Hanh trinh Singapore - Malaysia ket hop Marina Bay, Gardens by the Bay, Kuala Lumpur, Petronas Towers va cao nguyen Genting.',
-        'do thi hien dai, cong trinh bieu tuong, mua sam va giai tri gia dinh',
-        'gia dinh, nhom ban, khach muon mot tour Dong Nam A sach dep, de demo va nhieu diem check-in',
+        'Hành trình Singapore - Malaysia kết hợp Marina Bay, Gardens by the Bay, Kuala Lumpur, Petronas Towers va cao nguyên Genting.',
+        'do thi hien dai, công trình biểu tượng, mua sắm va giải trí gia đình',
+        'gia đình, nhóm bạn, khach muon mot tour Đông Nam Á sach đẹp, de demo va nhieu điểm check-in',
       ),
       price: 14_500_000,
       duration: '5 ngay 4 dem',
       availableSeats: 100,
       imageUrl: IMAGES.singaporeMalaysia[0],
       tourType: 'Nghỉ Dưỡng',
-      departurePoint: 'Ha Noi',
+      departurePoint: 'Hà Nội',
       highlights: [
         'Check-in Marina Bay va Gardens by the Bay',
         'Tham quan Petronas Towers tai Kuala Lumpur',
-        'Trai nghiem Genting hoac Malacca theo lich trinh',
-        'Lien tuyen 2 quoc gia, phu hop tour gia dinh',
+        'Trải nghiệm Genting hoac Malacca theo lịch trình',
+        'Lien tuyến 2 quoc gia, phù hợp tour gia đình',
       ],
       gallery: [...IMAGES.singaporeMalaysia],
       itinerary: [
         {
-          title: 'Viet Nam - Singapore',
+          title: 'Việt Nam - Singapore',
           description:
-            'Bay den Singapore, tham quan khu Marina Bay, Merlion va nghi dem tai Singapore.',
-          accommodation: 'Khach san Singapore theo goi',
-          transport: 'May bay va xe du lich',
+            'Bay đến Singapore, tham quan khu Marina Bay, Merlion va nghi dem tai Singapore.',
+          accommodation: 'Khách sạn Singapore theo goi',
+          transport: 'Máy bay va xe du lịch',
           activities: ['Marina Bay', 'Merlion Park', 'Singapore ve dem'],
           imageUrl: IMAGES.singaporeMalaysia[0],
         },
         {
           title: 'Singapore city tour',
           description:
-            'Tham quan Gardens by the Bay, khu trung tam va cac diem mua sam noi bat.',
-          accommodation: 'Khach san Singapore theo goi',
-          transport: 'Xe du lich',
-          activities: ['Gardens by the Bay', 'City tour Singapore', 'Mua sam'],
+            'Tham quan Gardens by the Bay, khu trung tâm va cac diem mua sắm nổi bật.',
+          accommodation: 'Khách sạn Singapore theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Gardens by the Bay', 'City tour Singapore', 'Mua sắm'],
           imageUrl: IMAGES.singaporeMalaysia[0],
         },
         {
           title: 'Singapore - Kuala Lumpur',
           description:
-            'Di chuyen sang Malaysia, tham quan Kuala Lumpur va Petronas Towers.',
-          accommodation: 'Khach san Kuala Lumpur theo goi',
-          transport: 'Xe du lich',
-          activities: ['Kuala Lumpur', 'Petronas Towers', 'Am thuc Malaysia'],
+            'Di chuyển sang Malaysia, tham quan Kuala Lumpur va Petronas Towers.',
+          accommodation: 'Khách sạn Kuala Lumpur theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Kuala Lumpur', 'Petronas Towers', 'Ẩm thực Malaysia'],
           imageUrl: IMAGES.singaporeMalaysia[1],
         },
         {
-          title: 'Genting/Malacca - Viet Nam',
+          title: 'Genting/Malacca - Việt Nam',
           description:
-            'Tham quan cao nguyen Genting hoac Malacca theo chuong trinh, sau do bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Genting hoac Malacca', 'Mua dac san', 'Bay ve Viet Nam'],
+            'Tham quan cao nguyên Genting hoac Malacca theo chương trình, sau do bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: [
+            'Genting hoac Malacca',
+            'Mua đặc sản',
+            'Bay về Việt Nam',
+          ],
           imageUrl: IMAGES.singaporeMalaysia[2],
         },
       ],
       faqs: [
-        { question: 'Tour co qua bien gioi Singapore - Malaysia bang gi?', answer: 'Thong thuong di bang xe du lich theo doan, huong dan vien ho tro thu tuc xuat nhap canh.' },
-        { question: 'Co can visa Singapore/Malaysia khong?', answer: 'Khach Viet Nam du lich ngan ngay thuong khong can visa, can ho chieu con han va dap ung quy dinh nhap canh.' },
+        {
+          question: 'Tour co qua biển gioi Singapore - Malaysia bang gi?',
+          answer:
+            'Thong thuong di bang xe du lịch theo đoàn, hướng dẫn viên hỗ trợ thủ tục xuất nhập cảnh.',
+        },
+        {
+          question: 'Co can visa Singapore/Malaysia khong?',
+          answer:
+            'Khach Việt Nam du lịch ngắn ngày thuong khong can visa, can hộ chiếu còn hạn va dap ung quy định nhập cảnh.',
+        },
       ],
     },
   },
@@ -349,19 +369,19 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Bali',
       slug: 'bali',
-      region: 'Dong Nam A',
+      region: 'Đông Nam Á',
       countryCode: 'ID',
       description:
-        'Dao nghi duong Indonesia noi tieng voi den Hindu, ruong bac thang Ubud, bien, resort va khong gian honeymoon.',
+        'Dao nghỉ dưỡng Indonesia nổi tiếng voi đền Hindu, ruộng bậc thang Ubud, biển, resort va khong gian honeymoon.',
       imageUrl: IMAGES.bali[0],
     },
     tour: {
       tourCode: 'INT-IDN-003',
-      name: 'Bali Ubud - Den Ulun Danu - Nghi Duong Bien 4 Ngay 3 Dem',
+      name: 'Bali Ubud - Den Ulun Danu - Nghi Duong Biển 4 Ngay 3 Dem',
       description: buildDescription(
-        'Tour Bali danh cho khach yeu nghi duong, ket hop Ubud, den Ulun Danu, ruong bac thang va thoi gian thu gian ben bien.',
-        'nghi duong dao, van hoa Hindu Bali, ruong bac thang va resort bien',
-        'cap doi, khach honeymoon, gia dinh va nhom ban muon lich trinh dep nhung khong qua gap',
+        'Tour Bali dảnh cho khach yeu nghỉ dưỡng, kết hợp Ubud, den Ulun Danu, ruộng bậc thang va thời gian thư giãn ben biển.',
+        'nghỉ dưỡng dao, văn hóa Hindu Bali, ruộng bậc thang va resort biển',
+        'cặp đôi, khach honeymoon, gia đình va nhóm bạn muon lịch trình đẹp nhung khong qua gap',
       ),
       price: 16_900_000,
       duration: '4 ngay 3 dem',
@@ -370,72 +390,79 @@ const internationalTours: InternationalTourSeed[] = [
       tourType: 'Nghỉ Dưỡng',
       departurePoint: 'TP.HCM',
       highlights: [
-        'Tham quan den Ulun Danu va canh quan Bali',
-        'Trai nghiem Ubud va ruong bac thang',
-        'Co thoi gian nghi duong bien',
-        'Phu hop honeymoon va khach thich resort',
+        'Tham quan den Ulun Danu va cảnh quan Bali',
+        'Trải nghiệm Ubud va ruộng bậc thang',
+        'Co thời gian nghỉ dưỡng biển',
+        'Phù hợp honeymoon va khach thich resort',
       ],
       gallery: [...IMAGES.bali],
       itinerary: [
         {
-          title: 'Viet Nam - Bali',
+          title: 'Việt Nam - Bali',
           description:
-            'Bay den Bali, don khach tai san bay, nhan phong va nghi ngoi tai resort/khach san.',
-          accommodation: 'Khach san/resort Bali theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Bali', 'Nhan phong nghi duong'],
+            'Bay đến Bali, đón khách tai sân bay, nhận phòng va nghỉ ngơi tai resort/khách sạn.',
+          accommodation: 'Khách sạn/resort Bali theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Bali', 'Nhận phòng nghỉ dưỡng'],
           imageUrl: IMAGES.bali[0],
         },
         {
           title: 'Den Ulun Danu - Ubud',
           description:
-            'Tham quan den Ulun Danu, khu Ubud va cac diem van hoa dac trung cua Bali.',
-          accommodation: 'Khach san/resort Bali theo goi',
-          transport: 'Xe du lich',
-          activities: ['Den Ulun Danu', 'Ubud', 'Am thuc Bali'],
+            'Tham quan den Ulun Danu, khu Ubud va cac diem văn hóa dac trung cua Bali.',
+          accommodation: 'Khách sạn/resort Bali theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Den Ulun Danu', 'Ubud', 'Ẩm thực Bali'],
           imageUrl: IMAGES.bali[0],
         },
         {
-          title: 'Ruong bac thang - Nghi duong bien',
+          title: 'Ruộng bậc thang - Nghỉ dưỡng biển',
           description:
-            'Check-in ruong bac thang, tu do nghi duong, tam bien hoac dung dich vu resort.',
-          accommodation: 'Khach san/resort Bali theo goi',
-          transport: 'Xe du lich',
-          activities: ['Ruong bac thang', 'Nghi duong bien', 'Tu do thu gian'],
+            'Check-in ruộng bậc thang, tự do nghỉ dưỡng, tam biển hoac dung dịch vụ resort.',
+          accommodation: 'Khách sạn/resort Bali theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Ruộng bậc thang', 'Nghỉ dưỡng biển', 'Tự do thư giãn'],
           imageUrl: IMAGES.bali[1],
         },
         {
-          title: 'Bali - Viet Nam',
-          description:
-            'Tu do mua sam, tra phong va bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Mua qua dia phuong', 'Bay ve Viet Nam'],
+          title: 'Bali - Việt Nam',
+          description: 'Tự do mua sắm, trả phòng va bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Mua qua địa phương', 'Bay về Việt Nam'],
           imageUrl: IMAGES.bali[2],
         },
       ],
       faqs: [
-        { question: 'Bali co can visa khong?', answer: 'Quy dinh visa co the thay doi theo thoi diem. Khach can duoc kiem tra ho chieu va quy dinh nhap canh truoc ngay khoi hanh.' },
-        { question: 'Tour co phu hop honeymoon khong?', answer: 'Co. Lich trinh co nhieu thoi gian nghi duong va cac diem chup anh dep.' },
+        {
+          question: 'Bali co can visa khong?',
+          answer:
+            'Quy định visa có thể thay doi theo thời điểm. Khach can duoc kiem tra hộ chiếu va quy định nhập cảnh trước ngày khởi hành.',
+        },
+        {
+          question: 'Tour co phù hợp honeymoon khong?',
+          answer:
+            'Co. Lịch trình co nhieu thời gian nghỉ dưỡng va cac diem chup ảnh đẹp.',
+        },
       ],
     },
   },
   {
     destination: {
-      name: 'Dai Loan',
+      name: 'Đài Loan',
       slug: 'dai-loan',
-      region: 'Dong Bac A',
+      region: 'Đông Bắc Á',
       countryCode: 'TW',
       description:
-        'Diem den dong bac A duoc ua chuong voi Dai Bac 101, cho dem, Cuu Phan, Dai Trung, Cao Hung va am thuc duong pho.',
+        'Điểm đến dong bac A duoc ua chuong voi Đài Bắc 101, cho dem, Cửu Phần, Đài Trung, Cao Hùng va ẩm thực duong pho.',
       imageUrl: IMAGES.taiwan[0],
     },
     tour: {
       tourCode: 'INT-TWN-004',
-      name: 'Dai Loan Dai Bac - Dai Trung - Cao Hung 5 Ngay 4 Dem',
+      name: 'Đài Loan Đài Bắc - Đài Trung - Cao Hùng 5 Ngay 4 Dem',
       description: buildDescription(
-        'Tour Dai Loan ket hop Dai Bac 101, cho dem, Cuu Phan, Dai Trung, Cao Hung va cac diem city tour pho bien.',
-        'city tour, am thuc cho dem, mua sam va canh quan dong bac A',
-        'khach tre, gia dinh, nhom ban va khach muon tour gan Viet Nam voi chi phi vua phai',
+        'Tour Đài Loan kết hợp Đài Bắc 101, cho dem, Cửu Phần, Đài Trung, Cao Hùng va cac diem city tour phổ biến.',
+        'city tour, ẩm thực cho dem, mua sắm va cảnh quan dong bac A',
+        'khách trẻ, gia đình, nhóm bạn va khach muon tour gan Việt Nam voi chi phí vừa phải',
       ),
       price: 17_900_000,
       duration: '5 ngay 4 dem',
@@ -445,51 +472,58 @@ const internationalTours: InternationalTourSeed[] = [
       departurePoint: 'TP.HCM',
       highlights: [
         'Check-in Taipei 101',
-        'Trai nghiem cho dem va am thuc Dai Loan',
-        'Tham quan Cuu Phan/Dai Trung/Cao Hung theo lich',
-        'Tuyen tour pho bien, de ban cho khach Viet',
+        'Trải nghiệm cho dem va ẩm thực Đài Loan',
+        'Tham quan Cửu Phần/Đài Trung/Cao Hùng theo lich',
+        'Tuyến tour phổ biến, de ban cho khach Viet',
       ],
       gallery: [...IMAGES.taiwan],
       itinerary: [
         {
-          title: 'Viet Nam - Dai Bac',
+          title: 'Việt Nam - Đài Bắc',
           description:
-            'Bay den Dai Bac, nhan phong va trai nghiem cho dem theo thoi gian den.',
-          accommodation: 'Khach san Dai Bac theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Dai Bac', 'Cho dem Dai Loan'],
+            'Bay đến Đài Bắc, nhận phòng va trải nghiệm cho dem theo thời gian den.',
+          accommodation: 'Khách sạn Đài Bắc theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Đài Bắc', 'Cho dem Đài Loan'],
           imageUrl: IMAGES.taiwan[0],
         },
         {
-          title: 'Dai Bac city tour',
+          title: 'Đài Bắc city tour',
           description:
-            'Tham quan Taipei 101, cac diem trung tam va khu mua sam.',
-          accommodation: 'Khach san Dai Bac theo goi',
-          transport: 'Xe du lich',
-          activities: ['Taipei 101', 'City tour Dai Bac', 'Mua sam'],
+            'Tham quan Taipei 101, cac diem trung tâm va khu mua sắm.',
+          accommodation: 'Khách sạn Đài Bắc theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Taipei 101', 'City tour Đài Bắc', 'Mua sắm'],
           imageUrl: IMAGES.taiwan[1],
         },
         {
-          title: 'Cuu Phan - Dai Trung',
+          title: 'Cửu Phần - Đài Trung',
           description:
-            'Kham pha pho co Cuu Phan hoac diem phu hop thoi tiet, di chuyen den Dai Trung.',
-          accommodation: 'Khach san Dai Trung theo goi',
-          transport: 'Xe du lich',
-          activities: ['Cuu Phan', 'Dai Trung', 'Am thuc dia phuong'],
+            'Khám phá phố cổ Cửu Phần hoac diem phù hợp thời tiết, di chuyển den Đài Trung.',
+          accommodation: 'Khách sạn Đài Trung theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Cửu Phần', 'Đài Trung', 'Ẩm thực địa phương'],
           imageUrl: IMAGES.taiwan[2],
         },
         {
-          title: 'Cao Hung - Viet Nam',
-          description:
-            'Tham quan Cao Hung, mua dac san va bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Cao Hung', 'Mua dac san', 'Bay ve Viet Nam'],
+          title: 'Cao Hùng - Việt Nam',
+          description: 'Tham quan Cao Hùng, mua đặc sản va bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Cao Hùng', 'Mua đặc sản', 'Bay về Việt Nam'],
           imageUrl: IMAGES.taiwan[0],
         },
       ],
       faqs: [
-        { question: 'Tour Dai Loan co can visa khong?', answer: 'Tuy ho so khach va quy dinh tai thoi diem dat tour. He thong seed nen ghi ro can tu van visa truoc khoi hanh.' },
-        { question: 'Cho dem co nam trong lich trinh khong?', answer: 'Co. Mot so buoi toi co thoi gian cho khach trai nghiem cho dem va am thuc dia phuong.' },
+        {
+          question: 'Tour Đài Loan co can visa khong?',
+          answer:
+            'Tuy hồ sơ khach va quy định tai thời điểm đặt tour. He thong seed nen ghi ro can tư vấn visa truoc khởi hành.',
+        },
+        {
+          question: 'Cho dem co nam trong lịch trình khong?',
+          answer:
+            'Co. Mot so buổi tối co thời gian cho khach trải nghiệm cho dem va ẩm thực địa phương.',
+        },
       ],
     },
   },
@@ -497,73 +531,80 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Hong Kong - Macau',
       slug: 'hong-kong-macau',
-      region: 'Dong Bac A',
+      region: 'Đông Bắc Á',
       countryCode: 'HK-MO',
       description:
-        'Lien tuyen do thi noi tieng voi skyline Hong Kong, Victoria Harbour, mua sam va di san Ruins of St. Paul tai Macau.',
+        'Lien tuyến do thi nổi tiếng voi skyline Hong Kong, Victoria Harbour, mua sắm va di sản Ruins of St. Paul tai Macau.',
       imageUrl: IMAGES.hongKongMacau[0],
     },
     tour: {
       tourCode: 'INT-HKMO-005',
       name: 'Hong Kong - Macau 4 Ngay 3 Dem',
       description: buildDescription(
-        'Tour Hong Kong - Macau ket hop Victoria Harbour, cac khu mua sam, city tour Hong Kong va di san Ruins of St. Paul tai Macau.',
-        'do thi chau A, mua sam, am thuc Quang Dong va di san Macau',
-        'khach thich city break, mua sam, gia dinh va nhom ban muon tour ngan ngay',
+        'Tour Hong Kong - Macau kết hợp Victoria Harbour, cac khu mua sắm, city tour Hong Kong va di sản Ruins of St. Paul tai Macau.',
+        'do thi chau A, mua sắm, ẩm thực Quang Dong va di sản Macau',
+        'khach thich city break, mua sắm, gia đình va nhóm bạn muon tour ngắn ngày',
       ),
       price: 18_900_000,
       duration: '4 ngay 3 dem',
       availableSeats: 80,
       imageUrl: IMAGES.hongKongMacau[0],
       tourType: 'Nghỉ Dưỡng',
-      departurePoint: 'Ha Noi',
+      departurePoint: 'Hà Nội',
       highlights: [
         'Ngam skyline Hong Kong va Victoria Harbour',
-        'Tham quan cac khu mua sam noi bat',
-        'Di chuyen sang Macau va check-in Ruins of St. Paul',
-        'Lich trinh ngan, phu hop ky nghi ngan ngay',
+        'Tham quan cac khu mua sắm nổi bật',
+        'Di chuyển sang Macau va check-in Ruins of St. Paul',
+        'Lịch trình ngan, phù hợp kỳ nghỉ ngắn ngày',
       ],
       gallery: [...IMAGES.hongKongMacau],
       itinerary: [
         {
-          title: 'Viet Nam - Hong Kong',
+          title: 'Việt Nam - Hong Kong',
           description:
-            'Bay den Hong Kong, don khach, nhan phong va tu do kham pha khu trung tam.',
-          accommodation: 'Khach san Hong Kong theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Hong Kong', 'Victoria Harbour'],
+            'Bay đến Hong Kong, đón khách, nhận phòng va tự do khám phá khu trung tâm.',
+          accommodation: 'Khách sạn Hong Kong theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Hong Kong', 'Victoria Harbour'],
           imageUrl: IMAGES.hongKongMacau[0],
         },
         {
           title: 'Hong Kong city tour',
           description:
-            'Tham quan cac diem bieu tuong, khu mua sam va diem ngam canh theo chuong trinh.',
-          accommodation: 'Khach san Hong Kong theo goi',
-          transport: 'Xe du lich',
-          activities: ['City tour Hong Kong', 'Mua sam', 'Am thuc Quang Dong'],
+            'Tham quan cac điểm biểu tượng, khu mua sắm va điểm ngắm cảnh theo chương trình.',
+          accommodation: 'Khách sạn Hong Kong theo goi',
+          transport: 'Xe du lịch',
+          activities: ['City tour Hong Kong', 'Mua sắm', 'Ẩm thực Quang Dong'],
           imageUrl: IMAGES.hongKongMacau[0],
         },
         {
           title: 'Hong Kong - Macau',
           description:
-            'Di chuyen sang Macau, tham quan Ruins of St. Paul va cac diem di san noi bat.',
-          accommodation: 'Khach san Macau/Hong Kong theo goi',
-          transport: 'Xe du lich va tau/cau duong bien',
-          activities: ['Macau', 'Ruins of St. Paul', 'Di san Macau'],
+            'Di chuyển sang Macau, tham quan Ruins of St. Paul va cac diem di sản nổi bật.',
+          accommodation: 'Khách sạn Macau/Hong Kong theo goi',
+          transport: 'Xe du lịch va tau/cau duong biển',
+          activities: ['Macau', 'Ruins of St. Paul', 'Di sản Macau'],
           imageUrl: IMAGES.hongKongMacau[1],
         },
         {
-          title: 'Macau/Hong Kong - Viet Nam',
-          description:
-            'Mua dac san, tra phong va bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Mua dac san', 'Bay ve Viet Nam'],
+          title: 'Macau/Hong Kong - Việt Nam',
+          description: 'Mua đặc sản, trả phòng va bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Mua đặc sản', 'Bay về Việt Nam'],
           imageUrl: IMAGES.hongKongMacau[2],
         },
       ],
       faqs: [
-        { question: 'Tour co di ca Hong Kong va Macau khong?', answer: 'Co. Lich trinh seed co day du hai diem, co the dieu chinh so dem tuy san pham thuc te.' },
-        { question: 'Co can visa khong?', answer: 'Quy dinh nhap canh can duoc kiem tra theo ho chieu va thoi diem khoi hanh.' },
+        {
+          question: 'Tour co di ca Hong Kong va Macau khong?',
+          answer:
+            'Co. Lịch trình seed co day du hai diem, có thể điều chỉnh số đêm tuy san phẩm thực te.',
+        },
+        {
+          question: 'Co can visa khong?',
+          answer:
+            'Quy định nhập cảnh can duoc kiem tra theo hộ chiếu va thời điểm khởi hành.',
+        },
       ],
     },
   },
@@ -571,19 +612,19 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Seoul - Nami',
       slug: 'seoul-nami',
-      region: 'Dong Bac A',
+      region: 'Đông Bắc Á',
       countryCode: 'KR',
       description:
-        'Tuyen Han Quoc pho bien voi Seoul, Gyeongbokgung, dao Nami, mua sam, am thuc va cong vien giai tri theo mua.',
+        'Tuyến Hàn Quốc phổ biến voi Seoul, Gyeongbokgung, dao Nami, mua sắm, ẩm thực va cong vien giải trí theo mùa.',
       imageUrl: IMAGES.seoulNami[0],
     },
     tour: {
       tourCode: 'INT-KOR-006',
-      name: 'Han Quoc Seoul - Nami - Everland 5 Ngay 4 Dem',
+      name: 'Hàn Quốc Seoul - Nami - Everland 5 Ngay 4 Dem',
       description: buildDescription(
-        'Tour Han Quoc ket hop cung dien Gyeongbokgung, dao Nami, mua sam Seoul va Everland hoac diem thay the theo mua.',
-        'van hoa Han Quoc, canh quan theo mua, mua sam va trai nghiem giai tri',
-        'gia dinh, khach tre, nhom ban va khach yeu K-culture',
+        'Tour Hàn Quốc kết hợp cung điện Gyeongbokgung, dao Nami, mua sắm Seoul va Everland hoac diem thay the theo mùa.',
+        'văn hóa Hàn Quốc, cảnh quan theo mùa, mua sắm va trải nghiệm giải trí',
+        'gia đình, khách trẻ, nhóm bạn va khach yeu K-culture',
       ),
       price: 22_900_000,
       duration: '5 ngay 4 dem',
@@ -592,52 +633,58 @@ const internationalTours: InternationalTourSeed[] = [
       tourType: 'Văn Hóa & Lịch Sử',
       departurePoint: 'TP.HCM',
       highlights: [
-        'Tham quan Gyeongbokgung va trung tam Seoul',
-        'Check-in dao Nami theo mua',
-        'Trai nghiem Everland hoac diem giai tri phu hop',
-        'Mua sam my pham, nhan sam va dac san Han Quoc',
+        'Tham quan Gyeongbokgung va trung tâm Seoul',
+        'Check-in dao Nami theo mùa',
+        'Trải nghiệm Everland hoac diem giải trí phù hợp',
+        'Mua sắm mỹ phẩm, nhân sâm va đặc sản Hàn Quốc',
       ],
       gallery: [...IMAGES.seoulNami],
       itinerary: [
         {
-          title: 'Viet Nam - Seoul',
-          description:
-            'Bay den Seoul, don khach, nhan phong va nghi ngoi.',
-          accommodation: 'Khach san Seoul theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Seoul', 'Nhan phong nghi ngoi'],
+          title: 'Việt Nam - Seoul',
+          description: 'Bay đến Seoul, đón khách, nhận phòng va nghỉ ngơi.',
+          accommodation: 'Khách sạn Seoul theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Seoul', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.seoulNami[0],
         },
         {
           title: 'Gyeongbokgung - Seoul city tour',
           description:
-            'Tham quan cung dien Gyeongbokgung, khu trung tam va cac diem van hoa Seoul.',
-          accommodation: 'Khach san Seoul theo goi',
-          transport: 'Xe du lich',
-          activities: ['Gyeongbokgung', 'City tour Seoul', 'Am thuc Han Quoc'],
+            'Tham quan cung điện Gyeongbokgung, khu trung tâm va cac diem văn hóa Seoul.',
+          accommodation: 'Khách sạn Seoul theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Gyeongbokgung', 'City tour Seoul', 'Ẩm thực Hàn Quốc'],
           imageUrl: IMAGES.seoulNami[1],
         },
         {
-          title: 'Dao Nami - Everland',
+          title: 'Đảo Nami - Everland',
           description:
-            'Di dao Nami, tiep tuc Everland hoac diem thay the theo thoi tiet va mua.',
-          accommodation: 'Khach san Seoul theo goi',
-          transport: 'Xe du lich',
-          activities: ['Dao Nami', 'Everland', 'Mua sam'],
+            'Di dao Nami, tiếp tục Everland hoac diem thay the theo thời tiết va mua.',
+          accommodation: 'Khách sạn Seoul theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Đảo Nami', 'Everland', 'Mua sắm'],
           imageUrl: IMAGES.seoulNami[2],
         },
         {
-          title: 'Seoul - Viet Nam',
-          description:
-            'Mua sam dac san, hoan tat thu tuc va bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Mua sam', 'Bay ve Viet Nam'],
+          title: 'Seoul - Việt Nam',
+          description: 'Mua sắm đặc sản, hoan tat thủ tục va bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Mua sắm', 'Bay về Việt Nam'],
           imageUrl: IMAGES.seoulNami[0],
         },
       ],
       faqs: [
-        { question: 'Tour Han Quoc co can visa khong?', answer: 'Thuong can visa hoac dieu kien nhap canh phu hop. Khach can nop ho so theo huong dan truoc ngay khoi hanh.' },
-        { question: 'Dao Nami mua nao dep?', answer: 'Xuan, thu va dong deu co diem hap dan rieng; seed phu hop demo quanh nam.' },
+        {
+          question: 'Tour Hàn Quốc co can visa khong?',
+          answer:
+            'Thuong can visa hoac dieu kien nhập cảnh phù hợp. Khach can nop hồ sơ theo huong dan trước ngày khởi hành.',
+        },
+        {
+          question: 'Đảo Nami mua nao đẹp?',
+          answer:
+            'Xuan, thu va dong deu co diem hap dan rieng; seed phù hợp demo quảnh nam.',
+        },
       ],
     },
   },
@@ -645,73 +692,79 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Tokyo - Fuji',
       slug: 'tokyo-fuji',
-      region: 'Dong Bac A',
+      region: 'Đông Bắc Á',
       countryCode: 'JP',
       description:
-        'Tuyen Nhat Ban kinh dien voi Tokyo, nui Phu Si, Hakone, mua sam va trai nghiem van hoa do thi Nhat.',
+        'Tuyến Nhật Bản kinh dien voi Tokyo, núi Phú Sĩ, Hakone, mua sắm va trải nghiệm văn hóa do thi Nhat.',
       imageUrl: IMAGES.tokyoFuji[0],
     },
     tour: {
       tourCode: 'INT-JPN-007',
-      name: 'Nhat Ban Tokyo - Fuji - Hakone 5 Ngay 4 Dem',
+      name: 'Nhật Bản Tokyo - Fuji - Hakone 5 Ngay 4 Dem',
       description: buildDescription(
-        'Tour Nhat Ban tuyen Tokyo - Fuji - Hakone, phu hop khach lan dau den Nhat voi cac diem bieu tuong va thoi gian mua sam.',
-        'nui Phu Si, do thi Tokyo, van hoa Nhat va mua sam',
-        'gia dinh, cap doi, nhom ban va khach muon san pham Nhat Ban kinh dien',
+        'Tour Nhật Bản tuyến Tokyo - Fuji - Hakone, phù hợp khach lần đầu den Nhat voi cac điểm biểu tượng va thời gian mua sắm.',
+        'núi Phú Sĩ, do thi Tokyo, văn hóa Nhat va mua sắm',
+        'gia đình, cặp đôi, nhóm bạn va khach muon sản phẩm Nhật Bản kinh dien',
       ),
       price: 32_900_000,
       duration: '5 ngay 4 dem',
       availableSeats: 90,
       imageUrl: IMAGES.tokyoFuji[0],
       tourType: 'Khám Phá',
-      departurePoint: 'Ha Noi',
+      departurePoint: 'Hà Nội',
       highlights: [
-        'Ngam nui Phu Si va khu Hakone/Fuji Five Lakes',
-        'City tour Tokyo voi cac khu pho bieu tuong',
-        'Trai nghiem am thuc va mua sam Nhat Ban',
-        'Tuyen tour de demo phan khuc gia cao',
+        'Ngam núi Phú Sĩ va khu Hakone/Fuji Five Lakes',
+        'City tour Tokyo voi cac khu pho biểu tượng',
+        'Trải nghiệm ẩm thực va mua sắm Nhật Bản',
+        'Tuyến tour de demo phân khúc giá cảo',
       ],
       gallery: [...IMAGES.tokyoFuji],
       itinerary: [
         {
-          title: 'Viet Nam - Tokyo',
-          description:
-            'Bay den Tokyo, don khach va nghi ngoi tai khach san.',
-          accommodation: 'Khach san Tokyo theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Tokyo', 'Nhan phong nghi ngoi'],
+          title: 'Việt Nam - Tokyo',
+          description: 'Bay đến Tokyo, đón khách va nghỉ ngơi tai khách sạn.',
+          accommodation: 'Khách sạn Tokyo theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Tokyo', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.tokyoFuji[2],
         },
         {
           title: 'Tokyo city tour',
           description:
-            'Tham quan cac khu pho bieu tuong, den chua/noi mua sam theo lich trinh.',
-          accommodation: 'Khach san Tokyo theo goi',
-          transport: 'Xe du lich',
-          activities: ['City tour Tokyo', 'Mua sam', 'Am thuc Nhat'],
+            'Tham quan cac khu pho biểu tượng, đền chùa/noi mua sắm theo lịch trình.',
+          accommodation: 'Khách sạn Tokyo theo goi',
+          transport: 'Xe du lịch',
+          activities: ['City tour Tokyo', 'Mua sắm', 'Ẩm thực Nhat'],
           imageUrl: IMAGES.tokyoFuji[0],
         },
         {
           title: 'Fuji - Hakone',
           description:
-            'Di chuyen khu nui Phu Si, tham quan diem ngam canh va nghi ngoi.',
-          accommodation: 'Khach san khu Fuji/Hakone theo goi',
-          transport: 'Xe du lich',
-          activities: ['Nui Phu Si', 'Hakone', 'Canh quan Nhat Ban'],
+            'Di chuyển khu núi Phú Sĩ, tham quan điểm ngắm cảnh va nghỉ ngơi.',
+          accommodation: 'Khách sạn khu Fuji/Hakone theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Núi Phú Sĩ', 'Hakone', 'Cảnh quan Nhật Bản'],
           imageUrl: IMAGES.tokyoFuji[1],
         },
         {
-          title: 'Tokyo - Viet Nam',
-          description:
-            'Mua sam, tra phong va bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Mua sam', 'Bay ve Viet Nam'],
+          title: 'Tokyo - Việt Nam',
+          description: 'Mua sắm, trả phòng va bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Mua sắm', 'Bay về Việt Nam'],
           imageUrl: IMAGES.tokyoFuji[2],
         },
       ],
       faqs: [
-        { question: 'Tour Nhat Ban co can visa khong?', answer: 'Thong thuong can visa Nhat Ban. Khach can ho chieu con han va ho so theo yeu cau.' },
-        { question: 'Co dam bao thay nui Phu Si khong?', answer: 'Canh nui Phu Si phu thuoc thoi tiet. Neu suong/mua, lich trinh van giu diem tham quan nhung tam nhin co the han che.' },
+        {
+          question: 'Tour Nhật Bản co can visa khong?',
+          answer:
+            'Thong thuong can visa Nhật Bản. Khach can hộ chiếu còn hạn va hồ sơ theo yêu cầu.',
+        },
+        {
+          question: 'Co dam bao thay núi Phú Sĩ khong?',
+          answer:
+            'Cảnh núi Phú Sĩ phụ thuộc thời tiết. Neu suong/mua, lịch trình van giu điểm tham quan nhung tam nhin có thể han che.',
+        },
       ],
     },
   },
@@ -719,73 +772,80 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Osaka - Kyoto',
       slug: 'osaka-kyoto',
-      region: 'Dong Bac A',
+      region: 'Đông Bắc Á',
       countryCode: 'JP',
       description:
-        'Tuyen Kansai noi bat voi Osaka Castle, Kyoto, Arashiyama, den chua, am thuc va nhung diem van hoa co kinh cua Nhat Ban.',
+        'Tuyến Kansai nổi bật voi Osaka Castle, Kyoto, Arashiyama, đền chùa, ẩm thực va nhung diem văn hóa co kinh cua Nhật Bản.',
       imageUrl: IMAGES.osakaKyoto[0],
     },
     tour: {
       tourCode: 'INT-JPN-008',
-      name: 'Nhat Ban Osaka - Kyoto - Nara 5 Ngay 4 Dem',
+      name: 'Nhật Bản Osaka - Kyoto - Nara 5 Ngay 4 Dem',
       description: buildDescription(
-        'Tour Kansai ket hop Osaka, Kyoto, Nara voi Osaka Castle, Arashiyama, den chua va cac khu pho am thuc noi tieng.',
-        'van hoa co do Nhat Ban, thanh pho Osaka, den chua va am thuc Kansai',
-        'khach yeu van hoa Nhat, gia dinh va nhom ban muon tuyen Nhat khac Tokyo',
+        'Tour Kansai kết hợp Osaka, Kyoto, Nara voi Osaka Castle, Arashiyama, đền chùa va cac khu pho ẩm thực nổi tiếng.',
+        'văn hóa cổ đô Nhật Bản, thành phố Osaka, đền chùa va ẩm thực Kansai',
+        'khach yeu văn hóa Nhat, gia đình va nhóm bạn muon tuyến Nhat khac Tokyo',
       ),
       price: 34_500_000,
       duration: '5 ngay 4 dem',
       availableSeats: 90,
       imageUrl: IMAGES.osakaKyoto[0],
       tourType: 'Văn Hóa & Lịch Sử',
-      departurePoint: 'Ha Noi',
+      departurePoint: 'Hà Nội',
       highlights: [
         'Tham quan Osaka Castle',
-        'Kham pha Kyoto va rung tre Arashiyama',
-        'Trai nghiem Nara hoac den chua theo lich trinh',
-        'Thuong thuc am thuc Kansai',
+        'Khám phá Kyoto va rừng tre Arashiyama',
+        'Trải nghiệm Nara hoac đền chùa theo lịch trình',
+        'Thuong thuc ẩm thực Kansai',
       ],
       gallery: [...IMAGES.osakaKyoto],
       itinerary: [
         {
-          title: 'Viet Nam - Osaka',
-          description:
-            'Bay den Osaka, don khach va nhan phong nghi ngoi.',
-          accommodation: 'Khach san Osaka theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Osaka', 'Nhan phong nghi ngoi'],
+          title: 'Việt Nam - Osaka',
+          description: 'Bay đến Osaka, đón khách va nhận phòng nghỉ ngơi.',
+          accommodation: 'Khách sạn Osaka theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Osaka', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.osakaKyoto[1],
         },
         {
           title: 'Osaka city tour',
           description:
-            'Tham quan Osaka Castle, khu trung tam va diem am thuc theo chuong trinh.',
-          accommodation: 'Khach san Osaka theo goi',
-          transport: 'Xe du lich',
-          activities: ['Osaka Castle', 'Dotonbori', 'Am thuc Kansai'],
+            'Tham quan Osaka Castle, khu trung tâm va diem ẩm thực theo chương trình.',
+          accommodation: 'Khách sạn Osaka theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Osaka Castle', 'Dotonbori', 'Ẩm thực Kansai'],
           imageUrl: IMAGES.osakaKyoto[1],
         },
         {
           title: 'Kyoto - Arashiyama',
           description:
-            'Kham pha Kyoto, rung tre Arashiyama va cac diem van hoa co kinh.',
-          accommodation: 'Khach san Osaka/Kyoto theo goi',
-          transport: 'Xe du lich',
-          activities: ['Kyoto', 'Arashiyama Bamboo Grove', 'Den chua Nhat Ban'],
+            'Khám phá Kyoto, rừng tre Arashiyama va cac diem văn hóa co kinh.',
+          accommodation: 'Khách sạn Osaka/Kyoto theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Kyoto', 'Arashiyama Bamboo Grove', 'Đền chùa Nhật Bản'],
           imageUrl: IMAGES.osakaKyoto[0],
         },
         {
-          title: 'Nara - Viet Nam',
+          title: 'Nara - Việt Nam',
           description:
-            'Tham quan Nara hoac diem thay the theo mua, mua sam va bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Nara', 'Mua sam', 'Bay ve Viet Nam'],
+            'Tham quan Nara hoac diem thay the theo mùa, mua sắm va bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Nara', 'Mua sắm', 'Bay về Việt Nam'],
           imageUrl: IMAGES.osakaKyoto[2],
         },
       ],
       faqs: [
-        { question: 'Tour Osaka - Kyoto khac Tokyo - Fuji nhu the nao?', answer: 'Tuyen Kansai nghieng ve van hoa co do, den chua va am thuc; Tokyo - Fuji nghieng ve do thi hien dai va nui Phu Si.' },
-        { question: 'Co can visa Nhat Ban khong?', answer: 'Co. Khach can chuan bi ho so visa theo yeu cau truoc ngay khoi hanh.' },
+        {
+          question: 'Tour Osaka - Kyoto khac Tokyo - Fuji nhu the nao?',
+          answer:
+            'Tuyến Kansai nghieng ve văn hóa cổ đô, đền chùa va ẩm thực; Tokyo - Fuji nghieng ve do thi hien dai va núi Phú Sĩ.',
+        },
+        {
+          question: 'Co can visa Nhật Bản khong?',
+          answer:
+            'Co. Khach can chuan bi hồ sơ visa theo yêu cầu trước ngày khởi hành.',
+        },
       ],
     },
   },
@@ -793,73 +853,88 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Dubai - Abu Dhabi',
       slug: 'dubai-abu-dhabi',
-      region: 'Trung Dong',
+      region: 'Trung Đông',
       countryCode: 'AE',
       description:
-        'Tuyen Trung Dong cao cap voi Burj Khalifa, Dubai Mall, sa mac, Abu Dhabi va Sheikh Zayed Grand Mosque.',
+        'Tuyến Trung Đông cao cap voi Burj Khalifa, Dubai Mall, sa mạc, Abu Dhabi va Sheikh Zayed Grand Mosque.',
       imageUrl: IMAGES.dubaiAbuDhabi[0],
     },
     tour: {
       tourCode: 'INT-UAE-009',
       name: 'Dubai - Abu Dhabi 5 Ngay 4 Dem',
       description: buildDescription(
-        'Tour Dubai - Abu Dhabi ket hop cong trinh hien dai, sa mac, mua sam va dai thanh duong Sheikh Zayed tai Abu Dhabi.',
-        'kien truc hien dai, desert safari, mua sam va trai nghiem Trung Dong',
-        'khach cao cap, gia dinh, nhom ban va khach muon diem den khac biet de demo phan khuc gia cao',
+        'Tour Dubai - Abu Dhabi kết hợp công trình hien dai, sa mạc, mua sắm va đại thánh đường Sheikh Zayed tai Abu Dhabi.',
+        'kiến trúc hien dai, desert safari, mua sắm va trải nghiệm Trung Đông',
+        'khach cao cap, gia đình, nhóm bạn va khach muon điểm đến khac biet de demo phân khúc giá cảo',
       ),
       price: 29_900_000,
       duration: '5 ngay 4 dem',
       availableSeats: 80,
       imageUrl: IMAGES.dubaiAbuDhabi[0],
       tourType: 'Tour Cao Cấp',
-      departurePoint: 'Ha Noi',
+      departurePoint: 'Hà Nội',
       highlights: [
         'Check-in Burj Khalifa va Dubai skyline',
-        'Trai nghiem desert safari theo chuong trinh',
+        'Trải nghiệm desert safari theo chương trình',
         'Tham quan Sheikh Zayed Grand Mosque tai Abu Dhabi',
-        'Mua sam tai Dubai Mall hoac cac khu thuong mai lon',
+        'Mua sắm tai Dubai Mall hoac cac khu thuong mai lon',
       ],
       gallery: [...IMAGES.dubaiAbuDhabi],
       itinerary: [
         {
-          title: 'Viet Nam - Dubai',
-          description:
-            'Bay den Dubai, don khach, nhan phong va nghi ngoi.',
-          accommodation: 'Khach san Dubai theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Dubai', 'Nhan phong nghi ngoi'],
+          title: 'Việt Nam - Dubai',
+          description: 'Bay đến Dubai, đón khách, nhận phòng va nghỉ ngơi.',
+          accommodation: 'Khách sạn Dubai theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Dubai', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.dubaiAbuDhabi[0],
         },
         {
           title: 'Dubai city tour',
           description:
-            'Tham quan Burj Khalifa, Dubai Mall va cac diem bieu tuong cua Dubai.',
-          accommodation: 'Khach san Dubai theo goi',
-          transport: 'Xe du lich',
+            'Tham quan Burj Khalifa, Dubai Mall va cac điểm biểu tượng cua Dubai.',
+          accommodation: 'Khách sạn Dubai theo goi',
+          transport: 'Xe du lịch',
           activities: ['Burj Khalifa', 'Dubai Mall', 'Dubai skyline'],
           imageUrl: IMAGES.dubaiAbuDhabi[0],
         },
         {
           title: 'Desert safari',
           description:
-            'Trai nghiem sa mac theo chuong trinh, dung bua toi va thuong thuc hoat dong giai tri dia phuong.',
-          accommodation: 'Khach san Dubai theo goi',
-          transport: 'Xe du lich/chuyen dung theo lich',
-          activities: ['Desert safari', 'Bua toi sa mac', 'Giai tri dia phuong'],
+            'Trải nghiệm sa mạc theo chương trình, dung bữa tối va thuong thuc hoat dong giải trí địa phương.',
+          accommodation: 'Khách sạn Dubai theo goi',
+          transport: 'Xe du lịch/chuyen dung theo lich',
+          activities: [
+            'Desert safari',
+            'Bữa tối sa mạc',
+            'Giải trí địa phương',
+          ],
           imageUrl: IMAGES.dubaiAbuDhabi[2],
         },
         {
-          title: 'Abu Dhabi - Viet Nam',
+          title: 'Abu Dhabi - Việt Nam',
           description:
-            'Tham quan Sheikh Zayed Grand Mosque tai Abu Dhabi, sau do bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Abu Dhabi', 'Sheikh Zayed Grand Mosque', 'Bay ve Viet Nam'],
+            'Tham quan Sheikh Zayed Grand Mosque tai Abu Dhabi, sau do bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: [
+            'Abu Dhabi',
+            'Sheikh Zayed Grand Mosque',
+            'Bay về Việt Nam',
+          ],
           imageUrl: IMAGES.dubaiAbuDhabi[1],
         },
       ],
       faqs: [
-        { question: 'Tour Dubai co can visa khong?', answer: 'Tuy ho chieu va quy dinh tai thoi diem khoi hanh. Nha to chuc can tu van visa truoc khi xac nhan booking.' },
-        { question: 'Desert safari co bat buoc khong?', answer: 'Khong. Khach co van de suc khoe co the duoc tu van hoat dong thay the phu hop.' },
+        {
+          question: 'Tour Dubai co can visa khong?',
+          answer:
+            'Tuy hộ chiếu va quy định tai thời điểm khởi hành. Nhà tổ chức can tư vấn visa trước khi xac nhan booking.',
+        },
+        {
+          question: 'Desert safari co bat buoc khong?',
+          answer:
+            'Khong. Khach co van de suc khoe có thể duoc tu văn hóat dong thay the phù hợp.',
+        },
       ],
     },
   },
@@ -867,19 +942,19 @@ const internationalTours: InternationalTourSeed[] = [
     destination: {
       name: 'Paris - Brussels - Amsterdam',
       slug: 'paris-brussels-amsterdam',
-      region: 'Chau Au',
+      region: 'Châu Âu',
       countryCode: 'FR-BE-NL',
       description:
-        'Tuyen chau Au kinh dien ket hop Paris, Brussels va Amsterdam voi thap Eiffel, pho co chau Au, kenh dao va van hoa Tay Au.',
+        'Tuyến chau Au kinh dien kết hợp Paris, Brussels va Amsterdam voi tháp Eiffel, phố cổ chau Au, kênh đào va văn hóa Tay Au.',
       imageUrl: IMAGES.europeClassic[0],
     },
     tour: {
       tourCode: 'INT-EUR-010',
-      name: 'Chau Au Paris - Brussels - Amsterdam 8 Ngay 7 Dem',
+      name: 'Châu Âu Paris - Brussels - Amsterdam 8 Ngay 7 Dem',
       description: buildDescription(
-        'Tour chau Au kinh dien cho khach Viet, ket hop Paris, Brussels, Amsterdam, cac cong trinh bieu tuong va trai nghiem do thi Tay Au.',
-        'kien truc chau Au, city tour, van hoa Tay Au va mua sam',
-        'khach co ngan sach cao, gia dinh, cap doi va khach muon san pham chau Au de demo cap do phuc tap hon',
+        'Tour chau Au kinh dien cho khach Viet, kết hợp Paris, Brussels, Amsterdam, cac công trình biểu tượng va trải nghiệm do thi Tay Au.',
+        'kiến trúc chau Au, city tour, văn hóa Tay Au va mua sắm',
+        'khach co ngân sách cao, gia đình, cặp đôi va khach muon sản phẩm chau Au de demo cap do phuc tap hon',
       ),
       price: 59_900_000,
       duration: '8 ngay 7 dem',
@@ -888,61 +963,68 @@ const internationalTours: InternationalTourSeed[] = [
       tourType: 'Văn Hóa & Lịch Sử',
       departurePoint: 'TP.HCM',
       highlights: [
-        'Check-in thap Eiffel va cac diem bieu tuong Paris',
-        'Tham quan Brussels va khong gian pho co chau Au',
-        'Trai nghiem Amsterdam voi kenh dao va city tour',
-        'San pham phu hop phan khuc tour xa, gia tri cao',
+        'Check-in tháp Eiffel va cac điểm biểu tượng Paris',
+        'Tham quan Brussels va khong gian phố cổ chau Au',
+        'Trải nghiệm Amsterdam voi kênh đào va city tour',
+        'Sản phẩm phù hợp phân khúc tour xa, giá trị cao',
       ],
       gallery: [...IMAGES.europeClassic],
       itinerary: [
         {
-          title: 'Viet Nam - Paris',
+          title: 'Việt Nam - Paris',
           description:
-            'Bay den Paris, don khach va nghi ngoi sau chang bay dai.',
-          accommodation: 'Khach san Paris theo goi',
-          transport: 'May bay va xe du lich',
-          activities: ['Bay den Paris', 'Nhan phong nghi ngoi'],
+            'Bay đến Paris, đón khách va nghỉ ngơi sau chang bay dai.',
+          accommodation: 'Khách sạn Paris theo goi',
+          transport: 'Máy bay va xe du lịch',
+          activities: ['Bay đến Paris', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.europeClassic[0],
         },
         {
           title: 'Paris city tour',
           description:
-            'Tham quan thap Eiffel, cac dai lo va diem bieu tuong Paris theo lich trinh.',
-          accommodation: 'Khach san Paris theo goi',
-          transport: 'Xe du lich',
-          activities: ['Thap Eiffel', 'City tour Paris', 'Mua sam'],
+            'Tham quan tháp Eiffel, cac dai lo va điểm biểu tượng Paris theo lịch trình.',
+          accommodation: 'Khách sạn Paris theo goi',
+          transport: 'Xe du lịch',
+          activities: ['Tháp Eiffel', 'City tour Paris', 'Mua sắm'],
           imageUrl: IMAGES.europeClassic[0],
         },
         {
           title: 'Paris - Brussels',
           description:
-            'Di chuyen den Brussels, tham quan trung tam va khong gian pho co chau Au.',
-          accommodation: 'Khach san Brussels theo goi',
-          transport: 'Xe du lich hoac tau theo lich',
-          activities: ['Brussels', 'Pho co chau Au', 'Am thuc dia phuong'],
+            'Di chuyển den Brussels, tham quan trung tâm va khong gian phố cổ chau Au.',
+          accommodation: 'Khách sạn Brussels theo goi',
+          transport: 'Xe du lịch hoac tau theo lich',
+          activities: ['Brussels', 'Phố cổ chau Au', 'Ẩm thực địa phương'],
           imageUrl: IMAGES.europeClassic[1],
         },
         {
           title: 'Brussels - Amsterdam',
           description:
-            'Tiep tuc den Amsterdam, tham quan thanh pho kenh dao va nghi dem.',
-          accommodation: 'Khach san Amsterdam theo goi',
-          transport: 'Xe du lich hoac tau theo lich',
-          activities: ['Amsterdam', 'Kenh dao', 'City tour'],
+            'Tiếp tục den Amsterdam, tham quan thành phố kênh đào va nghi dem.',
+          accommodation: 'Khách sạn Amsterdam theo goi',
+          transport: 'Xe du lịch hoac tau theo lich',
+          activities: ['Amsterdam', 'Kênh đào', 'City tour'],
           imageUrl: IMAGES.europeClassic[2],
         },
         {
-          title: 'Amsterdam - Viet Nam',
-          description:
-            'Mua sam, tra phong va bay ve Viet Nam.',
-          transport: 'Xe du lich va may bay',
-          activities: ['Mua sam', 'Bay ve Viet Nam'],
+          title: 'Amsterdam - Việt Nam',
+          description: 'Mua sắm, trả phòng va bay về Việt Nam.',
+          transport: 'Xe du lịch va máy bay',
+          activities: ['Mua sắm', 'Bay về Việt Nam'],
           imageUrl: IMAGES.europeClassic[0],
         },
       ],
       faqs: [
-        { question: 'Tour chau Au co can visa Schengen khong?', answer: 'Co. Khach can ho so visa Schengen va thoi gian xu ly du truoc ngay khoi hanh.' },
-        { question: 'Gia co the thay doi theo ve may bay khong?', answer: 'Co. Tour xa phu thuoc nhieu vao gia ve, ty gia va tinh trang phong khach san.' },
+        {
+          question: 'Tour chau Au co can visa Schengen khong?',
+          answer:
+            'Co. Khach can hồ sơ visa Schengen va thời gian xu ly du trước ngày khởi hành.',
+        },
+        {
+          question: 'Gia có thể thay doi theo ve máy bay khong?',
+          answer:
+            'Co. Tour xa phụ thuộc nhieu vao gia ve, ty gia va tinh trang phong khách sạn.',
+        },
       ],
     },
   },
@@ -957,7 +1039,7 @@ function departureData(basePrice: number, baseSeats: number) {
       price: basePrice,
       availableSeats: Math.max(10, baseSeats - index * 4),
       maxSeats: baseSeats,
-      note: 'Lich khoi hanh dinh ky',
+      note: 'Lich khởi hành dinh ky',
       category: null,
       flashSaleEndsAt: null,
       isActive: true,
@@ -969,7 +1051,7 @@ function departureData(basePrice: number, baseSeats: number) {
 export async function seedInternationalTours(prisma: PrismaClient) {
   for (const item of internationalTours) {
     const destination = await prisma.destination.upsert({
-      where: { name: item.destination.name },
+      where: { slug: item.destination.slug },
       update: {
         slug: item.destination.slug,
         description: item.destination.description,
@@ -1044,14 +1126,16 @@ export async function seedInternationalTours(prisma: PrismaClient) {
           },
         }),
       ),
-      ...departureData(item.tour.price, Math.min(item.tour.availableSeats, 36)).map(
-        (departure) =>
-          prisma.tourDeparture.create({
-            data: {
-              tourId: tour.id,
-              ...departure,
-            },
-          }),
+      ...departureData(
+        item.tour.price,
+        Math.min(item.tour.availableSeats, 36),
+      ).map((departure) =>
+        prisma.tourDeparture.create({
+          data: {
+            tourId: tour.id,
+            ...departure,
+          },
+        }),
       ),
       ...item.tour.itinerary.map((day, index) =>
         prisma.tourItinerary.create({
@@ -1093,7 +1177,7 @@ export async function seedInternationalTours(prisma: PrismaClient) {
           data: {
             tourId: tour.id,
             url,
-            altText: `${item.tour.name} - anh ${index + 1}`,
+            altText: `${item.tour.name} - ảnh ${index + 1}`,
             sortOrder: index,
           },
         }),

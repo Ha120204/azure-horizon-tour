@@ -28,11 +28,15 @@ interface RatingBreakdownStats {
     breakdown: { star: number; count: number; percent: number }[];
 }
 
+const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/;
+
 // ─── Main Page ─
 export default function TourDetailPage() {
     const params = useParams();
     const searchParams = useSearchParams();
     const { t, formatPrice, formatDate, language } = useLocale();
+    const tourId = typeof params.id === 'string' ? params.id : '';
+    const hasValidTourId = POSITIVE_INTEGER_PATTERN.test(tourId);
     const initialDepartureIdParam = searchParams.get('departureId');
     const initialDepartureId = initialDepartureIdParam ? Number(initialDepartureIdParam) : null;
 
@@ -46,8 +50,10 @@ export default function TourDetailPage() {
     const [similarTours, setSimilarTours] = useState<Tour[]>([]);
 
     const fetchReviews = async () => {
+        if (!hasValidTourId) return;
+
         try {
-            const res = await fetch(`${API_BASE_URL}/tour/${params.id}/reviews?limit=2`);
+            const res = await fetch(`${API_BASE_URL}/tour/${tourId}/reviews?limit=2`);
             if (res.ok) {
                 const data = await res.json();
                 setReviews(data.data || []);
@@ -64,9 +70,9 @@ export default function TourDetailPage() {
             try {
                 // Parallel data fetching for performance
                 const [tourRes, reviewsRes, ratingStatsRes] = await Promise.allSettled([
-                    fetch(`${API_BASE_URL}/tour/${params.id}?locale=${language}`),
-                    fetch(`${API_BASE_URL}/tour/${params.id}/reviews?limit=2`),
-                    fetch(`${API_BASE_URL}/tour/${params.id}/rating-stats`)
+                    fetch(`${API_BASE_URL}/tour/${tourId}?locale=${language}`),
+                    fetch(`${API_BASE_URL}/tour/${tourId}/reviews?limit=2`),
+                    fetch(`${API_BASE_URL}/tour/${tourId}/rating-stats`)
                 ]);
 
                 let fetchedTour = null;
@@ -75,6 +81,10 @@ export default function TourDetailPage() {
                     const json = await tourRes.value.json();
                     fetchedTour = json.data || json;
                     setTour(fetchedTour);
+                    // Auto-select gói đầu tiên (Hướng A: package bắt buộc)
+                    if (fetchedTour?.packages?.length > 0) {
+                        setSelectedPackage(fetchedTour.packages[0]);
+                    }
                 }
                 if (reviewsRes.status === 'fulfilled' && reviewsRes.value.ok) {
                     const data = await reviewsRes.value.json();
@@ -103,10 +113,13 @@ export default function TourDetailPage() {
             }
         };
 
-        if (params.id) {
+        if (hasValidTourId) {
             fetchAllData();
+        } else {
+            setTour(null);
+            setIsLoading(false);
         }
-    }, [params.id, language]);
+    }, [hasValidTourId, language, tourId]);
 
     if (isLoading) {
         return <div className="min-h-screen flex items-center justify-center font-bold text-primary">{t('tour_detail.loading')}</div>;
@@ -143,7 +156,7 @@ export default function TourDetailPage() {
                     <span className="text-on-surface font-medium truncate max-w-[200px]">{tour.name}</span>
                 </nav>
 
-                <TourGallery tour={tour} t={t} tourId={params.id as string} />
+                <TourGallery tour={tour} t={t} tourId={tourId} />
 
                 {/* ── Highlights ── */}
                 <HighlightsSection highlights={tour.highlights ?? []} t={t} />
@@ -216,7 +229,9 @@ export default function TourDetailPage() {
                                             pkg={pkg}
                                             selected={selectedPackage?.id === pkg.id}
                                             onSelect={() => {
-                                                setSelectedPackage((current) => current?.id === pkg.id ? null : pkg);
+                                                // One-way selection: một khi đã chọn gói, không thể bỏ chọn
+                                                // (Hướng A — package là bắt buộc, giống Klook)
+                                                setSelectedPackage(pkg);
                                             }}
                                             formatPrice={formatPrice}
                                             t={t}
@@ -400,7 +415,7 @@ export default function TourDetailPage() {
                                 )}
                             </div>
                             <div className="mt-8 flex justify-center">
-                                <Link href={`/tour/${params.id}/reviews`} className="text-primary font-bold text-sm md:text-base flex items-center gap-2 hover:bg-surface-container-low px-6 py-3 rounded-full transition-colors">
+                                <Link href={`/tour/${tourId}/reviews`} className="text-primary font-bold text-sm md:text-base flex items-center gap-2 hover:bg-surface-container-low px-6 py-3 rounded-full transition-colors">
                                     {t('reviews.showMore')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
                                 </Link>
                             </div>

@@ -16,6 +16,7 @@ import {
   FileTypeValidator,
   Put,
   Req,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
@@ -177,13 +178,22 @@ export class TourController {
 
   @UseGuards(OptionalJwtGuard)
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest, @Query('locale') locale?: string) {
-    return this.tourService.findOne(+id, getAuthUserId(req), getAuthRole(req), locale);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+    @Query('locale') locale?: string,
+  ) {
+    return this.tourService.findOne(
+      id,
+      getAuthUserId(req),
+      getAuthRole(req),
+      locale,
+    );
   }
 
   @Get(':id/rating-stats')
-  getRatingStats(@Param('id') id: string) {
-    return this.tourService.getRatingStats(+id);
+  getRatingStats(@Param('id', ParseIntPipe) id: number) {
+    return this.tourService.getRatingStats(id);
   }
 
   /**

@@ -10,19 +10,28 @@ export type ContactInfoDto = Record<string, Prisma.JsonValue>;
 
 export class CreateBookingDto {
     @IsInt()
-    tourId: number;
+    tourId!: number;
 
     @IsInt()
     @Min(1, { message: 'Số người đi phải ít nhất là 1' })
-    numberOfPeople: number;
+    numberOfPeople!: number;
+
+    /**
+     * Số ghế thực sự cần giữ (= adult + child, KHÔNG tính infant).
+     * Infant ngồi lòng người lớn nên không chiếm ghế.
+     * Nếu không gửi, fallback về numberOfPeople để backward-compatible.
+     */
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    seatCount?: number;
 
     @IsOptional()
     @IsString()
     voucherCode?: string;
 
-    @IsOptional()
-    @IsInt()
-    packageId?: number;
+    @IsInt({ message: 'Vui lòng chọn gói dịch vụ trước khi đặt tour' })
+    packageId!: number;
 
     @IsOptional()
     @IsInt()

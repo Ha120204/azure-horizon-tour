@@ -550,16 +550,22 @@ const articles: ArticleSeed[] = [
 export async function seedArticles(prisma: PrismaClient) {
   for (const article of articles) {
     const slug = slugify(article.title);
+    const content = buildContent(article);
+    const seoTitle = article.title;
+    const seoDescription = article.excerpt;
+
     await prisma.article.upsert({
       where: { slug },
       update: {
         category: article.category,
         title: article.title,
         excerpt: article.excerpt,
-        content: buildContent(article),
+        content,
         imageUrl: article.imageUrl,
         author: article.author,
         readTime: article.readTime,
+        seoTitle,
+        seoDescription,
         isFeatured: article.isFeatured ?? false,
         status: ArticleStatus.PUBLISHED,
         publishedAt: article.publishedAt,
@@ -571,10 +577,12 @@ export async function seedArticles(prisma: PrismaClient) {
         category: article.category,
         title: article.title,
         excerpt: article.excerpt,
-        content: buildContent(article),
+        content,
         imageUrl: article.imageUrl,
         author: article.author,
         readTime: article.readTime,
+        seoTitle,
+        seoDescription,
         isFeatured: article.isFeatured ?? false,
         status: ArticleStatus.PUBLISHED,
         publishedAt: article.publishedAt,

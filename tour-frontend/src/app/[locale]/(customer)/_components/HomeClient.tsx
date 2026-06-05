@@ -162,7 +162,7 @@ function StatsRow({ t }: { t: (key: string) => string }) {
   return (
     <div ref={rowRef} className="max-w-3xl mx-auto px-6 pb-8 hidden md:flex items-center justify-center">
       {STATS.map((stat, i) => (
-        <div key={stat.label} className="flex items-center">
+        <div key={stat.label} className={`home-stat-enter home-stat-d${i} flex items-center`}>
           <StatItem {...stat} />
           {i < STATS.length - 1 && (
             <div className="mx-8 h-8 w-px bg-white/20 flex-shrink-0" />
@@ -276,6 +276,74 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
 
   return (
     <div className="bg-background text-on-surface font-body antialiased min-h-screen flex flex-col">
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes home-hero-rise {
+            from {
+              opacity: 0;
+              transform: translate3d(0, 26px, 0);
+            }
+            to {
+              opacity: 1;
+              transform: translate3d(0, 0, 0);
+            }
+          }
+
+          @keyframes home-hero-search-rise {
+            from {
+              opacity: 0;
+              transform: translate3d(0, 34px, 0) scale(0.985);
+            }
+            to {
+              opacity: 1;
+              transform: translate3d(0, 0, 0) scale(1);
+            }
+          }
+
+          @keyframes home-stat-rise {
+            from {
+              opacity: 0;
+              transform: translate3d(0, 18px, 0);
+            }
+            to {
+              opacity: 1;
+              transform: translate3d(0, 0, 0);
+            }
+          }
+
+          .home-hero-enter {
+            animation: home-hero-rise 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
+          }
+
+          .home-hero-search-enter {
+            animation: home-hero-search-rise 0.78s cubic-bezier(0.16, 1, 0.3, 1) both;
+          }
+
+          .home-stat-enter {
+            animation: home-stat-rise 0.62s cubic-bezier(0.16, 1, 0.3, 1) both;
+          }
+
+          .home-hero-d1 { animation-delay: 80ms; }
+          .home-hero-d2 { animation-delay: 180ms; }
+          .home-hero-d3 { animation-delay: 300ms; }
+          .home-hero-d4 { animation-delay: 440ms; }
+          .home-stat-d0 { animation-delay: 520ms; }
+          .home-stat-d1 { animation-delay: 600ms; }
+          .home-stat-d2 { animation-delay: 680ms; }
+          .home-stat-d3 { animation-delay: 760ms; }
+
+          @media (prefers-reduced-motion: reduce) {
+            .home-hero-enter,
+            .home-hero-search-enter,
+            .home-stat-enter {
+              animation: none !important;
+              opacity: 1 !important;
+              transform: none !important;
+            }
+          }
+        `
+      }} />
+
       <Header />
 
       {/* ── CINEMATIC VIDEO HERO ── */}
@@ -290,21 +358,21 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
 
         {/* Hero Content */}
         <div className="relative z-30 text-center text-white px-6 w-full max-w-6xl mx-auto flex flex-col items-center">
-          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/25 bg-white/10 backdrop-blur-sm text-[0.6875rem] font-bold tracking-[0.12em] uppercase mb-6 text-white/90">
+          <span className="home-hero-enter home-hero-d1 inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/25 bg-white/10 backdrop-blur-sm text-[0.6875rem] font-bold tracking-[0.12em] uppercase mb-6 text-white/90">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             {t('hero.badge')}
           </span>
 
-          <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-headline font-extrabold leading-[1.05] tracking-tight mb-6 drop-shadow-2xl">
+          <h1 className="home-hero-enter home-hero-d2 text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-headline font-extrabold leading-[1.05] tracking-tight mb-6 drop-shadow-2xl">
             {t('hero.title1')}&nbsp;<br className="hidden sm:block" />
             <span className="italic" style={{ color: 'rgba(147,197,253,1)' }}>{t('hero.title2')}</span>.
           </h1>
 
-          <p className="text-base sm:text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed font-light">
+          <p className="home-hero-enter home-hero-d3 text-base sm:text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed font-light">
             {t('hero.subtitle')}
           </p>
 
-          <div className="w-full max-w-6xl mx-auto">
+          <div className="home-hero-search-enter home-hero-d4 w-full max-w-6xl mx-auto">
             <HeroSearch travelScope={travelScope} onTravelScopeChange={setTravelScope} />
           </div>
         </div>

@@ -5,6 +5,7 @@ import { ArticleKpiGrid } from './_components/ArticleKpiGrid';
 import { ArticleOverlays } from './_components/ArticleOverlays';
 import { ArticlePageHeader } from './_components/ArticlePageHeader';
 import { ArticleGridView, ArticleListView } from './_components/ArticleViews';
+import { ArticleWorkflowBanners } from './_components/ArticleWorkflowBanners';
 import { useArticleManagement } from './_hooks/useArticleManagement';
 
 export default function ArticleManagementPage() {
@@ -28,6 +29,13 @@ export default function ArticleManagementPage() {
       />
 
       <ArticleKpiGrid isAdmin={article.isAdmin} kpiCards={article.kpiCards} />
+
+      <ArticleWorkflowBanners
+        isAdmin={article.isAdmin}
+        stats={article.articleStats}
+        onViewStatus={article.viewWorkflowStatus}
+        onCreate={article.openCreate}
+      />
 
       <ArticleFilters
         search={article.search}
@@ -57,12 +65,25 @@ export default function ArticleManagementPage() {
           isSubmitting={article.isSubmitting}
           meta={article.meta}
           pageSize={article.pageSize}
+          sortBy={article.sortBy}
+          sortDir={article.sortDir}
+          selectedArticleIds={article.selectedArticleIds}
+          selectedArticles={article.selectedArticles}
+          selectedCount={article.selectedArticles.length}
+          allCurrentPageSelected={article.allCurrentPageSelected}
+          someCurrentPageSelected={article.someCurrentPageSelected}
+          isBulkActionLoading={article.isBulkActionLoading}
           onCreate={article.openCreate}
           onOpenEdit={article.openEdit}
           onToggleFeatured={article.handleToggleFeatured}
           onReview={article.setReviewTarget}
           onSubmit={article.setSubmitTarget}
           onDelete={article.setDeleteTarget}
+          onToggleSelected={article.toggleSelectedArticle}
+          onToggleCurrentPage={article.toggleCurrentPageSelection}
+          onClearSelection={article.clearArticleSelection}
+          onBulkAction={article.handleBulkAction}
+          onSortChange={article.changeSort}
           onPageChange={article.setPage}
           onPageSizeChange={article.changePageSize}
         />

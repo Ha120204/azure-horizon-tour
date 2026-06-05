@@ -54,7 +54,7 @@ export default function PackageCard({
                 </div>
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                     <p className="text-lg font-extrabold text-primary leading-none">
-                        {pkg.price > 0 ? `+ ${formatPrice(pkg.price)}` : t('tour_detail.packageFree')}
+                        {pkg.price > 0 ? formatPrice(pkg.price) : t('tour_detail.packageFree')}
                     </p>
                     {pkg.price > 0 && <p className="text-[10px] text-on-surface-variant">{t('tour_detail.packagePerPerson')}</p>}
                     {pkg.badge && (

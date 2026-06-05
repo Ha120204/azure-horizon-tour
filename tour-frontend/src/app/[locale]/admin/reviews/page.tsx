@@ -10,6 +10,7 @@ import {
     ReviewKpiGrid,
     ReviewList,
     ReviewPageHeader,
+    ReviewQuickFilters,
 } from './_components/ReviewPageSections';
 import { Toast } from './_components/Toast';
 import { useReviewManagement } from './_hooks/useReviewManagement';
@@ -22,6 +23,11 @@ export default function ReviewManagementPage() {
             <ReviewPageHeader onRefresh={review.refreshReviewData} />
 
             <ReviewKpiGrid kpis={review.kpis} />
+
+            <ReviewQuickFilters
+                activeQuickFilter={review.activeQuickFilter}
+                onQuickFilter={review.applyQuickFilter}
+            />
 
             <RatingBreakdown
                 stats={review.stats}
@@ -69,10 +75,12 @@ export default function ReviewManagementPage() {
 
             <ReviewBulkActionBar
                 selectedCount={review.selected.length}
+                selectedReviews={review.selectedReviews}
                 statusFilter={review.statusFilter}
                 bulkLoading={review.bulkLoading}
                 onBulkVisibility={review.handleBulkVisibility}
                 onBulkDelete={() => review.setDeleteTarget(review.selected)}
+                onExport={review.handleExportSelected}
                 onClear={review.clearSelection}
             />
 

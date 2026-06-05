@@ -167,7 +167,11 @@ function salePrice(basePrice: number, discountPercent: number): number {
   return Math.round(basePrice * (1 - discountPercent / 100));
 }
 
-function regularDepartures(basePrice: number, maxSeats: number, startOffset: number) {
+function regularDepartures(
+  basePrice: number,
+  maxSeats: number,
+  startOffset: number,
+) {
   return [35, 60, 90].map((gap, index) => ({
     departureDate: addDays(startOffset + gap),
     price: basePrice,
@@ -190,9 +194,13 @@ export async function seedPromotionDepartures(prisma: PrismaClient) {
   });
   const tourByCode = new Map(tours.map((tour) => [tour.tourCode, tour]));
 
-  const missingCodes = affectedTourCodes.filter((code) => !tourByCode.has(code));
+  const missingCodes = affectedTourCodes.filter(
+    (code) => !tourByCode.has(code),
+  );
   if (missingCodes.length > 0) {
-    throw new Error(`Missing tours for promotion seed: ${missingCodes.join(', ')}`);
+    throw new Error(
+      `Missing tours for promotion seed: ${missingCodes.join(', ')}`,
+    );
   }
 
   for (const promo of promotionSeeds) {
@@ -221,12 +229,14 @@ export async function seedPromotionDepartures(prisma: PrismaClient) {
           isActive: true,
           sortOrder: 0,
         },
-        ...regularDepartures(tour.price, promo.maxSeats, promo.departureOffsetDays).map(
-          (departure) => ({
-            tourId: tour.id,
-            ...departure,
-          }),
-        ),
+        ...regularDepartures(
+          tour.price,
+          promo.maxSeats,
+          promo.departureOffsetDays,
+        ).map((departure) => ({
+          tourId: tour.id,
+          ...departure,
+        })),
       ],
     });
   }

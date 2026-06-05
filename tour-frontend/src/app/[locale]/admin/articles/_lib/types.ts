@@ -3,6 +3,10 @@ import type { Article } from '@/components/admin/ArticleDrawer';
 export type ArticleStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
 export type ArticleViewMode = 'list' | 'grid';
 export type ArticleReviewAction = 'approve' | 'reject';
+export type ArticleBulkAction = 'publish' | 'draft' | 'trash' | 'feature' | 'unfeature' | 'category' | 'submit';
+export type ArticleBulkActionOptions = { category?: string; skipConfirm?: boolean };
+export type ArticleSortKey = 'title' | 'category' | 'author' | 'publishedAt' | 'status' | 'isFeatured';
+export type SortDirection = 'asc' | 'desc';
 export type ArticleKpiTone = 'blue' | 'slate' | 'amber' | 'emerald' | 'red' | 'violet';
 
 export type TrashArticle = Article & {
@@ -39,4 +43,5 @@ export type ArticleKpiCard = {
   tone: ArticleKpiTone;
   onClick: () => void;
   active: boolean;
+  resetCard?: boolean;
 };

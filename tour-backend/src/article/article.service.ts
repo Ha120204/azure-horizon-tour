@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { ArticleStatus } from '@prisma/client';
+import { ArticleStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 function generateSlug(title: string): string {
@@ -20,9 +20,12 @@ function generateSlug(title: string): string {
 }
 
 type ArticleDraftInput = {
+  slug?: string;
   title?: string;
   category?: string;
   excerpt?: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   content?: string;
   imageUrl?: string;
   author?: string;
@@ -31,11 +34,28 @@ type ArticleDraftInput = {
   saveMode?: 'draft' | 'publish';
 };
 
+type ArticleBulkAction =
+  | 'publish'
+  | 'draft'
+  | 'trash'
+  | 'feature'
+  | 'unfeature'
+  | 'category'
+  | 'submit';
+
+function normalizeBulkIds(ids?: number[]): number[] {
+  return [...new Set((ids ?? []).map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+}
+
 function stripHtml(value?: string | null): string {
   return String(value ?? '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .trim();
+}
+
+function normalizeArticleSlug(value: string): string {
+  return generateSlug(value).replace(/^-+|-+$/g, '');
 }
 
 function requirePublishableArticle(article: ArticleDraftInput) {
@@ -58,7 +78,7 @@ export class ArticleService {
   // ─── Public API (trang user — chỉ PUBLISHED) ────────────────────────────────
 
   async findAll(category?: string) {
-    const where: any = { status: ArticleStatus.PUBLISHED, deletedAt: null };
+    const where: Prisma.ArticleWhereInput = { status: ArticleStatus.PUBLISHED, deletedAt: null };
     if (category && category !== 'ALL') {
       where.category = category;
     }
@@ -67,7 +87,7 @@ export class ArticleService {
       orderBy: { publishedAt: 'desc' },
       select: {
         id: true, slug: true, category: true, title: true,
-        excerpt: true, imageUrl: true, author: true,
+        excerpt: true, seoTitle: true, seoDescription: true, imageUrl: true, author: true,
         readTime: true, isFeatured: true, publishedAt: true,
       },
     });
@@ -107,8 +127,8 @@ export class ArticleService {
 
   async getAdminStats(requesterId?: number, requesterRole?: string) {
     const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
-    const baseWhere = { deletedAt: null };
-    const visibleWhere = isAdmin
+    const baseWhere: Prisma.ArticleWhereInput = { deletedAt: null };
+    const visibleWhere: Prisma.ArticleWhereInput = isAdmin
       ? baseWhere
       : requesterRole === 'STAFF' && requesterId
         ? {
@@ -119,7 +139,7 @@ export class ArticleService {
             ],
           }
         : { ...baseWhere, status: ArticleStatus.PUBLISHED };
-    const statusWhere = (status: ArticleStatus) =>
+    const statusWhere = (status: ArticleStatus): Prisma.ArticleWhereInput =>
       isAdmin || status === ArticleStatus.PUBLISHED
         ? { ...baseWhere, status }
         : requesterRole === 'STAFF' && requesterId
@@ -181,6 +201,8 @@ export class ArticleService {
       category?: string;
       isFeatured?: string;
       status?: string;
+      sortBy?: string;
+      sortDir?: string;
     },
     requesterId?: number,
     requesterRole?: string,
@@ -189,7 +211,7 @@ export class ArticleService {
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const where: any = { deletedAt: null }; // Luôn loại trừ bài đã vào thùng rác
+    const where: Prisma.ArticleWhereInput = { deletedAt: null }; // Luôn loại trừ bài đã vào thùng rác
 
     // Phân quyền visibility
     const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
@@ -214,7 +236,7 @@ export class ArticleService {
     }
 
     if (query.search) {
-      const searchFilter = {
+      const searchFilter: Prisma.ArticleWhereInput = {
         OR: [
           { title: { contains: query.search, mode: 'insensitive' } },
           { author: { contains: query.search, mode: 'insensitive' } },
@@ -232,17 +254,27 @@ export class ArticleService {
     if (query.isFeatured === 'true') where.isFeatured = true;
     if (query.isFeatured === 'false') where.isFeatured = false;
 
+    const sortableFields = ['title', 'category', 'author', 'publishedAt', 'status', 'isFeatured'] as const;
+    type ArticleSortField = (typeof sortableFields)[number];
+    const sortBy: ArticleSortField = sortableFields.includes(query.sortBy as ArticleSortField)
+      ? query.sortBy as ArticleSortField
+      : 'publishedAt';
+    const sortDir: Prisma.SortOrder = query.sortDir === 'asc' ? 'asc' : 'desc';
+    const orderBy: Prisma.ArticleOrderByWithRelationInput[] = sortBy === 'publishedAt'
+      ? [{ publishedAt: sortDir }, { updatedAt: sortDir }, { createdAt: sortDir }]
+      : [{ [sortBy]: sortDir } as Prisma.ArticleOrderByWithRelationInput, { createdAt: 'desc' }];
+
     const [articles, totalItems] = await Promise.all([
       this.prisma.article.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         select: {
           id: true, slug: true, category: true, title: true,
-          excerpt: true, imageUrl: true, author: true,
+          excerpt: true, seoTitle: true, seoDescription: true, imageUrl: true, author: true,
           readTime: true, isFeatured: true, publishedAt: true,
-          createdAt: true, status: true, reviewNote: true,
+          createdAt: true, updatedAt: true, status: true, reviewNote: true,
           createdById: true,
           createdBy: { select: { id: true, fullName: true } },
         },
@@ -285,8 +317,9 @@ export class ArticleService {
     if (shouldPublish) requirePublishableArticle(dto);
 
     const title = dto.title?.trim() ?? '';
-    const slugSeed = title || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const baseSlug = generateSlug(slugSeed);
+    const slugSeed = dto.slug?.trim() || title || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const baseSlug = normalizeArticleSlug(slugSeed);
+    if (!baseSlug) throw new BadRequestException('Slug không hợp lệ');
     let slug = baseSlug;
     let suffix = 1;
     while (await this.prisma.article.findUnique({ where: { slug } })) {
@@ -301,6 +334,8 @@ export class ArticleService {
         title,
         category: (dto.category || 'GUIDES').toUpperCase(),
         excerpt: dto.excerpt?.trim() ?? '',
+        seoTitle: dto.seoTitle?.trim() || null,
+        seoDescription: dto.seoDescription?.trim() || null,
         content: dto.content ?? '',
         imageUrl: dto.imageUrl?.trim() ?? '',
         author: dto.author?.trim() ?? '',
@@ -351,7 +386,7 @@ export class ArticleService {
       throw new BadRequestException('Vui lòng nhập lý do từ chối');
     }
 
-    const updateData: any = {
+    const updateData: Prisma.ArticleUpdateInput = {
       status: action === 'approve' ? ArticleStatus.PUBLISHED : ArticleStatus.REJECTED,
       reviewNote: action === 'reject' ? (note ?? null) : null,
       // Khi từ chối: KHÔNG đặt publishedAt = null vì có thể DB còn NOT NULL constraint
@@ -395,18 +430,36 @@ export class ArticleService {
     const publishCandidate: ArticleDraftInput = { ...existing, ...articleData };
     if (wantsPublish) requirePublishableArticle(publishCandidate);
 
-    const updateData: any = {
-      ...articleData,
-      ...(dto.title !== undefined && { title: dto.title.trim() }),
-      ...(dto.excerpt !== undefined && { excerpt: dto.excerpt.trim() }),
-      ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl.trim() }),
-      ...(dto.author !== undefined && { author: dto.author.trim() }),
-      ...(dto.readTime !== undefined && { readTime: dto.readTime || 1 }),
-    };
-    if (dto.category) updateData.category = dto.category.toUpperCase();
+    const updateData: Prisma.ArticleUpdateInput = {};
+    if (dto.slug !== undefined) updateData.slug = normalizeArticleSlug(dto.slug);
+    if (dto.title !== undefined) updateData.title = dto.title.trim();
+    if (dto.category !== undefined) {
+      updateData.category = dto.category ? dto.category.toUpperCase() : dto.category;
+    }
+    if (dto.excerpt !== undefined) updateData.excerpt = dto.excerpt.trim();
+    if (dto.seoTitle !== undefined) updateData.seoTitle = String(dto.seoTitle ?? '').trim() || null;
+    if (dto.seoDescription !== undefined) {
+      updateData.seoDescription = String(dto.seoDescription ?? '').trim() || null;
+    }
+    if (dto.content !== undefined) updateData.content = dto.content;
+    if (dto.imageUrl !== undefined) updateData.imageUrl = dto.imageUrl.trim();
+    if (dto.author !== undefined) updateData.author = dto.author.trim();
+    if (dto.readTime !== undefined) updateData.readTime = dto.readTime || 1;
+    if (dto.isFeatured !== undefined) updateData.isFeatured = dto.isFeatured;
 
-    if (dto.title?.trim() && dto.title.trim() !== existing.title) {
-      const baseSlug = generateSlug(dto.title.trim());
+    if (dto.slug !== undefined) {
+      const baseSlug = normalizeArticleSlug(dto.slug);
+      if (!baseSlug) throw new BadRequestException('Slug không hợp lệ');
+      let slug = baseSlug;
+      let suffix = 1;
+      while (
+        await this.prisma.article.findFirst({ where: { slug, NOT: { id } } })
+      ) {
+        slug = `${baseSlug}-${suffix++}`;
+      }
+      updateData.slug = slug;
+    } else if (dto.title?.trim() && dto.title.trim() !== existing.title) {
+      const baseSlug = normalizeArticleSlug(dto.title.trim());
       let slug = baseSlug;
       let suffix = 1;
       while (
@@ -447,13 +500,164 @@ export class ArticleService {
   }
 
   /** Lấy danh sách thùng rác (Admin only) */
+  async adminBulkAction(
+    ids: number[] | undefined,
+    action: ArticleBulkAction,
+    requesterId?: number,
+    requesterRole?: string,
+    category?: string,
+  ) {
+    const articleIds = normalizeBulkIds(ids);
+    if (articleIds.length === 0) {
+      throw new BadRequestException('Vui long chon it nhat mot bai viet');
+    }
+
+    const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
+    const isStaff = requesterRole === 'STAFF';
+    const adminOnlyActions: ArticleBulkAction[] = ['publish', 'draft', 'trash', 'feature', 'unfeature', 'category'];
+    if (adminOnlyActions.includes(action) && !isAdmin) {
+      throw new ForbiddenException('Chi Admin moi co the thuc hien thao tac nay');
+    }
+    if (action === 'submit' && !isStaff) {
+      throw new ForbiddenException('Chi nhan vien moi co the gui duyet hang loat');
+    }
+
+    const articles = await this.prisma.article.findMany({
+      where: { id: { in: articleIds }, deletedAt: null },
+    });
+    const baseSkipped = articleIds.length - articles.length;
+    const now = new Date();
+
+    if (action === 'trash') {
+      const result = await this.prisma.article.updateMany({
+        where: { id: { in: articles.map((article) => article.id) }, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      return {
+        action,
+        requested: articleIds.length,
+        updated: result.count,
+        skipped: articleIds.length - result.count,
+      };
+    }
+
+    if (action === 'draft') {
+      const result = await this.prisma.article.updateMany({
+        where: { id: { in: articles.map((article) => article.id) }, deletedAt: null },
+        data: {
+          status: ArticleStatus.DRAFT,
+          publishedAt: null,
+          reviewNote: null,
+          isFeatured: false,
+        },
+      });
+      return {
+        action,
+        requested: articleIds.length,
+        updated: result.count,
+        skipped: articleIds.length - result.count,
+      };
+    }
+
+    if (action === 'feature' || action === 'unfeature') {
+      const eligibleIds = articles
+        .filter((article) => article.status === ArticleStatus.PUBLISHED)
+        .map((article) => article.id);
+      const result = await this.prisma.article.updateMany({
+        where: { id: { in: eligibleIds }, deletedAt: null },
+        data: { isFeatured: action === 'feature' },
+      });
+      return {
+        action,
+        requested: articleIds.length,
+        updated: result.count,
+        skipped: articleIds.length - result.count,
+      };
+    }
+
+    if (action === 'category') {
+      const normalizedCategory = category?.trim().toUpperCase();
+      const allowedCategories = ['GUIDES', 'INSPIRATION', 'CULTURE', 'GASTRONOMY'];
+      if (!normalizedCategory || !allowedCategories.includes(normalizedCategory)) {
+        throw new BadRequestException('Danh muc bai viet khong hop le');
+      }
+      const result = await this.prisma.article.updateMany({
+        where: { id: { in: articles.map((article) => article.id) }, deletedAt: null },
+        data: { category: normalizedCategory },
+      });
+      return {
+        action,
+        requested: articleIds.length,
+        updated: result.count,
+        skipped: articleIds.length - result.count,
+      };
+    }
+
+    if (action === 'publish') {
+      const eligibleArticles = articles.filter((article) => {
+        try {
+          requirePublishableArticle(article);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      if (eligibleArticles.length > 0) {
+        await this.prisma.$transaction(
+          eligibleArticles.map((article) =>
+            this.prisma.article.update({
+              where: { id: article.id },
+              data: {
+                status: ArticleStatus.PUBLISHED,
+                publishedAt: article.publishedAt ?? now,
+                reviewNote: null,
+              },
+            }),
+          ),
+        );
+      }
+      return {
+        action,
+        requested: articleIds.length,
+        updated: eligibleArticles.length,
+        skipped: articleIds.length - eligibleArticles.length,
+      };
+    }
+
+    if (action === 'submit') {
+      const eligibleArticles = articles.filter((article) => {
+        if (!requesterId) return false;
+        if (article.createdById !== null && article.createdById !== requesterId) return false;
+        if (article.status !== ArticleStatus.DRAFT && article.status !== ArticleStatus.REJECTED) return false;
+        try {
+          requirePublishableArticle(article);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      const result = await this.prisma.article.updateMany({
+        where: { id: { in: eligibleArticles.map((article) => article.id) }, deletedAt: null },
+        data: { status: ArticleStatus.PENDING_REVIEW, reviewNote: null },
+      });
+      return {
+        action,
+        requested: articleIds.length,
+        updated: result.count,
+        skipped: baseSkipped + (articles.length - eligibleArticles.length),
+      };
+    }
+
+    throw new BadRequestException('Thao tac hang loat khong hop le');
+  }
+
   async getTrash(
     query: { page?: number; limit?: number; search?: string } = {},
   ) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const skip = (page - 1) * limit;
-    const where: any = { deletedAt: { not: null } };
+    const where: Prisma.ArticleWhereInput = { deletedAt: { not: null } };
     if (query.search) {
       where.OR = [
         { title: { contains: query.search, mode: 'insensitive' } },
@@ -468,7 +672,7 @@ export class ArticleService {
         orderBy: { deletedAt: 'desc' },
         select: {
           id: true, slug: true, title: true, category: true,
-          excerpt: true, imageUrl: true, author: true,
+          excerpt: true, seoTitle: true, seoDescription: true, imageUrl: true, author: true,
           deletedAt: true, status: true, createdAt: true,
         },
       }),

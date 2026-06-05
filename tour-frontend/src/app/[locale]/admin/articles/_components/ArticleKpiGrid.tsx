@@ -23,27 +23,30 @@ export function ArticleKpiGrid({ isAdmin, kpiCards }: ArticleKpiGridProps) {
         const borderCls = card.active
           ? 'border-primary/60 ring-2 ring-primary/20 shadow-md'
           : 'border-outline-variant/10 hover:border-outline-variant/25 hover:shadow-md';
+        const helperText = card.active
+          ? card.resetCard ? 'Đang xem tất cả' : 'Đang lọc · Nhấn để bỏ'
+          : card.sub;
+        const helperCls = card.active ? 'text-primary font-semibold' : 'text-on-surface-variant/50';
+
         return (
           <button
             key={card.label}
             type="button"
             onClick={card.onClick}
-            className={`relative bg-surface-container-lowest rounded-2xl p-5 border shadow-sm transition-all text-left ${borderCls} cursor-pointer active:scale-[0.99]`}
+            aria-pressed={card.active}
+            className={`relative bg-surface-container-lowest rounded-2xl p-5 border shadow-sm transition-all text-left ${borderCls} cursor-pointer active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-primary outline-none`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${kpiTone[card.tone]}`}>
                 <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>{card.icon}</span>
               </div>
               <span className={`material-symbols-outlined text-[18px] mt-1 ${card.active ? 'text-primary' : 'text-on-surface-variant/35'}`}>
-                {card.active ? 'filter_alt_off' : 'filter_alt'}
+                {card.resetCard ? 'select_all' : card.active ? 'filter_alt_off' : 'filter_alt'}
               </span>
             </div>
             <p className="text-2xl font-extrabold text-on-surface leading-tight truncate mt-4">{card.value}</p>
             <p className="text-xs font-semibold text-on-surface mt-1">{card.label}</p>
-            {card.active
-              ? <p className="text-[10px] font-semibold mt-0.5 text-primary">Đang lọc · Nhấn để bỏ</p>
-              : <p className="text-[10px] text-on-surface-variant/50 mt-0.5">{card.sub}</p>
-            }
+            <p className={`text-[10px] mt-0.5 ${helperCls}`}>{helperText}</p>
           </button>
         );
       })}

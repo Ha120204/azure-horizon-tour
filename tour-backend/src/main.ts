@@ -17,8 +17,20 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: '5mb' }));
   app.use(cookieParser());
   app.use(helmet({ crossOriginResourcePolicy: false }));
+  const isDev = process.env.NODE_ENV !== 'production';
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        process.env.FRONTEND_URL || 'http://localhost:3001',
+        'http://localhost:3001',
+      ];
+      // Cho phép tất cả devtunnels.ms trong môi trường dev
+      if (!origin || allowedOrigins.includes(origin) || (isDev && origin?.endsWith('.devtunnels.ms'))) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked: ${origin}`));
+      }
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });

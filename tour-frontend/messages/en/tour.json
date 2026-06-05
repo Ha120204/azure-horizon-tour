@@ -80,6 +80,7 @@
     "noSchedule": "No departure schedule yet. Contact us for consultation.",
     "bookNowCta": "Book Now - {price} / person",
     "selectDateFirst": "Select a date to book",
+    "selectPackageFirst": "Please select a package",
     "paymentSecure": "Secure payment via PayOS",
     "freeCancellation24h": "Free cancellation within 24h",
     "support247": "24/7 Support",

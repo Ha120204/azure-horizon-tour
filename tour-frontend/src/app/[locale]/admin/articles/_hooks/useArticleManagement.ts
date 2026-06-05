@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
 import { API_BASE_URL } from '@/lib/constants';
@@ -11,11 +11,15 @@ import { getCatCfg } from '../_lib/helpers';
 import { buildArticleKpiCards } from '../_lib/kpis';
 import type {
   ArticleMeta,
+  ArticleBulkAction,
+  ArticleBulkActionOptions,
   ArticleReviewAction,
+  ArticleSortKey,
   ArticleStats,
   ArticleStatus,
   ArticleToastState,
   ArticleViewMode,
+  SortDirection,
   TrashArticle,
 } from '../_lib/types';
 
@@ -42,6 +46,10 @@ export function useArticleManagement() {
   const [viewMode, setViewMode] = useState<ArticleViewMode>('list');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [sortBy, setSortBy] = useState<ArticleSortKey>('publishedAt');
+  const [sortDir, setSortDir] = useState<SortDirection>('desc');
+  const [selectedArticleIds, setSelectedArticleIds] = useState<Set<number>>(new Set());
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
   const [userRole, setUserRole] = useState('');
   const [userId, setUserId] = useState<number | null>(null);
@@ -125,6 +133,8 @@ export function useArticleManagement() {
       const qs = new URLSearchParams();
       qs.set('page', String(page));
       qs.set('limit', String(pageSize));
+      qs.set('sortBy', sortBy);
+      qs.set('sortDir', sortDir);
 
       if (debouncedSearch) qs.set('search', debouncedSearch);
       if (categoryFilter) qs.set('category', categoryFilter);
@@ -142,9 +152,50 @@ export function useArticleManagement() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, pageSize, debouncedSearch, categoryFilter, featuredFilter, statusFilter, showToast]);
+  }, [page, pageSize, sortBy, sortDir, debouncedSearch, categoryFilter, featuredFilter, statusFilter, showToast]);
 
   useEffect(() => { fetchArticles(); }, [fetchArticles]);
+
+  const selectedArticles = useMemo(
+    () => articles.filter(article => selectedArticleIds.has(article.id)),
+    [articles, selectedArticleIds]
+  );
+  const allCurrentPageSelected = articles.length > 0 && articles.every(article => selectedArticleIds.has(article.id));
+  const someCurrentPageSelected = articles.some(article => selectedArticleIds.has(article.id));
+
+  useEffect(() => {
+    const currentArticleIds = new Set(articles.map(article => article.id));
+    setSelectedArticleIds(current => {
+      const next = new Set([...current].filter(id => currentArticleIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [articles]);
+
+  const toggleSelectedArticle = useCallback((articleId: number) => {
+    setSelectedArticleIds(current => {
+      const next = new Set(current);
+      if (next.has(articleId)) next.delete(articleId);
+      else next.add(articleId);
+      return next;
+    });
+  }, []);
+
+  const toggleCurrentPageSelection = useCallback(() => {
+    setSelectedArticleIds(current => {
+      const next = new Set(current);
+      const allSelected = articles.length > 0 && articles.every(article => next.has(article.id));
+      if (allSelected) {
+        articles.forEach(article => next.delete(article.id));
+      } else {
+        articles.forEach(article => next.add(article.id));
+      }
+      return next;
+    });
+  }, [articles]);
+
+  const clearArticleSelection = useCallback(() => {
+    setSelectedArticleIds(new Set());
+  }, []);
 
   const fetchTrash = useCallback(async () => {
     if (!isAdmin) return;
@@ -177,6 +228,60 @@ export function useArticleManagement() {
 
   useEffect(() => { if (showTrash) fetchTrash(); }, [showTrash, fetchTrash]);
 
+  const handleBulkAction = useCallback(async (action: ArticleBulkAction, options?: ArticleBulkActionOptions) => {
+    const ids = [...selectedArticleIds];
+    if (ids.length === 0) return;
+    if (action === 'category' && !options?.category) {
+      showToast('Vui lòng chọn danh mục cần đổi', false);
+      return;
+    }
+
+    const actionLabels: Record<ArticleBulkAction, string> = {
+      publish: 'xuất bản',
+      draft: 'chuyển về bản nháp',
+      trash: 'đưa vào thùng rác',
+      feature: 'gắn nổi bật',
+      unfeature: 'bỏ nổi bật',
+      category: 'đổi danh mục',
+      submit: 'gửi duyệt',
+    };
+
+    if (!options?.skipConfirm && (action === 'trash' || action === 'draft' || action === 'publish')) {
+      const confirmed = window.confirm(`Xác nhận ${actionLabels[action]} ${ids.length} bài viết đã chọn?`);
+      if (!confirmed) return;
+    }
+
+    setIsBulkActionLoading(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/article/admin/bulk-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action, category: options?.category }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = json?.message;
+        throw new Error(Array.isArray(message) ? message.join(', ') : String(message ?? 'Thao tác hàng loạt thất bại'));
+      }
+
+      const payload = json?.data ?? json;
+      const updated = Number(payload?.updated ?? 0);
+      const requested = Number(payload?.requested ?? ids.length);
+      const skipped = Number(payload?.skipped ?? Math.max(requested - updated, 0));
+      showToast(
+        skipped > 0
+          ? `Đã ${actionLabels[action]} ${updated}/${requested} bài viết. ${skipped} bài không đủ điều kiện.`
+          : `Đã ${actionLabels[action]} ${updated} bài viết.`
+      );
+      clearArticleSelection();
+      await Promise.all([fetchArticles(), fetchStats(), fetchTrash()]);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Thao tác hàng loạt thất bại', false);
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  }, [clearArticleSelection, fetchArticles, fetchStats, fetchTrash, selectedArticleIds, showToast]);
+
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -208,6 +313,7 @@ export function useArticleManagement() {
     pause: Boolean(
       drawerMode || deleteTarget || hardDeleteTarget || reviewTarget || submitTarget ||
       isDeleting || isHardDeleting || isRestoring || isReviewing || isSubmitting
+      || isBulkActionLoading
     ),
     onRefresh: refreshArticleData,
   });
@@ -302,6 +408,7 @@ export function useArticleManagement() {
 
   const resetFilters = useCallback(() => {
     setSearch('');
+    setDebouncedSearch('');
     setCategoryFilter('');
     setFeaturedFilter('');
     setStatusFilter('');
@@ -311,6 +418,12 @@ export function useArticleManagement() {
   const filterByStatus = useCallback((status: ArticleStatus) => {
     setFeaturedFilter('');
     setStatusFilter(current => current === status ? '' : status);
+    setPage(1);
+  }, []);
+
+  const viewWorkflowStatus = useCallback((status: ArticleStatus) => {
+    setFeaturedFilter('');
+    setStatusFilter(status);
     setPage(1);
   }, []);
 
@@ -349,6 +462,16 @@ export function useArticleManagement() {
     setPageSize(size);
     setPage(1);
   }, []);
+
+  const changeSort = useCallback((key: ArticleSortKey) => {
+    if (sortBy === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(key);
+      setSortDir(key === 'title' || key === 'author' || key === 'category' ? 'asc' : 'desc');
+    }
+    setPage(1);
+  }, [sortBy, sortDir]);
 
   const toggleTrashPanel = useCallback(() => {
     setShowTrash(value => !value);
@@ -401,9 +524,12 @@ export function useArticleManagement() {
     statusFilter,
     viewMode,
     pageSize,
+    sortBy,
+    sortDir,
     userRole,
     userId,
     isAdmin,
+    articleStats,
     drawerMode,
     editTarget,
     deleteTarget,
@@ -423,6 +549,11 @@ export function useArticleManagement() {
     isReviewing,
     submitTarget,
     isSubmitting,
+    selectedArticleIds,
+    selectedArticles,
+    allCurrentPageSelected,
+    someCurrentPageSelected,
+    isBulkActionLoading,
     hasFilter,
     topCategorySummary,
     kpiCards,
@@ -445,11 +576,17 @@ export function useArticleManagement() {
     handleDelete,
     handleRestore,
     handleHardDelete,
+    toggleSelectedArticle,
+    toggleCurrentPageSelection,
+    clearArticleSelection,
+    handleBulkAction,
     resetFilters,
+    viewWorkflowStatus,
     changeCategoryFilter,
     changeFeaturedFilter,
     changeStatusFilter,
     changePageSize,
+    changeSort,
     toggleTrashPanel,
     closeDrawer,
     handleDrawerSuccess,

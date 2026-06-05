@@ -15,6 +15,7 @@ import ConfirmBookingModal from '@/components/checkout/ConfirmBookingModal';
 import { buildLocalizedLoginPath } from '@/lib/authRedirect';
 import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
 import type { PassengerType } from '@/lib/passengerDetails';
+import { PASSENGER_MULTIPLIERS } from '@/lib/passengerPricing';
 
 interface Passenger {
     type: PassengerType;
@@ -38,6 +39,7 @@ interface CheckoutDeparture {
     category?: string | null;
     note?: string | null;
     flashSaleEndsAt?: string | null;
+    departureDate?: string | null;  // dùng để tính tuổi chính xác tại thời điểm khởi hành
 }
 
 interface CheckoutTourData {
@@ -261,12 +263,14 @@ function CheckoutContent() {
     // 2. GỌI API LẤY DATA THẬT CỦA TOUR VÀ THÔNG TIN NGƯỜI DÙNG
     useEffect(() => {
         const fetchInitialData = async () => {
+            let isRedirectingToLogin = false;
             try {
                 const profile = await fetchAuthProfile();
                 setIsLoggedIn(!!profile);
 
                 if (!profile) {
                     const redirectPath = `${window.location.pathname}${window.location.search}`;
+                    isRedirectingToLogin = true;
                     router.replace(buildLocalizedLoginPath(language, redirectPath));
                     return;
                 }
@@ -280,7 +284,15 @@ function CheckoutContent() {
                             setTourData(tourInfo);
                             if (packageIdStr && tourInfo.packages) {
                                 const pkg = tourInfo.packages.find((p: CheckoutPackage) => p.id.toString() === packageIdStr);
-                                if (pkg) setSelectedPackage(pkg);
+                                // Nếu có packageId trong URL thì dùng, không thì tự động chọn gói đầu tiên
+                                if (pkg) {
+                                    setSelectedPackage(pkg);
+                                } else if (tourInfo.packages.length > 0) {
+                                    setSelectedPackage(tourInfo.packages[0]);
+                                }
+                            } else if (tourInfo.packages?.length > 0) {
+                                // Không có packageId trong URL — auto-select gói đầu tiên (Hướng A)
+                                setSelectedPackage(tourInfo.packages[0]);
                             }
                             if (departureIdStr && tourInfo.departures) {
                                 const dep = tourInfo.departures.find((d: CheckoutDeparture) => d.id.toString() === departureIdStr);
@@ -328,6 +340,7 @@ function CheckoutContent() {
                             clearClientUserStorage();
                             window.dispatchEvent(new Event('auth-change'));
                             const redirectPath = `${window.location.pathname}${window.location.search}`;
+                            isRedirectingToLogin = true;
                             router.replace(buildLocalizedLoginPath(language, redirectPath));
                             return;
                         }
@@ -337,6 +350,7 @@ function CheckoutContent() {
                         clearClientUserStorage();
                         window.dispatchEvent(new Event('auth-change'));
                         const redirectPath = `${window.location.pathname}${window.location.search}`;
+                        isRedirectingToLogin = true;
                         router.replace(buildLocalizedLoginPath(language, redirectPath));
                         return;
                     }
@@ -353,23 +367,22 @@ function CheckoutContent() {
             } catch (error) {
                 console.error("Lỗi tải dữ liệu ban đầu:", error);
             } finally {
-                setIsLoadingTour(false);
+                if (!isRedirectingToLogin) {
+                    setIsLoadingTour(false);
+                }
             }
         };
         fetchInitialData();
     }, [tourIdStr, packageIdStr, departureIdStr, language, router]);
 
-    // 3. THIẾT LẬP BẢNG GIÁ ĐỘNG DỰA TRÊN GIÁ TOUR TRONG DATABASE
-    const basePrice = (() => {
-        const base = selectedDeparture?.price ?? tourData?.price ?? 0;
-        const addon = selectedPackage?.price ?? 0;
-        return base + addon;
-    })();
+    // 3. THIẾT LẬP BẢNG GIÁ ĐỘNG DỰA TRÊN GIÁ PACKAGE (mô hình Hướng A)
+    // Package.price là giá toàn phần, không cộng departure.price nữa.
+    const basePrice = selectedPackage?.price ?? tourData?.price ?? 0;
 
     const PRICES = {
-        'Adult (12+)': basePrice,
-        'Child (4-11)': basePrice * 0.7,
-        'Infant (<4)': basePrice * 0.1
+        'Adult (12+)': basePrice * PASSENGER_MULTIPLIERS['Adult (12+)'],
+        'Child (4-11)': basePrice * PASSENGER_MULTIPLIERS['Child (4-11)'],
+        'Infant (<4)': basePrice * PASSENGER_MULTIPLIERS['Infant (<4)']
     };
 
     const adultCount = 1 + passengers.filter(p => p.type === 'Adult (12+)').length;
@@ -601,6 +614,8 @@ function CheckoutContent() {
             ];
 
             const totalPeople = adultCount + childCount + infantCount;
+            // Infant không chiếm ghế (ngồi lòng người lớn) — chỉ adult + child mới cần ghế thực
+            const seatCount = adultCount + childCount;
 
             const bookingPayload = {
                 tourId: Number(tourIdStr) || tourData.id,
@@ -609,7 +624,8 @@ function CheckoutContent() {
                 contactInfo: contactInfo,
                 passengers: allPassengers,
                 totalAmount: totalPrice,
-                numberOfPeople: totalPeople,
+                numberOfPeople: totalPeople,   // tổng người (adult + child + infant) để lưu lịch sử
+                seatCount: seatCount,          // số ghế thực cần giữ (không tính infant)
                 voucherCode: appliedVoucher?.code || undefined,
                 paymentMethod: paymentMethod,
             };
@@ -695,6 +711,7 @@ function CheckoutContent() {
                         editingPassengerIndex={editingPassengerIndex}
                         t={t}
                         maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats ?? undefined}
+                        departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
                     />
                 </div>
 

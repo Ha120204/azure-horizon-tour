@@ -32,13 +32,19 @@ export const parseRatingBuckets = (input?: string): number[] => {
     .split(',')
     .map((r) => Number(r.trim()))
     .filter((r) => !Number.isNaN(r));
-  if (ratings.length === 0 || ratings.some((r) => !Number.isInteger(r) || r < 1 || r > 5)) {
+  if (
+    ratings.length === 0 ||
+    ratings.some((r) => !Number.isInteger(r) || r < 1 || r > 5)
+  ) {
     throw new BadRequestException('Bộ lọc đánh giá không hợp lệ');
   }
   return Array.from(new Set(ratings));
 };
 
-export const appendAndFilter = (where: Prisma.TourWhereInput, filter: Prisma.TourWhereInput) => {
+export const appendAndFilter = (
+  where: Prisma.TourWhereInput,
+  filter: Prisma.TourWhereInput,
+) => {
   where.AND = Array.isArray(where.AND)
     ? [...where.AND, filter]
     : where.AND
@@ -76,16 +82,22 @@ export const requirePublishableTour = (
   if (!hasText(tour.description)) errors.push('Mô tả');
   if (tour.price == null || Number(tour.price) <= 0) errors.push('Giá');
   if (!tour.destinationId) errors.push('Điểm đến');
-  if (tour.destination?.name === DRAFT_DESTINATION_NAME) errors.push('Điểm đến');
+  if (tour.destination?.name === DRAFT_DESTINATION_NAME)
+    errors.push('Điểm đến');
   if (!hasText(tour.duration)) errors.push('Thời lượng');
-  if (tour.availableSeats == null || Number(tour.availableSeats) < 1) errors.push('Số ghế');
+  if (tour.availableSeats == null || Number(tour.availableSeats) < 1)
+    errors.push('Số ghế');
 
   const startDate = tour.startDate ? new Date(tour.startDate) : null;
-  if (!startDate || Number.isNaN(startDate.getTime())) errors.push('Ngày khởi hành');
+  if (!startDate || Number.isNaN(startDate.getTime()))
+    errors.push('Ngày khởi hành');
 
   if (options.requireDepartures) {
     const validDepartures = (tour.departures ?? []).filter(
-      (d) => d.isActive !== false && d.departureDate && Number(d.availableSeats ?? 0) > 0,
+      (d) =>
+        d.isActive !== false &&
+        d.departureDate &&
+        Number(d.availableSeats ?? 0) > 0,
     );
     if (validDepartures.length === 0) errors.push('Ít nhất 1 chuyến khởi hành');
   }
@@ -102,9 +114,24 @@ export const requirePublishableTour = (
 export const isAdminLikeRole = (role?: string) =>
   role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'STAFF';
 
-export const sanitizePublicTourDetail = <T extends Record<string, unknown>>(tour: T) => {
-  const { createdBy, reviewedBy, createdById, reviewedById, reviewNote, deletedAt, ...publicTour } = tour;
-  void createdBy; void reviewedBy; void createdById; void reviewedById; void reviewNote; void deletedAt;
+export const sanitizePublicTourDetail = <T extends Record<string, unknown>>(
+  tour: T,
+) => {
+  const {
+    createdBy,
+    reviewedBy,
+    createdById,
+    reviewedById,
+    reviewNote,
+    deletedAt,
+    ...publicTour
+  } = tour;
+  void createdBy;
+  void reviewedBy;
+  void createdById;
+  void reviewedById;
+  void reviewNote;
+  void deletedAt;
   return publicTour;
 };
 

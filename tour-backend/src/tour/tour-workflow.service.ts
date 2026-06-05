@@ -16,24 +16,47 @@ export class TourWorkflowService {
     private readonly tourPermission: TourPermissionService,
   ) {}
 
-  async submitForReview(id: number, requesterId: number) {
-    const tour = await this.prisma.tour.findUnique({
+  private findTourForPublishability(id: number) {
+    return this.prisma.tour.findUnique({
       where: { id, deletedAt: null },
       include: {
-        destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
+        destination: {
+          select: {
+            id: true,
+            name: true,
+            travelScope: true,
+            countryCode: true,
+          },
+        },
         departures: {
-          where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
-          select: { departureDate: true, availableSeats: true, isActive: true },
+          where: {
+            isActive: true,
+            departureDate: { gte: getMinBookableDate() },
+          },
+          select: {
+            departureDate: true,
+            availableSeats: true,
+            isActive: true,
+          },
         },
       },
     });
+  }
+
+  async submitForReview(id: number, requesterId: number) {
+    const tour = await this.findTourForPublishability(id);
     if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
 
     if (tour.createdById !== requesterId)
       throw new ForbiddenException('Bạn không có quyền gửi duyệt tour này');
 
-    if (tour.status !== TourStatus.DRAFT && tour.status !== TourStatus.REJECTED) {
-      throw new BadRequestException(`Tour đang ở trạng thái "${tour.status}", không thể gửi duyệt`);
+    if (
+      tour.status !== TourStatus.DRAFT &&
+      tour.status !== TourStatus.REJECTED
+    ) {
+      throw new BadRequestException(
+        `Tour đang ở trạng thái "${tour.status}", không thể gửi duyệt`,
+      );
     }
 
     requirePublishableTour(tour, { requireDepartures: true });
@@ -44,18 +67,29 @@ export class TourWorkflowService {
     });
   }
 
-  async reviewTour(id: number, reviewerId: number, action: 'approve' | 'reject', note?: string) {
-    const tour = await this.prisma.tour.findUnique({ where: { id, deletedAt: null } });
+  async reviewTour(
+    id: number,
+    reviewerId: number,
+    action: 'approve' | 'reject',
+    note?: string,
+  ) {
+    const tour = await this.findTourForPublishability(id);
     if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
 
     if (tour.status !== TourStatus.PENDING_REVIEW) {
-      throw new BadRequestException(`Tour đang ở trạng thái "${tour.status}", không thể duyệt`);
+      throw new BadRequestException(
+        `Tour đang ở trạng thái "${tour.status}", không thể duyệt`,
+      );
     }
     if (action === 'reject' && !note?.trim()) {
       throw new BadRequestException('Vui lòng nhập lý do từ chối');
     }
+    if (action === 'approve') {
+      requirePublishableTour(tour, { requireDepartures: true });
+    }
 
-    const newStatus = action === 'approve' ? TourStatus.PUBLISHED : TourStatus.REJECTED;
+    const newStatus =
+      action === 'approve' ? TourStatus.PUBLISHED : TourStatus.REJECTED;
 
     return this.prisma.tour.update({
       where: { id },
@@ -69,16 +103,7 @@ export class TourWorkflowService {
   }
 
   async publishTour(id: number, publisherId: number) {
-    const tour = await this.prisma.tour.findUnique({
-      where: { id, deletedAt: null },
-      include: {
-        destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
-        departures: {
-          where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
-          select: { departureDate: true, availableSeats: true, isActive: true },
-        },
-      },
-    });
+    const tour = await this.findTourForPublishability(id);
     if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
 
     if (tour.status === TourStatus.COMPLETED)
@@ -88,7 +113,12 @@ export class TourWorkflowService {
 
     return this.prisma.tour.update({
       where: { id },
-      data: { status: TourStatus.PUBLISHED, reviewedById: publisherId, reviewNote: null, publishedAt: new Date() },
+      data: {
+        status: TourStatus.PUBLISHED,
+        reviewedById: publisherId,
+        reviewNote: null,
+        publishedAt: new Date(),
+      },
     });
   }
 
@@ -98,11 +128,20 @@ export class TourWorkflowService {
         where: { status: TourStatus.PENDING_REVIEW, deletedAt: null },
         orderBy: { updatedAt: 'asc' },
         include: {
-          destination: { select: { id: true, name: true, travelScope: true, countryCode: true } },
+          destination: {
+            select: {
+              id: true,
+              name: true,
+              travelScope: true,
+              countryCode: true,
+            },
+          },
           createdBy: { select: { id: true, fullName: true, avatarUrl: true } },
         },
       }),
-      this.prisma.tour.count({ where: { status: TourStatus.PENDING_REVIEW, deletedAt: null } }),
+      this.prisma.tour.count({
+        where: { status: TourStatus.PENDING_REVIEW, deletedAt: null },
+      }),
     ]);
     return { data: tours, count };
   }

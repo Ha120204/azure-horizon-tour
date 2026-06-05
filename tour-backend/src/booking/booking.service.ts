@@ -7,11 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Prisma,
-  type TourDeparture,
-  type TourPackage,
-} from '@prisma/client';
+import { Prisma, type TourDeparture } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingDto } from './dto/update-booking.dto';
@@ -29,13 +25,16 @@ import {
   asPassengerInputs,
   assertVoucherAllowedForDeparture,
   calculateBookingHoldExpiresAt,
+  calcSeatCount,
   generateBookingCode,
   getErrorMessage,
   getPassengerTotal,
   IN_STORE_MAX_HOLD_HOURS,
   isPayosDuplicateError,
+  normalizePassengers,
   PAYOS_HOLD_MINUTES,
   reserveSeatsAtomically,
+  validatePassengerAgeVsType,
 } from './helpers/booking-helpers';
 
 @Injectable()
@@ -43,14 +42,20 @@ export class BookingService {
   private readonly logger = new Logger(BookingService.name);
 
   // --- In-memory TTL cache --------------------------------------------------
-  // Kh�ng c?n Redis: dashboard stats acceptable stale 30s,
-  // v� project chua bundle @nestjs/cache-manager.
-  private readonly _statsCache = new Map<string, { data: unknown; expiresAt: number }>();
+  // Kh�ng c?n Redis: dashboard stats acceptable stale 30s,
+  // v� project chua bundle @nestjs/cache-manager.
+  private readonly _statsCache = new Map<
+    string,
+    { data: unknown; expiresAt: number }
+  >();
 
   private cacheGet<T>(key: string): T | null {
     const entry = this._statsCache.get(key);
     if (!entry) return null;
-    if (Date.now() > entry.expiresAt) { this._statsCache.delete(key); return null; }
+    if (Date.now() > entry.expiresAt) {
+      this._statsCache.delete(key);
+      return null;
+    }
     return entry.data as T;
   }
 
@@ -58,7 +63,7 @@ export class BookingService {
     this._statsCache.set(key, { data, expiresAt: Date.now() + ttlMs });
   }
 
-  /** X�a cache th? c�ng khi c� mutation quan tr?ng n?u c?n */
+  /** X�a cache th? c�ng khi c� mutation quan tr?ng n?u c?n */
   invalidateDashboardCache(): void {
     this._statsCache.delete('quickStats');
     this._statsCache.delete('operationalStats');
@@ -80,28 +85,75 @@ export class BookingService {
 
   // Cleaned comment
 
-  async createAssistedDraft(actorUserId: number, dto: CreateAssistedBookingDraftDto) {
+  async createAssistedDraft(
+    actorUserId: number,
+    dto: CreateAssistedBookingDraftDto,
+  ) {
     return this.assistedDraftService.createAssistedDraft(actorUserId, dto);
   }
 
-  async updateAssistedDraft(id: number, actorUserId: number, actorRole: string, dto: CreateAssistedBookingDraftDto) {
-    return this.assistedDraftService.updateAssistedDraft(id, actorUserId, actorRole, dto);
+  async updateAssistedDraft(
+    id: number,
+    actorUserId: number,
+    actorRole: string,
+    dto: CreateAssistedBookingDraftDto,
+  ) {
+    return this.assistedDraftService.updateAssistedDraft(
+      id,
+      actorUserId,
+      actorRole,
+      dto,
+    );
   }
 
-  async getAssistedDrafts(actorUserId: number, actorRole: string, status?: string, search?: string) {
-    return this.assistedDraftService.getAssistedDrafts(actorUserId, actorRole, status, search);
+  async getAssistedDrafts(
+    actorUserId: number,
+    actorRole: string,
+    status?: string,
+    search?: string,
+  ) {
+    return this.assistedDraftService.getAssistedDrafts(
+      actorUserId,
+      actorRole,
+      status,
+      search,
+    );
   }
 
-  async deleteAssistedDraft(id: number, actorUserId: number, actorRole: string) {
-    return this.assistedDraftService.deleteAssistedDraft(id, actorUserId, actorRole);
+  async deleteAssistedDraft(
+    id: number,
+    actorUserId: number,
+    actorRole: string,
+  ) {
+    return this.assistedDraftService.deleteAssistedDraft(
+      id,
+      actorUserId,
+      actorRole,
+    );
   }
 
-  async submitAssistedDraft(id: number, actorUserId: number, actorRole: string) {
-    return this.assistedDraftService.submitAssistedDraft(id, actorUserId, actorRole);
+  async submitAssistedDraft(
+    id: number,
+    actorUserId: number,
+    actorRole: string,
+  ) {
+    return this.assistedDraftService.submitAssistedDraft(
+      id,
+      actorUserId,
+      actorRole,
+    );
   }
 
-  async requestRevisionAssistedDraft(id: number, adminId: number, reason: string) {
-    return this.assistedDraftService.requestRevisionAssistedDraft(id, adminId, reason);
+  async requestRevisionAssistedDraft(
+    id: number,
+    adminId: number,
+    reason: string,
+  ) {
+    return this.assistedDraftService.requestRevisionAssistedDraft(
+      id,
+      adminId,
+      reason,
+    );
   }
 
   async rejectAssistedDraft(id: number, adminId: number, reason: string) {
@@ -112,11 +164,23 @@ export class BookingService {
     return this.assistedDraftService.approveAssistedDraft(id, adminId, note);
   }
 
-  async resendPaymentRequest(bookingId: number, actorUserId: number, forceEmail = false) {
-    return this.assistedDraftService.resendPaymentRequest(bookingId, actorUserId, forceEmail);
+  async resendPaymentRequest(
+    bookingId: number,
+    actorUserId: number,
+    forceEmail = false,
+  ) {
+    return this.assistedDraftService.resendPaymentRequest(
+      bookingId,
+      actorUserId,
+      forceEmail,
+    );
   }
 
-  private async markVoucherAsUsed(tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0], userId: number, voucherCode?: string | null) {
+  private async markVoucherAsUsed(
+    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
+    userId: number,
+    voucherCode?: string | null,
+  ) {
     return this.assistedDraftService.markVoucherAsUsed(tx, userId, voucherCode);
   }
 
@@ -149,35 +213,49 @@ export class BookingService {
 
       // Cleaned comment
       let selectedDeparture: TourDeparture | null = null;
+
+      // seatCount = số ghế thực cần giữ (adult + child, KHÔNG tính infant).
+      // Infant ngồi lòng người lớn nên không chiếm ghế tồn kho.
+      // Fallback về numberOfPeople nếu client cũ không gửi seatCount.
+      const seatCount = dto.seatCount ?? dto.numberOfPeople;
+
       if (dto.departureId) {
         selectedDeparture = await tx.tourDeparture.findUnique({
           where: { id: dto.departureId },
         });
-        if (!selectedDeparture || selectedDeparture.tourId !== tour.id || !selectedDeparture.isActive) {
+        if (
+          !selectedDeparture ||
+          selectedDeparture.tourId !== tour.id ||
+          !selectedDeparture.isActive
+        ) {
           throw new BadRequestException('Invalid departure');
         }
-        if (selectedDeparture.availableSeats < dto.numberOfPeople) {
+        if (selectedDeparture.availableSeats < seatCount) {
           throw new BadRequestException('Not enough seats for this departure');
         }
       } else {
         // Cleaned comment
-        if (tour.availableSeats < dto.numberOfPeople) {
+        if (tour.availableSeats < seatCount) {
           throw new BadRequestException('Not enough seats available');
         }
       }
 
-      let basePrice = selectedDeparture?.price ?? tour.price;
-      let selectedPackage: TourPackage | null = null;
-      if (dto.packageId) {
-        selectedPackage = await tx.tourPackage.findUnique({
-          where: { id: dto.packageId },
-        });
-        if (!selectedPackage || selectedPackage.tourId !== tour.id) {
-          throw new BadRequestException('Invalid tour package');
-        }
-        // Cleaned comment
-        basePrice += selectedPackage.price;
+      // Package là bắt buộc — giá package là giá toàn phần (mô hình Klook/Viator).
+      // packageId luôn phải có; DTO đã enforce ở tầng validation.
+      const selectedPackage = await tx.tourPackage.findUnique({
+        where: { id: dto.packageId },
+      });
+      if (
+        !selectedPackage ||
+        selectedPackage.tourId !== tour.id ||
+        !selectedPackage.isActive
+      ) {
+        throw new BadRequestException('Gói dịch vụ không hợp lệ hoặc đã ngừng cung cấp');
       }
+      // basePrice = giá toàn phần của gói (không cộng thêm departure.price).
+      // departure.price vẫn được dùng để fallback cho các flow cũ nếu cần,
+      // nhưng với mô hình package-first, package.price là giá cuối cùng.
+      const basePrice = selectedPackage.price;
 
       // Cleaned comment
       let totalPrice = getPassengerTotal(
@@ -191,32 +269,59 @@ export class BookingService {
 
       // Cleaned comment
       if (dto.voucherCode) {
-        assertVoucherAllowedForDeparture(selectedDeparture, dto.voucherCode, tour.price);
+        assertVoucherAllowedForDeparture(
+          selectedDeparture,
+          dto.voucherCode,
+          tour.price,
+        );
         const voucherResult = await this.voucherService.validateVoucher(
           dto.voucherCode,
           totalPrice,
-          { userId: finalUserId, tourId: tour.id, departureId: selectedDeparture?.id ?? null },
+          {
+            userId: finalUserId,
+            tourId: tour.id,
+            departureId: selectedDeparture?.id ?? null,
+          },
         );
         discountAmount = voucherResult.discountAmount;
         totalPrice = voucherResult.finalPrice;
         voucherCode = dto.voucherCode.trim().toUpperCase();
       }
 
+      // ── Validate DOB vs passenger type (security: chống payload forge) ──────
+      // Lấy ngày khởi hành để tính tuổi đúng tại thời điểm đi tour.
+      // Nếu không có departure cụ thể, dùng tour.startDate.
+      const departureDate = selectedDeparture?.departureDate ?? tour.startDate;
+
+      const passengersToValidate = normalizePassengers(
+        dto.passengers,
+        dto.numberOfPeople,
+      );
+      for (const p of passengersToValidate) {
+        const dobValue = typeof p['dob'] === 'string' ? p['dob'] : null;
+        validatePassengerAgeVsType(
+          p.type ?? 'ADULT',
+          dobValue,
+          departureDate,
+        );
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       await reserveSeatsAtomically(tx, {
         tourId: tour.id,
         departureId: dto.departureId,
-        seats: dto.numberOfPeople,
+        seats: seatCount,
       });
 
       // Cleaned comment
       const newBookingCode = generateBookingCode();
-      const paymentMethod = dto.paymentMethod === 'IN_STORE' ? 'IN_STORE' : 'PAYOS';
-      const departureDate = selectedDeparture?.departureDate ?? tour.startDate;
+      const paymentMethod =
+        dto.paymentMethod === 'IN_STORE' ? 'IN_STORE' : 'PAYOS';
+      // departureDate đã được khai báo ở trên (dùng chung cho validation + holdExpiresAt)
       const holdExpiresAt = calculateBookingHoldExpiresAt({
         paymentMethod,
         departureDate,
       });
-
       // Cleaned comment
       const newBooking = await tx.booking.create({
         data: {
@@ -284,7 +389,9 @@ export class BookingService {
     } catch (payosError: unknown) {
       // Cleaned comment
       if (isPayosDuplicateError(payosError)) {
-        this.logger.warn('[BOOKING] PayOS order already exists, reusing checkout URL.');
+        this.logger.warn(
+          '[BOOKING] PayOS order already exists, reusing checkout URL.',
+        );
         const existing = await this.paymentService.getPaymentInfo(orderCode);
         if (!existing?.id) {
           throw new BadRequestException(
@@ -422,7 +529,10 @@ export class BookingService {
           });
         }
       } catch (emailError) {
-        this.logger.error('[EMAIL] Failed to send confirmation email:', getErrorMessage(emailError));
+        this.logger.error(
+          '[EMAIL] Failed to send confirmation email:',
+          getErrorMessage(emailError),
+        );
         // Cleaned comment
       }
     } else if (
@@ -433,7 +543,7 @@ export class BookingService {
       await this.cancelAndRestoreSeats(
         booking.id,
         booking.tourId,
-        booking.numberOfPeople,
+        calcSeatCount(booking.passengers, booking.numberOfPeople),
         booking.departureId,
       );
 
@@ -518,8 +628,13 @@ export class BookingService {
     bookingCode: string,
     dto: CreateBookingDto,
   ) {
-    const contactInfo = dto.contactInfo as { fullName?: string; email?: string } | undefined;
-    const customerName = contactInfo?.fullName?.trim() || contactInfo?.email?.trim() || 'Khách hàng';
+    const contactInfo = dto.contactInfo as
+      | { fullName?: string; email?: string }
+      | undefined;
+    const customerName =
+      contactInfo?.fullName?.trim() ||
+      contactInfo?.email?.trim() ||
+      'Khách hàng';
 
     await this.adminNotifications.createSafe({
       type: 'booking_pending',
@@ -548,8 +663,12 @@ export class BookingService {
     processedCount: number;
   }> {
     const now = new Date();
-    const payosFallbackExpiryTime = new Date(now.getTime() - PAYOS_HOLD_MINUTES * 60 * 1000);
-    const instoreFallbackExpiryTime = new Date(now.getTime() - IN_STORE_MAX_HOLD_HOURS * 60 * 60 * 1000);
+    const payosFallbackExpiryTime = new Date(
+      now.getTime() - PAYOS_HOLD_MINUTES * 60 * 1000,
+    );
+    const instoreFallbackExpiryTime = new Date(
+      now.getTime() - IN_STORE_MAX_HOLD_HOURS * 60 * 60 * 1000,
+    );
 
     // Cleaned comment
     const expiredBookings = await this.prisma.booking.findMany({
@@ -585,15 +704,16 @@ export class BookingService {
 
     let processedCount = 0;
     for (const booking of expiredBookings) {
+      const seatsToRestore = calcSeatCount(booking.passengers, booking.numberOfPeople);
       await this.cancelAndRestoreSeats(
         booking.id,
         booking.tourId,
-        booking.numberOfPeople,
+        seatsToRestore,
         booking.departureId,
       );
       processedCount += 1;
       this.logger.log(
-        `[CRON] Cancelled bookingId=${booking.id} and restored ${booking.numberOfPeople} seats for tourId=${booking.tourId}`,
+        `[CRON] Cancelled bookingId=${booking.id}, restored ${seatsToRestore} seats (total people=${booking.numberOfPeople}) for tourId=${booking.tourId}`,
       );
     }
 
@@ -627,8 +747,8 @@ export class BookingService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const confirmed = await tx.booking.update({
         where: { id: bookingId },
-        data: { 
-          status: 'CONFIRMED', 
+        data: {
+          status: 'CONFIRMED',
           paymentStatus: 'PAID',
           confirmedById: adminId || null,
         },
@@ -658,21 +778,33 @@ export class BookingService {
     };
   }
 
-  async updatePaymentMethod(bookingId: number, paymentMethod: 'PAYOS' | 'IN_STORE', userId: number) {
+  async updatePaymentMethod(
+    bookingId: number,
+    paymentMethod: 'PAYOS' | 'IN_STORE',
+    userId: number,
+  ) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
       include: { tour: { select: { startDate: true } } },
     });
 
     if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.userId !== userId) throw new ForbiddenException('Bạn không có quyền chỉnh sửa booking này');
+    if (booking.userId !== userId)
+      throw new ForbiddenException('Bạn không có quyền chỉnh sửa booking này');
     if (booking.status !== 'PENDING' || booking.paymentStatus !== 'UNPAID') {
-      throw new BadRequestException('Chỉ có thể thay đổi phương thức thanh toán cho đơn hàng chưa thanh toán');
+      throw new BadRequestException(
+        'Chỉ có thể thay đổi phương thức thanh toán cho đơn hàng chưa thanh toán',
+      );
     }
 
     const now = new Date();
-    if (booking.holdExpiresAt && booking.holdExpiresAt.getTime() <= now.getTime()) {
-      throw new BadRequestException('Booking da het han giu cho. Vui long dat tour moi.');
+    if (
+      booking.holdExpiresAt &&
+      booking.holdExpiresAt.getTime() <= now.getTime()
+    ) {
+      throw new BadRequestException(
+        'Booking da het han giu cho. Vui long dat tour moi.',
+      );
     }
 
     const departure = booking.departureId
@@ -741,7 +873,6 @@ export class BookingService {
     };
   }
 
-
   async updateAdminNote(bookingId: number, adminId: number, note: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
@@ -750,9 +881,10 @@ export class BookingService {
     if (!booking) throw new NotFoundException('Booking khong ton tai');
 
     const existing = booking.contactInfo;
-    const contactInfo = existing && typeof existing === 'object' && !Array.isArray(existing)
-      ? { ...(existing as Record<string, unknown>) }
-      : {};
+    const contactInfo =
+      existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? { ...(existing as Record<string, unknown>) }
+        : {};
     contactInfo.adminNote = note.trim();
     contactInfo.adminNoteUpdatedAt = new Date().toISOString();
     contactInfo.adminNoteById = adminId;
@@ -765,13 +897,23 @@ export class BookingService {
   }
 
   async adminCancelBooking(bookingId: number, adminId: number, reason: string) {
-    return this.cancellationService.adminCancelBooking(bookingId, adminId, reason);
+    return this.cancellationService.adminCancelBooking(
+      bookingId,
+      adminId,
+      reason,
+    );
   }
   // --- Query --- delegated to BookingQueryService -------------------------
 
-  async getMyBookings(userId: number) { return this.queryService.getMyBookings(userId); }
-  async getMyBookingById(bookingId: number, userId: number) { return this.queryService.getMyBookingById(bookingId, userId); }
-  async findMyByBookingCode(bookingCode: string, userId: number) { return this.queryService.findMyByBookingCode(bookingCode, userId); }
+  async getMyBookings(userId: number) {
+    return this.queryService.getMyBookings(userId);
+  }
+  async getMyBookingById(bookingId: number, userId: number) {
+    return this.queryService.getMyBookingById(bookingId, userId);
+  }
+  async findMyByBookingCode(bookingCode: string, userId: number) {
+    return this.queryService.findMyByBookingCode(bookingCode, userId);
+  }
   async getAllBookings(
     status?: string,
     paymentStatus?: string,
@@ -802,17 +944,39 @@ export class BookingService {
     );
   }
 
-  async retryPayment(bookingId: number, userId: number) { return this.queryService.retryPayment(bookingId, userId); }
-  async findPublicByBookingCode(bookingCode: string, email: string) { return this.queryService.findPublicByBookingCode(bookingCode, email); }
-  async publicRetryPayment(bookingCode: string, email: string) { return this.queryService.publicRetryPayment(bookingCode, email); }
-  async getBookingById(bookingId: number) { return this.queryService.getBookingById(bookingId); }
-  async findByBookingCode(bookingCode: string) { return this.queryService.findByBookingCode(bookingCode); }
-  async proxyImage(imageUrl: string, res: import('express').Response) { return this.queryService.proxyImage(imageUrl, res); }
+  async retryPayment(bookingId: number, userId: number) {
+    return this.queryService.retryPayment(bookingId, userId);
+  }
+  async findPublicByBookingCode(bookingCode: string, email: string) {
+    return this.queryService.findPublicByBookingCode(bookingCode, email);
+  }
+  async publicRetryPayment(bookingCode: string, email: string) {
+    return this.queryService.publicRetryPayment(bookingCode, email);
+  }
+  async getBookingById(bookingId: number) {
+    return this.queryService.getBookingById(bookingId);
+  }
+  async findByBookingCode(bookingCode: string) {
+    return this.queryService.findByBookingCode(bookingCode);
+  }
+  async proxyImage(imageUrl: string, res: import('express').Response) {
+    return this.queryService.proxyImage(imageUrl, res);
+  }
 
   // Cleaned comment
 
-  async requestCancellation(bookingId: number, userId: number, reason: string, bankDetails?: import('@prisma/client').Prisma.InputJsonValue) {
-    return this.cancellationService.requestCancellation(bookingId, userId, reason, bankDetails);
+  async requestCancellation(
+    bookingId: number,
+    userId: number,
+    reason: string,
+    bankDetails?: import('@prisma/client').Prisma.InputJsonValue,
+  ) {
+    return this.cancellationService.requestCancellation(
+      bookingId,
+      userId,
+      reason,
+      bankDetails,
+    );
   }
 
   async approveCancellation(bookingId: number, adminNote?: string) {
@@ -829,7 +993,10 @@ export class BookingService {
 
   async getAdminQuickStats() {
     const CACHE_TTL_MS = 30_000;
-    const cached = this.cacheGet<Awaited<ReturnType<typeof this._computeQuickStats>>>('quickStats');
+    const cached =
+      this.cacheGet<Awaited<ReturnType<typeof this._computeQuickStats>>>(
+        'quickStats',
+      );
     if (cached) return cached;
     const result = await this._computeQuickStats();
     this.cacheSet('quickStats', result, CACHE_TTL_MS);
@@ -838,7 +1005,9 @@ export class BookingService {
 
   private async _computeQuickStats() {
     const pendingOverdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const cancelRequestedOverdueSince = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const cancelRequestedOverdueSince = new Date(
+      Date.now() - 4 * 60 * 60 * 1000,
+    );
     const [
       grouped,
       paymentGrouped,
@@ -847,10 +1016,23 @@ export class BookingService {
       pendingOverdue,
       cancelRequestedOverdue,
     ] = await Promise.all([
-      this.prisma.booking.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { status: true } }),
-      this.prisma.booking.groupBy({ by: ['paymentStatus'], where: { deletedAt: null }, _count: { paymentStatus: true } }),
-      this.prisma.tour.count({ where: { deletedAt: null, status: 'PUBLISHED' } }),
-      this.prisma.assistedBookingDraft.groupBy({ by: ['status'], _count: { status: true } }),
+      this.prisma.booking.groupBy({
+        by: ['status'],
+        where: { deletedAt: null },
+        _count: { status: true },
+      }),
+      this.prisma.booking.groupBy({
+        by: ['paymentStatus'],
+        where: { deletedAt: null },
+        _count: { paymentStatus: true },
+      }),
+      this.prisma.tour.count({
+        where: { deletedAt: null, status: 'PUBLISHED' },
+      }),
+      this.prisma.assistedBookingDraft.groupBy({
+        by: ['status'],
+        _count: { status: true },
+      }),
       this.prisma.booking.count({
         where: {
           deletedAt: null,
@@ -869,17 +1051,22 @@ export class BookingService {
     const map: Record<string, number> = {};
     for (const row of grouped) map[row.status] = row._count.status;
     const paymentMap: Record<string, number> = {};
-    for (const row of paymentGrouped) paymentMap[row.paymentStatus] = row._count.paymentStatus;
+    for (const row of paymentGrouped)
+      paymentMap[row.paymentStatus] = row._count.paymentStatus;
     const assistedDraftMap: Record<string, number> = {};
-    for (const row of assistedDraftGrouped) assistedDraftMap[row.status] = row._count.status;
+    for (const row of assistedDraftGrouped)
+      assistedDraftMap[row.status] = row._count.status;
     return {
-      pending: map['PENDING'] || 0, confirmed: map['CONFIRMED'] || 0,
-      cancelRequested: map['CANCEL_REQUESTED'] || 0, cancelled: map['CANCELLED'] || 0,
+      pending: map['PENDING'] || 0,
+      confirmed: map['CONFIRMED'] || 0,
+      cancelRequested: map['CANCEL_REQUESTED'] || 0,
+      cancelled: map['CANCELLED'] || 0,
       total: Object.values(map).reduce((a, b) => a + b, 0),
       pendingOverdue,
       cancelRequestedOverdue,
       publishedTours: myToursCount,
-      unpaidCount: paymentMap['UNPAID'] || 0, processingCount: paymentMap['PROCESSING'] || 0,
+      unpaidCount: paymentMap['UNPAID'] || 0,
+      processingCount: paymentMap['PROCESSING'] || 0,
       failedPaymentCount: paymentMap['FAILED'] || 0,
       assistedDraftPending: assistedDraftMap['PENDING_APPROVAL'] || 0,
       assistedDraftNeedsRevision: assistedDraftMap['NEEDS_REVISION'] || 0,
@@ -901,7 +1088,10 @@ export class BookingService {
    */
   async getOperationalStats() {
     const CACHE_TTL_MS = 30_000;
-    const cached = this.cacheGet<Awaited<ReturnType<typeof this._computeOperationalStats>>>('operationalStats');
+    const cached =
+      this.cacheGet<Awaited<ReturnType<typeof this._computeOperationalStats>>>(
+        'operationalStats',
+      );
     if (cached) return cached;
     const result = await this._computeOperationalStats();
     this.cacheSet('operationalStats', result, CACHE_TTL_MS);
@@ -910,20 +1100,49 @@ export class BookingService {
 
   private async _computeOperationalStats() {
     // 5 queries chạy song song — không có dependency giữa chúng
-    const [bookingPending, cancelRequested, tourPending, articlePending, supportOpen] = await Promise.all([
-      this.prisma.booking.count({ where: { deletedAt: null, status: 'PENDING' } }),
-      this.prisma.booking.count({ where: { deletedAt: null, status: 'CANCEL_REQUESTED' } }),
-      this.prisma.tour.count({ where: { deletedAt: null, status: 'PENDING_REVIEW' } }),
-      this.prisma.article.count({ where: { deletedAt: null, status: 'PENDING_REVIEW' } }),
-      this.prisma.supportTicket.count({ where: { status: { in: ['NEW', 'IN_PROGRESS'] } } }),
+    const [
+      bookingPending,
+      cancelRequested,
+      tourPending,
+      articlePending,
+      supportOpen,
+    ] = await Promise.all([
+      this.prisma.booking.count({
+        where: { deletedAt: null, status: 'PENDING' },
+      }),
+      this.prisma.booking.count({
+        where: { deletedAt: null, status: 'CANCEL_REQUESTED' },
+      }),
+      this.prisma.tour.count({
+        where: { deletedAt: null, status: 'PENDING_REVIEW' },
+      }),
+      this.prisma.article.count({
+        where: { deletedAt: null, status: 'PENDING_REVIEW' },
+      }),
+      this.prisma.supportTicket.count({
+        where: { status: { in: ['NEW', 'IN_PROGRESS'] } },
+      }),
     ]);
-    return { bookingPending, cancelRequested, tourPending, articlePending, supportOpen };
+    return {
+      bookingPending,
+      cancelRequested,
+      tourPending,
+      articlePending,
+      supportOpen,
+    };
   }
 
-  findAll() { return `This action returns all booking`; }
-  findOne(id: number) { return `This action returns a #${id} booking`; }
-  update(id: number, updateBookingDto: UpdateBookingDto) { void updateBookingDto; return `This action updates a #${id} booking`; }
-  remove(id: number) { return `This action removes a #${id} booking`; }
+  findAll() {
+    return `This action returns all booking`;
+  }
+  findOne(id: number) {
+    return `This action returns a #${id} booking`;
+  }
+  update(id: number, updateBookingDto: UpdateBookingDto) {
+    void updateBookingDto;
+    return `This action updates a #${id} booking`;
+  }
+  remove(id: number) {
+    return `This action removes a #${id} booking`;
+  }
 }
-
-

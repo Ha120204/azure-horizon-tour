@@ -1,8 +1,4 @@
-import {
-  Prisma,
-  PrismaClient,
-  TourStatus,
-} from '@prisma/client';
+import { Prisma, PrismaClient, TourStatus } from '@prisma/client';
 
 type Region = 'Miền Bắc' | 'Miền Trung' | 'Miền Nam';
 
@@ -170,7 +166,8 @@ function packageData(basePrice: number) {
   return [
     {
       name: 'Gói Tiêu Chuẩn',
-      description: 'Lựa chọn cân bằng cho khách muốn tối ưu chi phí nhưng vẫn đủ dịch vụ chính.',
+      description:
+        'Lựa chọn cân bằng cho khách muốn tối ưu chi phí nhưng vẫn đủ dịch vụ chính.',
       price: basePrice,
       badge: 'BEST VALUE',
       includes: [
@@ -189,7 +186,8 @@ function packageData(basePrice: number) {
     },
     {
       name: 'Gói Cao Cấp',
-      description: 'Nâng cấp khách sạn, bữa ăn và trải nghiệm để hành trình thoải mái hơn.',
+      description:
+        'Nâng cấp khách sạn, bữa ăn và trải nghiệm để hành trình thoải mái hơn.',
       price: Math.round(basePrice * 1.28),
       badge: 'POPULAR',
       includes: [
@@ -209,7 +207,8 @@ function packageData(basePrice: number) {
     },
     {
       name: 'Gói Riêng Tư',
-      description: 'Dành cho gia đình hoặc nhóm nhỏ muốn lịch trình linh hoạt và riêng tư hơn.',
+      description:
+        'Dành cho gia đình hoặc nhóm nhỏ muốn lịch trình linh hoạt và riêng tư hơn.',
       price: Math.round(basePrice * 1.65),
       badge: 'LUXURY',
       includes: [
@@ -246,7 +245,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Hà Nội',
       slug: 'ha-noi',
       region: 'Miền Bắc',
-      description: 'Thủ đô nghìn năm văn hiến, nổi bật với phố cổ, di tích lịch sử, ẩm thực đường phố và nhịp sống đô thị giàu bản sắc.',
+      description:
+        'Thủ đô nghìn năm văn hiến, nổi bật với phố cổ, di tích lịch sử, ẩm thực đường phố và nhịp sống đô thị giàu bản sắc.',
       imageUrl: IMAGES.hanoi[0],
     },
     tour: {
@@ -273,15 +273,28 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Một ngày chạm vào nhịp sống Hà Nội',
-          description: 'Đón khách tại trung tâm, tham quan các biểu tượng lịch sử, dạo phố cổ và thưởng thức đặc sản địa phương trước khi kết thúc vào cuối chiều.',
+          description:
+            'Đón khách tại trung tâm, tham quan các biểu tượng lịch sử, dạo phố cổ và thưởng thức đặc sản địa phương trước khi kết thúc vào cuối chiều.',
           transport: 'Xe du lịch và đi bộ trong phố cổ',
-          activities: ['Hồ Gươm - phố cổ', 'Văn Miếu - Hoàng thành Thăng Long', 'Ẩm thực Hà Nội'],
+          activities: [
+            'Hồ Gươm - phố cổ',
+            'Văn Miếu - Hoàng thành Thăng Long',
+            'Ẩm thực Hà Nội',
+          ],
           imageUrl: IMAGES.hanoi[1],
         },
       ],
       faqs: [
-        { question: 'Tour có phù hợp với trẻ em không?', answer: 'Có. Lịch trình nhẹ, chủ yếu tham quan trong nội đô và có nhiều điểm nghỉ.' },
-        { question: 'Có cần chuẩn bị trang phục gì đặc biệt?', answer: 'Nên mặc lịch sự khi vào khu di tích, mang giày thoải mái để đi bộ trong phố cổ.' },
+        {
+          question: 'Tour có phù hợp với trẻ em không?',
+          answer:
+            'Có. Lịch trình nhẹ, chủ yếu tham quan trong nội đô và có nhiều điểm nghỉ.',
+        },
+        {
+          question: 'Có cần chuẩn bị trang phục gì đặc biệt?',
+          answer:
+            'Nên mặc lịch sự khi vào khu di tích, mang giày thoải mái để đi bộ trong phố cổ.',
+        },
       ],
     },
   },
@@ -290,7 +303,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Hạ Long',
       slug: 'ha-long',
       region: 'Miền Bắc',
-      description: 'Điểm đến biển đảo nổi tiếng với cảnh quan núi đá vôi, vịnh xanh, hang động và trải nghiệm du thuyền.',
+      description:
+        'Điểm đến biển đảo nổi tiếng với cảnh quan núi đá vôi, vịnh xanh, hang động và trải nghiệm du thuyền.',
       imageUrl: IMAGES.haLong[0],
     },
     tour: {
@@ -317,23 +331,40 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Hà Nội - Hạ Long - Lên du thuyền',
-          description: 'Khởi hành từ Hà Nội, làm thủ tục lên du thuyền, dùng bữa trưa, tham quan hang động hoặc khu vực chèo kayak và nghỉ đêm trên vịnh.',
+          description:
+            'Khởi hành từ Hà Nội, làm thủ tục lên du thuyền, dùng bữa trưa, tham quan hang động hoặc khu vực chèo kayak và nghỉ đêm trên vịnh.',
           accommodation: 'Du thuyền tiêu chuẩn theo gói',
           transport: 'Xe du lịch và du thuyền',
-          activities: ['Di chuyển Hà Nội - Hạ Long', 'Chèo kayak hoặc tham quan hang động', 'Ngắm hoàng hôn trên vịnh'],
+          activities: [
+            'Di chuyển Hà Nội - Hạ Long',
+            'Chèo kayak hoặc tham quan hang động',
+            'Ngắm hoàng hôn trên vịnh',
+          ],
           imageUrl: IMAGES.haLong[0],
         },
         {
           title: 'Bình minh trên vịnh - Trở về Hà Nội',
-          description: 'Tập thái cực quyền hoặc thư giãn buổi sáng, dùng brunch trên tàu, trả phòng và trở về Hà Nội.',
+          description:
+            'Tập thái cực quyền hoặc thư giãn buổi sáng, dùng brunch trên tàu, trả phòng và trở về Hà Nội.',
           transport: 'Du thuyền và xe du lịch',
-          activities: ['Ngắm bình minh', 'Brunch trên du thuyền', 'Trở về Hà Nội'],
+          activities: [
+            'Ngắm bình minh',
+            'Brunch trên du thuyền',
+            'Trở về Hà Nội',
+          ],
           imageUrl: IMAGES.haLong[1],
         },
       ],
       faqs: [
-        { question: 'Tour có bao gồm phòng nghỉ trên du thuyền không?', answer: 'Có. Hạng phòng phụ thuộc gói khách chọn khi đặt.' },
-        { question: 'Nếu thời tiết xấu thì sao?', answer: 'Lịch tàu phụ thuộc điều phối cảng vụ. Nếu có thay đổi, đội hỗ trợ sẽ thông báo phương án thay thế.' },
+        {
+          question: 'Tour có bao gồm phòng nghỉ trên du thuyền không?',
+          answer: 'Có. Hạng phòng phụ thuộc gói khách chọn khi đặt.',
+        },
+        {
+          question: 'Nếu thời tiết xấu thì sao?',
+          answer:
+            'Lịch tàu phụ thuộc điều phối cảng vụ. Nếu có thay đổi, đội hỗ trợ sẽ thông báo phương án thay thế.',
+        },
       ],
     },
   },
@@ -342,7 +373,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Ninh Bình',
       slug: 'ninh-binh',
       region: 'Miền Bắc',
-      description: 'Vùng đất di sản với Tràng An, Tam Cốc, Hoa Lư và Hang Múa, nổi bật bởi cảnh quan núi đá vôi và sông nước.',
+      description:
+        'Vùng đất di sản với Tràng An, Tam Cốc, Hoa Lư và Hang Múa, nổi bật bởi cảnh quan núi đá vôi và sông nước.',
       imageUrl: IMAGES.ninhBinh[0],
     },
     tour: {
@@ -369,15 +401,24 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Hà Nội - Hoa Lư - Tràng An - Hang Múa',
-          description: 'Khởi hành từ Hà Nội, tham quan Hoa Lư, dùng bữa trưa, đi thuyền Tràng An và leo Hang Múa trước khi trở về.',
+          description:
+            'Khởi hành từ Hà Nội, tham quan Hoa Lư, dùng bữa trưa, đi thuyền Tràng An và leo Hang Múa trước khi trở về.',
           transport: 'Xe du lịch và thuyền chèo tay',
           activities: ['Cố đô Hoa Lư', 'Thuyền Tràng An', 'Hang Múa'],
           imageUrl: IMAGES.ninhBinh[0],
         },
       ],
       faqs: [
-        { question: 'Hang Múa có khó leo không?', answer: 'Có khoảng vài trăm bậc đá, khách nên mang giày thoải mái và cân nhắc nếu có vấn đề sức khỏe.' },
-        { question: 'Tour có đón tại khách sạn không?', answer: 'Có hỗ trợ đón trong khu vực trung tâm theo khung giờ xác nhận trước ngày đi.' },
+        {
+          question: 'Hang Múa có khó leo không?',
+          answer:
+            'Có khoảng vài trăm bậc đá, khách nên mang giày thoải mái và cân nhắc nếu có vấn đề sức khỏe.',
+        },
+        {
+          question: 'Tour có đón tại khách sạn không?',
+          answer:
+            'Có hỗ trợ đón trong khu vực trung tâm theo khung giờ xác nhận trước ngày đi.',
+        },
       ],
     },
   },
@@ -386,7 +427,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Sapa',
       slug: 'sapa',
       region: 'Miền Bắc',
-      description: 'Thị trấn vùng cao nổi tiếng với Fansipan, ruộng bậc thang, bản làng và khí hậu mát mẻ quanh năm.',
+      description:
+        'Thị trấn vùng cao nổi tiếng với Fansipan, ruộng bậc thang, bản làng và khí hậu mát mẻ quanh năm.',
       imageUrl: IMAGES.sapa[0],
     },
     tour: {
@@ -413,15 +455,21 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Hà Nội - Sapa - Bản Cát Cát',
-          description: 'Di chuyển lên Sapa, nhận phòng, dùng bữa trưa và tham quan bản Cát Cát vào buổi chiều.',
+          description:
+            'Di chuyển lên Sapa, nhận phòng, dùng bữa trưa và tham quan bản Cát Cát vào buổi chiều.',
           accommodation: 'Khách sạn Sapa theo gói',
           transport: 'Xe limousine hoặc xe du lịch',
-          activities: ['Di chuyển Hà Nội - Sapa', 'Bản Cát Cát', 'Tự do khám phá trung tâm'],
+          activities: [
+            'Di chuyển Hà Nội - Sapa',
+            'Bản Cát Cát',
+            'Tự do khám phá trung tâm',
+          ],
           imageUrl: IMAGES.sapa[0],
         },
         {
           title: 'Fansipan - Nóc nhà Đông Dương',
-          description: 'Khởi hành đi khu cáp treo Fansipan, tham quan quần thể tâm linh và ngắm cảnh núi Hoàng Liên Sơn.',
+          description:
+            'Khởi hành đi khu cáp treo Fansipan, tham quan quần thể tâm linh và ngắm cảnh núi Hoàng Liên Sơn.',
           accommodation: 'Khách sạn Sapa theo gói',
           transport: 'Xe du lịch và cáp treo tự túc/nâng cấp theo gói',
           activities: ['Fansipan', 'Ẩm thực vùng cao', 'Chợ đêm Sapa'],
@@ -429,15 +477,24 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Sapa - Hà Nội',
-          description: 'Ăn sáng, tự do mua đặc sản hoặc cà phê ngắm núi trước khi trở về Hà Nội.',
+          description:
+            'Ăn sáng, tự do mua đặc sản hoặc cà phê ngắm núi trước khi trở về Hà Nội.',
           transport: 'Xe limousine hoặc xe du lịch',
           activities: ['Tự do mua sắm', 'Trở về Hà Nội'],
           imageUrl: IMAGES.sapa[2],
         },
       ],
       faqs: [
-        { question: 'Giá tour đã bao gồm vé cáp treo Fansipan chưa?', answer: 'Tùy gói dịch vụ. Gói cao cấp và riêng tư có thể bao gồm hoặc hỗ trợ đặt trước.' },
-        { question: 'Sapa mùa nào đẹp?', answer: 'Mỗi mùa có nét riêng. Mùa lúa và mùa săn mây thường được khách lựa chọn nhiều.' },
+        {
+          question: 'Giá tour đã bao gồm vé cáp treo Fansipan chưa?',
+          answer:
+            'Tùy gói dịch vụ. Gói cao cấp và riêng tư có thể bao gồm hoặc hỗ trợ đặt trước.',
+        },
+        {
+          question: 'Sapa mùa nào đẹp?',
+          answer:
+            'Mỗi mùa có nét riêng. Mùa lúa và mùa săn mây thường được khách lựa chọn nhiều.',
+        },
       ],
     },
   },
@@ -446,7 +503,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Hà Giang',
       slug: 'ha-giang',
       region: 'Miền Bắc',
-      description: 'Cung đường cao nguyên đá nổi tiếng với đèo Mã Pì Lèng, sông Nho Quế, Đồng Văn và văn hóa vùng biên.',
+      description:
+        'Cung đường cao nguyên đá nổi tiếng với đèo Mã Pì Lèng, sông Nho Quế, Đồng Văn và văn hóa vùng biên.',
       imageUrl: IMAGES.haGiang[0],
     },
     tour: {
@@ -473,7 +531,8 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Hà Nội - Hà Giang',
-          description: 'Khởi hành đi Hà Giang, dừng nghỉ trên đường, nhận phòng và chuẩn bị cho cung loop.',
+          description:
+            'Khởi hành đi Hà Giang, dừng nghỉ trên đường, nhận phòng và chuẩn bị cho cung loop.',
           accommodation: 'Khách sạn/homestay Hà Giang',
           transport: 'Xe du lịch',
           activities: ['Di chuyển Hà Nội - Hà Giang', 'Nghỉ đêm tại Hà Giang'],
@@ -481,7 +540,8 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Quản Bạ - Yên Minh - Đồng Văn',
-          description: 'Đi qua cổng trời Quản Bạ, núi đôi, rừng thông Yên Minh và nghỉ đêm tại Đồng Văn.',
+          description:
+            'Đi qua cổng trời Quản Bạ, núi đôi, rừng thông Yên Minh và nghỉ đêm tại Đồng Văn.',
           accommodation: 'Khách sạn/homestay Đồng Văn',
           transport: 'Xe du lịch',
           activities: ['Cổng trời Quản Bạ', 'Yên Minh', 'Phố cổ Đồng Văn'],
@@ -489,7 +549,8 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Mã Pì Lèng - Sông Nho Quế',
-          description: 'Khám phá đoạn đẹp nhất của cung đường với Mã Pì Lèng và trải nghiệm thuyền trên sông Nho Quế.',
+          description:
+            'Khám phá đoạn đẹp nhất của cung đường với Mã Pì Lèng và trải nghiệm thuyền trên sông Nho Quế.',
           accommodation: 'Khách sạn/homestay Hà Giang',
           transport: 'Xe du lịch và thuyền',
           activities: ['Đèo Mã Pì Lèng', 'Sông Nho Quế', 'Hẻm Tu Sản'],
@@ -497,15 +558,24 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Hà Giang - Hà Nội',
-          description: 'Ăn sáng, trả phòng và trở về Hà Nội, kết thúc hành trình.',
+          description:
+            'Ăn sáng, trả phòng và trở về Hà Nội, kết thúc hành trình.',
           transport: 'Xe du lịch',
           activities: ['Trở về Hà Nội'],
           imageUrl: IMAGES.haGiang[0],
         },
       ],
       faqs: [
-        { question: 'Tour có tự lái xe máy không?', answer: 'Seed tour này mặc định di chuyển bằng xe ô tô để an toàn hơn. Có thể tùy biến gói riêng nếu muốn trải nghiệm xe máy.' },
-        { question: 'Hà Giang có phù hợp trẻ nhỏ không?', answer: 'Cung đường dài và nhiều đèo, phù hợp hơn với người có sức khỏe ổn định.' },
+        {
+          question: 'Tour có tự lái xe máy không?',
+          answer:
+            'Seed tour này mặc định di chuyển bằng xe ô tô để an toàn hơn. Có thể tùy biến gói riêng nếu muốn trải nghiệm xe máy.',
+        },
+        {
+          question: 'Hà Giang có phù hợp trẻ nhỏ không?',
+          answer:
+            'Cung đường dài và nhiều đèo, phù hợp hơn với người có sức khỏe ổn định.',
+        },
       ],
     },
   },
@@ -514,7 +584,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Quảng Bình',
       slug: 'quang-binh',
       region: 'Miền Trung',
-      description: 'Thiên đường hang động với Phong Nha - Kẻ Bàng, động Thiên Đường, sông Chày và các trải nghiệm thiên nhiên.',
+      description:
+        'Thiên đường hang động với Phong Nha - Kẻ Bàng, động Thiên Đường, sông Chày và các trải nghiệm thiên nhiên.',
       imageUrl: IMAGES.quangBinh[0],
     },
     tour: {
@@ -541,7 +612,8 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Đồng Hới - Phong Nha',
-          description: 'Đón khách tại Đồng Hới, di chuyển đến Phong Nha, tham quan và nghỉ đêm.',
+          description:
+            'Đón khách tại Đồng Hới, di chuyển đến Phong Nha, tham quan và nghỉ đêm.',
           accommodation: 'Khách sạn Đồng Hới/Phong Nha',
           transport: 'Xe du lịch',
           activities: ['Đón khách Đồng Hới', 'Phong Nha', 'Ẩm thực địa phương'],
@@ -549,7 +621,8 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Động Thiên Đường - Sông Chày',
-          description: 'Tham quan động Thiên Đường và trải nghiệm hoạt động ngoài trời tại khu vực sông Chày theo điều kiện thời tiết.',
+          description:
+            'Tham quan động Thiên Đường và trải nghiệm hoạt động ngoài trời tại khu vực sông Chày theo điều kiện thời tiết.',
           accommodation: 'Khách sạn Đồng Hới/Phong Nha',
           transport: 'Xe du lịch',
           activities: ['Động Thiên Đường', 'Sông Chày', 'Hang Tối theo mùa'],
@@ -557,15 +630,23 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Đồng Hới - Kết thúc',
-          description: 'Tự do nghỉ ngơi, mua đặc sản và tiễn khách tại sân bay/ga Đồng Hới.',
+          description:
+            'Tự do nghỉ ngơi, mua đặc sản và tiễn khách tại sân bay/ga Đồng Hới.',
           transport: 'Xe du lịch',
           activities: ['Mua đặc sản', 'Tiễn khách'],
           imageUrl: IMAGES.quangBinh[2],
         },
       ],
       faqs: [
-        { question: 'Tour có trekking nặng không?', answer: 'Không. Đây là tour khám phá nhẹ, phù hợp phần lớn du khách.' },
-        { question: 'Có cần mang đồ bơi không?', answer: 'Nên mang đồ bơi hoặc quần áo nhanh khô nếu chọn hoạt động sông Chày - hang Tối.' },
+        {
+          question: 'Tour có trekking nặng không?',
+          answer: 'Không. Đây là tour khám phá nhẹ, phù hợp phần lớn du khách.',
+        },
+        {
+          question: 'Có cần mang đồ bơi không?',
+          answer:
+            'Nên mang đồ bơi hoặc quần áo nhanh khô nếu chọn hoạt động sông Chày - hang Tối.',
+        },
       ],
     },
   },
@@ -574,7 +655,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Huế',
       slug: 'hue',
       region: 'Miền Trung',
-      description: 'Cố đô nổi tiếng với Đại Nội, lăng tẩm, chùa Thiên Mụ, sông Hương và ẩm thực cung đình.',
+      description:
+        'Cố đô nổi tiếng với Đại Nội, lăng tẩm, chùa Thiên Mụ, sông Hương và ẩm thực cung đình.',
       imageUrl: IMAGES.hue[0],
     },
     tour: {
@@ -601,7 +683,8 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Đại Nội - Chùa Thiên Mụ - Sông Hương',
-          description: 'Đón khách, tham quan Đại Nội, chùa Thiên Mụ và trải nghiệm sông Hương vào chiều tối.',
+          description:
+            'Đón khách, tham quan Đại Nội, chùa Thiên Mụ và trải nghiệm sông Hương vào chiều tối.',
           accommodation: 'Khách sạn Huế theo gói',
           transport: 'Xe du lịch và thuyền rồng',
           activities: ['Đại Nội', 'Chùa Thiên Mụ', 'Sông Hương'],
@@ -609,15 +692,28 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Lăng vua - Ẩm thực Huế',
-          description: 'Tham quan lăng vua, thưởng thức đặc sản Huế và kết thúc tour.',
+          description:
+            'Tham quan lăng vua, thưởng thức đặc sản Huế và kết thúc tour.',
           transport: 'Xe du lịch',
-          activities: ['Lăng Khải Định hoặc Minh Mạng', 'Ẩm thực Huế', 'Tiễn khách'],
+          activities: [
+            'Lăng Khải Định hoặc Minh Mạng',
+            'Ẩm thực Huế',
+            'Tiễn khách',
+          ],
           imageUrl: IMAGES.hue[1],
         },
       ],
       faqs: [
-        { question: 'Tour có phù hợp người lớn tuổi không?', answer: 'Có. Lịch trình không quá gấp, nhưng khách nên mang giày thoải mái khi tham quan di tích.' },
-        { question: 'Có bao gồm thuyền sông Hương không?', answer: 'Có trong chương trình tiêu chuẩn, tùy điều kiện vận hành và thời tiết.' },
+        {
+          question: 'Tour có phù hợp người lớn tuổi không?',
+          answer:
+            'Có. Lịch trình không quá gấp, nhưng khách nên mang giày thoải mái khi tham quan di tích.',
+        },
+        {
+          question: 'Có bao gồm thuyền sông Hương không?',
+          answer:
+            'Có trong chương trình tiêu chuẩn, tùy điều kiện vận hành và thời tiết.',
+        },
       ],
     },
   },
@@ -626,7 +722,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Đà Nẵng',
       slug: 'da-nang',
       region: 'Miền Trung',
-      description: 'Thành phố biển năng động với Mỹ Khê, Sơn Trà, Bà Nà Hills và vị trí thuận tiện kết nối Huế - Hội An.',
+      description:
+        'Thành phố biển năng động với Mỹ Khê, Sơn Trà, Bà Nà Hills và vị trí thuận tiện kết nối Huế - Hội An.',
       imageUrl: IMAGES.daNang[0],
     },
     tour: {
@@ -653,7 +750,8 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Đà Nẵng - Sơn Trà - Biển Mỹ Khê',
-          description: 'Đón khách, tham quan Sơn Trà, nhận phòng và tự do tắm biển Mỹ Khê.',
+          description:
+            'Đón khách, tham quan Sơn Trà, nhận phòng và tự do tắm biển Mỹ Khê.',
           accommodation: 'Khách sạn Đà Nẵng theo gói',
           transport: 'Xe du lịch',
           activities: ['Bán đảo Sơn Trà', 'Biển Mỹ Khê', 'Cầu Rồng buổi tối'],
@@ -661,7 +759,8 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Bà Nà Hills',
-          description: 'Di chuyển lên Bà Nà Hills, tham quan Cầu Vàng, làng Pháp và các khu vui chơi theo chương trình.',
+          description:
+            'Di chuyển lên Bà Nà Hills, tham quan Cầu Vàng, làng Pháp và các khu vui chơi theo chương trình.',
           accommodation: 'Khách sạn Đà Nẵng theo gói',
           transport: 'Xe du lịch và cáp treo',
           activities: ['Bà Nà Hills', 'Cầu Vàng', 'Làng Pháp'],
@@ -669,15 +768,24 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Tự do mua sắm - Tiễn khách',
-          description: 'Ăn sáng, tự do mua đặc sản và tiễn khách tại sân bay/ga Đà Nẵng.',
+          description:
+            'Ăn sáng, tự do mua đặc sản và tiễn khách tại sân bay/ga Đà Nẵng.',
           transport: 'Xe du lịch',
           activities: ['Mua đặc sản', 'Tiễn khách'],
           imageUrl: IMAGES.daNang[2],
         },
       ],
       faqs: [
-        { question: 'Vé Bà Nà Hills đã bao gồm chưa?', answer: 'Tùy gói. Seed này cho phép phân biệt rõ gói tiêu chuẩn và gói nâng cấp.' },
-        { question: 'Tour có phù hợp gia đình có trẻ nhỏ không?', answer: 'Có. Lịch trình phổ biến, dịch vụ dễ tiếp cận và thời gian di chuyển không quá dài.' },
+        {
+          question: 'Vé Bà Nà Hills đã bao gồm chưa?',
+          answer:
+            'Tùy gói. Seed này cho phép phân biệt rõ gói tiêu chuẩn và gói nâng cấp.',
+        },
+        {
+          question: 'Tour có phù hợp gia đình có trẻ nhỏ không?',
+          answer:
+            'Có. Lịch trình phổ biến, dịch vụ dễ tiếp cận và thời gian di chuyển không quá dài.',
+        },
       ],
     },
   },
@@ -686,7 +794,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Hội An',
       slug: 'hoi-an',
       region: 'Miền Trung',
-      description: 'Phố cổ di sản nổi tiếng với đèn lồng, kiến trúc giao thương, làng nghề, rừng dừa và ẩm thực địa phương.',
+      description:
+        'Phố cổ di sản nổi tiếng với đèn lồng, kiến trúc giao thương, làng nghề, rừng dừa và ẩm thực địa phương.',
       imageUrl: IMAGES.hoiAn[0],
     },
     tour: {
@@ -713,23 +822,36 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Rừng dừa - Phố cổ Hội An',
-          description: 'Đón khách, trải nghiệm rừng dừa, nhận phòng và dạo phố cổ Hội An buổi tối.',
+          description:
+            'Đón khách, trải nghiệm rừng dừa, nhận phòng và dạo phố cổ Hội An buổi tối.',
           accommodation: 'Khách sạn Hội An theo gói',
           transport: 'Xe du lịch và thuyền thúng',
-          activities: ['Rừng dừa Bảy Mẫu', 'Phố cổ Hội An', 'Đèn lồng buổi tối'],
+          activities: [
+            'Rừng dừa Bảy Mẫu',
+            'Phố cổ Hội An',
+            'Đèn lồng buổi tối',
+          ],
           imageUrl: IMAGES.hoiAn[0],
         },
         {
           title: 'Làng nghề - Tiễn khách',
-          description: 'Tham quan làng nghề, mua quà địa phương và kết thúc chương trình.',
+          description:
+            'Tham quan làng nghề, mua quà địa phương và kết thúc chương trình.',
           transport: 'Xe du lịch',
           activities: ['Làng nghề Hội An', 'Ẩm thực địa phương', 'Tiễn khách'],
           imageUrl: IMAGES.hoiAn[1],
         },
       ],
       faqs: [
-        { question: 'Tour có nhiều thời gian tự do không?', answer: 'Có. Buổi tối tại phố cổ được thiết kế thoáng để khách tự do ăn uống, chụp ảnh và mua sắm.' },
-        { question: 'Có thể khởi hành từ Đà Nẵng không?', answer: 'Có. Điểm đón có thể là Đà Nẵng hoặc Hội An tùy lựa chọn.' },
+        {
+          question: 'Tour có nhiều thời gian tự do không?',
+          answer:
+            'Có. Buổi tối tại phố cổ được thiết kế thoáng để khách tự do ăn uống, chụp ảnh và mua sắm.',
+        },
+        {
+          question: 'Có thể khởi hành từ Đà Nẵng không?',
+          answer: 'Có. Điểm đón có thể là Đà Nẵng hoặc Hội An tùy lựa chọn.',
+        },
       ],
     },
   },
@@ -738,7 +860,8 @@ const tours: DomesticTourSeed[] = [
       name: 'Nha Trang',
       slug: 'nha-trang',
       region: 'Miền Trung',
-      description: 'Thành phố biển nổi tiếng với đảo, san hô, resort, hải sản và các hoạt động thể thao nước.',
+      description:
+        'Thành phố biển nổi tiếng với đảo, san hô, resort, hải sản và các hoạt động thể thao nước.',
       imageUrl: IMAGES.nhaTrang[0],
     },
     tour: {
@@ -765,7 +888,8 @@ const tours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Đón khách - Nghỉ dưỡng biển',
-          description: 'Đón khách tại Nha Trang, nhận phòng, tự do tắm biển và thưởng thức hải sản.',
+          description:
+            'Đón khách tại Nha Trang, nhận phòng, tự do tắm biển và thưởng thức hải sản.',
           accommodation: 'Khách sạn/resort Nha Trang theo gói',
           transport: 'Xe du lịch',
           activities: ['Đón khách Nha Trang', 'Tắm biển', 'Ẩm thực hải sản'],
@@ -773,7 +897,8 @@ const tours: DomesticTourSeed[] = [
         },
         {
           title: 'Tour đảo - San hô',
-          description: 'Tham gia tour đảo, trải nghiệm lặn ngắm san hô hoặc hoạt động biển phù hợp thời tiết.',
+          description:
+            'Tham gia tour đảo, trải nghiệm lặn ngắm san hô hoặc hoạt động biển phù hợp thời tiết.',
           accommodation: 'Khách sạn/resort Nha Trang theo gói',
           transport: 'Xe du lịch và tàu',
           activities: ['Tour đảo', 'Lặn ngắm san hô', 'Ăn trưa hải sản'],
@@ -788,8 +913,16 @@ const tours: DomesticTourSeed[] = [
         },
       ],
       faqs: [
-        { question: 'Hoạt động lặn có bắt buộc không?', answer: 'Không. Khách có thể chọn ngồi tàu, tắm biển hoặc tham gia hoạt động nhẹ hơn.' },
-        { question: 'Tour có phù hợp mùa mưa không?', answer: 'Có thể đi, nhưng lịch đảo phụ thuộc thời tiết biển. Đội điều hành sẽ tư vấn trước ngày khởi hành.' },
+        {
+          question: 'Hoạt động lặn có bắt buộc không?',
+          answer:
+            'Không. Khách có thể chọn ngồi tàu, tắm biển hoặc tham gia hoạt động nhẹ hơn.',
+        },
+        {
+          question: 'Tour có phù hợp mùa mưa không?',
+          answer:
+            'Có thể đi, nhưng lịch đảo phụ thuộc thời tiết biển. Đội điều hành sẽ tư vấn trước ngày khởi hành.',
+        },
       ],
     },
   },
@@ -801,7 +934,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Đà Lạt',
       slug: 'da-lat',
       region: 'Miền Trung',
-      description: 'Thành phố cao nguyên nổi tiếng với khí hậu mát mẻ, hồ Tuyền Lâm, rừng thông, vườn hoa, nông trại và không gian nghỉ dưỡng lãng mạn.',
+      description:
+        'Thành phố cao nguyên nổi tiếng với khí hậu mát mẻ, hồ Tuyền Lâm, rừng thông, vườn hoa, nông trại và không gian nghỉ dưỡng lãng mạn.',
       imageUrl: IMAGES.daLat[0],
     },
     tour: {
@@ -828,7 +962,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Đón khách - Hồ Tuyền Lâm - Trung tâm Đà Lạt',
-          description: 'Đón khách tại Đà Lạt, tham quan hồ Tuyền Lâm, rừng thông và nhận phòng nghỉ ngơi trước khi tự do khám phá trung tâm buổi tối.',
+          description:
+            'Đón khách tại Đà Lạt, tham quan hồ Tuyền Lâm, rừng thông và nhận phòng nghỉ ngơi trước khi tự do khám phá trung tâm buổi tối.',
           accommodation: 'Khách sạn Đà Lạt theo gói',
           transport: 'Xe du lịch',
           activities: ['Hồ Tuyền Lâm', 'Rừng thông', 'Chợ đêm Đà Lạt'],
@@ -836,7 +971,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Vườn hoa - Nông trại - Cà phê ngắm cảnh',
-          description: 'Tham quan các điểm nông trại, vườn hoa theo mùa, dùng bữa trưa địa phương và dừng tại quán cà phê có tầm nhìn cao nguyên.',
+          description:
+            'Tham quan các điểm nông trại, vườn hoa theo mùa, dùng bữa trưa địa phương và dừng tại quán cà phê có tầm nhìn cao nguyên.',
           accommodation: 'Khách sạn Đà Lạt theo gói',
           transport: 'Xe du lịch',
           activities: ['Vườn hoa', 'Nông trại', 'Cà phê ngắm cảnh'],
@@ -844,15 +980,24 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Mua đặc sản - Tiễn khách',
-          description: 'Tự do mua đặc sản, cà phê, mứt Đà Lạt và tiễn khách tại sân bay hoặc bến xe.',
+          description:
+            'Tự do mua đặc sản, cà phê, mứt Đà Lạt và tiễn khách tại sân bay hoặc bến xe.',
           transport: 'Xe du lịch',
           activities: ['Mua đặc sản', 'Tiễn khách'],
           imageUrl: IMAGES.daLat[2],
         },
       ],
       faqs: [
-        { question: 'Đà Lạt có cần chuẩn bị áo ấm không?', answer: 'Có. Buổi tối và sáng sớm thường lạnh, khách nên mang áo khoác nhẹ.' },
-        { question: 'Tour có phù hợp gia đình có trẻ nhỏ không?', answer: 'Có. Lịch trình nhẹ, thời gian di chuyển giữa các điểm không quá dài.' },
+        {
+          question: 'Đà Lạt có cần chuẩn bị áo ấm không?',
+          answer:
+            'Có. Buổi tối và sáng sớm thường lạnh, khách nên mang áo khoác nhẹ.',
+        },
+        {
+          question: 'Tour có phù hợp gia đình có trẻ nhỏ không?',
+          answer:
+            'Có. Lịch trình nhẹ, thời gian di chuyển giữa các điểm không quá dài.',
+        },
       ],
     },
   },
@@ -861,7 +1006,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Phú Quốc',
       slug: 'phu-quoc',
       region: 'Miền Nam',
-      description: 'Đảo nghỉ dưỡng nổi tiếng với bãi biển, hoàng hôn, hải sản, cáp treo Hòn Thơm, làng chài và các khu vui chơi biển đảo.',
+      description:
+        'Đảo nghỉ dưỡng nổi tiếng với bãi biển, hoàng hôn, hải sản, cáp treo Hòn Thơm, làng chài và các khu vui chơi biển đảo.',
       imageUrl: IMAGES.phuQuoc[0],
     },
     tour: {
@@ -888,7 +1034,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Đón khách - Nghỉ dưỡng biển',
-          description: 'Đón khách tại sân bay Phú Quốc, nhận phòng, tự do tắm biển và dùng bữa tối hải sản.',
+          description:
+            'Đón khách tại sân bay Phú Quốc, nhận phòng, tự do tắm biển và dùng bữa tối hải sản.',
           accommodation: 'Khách sạn/resort Phú Quốc theo gói',
           transport: 'Xe du lịch',
           activities: ['Đón khách Phú Quốc', 'Tắm biển', 'Hải sản địa phương'],
@@ -896,7 +1043,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Nam Đảo - Làng chài - Hoàng hôn',
-          description: 'Khám phá các điểm nổi bật khu Nam Đảo, ghé làng chài, mua đặc sản và ngắm hoàng hôn ven biển.',
+          description:
+            'Khám phá các điểm nổi bật khu Nam Đảo, ghé làng chài, mua đặc sản và ngắm hoàng hôn ven biển.',
           accommodation: 'Khách sạn/resort Phú Quốc theo gói',
           transport: 'Xe du lịch',
           activities: ['Nam Đảo', 'Làng chài', 'Ngắm hoàng hôn'],
@@ -911,8 +1059,16 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
       ],
       faqs: [
-        { question: 'Tour có bao gồm vé vui chơi không?', answer: 'Tùy gói. Gói cao cấp có thể bao gồm hoặc hỗ trợ đặt vé trước.' },
-        { question: 'Nên đi Phú Quốc mùa nào?', answer: 'Mùa khô thường thuận lợi hơn cho hoạt động biển, nhưng lịch tour vẫn phụ thuộc tình hình thời tiết thực tế.' },
+        {
+          question: 'Tour có bao gồm vé vui chơi không?',
+          answer:
+            'Tùy gói. Gói cao cấp có thể bao gồm hoặc hỗ trợ đặt vé trước.',
+        },
+        {
+          question: 'Nên đi Phú Quốc mùa nào?',
+          answer:
+            'Mùa khô thường thuận lợi hơn cho hoạt động biển, nhưng lịch tour vẫn phụ thuộc tình hình thời tiết thực tế.',
+        },
       ],
     },
   },
@@ -921,7 +1077,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Mũi Né',
       slug: 'mui-ne',
       region: 'Miền Nam',
-      description: 'Điểm đến biển của Bình Thuận nổi bật với đồi cát, làng chài, suối Tiên, resort ven biển và các hoạt động ngắm bình minh.',
+      description:
+        'Điểm đến biển của Bình Thuận nổi bật với đồi cát, làng chài, suối Tiên, resort ven biển và các hoạt động ngắm bình minh.',
       imageUrl: IMAGES.muiNe[0],
     },
     tour: {
@@ -948,7 +1105,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'TP.HCM - Mũi Né - Suối Tiên',
-          description: 'Khởi hành từ TP.HCM, đến Mũi Né nhận phòng, tham quan suối Tiên và tự do tắm biển.',
+          description:
+            'Khởi hành từ TP.HCM, đến Mũi Né nhận phòng, tham quan suối Tiên và tự do tắm biển.',
           accommodation: 'Khách sạn/resort Mũi Né theo gói',
           transport: 'Xe du lịch',
           activities: ['Di chuyển TP.HCM - Mũi Né', 'Suối Tiên', 'Tắm biển'],
@@ -956,15 +1114,24 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Đồi cát - Làng chài - Trở về',
-          description: 'Dậy sớm ngắm bình minh trên đồi cát, ghé làng chài, dùng bữa trưa và trở về TP.HCM.',
+          description:
+            'Dậy sớm ngắm bình minh trên đồi cát, ghé làng chài, dùng bữa trưa và trở về TP.HCM.',
           transport: 'Xe du lịch',
           activities: ['Đồi cát Mũi Né', 'Làng chài', 'Trở về TP.HCM'],
           imageUrl: IMAGES.muiNe[1],
         },
       ],
       faqs: [
-        { question: 'Có cần dậy sớm để đi đồi cát không?', answer: 'Có. Bình minh là thời điểm đẹp và mát nhất để tham quan đồi cát.' },
-        { question: 'Tour có phù hợp đi cuối tuần không?', answer: 'Có. Đây là tour ngắn ngày, phù hợp khách xuất phát từ TP.HCM.' },
+        {
+          question: 'Có cần dậy sớm để đi đồi cát không?',
+          answer:
+            'Có. Bình minh là thời điểm đẹp và mát nhất để tham quan đồi cát.',
+        },
+        {
+          question: 'Tour có phù hợp đi cuối tuần không?',
+          answer:
+            'Có. Đây là tour ngắn ngày, phù hợp khách xuất phát từ TP.HCM.',
+        },
       ],
     },
   },
@@ -973,7 +1140,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Quy Nhơn',
       slug: 'quy-nhon',
       region: 'Miền Trung',
-      description: 'Thành phố biển Bình Định nổi tiếng với Kỳ Co, Eo Gió, làng chài, bãi biển xanh và nhịp nghỉ dưỡng yên tĩnh hơn các đô thị biển lớn.',
+      description:
+        'Thành phố biển Bình Định nổi tiếng với Kỳ Co, Eo Gió, làng chài, bãi biển xanh và nhịp nghỉ dưỡng yên tĩnh hơn các đô thị biển lớn.',
       imageUrl: IMAGES.quyNhon[0],
     },
     tour: {
@@ -1000,15 +1168,21 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Đón khách - Biển Quy Nhơn',
-          description: 'Đón khách tại Quy Nhơn, nhận phòng, tham quan bãi biển trung tâm và thưởng thức hải sản.',
+          description:
+            'Đón khách tại Quy Nhơn, nhận phòng, tham quan bãi biển trung tâm và thưởng thức hải sản.',
           accommodation: 'Khách sạn Quy Nhơn theo gói',
           transport: 'Xe du lịch',
-          activities: ['Đón khách Quy Nhơn', 'Biển trung tâm', 'Hải sản Bình Định'],
+          activities: [
+            'Đón khách Quy Nhơn',
+            'Biển trung tâm',
+            'Hải sản Bình Định',
+          ],
           imageUrl: IMAGES.quyNhon[0],
         },
         {
           title: 'Kỳ Co - Eo Gió',
-          description: 'Khám phá Kỳ Co, Eo Gió, chụp ảnh ven biển và dùng bữa trưa theo chương trình.',
+          description:
+            'Khám phá Kỳ Co, Eo Gió, chụp ảnh ven biển và dùng bữa trưa theo chương trình.',
           accommodation: 'Khách sạn Quy Nhơn theo gói',
           transport: 'Xe du lịch và cano/tàu theo điều kiện',
           activities: ['Kỳ Co', 'Eo Gió', 'Làng chài'],
@@ -1016,15 +1190,24 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Tự do mua đặc sản - Tiễn khách',
-          description: 'Tự do mua đặc sản Bình Định và tiễn khách tại sân bay/ga.',
+          description:
+            'Tự do mua đặc sản Bình Định và tiễn khách tại sân bay/ga.',
           transport: 'Xe du lịch',
           activities: ['Mua đặc sản', 'Tiễn khách'],
           imageUrl: IMAGES.quyNhon[2],
         },
       ],
       faqs: [
-        { question: 'Kỳ Co có phụ thuộc thời tiết biển không?', answer: 'Có. Nếu biển động, đội điều hành sẽ đổi sang điểm tham quan phù hợp và an toàn hơn.' },
-        { question: 'Tour có nhiều thời gian tắm biển không?', answer: 'Có. Lịch trình có thời gian tự do tại bãi biển và khách sạn.' },
+        {
+          question: 'Kỳ Co có phụ thuộc thời tiết biển không?',
+          answer:
+            'Có. Nếu biển động, đội điều hành sẽ đổi sang điểm tham quan phù hợp và an toàn hơn.',
+        },
+        {
+          question: 'Tour có nhiều thời gian tắm biển không?',
+          answer:
+            'Có. Lịch trình có thời gian tự do tại bãi biển và khách sạn.',
+        },
       ],
     },
   },
@@ -1033,7 +1216,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Phú Yên',
       slug: 'phu-yen',
       region: 'Miền Trung',
-      description: 'Vùng biển miền Trung nổi bật với Gành Đá Đĩa, Bãi Xép, Mũi Điện, tháp Nghinh Phong và nhịp du lịch còn nguyên vẻ mộc mạc.',
+      description:
+        'Vùng biển miền Trung nổi bật với Gành Đá Đĩa, Bãi Xép, Mũi Điện, tháp Nghinh Phong và nhịp du lịch còn nguyên vẻ mộc mạc.',
       imageUrl: IMAGES.phuYen[0],
     },
     tour: {
@@ -1060,7 +1244,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Tuy Hòa - Bãi Xép - Tháp Nghinh Phong',
-          description: 'Đón khách tại Tuy Hòa, tham quan Bãi Xép, tháp Nghinh Phong và dùng bữa tối địa phương.',
+          description:
+            'Đón khách tại Tuy Hòa, tham quan Bãi Xép, tháp Nghinh Phong và dùng bữa tối địa phương.',
           accommodation: 'Khách sạn Tuy Hòa theo gói',
           transport: 'Xe du lịch',
           activities: ['Bãi Xép', 'Tháp Nghinh Phong', 'Ẩm thực Phú Yên'],
@@ -1068,7 +1253,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Gành Đá Đĩa - Mũi Điện',
-          description: 'Khám phá Gành Đá Đĩa, Mũi Điện, các điểm biển ven đường và nghỉ đêm tại Tuy Hòa.',
+          description:
+            'Khám phá Gành Đá Đĩa, Mũi Điện, các điểm biển ven đường và nghỉ đêm tại Tuy Hòa.',
           accommodation: 'Khách sạn Tuy Hòa theo gói',
           transport: 'Xe du lịch',
           activities: ['Gành Đá Đĩa', 'Mũi Điện', 'Biển Phú Yên'],
@@ -1076,15 +1262,24 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Mua đặc sản - Tiễn khách',
-          description: 'Tự do mua đặc sản, cà phê sáng và tiễn khách tại sân bay/ga Tuy Hòa.',
+          description:
+            'Tự do mua đặc sản, cà phê sáng và tiễn khách tại sân bay/ga Tuy Hòa.',
           transport: 'Xe du lịch',
           activities: ['Mua đặc sản', 'Tiễn khách'],
           imageUrl: IMAGES.phuYen[2],
         },
       ],
       faqs: [
-        { question: 'Tour Phú Yên có nhiều điểm chụp ảnh không?', answer: 'Có. Các điểm như Gành Đá Đĩa, Bãi Xép, Mũi Điện đều phù hợp chụp ảnh phong cảnh.' },
-        { question: 'Có phù hợp khách lớn tuổi không?', answer: 'Có, nhưng một số điểm ven biển cần đi bộ nhẹ nên khách nên mang giày thoải mái.' },
+        {
+          question: 'Tour Phú Yên có nhiều điểm chụp ảnh không?',
+          answer:
+            'Có. Các điểm như Gành Đá Đĩa, Bãi Xép, Mũi Điện đều phù hợp chụp ảnh phong cảnh.',
+        },
+        {
+          question: 'Có phù hợp khách lớn tuổi không?',
+          answer:
+            'Có, nhưng một số điểm ven biển cần đi bộ nhẹ nên khách nên mang giày thoải mái.',
+        },
       ],
     },
   },
@@ -1093,7 +1288,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Cần Thơ',
       slug: 'can-tho',
       region: 'Miền Nam',
-      description: 'Trung tâm miền Tây nổi tiếng với chợ nổi Cái Răng, sông nước, vườn trái cây, bến Ninh Kiều và ẩm thực Nam Bộ.',
+      description:
+        'Trung tâm miền Tây nổi tiếng với chợ nổi Cái Răng, sông nước, vườn trái cây, bến Ninh Kiều và ẩm thực Nam Bộ.',
       imageUrl: IMAGES.canTho[0],
     },
     tour: {
@@ -1120,23 +1316,37 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'TP.HCM - Cần Thơ - Bến Ninh Kiều',
-          description: 'Khởi hành đi Cần Thơ, nhận phòng, tham quan điểm miệt vườn hoặc nhà cổ và dạo bến Ninh Kiều.',
+          description:
+            'Khởi hành đi Cần Thơ, nhận phòng, tham quan điểm miệt vườn hoặc nhà cổ và dạo bến Ninh Kiều.',
           accommodation: 'Khách sạn Cần Thơ theo gói',
           transport: 'Xe du lịch',
-          activities: ['Di chuyển TP.HCM - Cần Thơ', 'Miệt vườn', 'Bến Ninh Kiều'],
+          activities: [
+            'Di chuyển TP.HCM - Cần Thơ',
+            'Miệt vườn',
+            'Bến Ninh Kiều',
+          ],
           imageUrl: IMAGES.canTho[0],
         },
         {
           title: 'Chợ nổi Cái Răng - Trở về',
-          description: 'Dậy sớm đi thuyền chợ nổi Cái Răng, ăn sáng kiểu miền Tây, mua đặc sản và trở về.',
+          description:
+            'Dậy sớm đi thuyền chợ nổi Cái Răng, ăn sáng kiểu miền Tây, mua đặc sản và trở về.',
           transport: 'Xe du lịch và thuyền',
           activities: ['Chợ nổi Cái Răng', 'Ăn sáng trên sông', 'Trở về'],
           imageUrl: IMAGES.canTho[1],
         },
       ],
       faqs: [
-        { question: 'Vì sao phải đi chợ nổi từ sáng sớm?', answer: 'Chợ nổi nhộn nhịp nhất vào sáng sớm, nếu đi muộn trải nghiệm sẽ kém hơn.' },
-        { question: 'Tour có say sóng không?', answer: 'Hoạt động thuyền chủ yếu trên sông, thường êm hơn biển nhưng khách nhạy cảm vẫn nên chuẩn bị thuốc cá nhân.' },
+        {
+          question: 'Vì sao phải đi chợ nổi từ sáng sớm?',
+          answer:
+            'Chợ nổi nhộn nhịp nhất vào sáng sớm, nếu đi muộn trải nghiệm sẽ kém hơn.',
+        },
+        {
+          question: 'Tour có say sóng không?',
+          answer:
+            'Hoạt động thuyền chủ yếu trên sông, thường êm hơn biển nhưng khách nhạy cảm vẫn nên chuẩn bị thuốc cá nhân.',
+        },
       ],
     },
   },
@@ -1145,7 +1355,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'TP.HCM',
       slug: 'tp-ho-chi-minh',
       region: 'Miền Nam',
-      description: 'Đô thị năng động với các công trình lịch sử, phố đi bộ, chợ Bến Thành, ẩm thực đường phố và tuyến tham quan Củ Chi.',
+      description:
+        'Đô thị năng động với các công trình lịch sử, phố đi bộ, chợ Bến Thành, ẩm thực đường phố và tuyến tham quan Củ Chi.',
       imageUrl: IMAGES.hoChiMinh[0],
     },
     tour: {
@@ -1172,7 +1383,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'City tour trung tâm Sài Gòn',
-          description: 'Đón khách, tham quan các công trình trung tâm, chợ Bến Thành hoặc phố đi bộ và thưởng thức ẩm thực địa phương.',
+          description:
+            'Đón khách, tham quan các công trình trung tâm, chợ Bến Thành hoặc phố đi bộ và thưởng thức ẩm thực địa phương.',
           accommodation: 'Khách sạn TP.HCM theo gói',
           transport: 'Xe du lịch',
           activities: ['Dinh Độc Lập', 'Bưu điện Thành phố', 'Chợ Bến Thành'],
@@ -1180,15 +1392,24 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Địa đạo Củ Chi - Tiễn khách',
-          description: 'Di chuyển đến Củ Chi, tìm hiểu hệ thống địa đạo, dùng bữa trưa và tiễn khách tại trung tâm hoặc sân bay.',
+          description:
+            'Di chuyển đến Củ Chi, tìm hiểu hệ thống địa đạo, dùng bữa trưa và tiễn khách tại trung tâm hoặc sân bay.',
           transport: 'Xe du lịch',
           activities: ['Địa đạo Củ Chi', 'Ăn trưa', 'Tiễn khách'],
           imageUrl: IMAGES.hoChiMinh[1],
         },
       ],
       faqs: [
-        { question: 'Các điểm trung tâm có phụ thuộc lịch mở cửa không?', answer: 'Có. Nếu một điểm đóng cửa hoặc bảo trì, hướng dẫn viên sẽ điều chỉnh điểm thay thế phù hợp.' },
-        { question: 'Tour Củ Chi có cần đi bộ nhiều không?', answer: 'Có đi bộ nhẹ trong khu tham quan, khách nên mang giày thoải mái.' },
+        {
+          question: 'Các điểm trung tâm có phụ thuộc lịch mở cửa không?',
+          answer:
+            'Có. Nếu một điểm đóng cửa hoặc bảo trì, hướng dẫn viên sẽ điều chỉnh điểm thay thế phù hợp.',
+        },
+        {
+          question: 'Tour Củ Chi có cần đi bộ nhiều không?',
+          answer:
+            'Có đi bộ nhẹ trong khu tham quan, khách nên mang giày thoải mái.',
+        },
       ],
     },
   },
@@ -1197,7 +1418,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Mộc Châu',
       slug: 'moc-chau',
       region: 'Miền Bắc',
-      description: 'Cao nguyên Sơn La nổi bật với đồi chè, thung lũng hoa, thác nước, khí hậu mát và các bản làng dân tộc Tây Bắc.',
+      description:
+        'Cao nguyên Sơn La nổi bật với đồi chè, thung lũng hoa, thác nước, khí hậu mát và các bản làng dân tộc Tây Bắc.',
       imageUrl: IMAGES.mocChau[0],
     },
     tour: {
@@ -1224,23 +1446,36 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Hà Nội - Mộc Châu - Đồi chè',
-          description: 'Khởi hành từ Hà Nội, đến Mộc Châu tham quan đồi chè, điểm hoa theo mùa và nghỉ đêm.',
+          description:
+            'Khởi hành từ Hà Nội, đến Mộc Châu tham quan đồi chè, điểm hoa theo mùa và nghỉ đêm.',
           accommodation: 'Khách sạn/homestay Mộc Châu',
           transport: 'Xe du lịch',
-          activities: ['Di chuyển Hà Nội - Mộc Châu', 'Đồi chè', 'Ẩm thực Tây Bắc'],
+          activities: [
+            'Di chuyển Hà Nội - Mộc Châu',
+            'Đồi chè',
+            'Ẩm thực Tây Bắc',
+          ],
           imageUrl: IMAGES.mocChau[0],
         },
         {
           title: 'Thác Dải Yếm - Bản làng - Trở về',
-          description: 'Tham quan thác Dải Yếm hoặc bản làng, mua đặc sản sữa, chè và trở về Hà Nội.',
+          description:
+            'Tham quan thác Dải Yếm hoặc bản làng, mua đặc sản sữa, chè và trở về Hà Nội.',
           transport: 'Xe du lịch',
           activities: ['Thác Dải Yếm', 'Bản làng', 'Trở về Hà Nội'],
           imageUrl: IMAGES.mocChau[1],
         },
       ],
       faqs: [
-        { question: 'Mộc Châu mùa nào đẹp?', answer: 'Mỗi mùa có cảnh riêng: mùa hoa, mùa mận, mùa chè xanh. Seed này phù hợp chạy quanh năm.' },
-        { question: 'Tour có phù hợp trẻ em không?', answer: 'Có, nhưng gia đình nên chuẩn bị áo khoác và giày dễ đi.' },
+        {
+          question: 'Mộc Châu mùa nào đẹp?',
+          answer:
+            'Mỗi mùa có cảnh riêng: mùa hoa, mùa mận, mùa chè xanh. Seed này phù hợp chạy quanh năm.',
+        },
+        {
+          question: 'Tour có phù hợp trẻ em không?',
+          answer: 'Có, nhưng gia đình nên chuẩn bị áo khoác và giày dễ đi.',
+        },
       ],
     },
   },
@@ -1249,7 +1484,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Mai Châu',
       slug: 'mai-chau',
       region: 'Miền Bắc',
-      description: 'Thung lũng Hòa Bình yên bình với ruộng lúa, bản Lác, nhà sàn, văn hóa Thái và các cung đường đạp xe nhẹ giữa làng bản.',
+      description:
+        'Thung lũng Hòa Bình yên bình với ruộng lúa, bản Lác, nhà sàn, văn hóa Thái và các cung đường đạp xe nhẹ giữa làng bản.',
       imageUrl: IMAGES.maiChau[0],
     },
     tour: {
@@ -1276,23 +1512,37 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Hà Nội - Mai Châu - Bản Lác',
-          description: 'Khởi hành từ Hà Nội, đến Mai Châu dùng bữa trưa, nhận phòng và dạo bản Lác.',
+          description:
+            'Khởi hành từ Hà Nội, đến Mai Châu dùng bữa trưa, nhận phòng và dạo bản Lác.',
           accommodation: 'Nhà sàn/homestay Mai Châu theo gói',
           transport: 'Xe du lịch',
-          activities: ['Di chuyển Hà Nội - Mai Châu', 'Bản Lác', 'Ẩm thực địa phương'],
+          activities: [
+            'Di chuyển Hà Nội - Mai Châu',
+            'Bản Lác',
+            'Ẩm thực địa phương',
+          ],
           imageUrl: IMAGES.maiChau[0],
         },
         {
           title: 'Thung lũng Mai Châu - Trở về',
-          description: 'Tự do đạp xe hoặc đi bộ quanh thung lũng, mua quà địa phương và trở về Hà Nội.',
+          description:
+            'Tự do đạp xe hoặc đi bộ quanh thung lũng, mua quà địa phương và trở về Hà Nội.',
           transport: 'Xe du lịch',
           activities: ['Đạp xe nhẹ', 'Thung lũng lúa', 'Trở về Hà Nội'],
           imageUrl: IMAGES.maiChau[1],
         },
       ],
       faqs: [
-        { question: 'Tour Mai Châu có nghỉ nhà sàn không?', answer: 'Có thể chọn nhà sàn/homestay hoặc khách sạn tùy gói dịch vụ.' },
-        { question: 'Có bắt buộc đạp xe không?', answer: 'Không. Khách có thể đi bộ nhẹ quanh bản nếu không muốn đạp xe.' },
+        {
+          question: 'Tour Mai Châu có nghỉ nhà sàn không?',
+          answer:
+            'Có thể chọn nhà sàn/homestay hoặc khách sạn tùy gói dịch vụ.',
+        },
+        {
+          question: 'Có bắt buộc đạp xe không?',
+          answer:
+            'Không. Khách có thể đi bộ nhẹ quanh bản nếu không muốn đạp xe.',
+        },
       ],
     },
   },
@@ -1301,7 +1551,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       name: 'Cao Bằng',
       slug: 'cao-bang',
       region: 'Miền Bắc',
-      description: 'Vùng Đông Bắc nổi tiếng với thác Bản Giốc, suối Lê Nin, động Ngườm Ngao, núi non biên giới và bản làng yên bình.',
+      description:
+        'Vùng Đông Bắc nổi tiếng với thác Bản Giốc, suối Lê Nin, động Ngườm Ngao, núi non biên giới và bản làng yên bình.',
       imageUrl: IMAGES.caoBang[0],
     },
     tour: {
@@ -1328,7 +1579,8 @@ const remainingDomesticTours: DomesticTourSeed[] = [
       itinerary: [
         {
           title: 'Hà Nội - Cao Bằng',
-          description: 'Khởi hành từ Hà Nội đi Cao Bằng, dừng nghỉ trên đường, nhận phòng và dùng bữa tối địa phương.',
+          description:
+            'Khởi hành từ Hà Nội đi Cao Bằng, dừng nghỉ trên đường, nhận phòng và dùng bữa tối địa phương.',
           accommodation: 'Khách sạn Cao Bằng theo gói',
           transport: 'Xe du lịch',
           activities: ['Di chuyển Hà Nội - Cao Bằng', 'Ẩm thực địa phương'],
@@ -1336,10 +1588,15 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
         {
           title: 'Thác Bản Giốc - Động Ngườm Ngao',
-          description: 'Tham quan thác Bản Giốc, động Ngườm Ngao và các điểm cảnh quan khu vực Trùng Khánh.',
+          description:
+            'Tham quan thác Bản Giốc, động Ngườm Ngao và các điểm cảnh quan khu vực Trùng Khánh.',
           accommodation: 'Khách sạn Cao Bằng theo gói',
           transport: 'Xe du lịch',
-          activities: ['Thác Bản Giốc', 'Động Ngườm Ngao', 'Cảnh quan Trùng Khánh'],
+          activities: [
+            'Thác Bản Giốc',
+            'Động Ngườm Ngao',
+            'Cảnh quan Trùng Khánh',
+          ],
           imageUrl: IMAGES.caoBang[1],
         },
         {
@@ -1351,8 +1608,16 @@ const remainingDomesticTours: DomesticTourSeed[] = [
         },
       ],
       faqs: [
-        { question: 'Cao Bằng di chuyển có xa không?', answer: 'Có. Tour được thiết kế 3 ngày 2 đêm để giảm áp lực di chuyển và có thời gian nghỉ hợp lý.' },
-        { question: 'Thác Bản Giốc mùa nào đẹp?', answer: 'Mùa nước nhiều thường ấn tượng hơn, nhưng lịch trình vẫn có thể chạy quanh năm tùy thời tiết.' },
+        {
+          question: 'Cao Bằng di chuyển có xa không?',
+          answer:
+            'Có. Tour được thiết kế 3 ngày 2 đêm để giảm áp lực di chuyển và có thời gian nghỉ hợp lý.',
+        },
+        {
+          question: 'Thác Bản Giốc mùa nào đẹp?',
+          answer:
+            'Mùa nước nhiều thường ấn tượng hơn, nhưng lịch trình vẫn có thể chạy quanh năm tùy thời tiết.',
+        },
       ],
     },
   },
@@ -1461,14 +1726,16 @@ export async function seedDomesticTours(prisma: PrismaClient) {
           },
         }),
       ),
-      ...departureData(item.tour.price, Math.min(item.tour.availableSeats, 40)).map(
-        (departure) =>
-          prisma.tourDeparture.create({
-            data: {
-              tourId: tour.id,
-              ...departure,
-            },
-          }),
+      ...departureData(
+        item.tour.price,
+        Math.min(item.tour.availableSeats, 40),
+      ).map((departure) =>
+        prisma.tourDeparture.create({
+          data: {
+            tourId: tour.id,
+            ...departure,
+          },
+        }),
       ),
       ...item.tour.itinerary.map((day, index) =>
         prisma.tourItinerary.create({

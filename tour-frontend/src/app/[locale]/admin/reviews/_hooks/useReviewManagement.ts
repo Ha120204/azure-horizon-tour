@@ -7,9 +7,11 @@ import { useAdminRealtime } from '@/hooks/useAdminRealtime';
 import { API_BASE_URL } from '@/lib/constants';
 import { fetchWithAuth } from '@/lib/fetchWithAuth';
 import { EMPTY_ADMIN_STATS } from '../_lib/config';
+import { exportReviewsCsv } from '../_lib/exportCsv';
 import type { AdminStats, Meta, Review, ReviewKpiItem } from '../_lib/types';
 
 const REVIEW_REALTIME_TYPES = ['review_good', 'review_bad'] as const;
+type ReviewQuickFilter = 'all' | 'unreplied' | 'low' | 'replied' | 'hidden';
 
 export function useReviewManagement() {
     const params = useParams<{ locale?: string }>();
@@ -142,6 +144,10 @@ export function useReviewManagement() {
     }, [reviews]);
 
     const clearSelection = useCallback(() => setSelected([]), []);
+    const selectedReviews = useMemo(
+        () => reviews.filter((review) => selected.includes(review.id)),
+        [reviews, selected],
+    );
 
     const handleToggleVisibility = useCallback(async (review: Review) => {
         setLoadingId(review.id);
@@ -235,6 +241,15 @@ export function useReviewManagement() {
         }
     }, [clearSelection, fetchReviews, fetchStats, selected, showToast]);
 
+    const handleExportSelected = useCallback(() => {
+        const exportedCount = exportReviewsCsv(selectedReviews);
+        if (exportedCount === 0) {
+            showToast('Chưa có đánh giá nào để xuất', false);
+            return;
+        }
+        showToast(`Đã xuất ${exportedCount} đánh giá`);
+    }, [selectedReviews, showToast]);
+
     const resetFilters = useCallback(() => {
         setSearch('');
         setRatingFilter('');
@@ -296,6 +311,40 @@ export function useReviewManagement() {
         setSelected([]);
     }, []);
 
+    const applyQuickFilter = useCallback((filter: ReviewQuickFilter) => {
+        if (filter === 'all') {
+            resetFilters();
+            return;
+        }
+
+        setPage(1);
+
+        if (filter === 'unreplied') {
+            setRatingFilter('');
+            setStatusFilter('');
+            setReplyFilter('unreplied');
+            return;
+        }
+
+        if (filter === 'low') {
+            setRatingFilter('1,2');
+            setStatusFilter('');
+            setReplyFilter('');
+            return;
+        }
+
+        if (filter === 'replied') {
+            setRatingFilter('');
+            setStatusFilter('');
+            setReplyFilter('replied');
+            return;
+        }
+
+        setRatingFilter('');
+        setStatusFilter('hidden');
+        setReplyFilter('');
+    }, [resetFilters]);
+
     const openLightbox = useCallback((images: string[], idx: number) => {
         setLightbox({ images, idx });
     }, []);
@@ -303,6 +352,14 @@ export function useReviewManagement() {
     const hasFilter = Boolean(search || ratingFilter || statusFilter || replyFilter || sortBy !== 'newest');
     const lowRatingCount = (stats.breakdown[1] ?? 0) + (stats.breakdown[2] ?? 0);
     const selectedRatings = ratingFilter.split(',').filter(Boolean);
+    const activeQuickFilter = useMemo<ReviewQuickFilter | ''>(() => {
+        if (!ratingFilter && !statusFilter && !replyFilter) return 'all';
+        if (!ratingFilter && !statusFilter && replyFilter === 'unreplied') return 'unreplied';
+        if (ratingFilter === '1,2' && !statusFilter && !replyFilter) return 'low';
+        if (!ratingFilter && !statusFilter && replyFilter === 'replied') return 'replied';
+        if (!ratingFilter && statusFilter === 'hidden' && !replyFilter) return 'hidden';
+        return '';
+    }, [ratingFilter, replyFilter, statusFilter]);
 
     const kpis = useMemo<ReviewKpiItem[]>(() => [
         {
@@ -360,6 +417,7 @@ export function useReviewManagement() {
         sortBy,
         pageSize,
         selected,
+        selectedReviews,
         loadingId,
         bulkLoading,
         deleteTarget,
@@ -370,6 +428,7 @@ export function useReviewManagement() {
         isAllSelected,
         hasFilter,
         selectedRatings,
+        activeQuickFilter,
         kpis,
         setSearch,
         setDeleteTarget,
@@ -384,8 +443,10 @@ export function useReviewManagement() {
         handleDelete,
         handleReply,
         handleBulkVisibility,
+        handleExportSelected,
         resetFilters,
         filterByRating,
+        applyQuickFilter,
         changeRatingFilter,
         changeStatusFilter,
         changeReplyFilter,

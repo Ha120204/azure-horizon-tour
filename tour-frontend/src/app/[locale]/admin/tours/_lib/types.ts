@@ -1,162 +1,171 @@
-export type TourStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED' | 'COMPLETED';
-export type TourTab = 'active' | 'trash';
+export type TourStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "PUBLISHED"
+  | "REJECTED"
+  | "COMPLETED";
+export type TourTab = "active" | "trash";
 
 export interface Meta {
-    totalItems: number;
-    totalPages: number;
-    currentPage: number;
-    itemsPerPage?: number;
+  totalItems: number;
+  totalPages: number;
+  currentPage: number;
+  itemsPerPage?: number;
 }
 
 export interface Tour {
+  id: number;
+  name: string;
+  nameEn?: string;
+  description?: string;
+  descriptionEn?: string;
+  imageUrl: string;
+  price: number;
+  availableSeats: number;
+  bookedSeats?: number;
+  totalSeats?: number;
+  duration: string;
+  durationEn?: string;
+  tourType: string;
+  tourCode?: string;
+  averageRating: number;
+  startDate: string;
+  endDate?: string;
+  departurePoint?: string;
+  departurePointEn?: string;
+  destinationId?: number | null;
+  destination: {
     id: number;
     name: string;
-    nameEn?: string;
-    description?: string;
-    descriptionEn?: string;
-    imageUrl: string;
-    price: number;
-    availableSeats: number;
-    bookedSeats?: number;
-    totalSeats?: number;
-    duration: string;
-    durationEn?: string;
-    tourType: string;
-    tourCode?: string;
-    averageRating: number;
-    startDate: string;
-    endDate?: string;
-    departurePoint?: string;
-    departurePointEn?: string;
-    destinationId?: number | null;
-    destination: { id: number; name: string };
-    status: TourStatus;
-    reviewNote?: string;
-    createdById?: number;
-    createdBy?: { id: number; fullName: string };
-    images?: TourImage[];
-    packages?: TourPackage[];
-    departures?: TourDeparture[];
-    highlights?: TourHighlight[];
-    itinerary?: TourItineraryDay[];
-    faqs?: TourFaq[];
+    travelScope?: "DOMESTIC" | "INTERNATIONAL";
+  };
+  status: TourStatus;
+  reviewNote?: string;
+  createdById?: number;
+  createdBy?: { id: number; fullName: string };
+  images?: TourImage[];
+  packages?: TourPackage[];
+  departures?: TourDeparture[];
+  highlights?: TourHighlight[];
+  itinerary?: TourItineraryDay[];
+  faqs?: TourFaq[];
 }
 
 export interface TourImage {
-    id: number;
-    url: string;
-    altText?: string;
-    sortOrder?: number;
+  id: number;
+  url: string;
+  altText?: string;
+  sortOrder?: number;
 }
 
 export interface TourPackage {
-    id: number;
-    name: string;
-    nameEn?: string;
-    description?: string;
-    descriptionEn?: string;
-    price: number;
-    badge?: string;
-    includes?: string[] | string;
-    includesEn?: string[] | string;
-    excludes?: string[] | string;
-    excludesEn?: string[] | string;
+  id: number;
+  name: string;
+  nameEn?: string;
+  description?: string;
+  descriptionEn?: string;
+  price: number;
+  badge?: string;
+  includes?: string[] | string;
+  includesEn?: string[] | string;
+  excludes?: string[] | string;
+  excludesEn?: string[] | string;
 }
 
 export interface TourDeparture {
-    id: number;
-    departureDate: string;
-    price: number;
-    availableSeats: number;
-    maxSeats?: number;
-    note?: string;
-    noteEn?: string;
-    category?: string;
+  id: number;
+  departureDate: string;
+  price: number;
+  availableSeats: number;
+  maxSeats?: number;
+  note?: string;
+  noteEn?: string;
+  category?: string;
 }
 
 export interface TourHighlight {
-    id: number;
-    content: string;
-    contentEn?: string;
-    icon?: string;
+  id: number;
+  content: string;
+  contentEn?: string;
+  icon?: string;
 }
 
 export interface TourTimelineEntry {
-    time: string;
-    activity: string;
+  time: string;
+  activity: string;
 }
 
 export interface TourItineraryDay {
-    id: number;
-    dayNumber: number;
-    title: string;
-    titleEn?: string | null;
-    description: string;
-    descriptionEn?: string | null;
-    mealsBreakfast?: boolean;
-    mealsLunch?: boolean;
-    mealsDinner?: boolean;
-    accommodation?: string | null;
-    accommodationEn?: string | null;
-    transport?: string | null;
-    transportEn?: string | null;
-    activities?: string[];
-    activitiesEn?: string[];
-    timeline?: TourTimelineEntry[];
-    timelineEn?: TourTimelineEntry[];
+  id: number;
+  dayNumber: number;
+  title: string;
+  titleEn?: string | null;
+  description: string;
+  descriptionEn?: string | null;
+  mealsBreakfast?: boolean;
+  mealsLunch?: boolean;
+  mealsDinner?: boolean;
+  accommodation?: string | null;
+  accommodationEn?: string | null;
+  transport?: string | null;
+  transportEn?: string | null;
+  activities?: string[];
+  activitiesEn?: string[];
+  timeline?: TourTimelineEntry[];
+  timelineEn?: TourTimelineEntry[];
 }
 
 export interface TourFaq {
-    id: number;
-    question: string;
-    questionEn?: string;
-    answer: string;
-    answerEn?: string;
+  id: number;
+  question: string;
+  questionEn?: string;
+  answer: string;
+  answerEn?: string;
 }
 
 export interface TrashedTour extends Tour {
-    deletedAt: string | null;
-    bookingCount?: number;
-    canPermanentDelete?: boolean;
+  deletedAt: string | null;
+  bookingCount?: number;
+  canPermanentDelete?: boolean;
 }
 
 export interface Destination {
-    id: number;
-    name: string;
-    travelScope?: 'DOMESTIC' | 'INTERNATIONAL';
-    countryCode?: string | null;
+  id: number;
+  name: string;
+  travelScope?: "DOMESTIC" | "INTERNATIONAL";
+  countryCode?: string | null;
 }
 
 export interface ToastState {
-    message: string;
-    type: 'success' | 'error';
+  message: string;
+  type: "success" | "error";
 }
 
-export type ModalMode = 'create' | 'edit' | null;
+export type ModalMode = "create" | "edit" | null;
 
 export interface TourStats {
-    totalVisible: number;
-    total: number;
-    published: number;
-    draft: number;
-    pending: number;
-    rejected: number;
-    completed: number;
-    active: number;
-    totalSeats: number;
-    avgPrice: number;
-    loaded: boolean;
+  totalVisible: number;
+  total: number;
+  published: number;
+  draft: number;
+  pending: number;
+  rejected: number;
+  completed: number;
+  active: number;
+  totalSeats: number;
+  avgPrice: number;
+  loaded: boolean;
 }
 
 export interface TourKpiItem {
-    icon: string;
-    label: string;
-    value: string;
-    unit: string | null;
-    subtitle?: string | null;
-    color: string;
-    highlight: boolean;
-    onClick: (() => void) | null;
+  icon: string;
+  label: string;
+  value: string;
+  unit: string | null;
+  subtitle?: string | null;
+  color: string;
+  highlight: boolean;
+  onClick: (() => void) | null;
 }
 
-export type TourReviewAction = 'approve' | 'reject';
+export type TourReviewAction = "approve" | "reject";

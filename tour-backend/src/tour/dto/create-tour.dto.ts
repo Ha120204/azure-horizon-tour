@@ -1,4 +1,12 @@
-import { IsDate, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsDate,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsFutureDate } from '../../common/validators/is-future-date.validator';
 import { TourStatus } from '@prisma/client';
@@ -35,7 +43,9 @@ export class CreateTourDto {
   @IsOptional()
   @Type(() => Date)
   @IsDate()
-  @IsFutureDate({ message: 'Ngày khởi hành phải là hôm nay hoặc trong tương lai.' })
+  @IsFutureDate({
+    message: 'Ngày khởi hành phải là hôm nay hoặc trong tương lai.',
+  })
   startDate?: Date;
 
   @IsOptional()

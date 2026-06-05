@@ -62,7 +62,8 @@ export class TourService {
       requirePublishableTour(createTourDto);
     }
 
-    const resolvedDestinationId = await this.resolveDestinationId(destinationId);
+    const resolvedDestinationId =
+      await this.resolveDestinationId(destinationId);
 
     return this.prisma.tour.create({
       data: {
@@ -149,7 +150,13 @@ export class TourService {
         normalizedDest.length > 0
           ? await Promise.all([
               this.prisma.destination.findMany({
-                select: { id: true, name: true, nameEn: true, region: true, regionEn: true },
+                select: {
+                  id: true,
+                  name: true,
+                  nameEn: true,
+                  region: true,
+                  regionEn: true,
+                },
               }),
               this.prisma.tour.findMany({
                 where: { deletedAt: null },
@@ -157,19 +164,30 @@ export class TourService {
                   id: true,
                   name: true,
                   nameEn: true,
-                  destination: { select: { name: true, nameEn: true, region: true, regionEn: true } },
+                  destination: {
+                    select: {
+                      name: true,
+                      nameEn: true,
+                      region: true,
+                      regionEn: true,
+                    },
+                  },
                 },
               }),
             ])
           : [[], []];
       const matchingDestinationIds = matchingDestinations
         .filter((destination) =>
-          normalizeSearchText(`${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''}`).includes(normalizedDest),
+          normalizeSearchText(
+            `${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''}`,
+          ).includes(normalizedDest),
         )
         .map((destination) => destination.id);
       const matchingTourIds = matchingTours
         .filter((tour) =>
-          normalizeSearchText(`${tour.name} ${tour.nameEn ?? ''} ${tour.destination?.name ?? ''} ${tour.destination?.nameEn ?? ''} ${tour.destination?.region ?? ''} ${tour.destination?.regionEn ?? ''}`).includes(normalizedDest),
+          normalizeSearchText(
+            `${tour.name} ${tour.nameEn ?? ''} ${tour.destination?.name ?? ''} ${tour.destination?.nameEn ?? ''} ${tour.destination?.region ?? ''} ${tour.destination?.regionEn ?? ''}`,
+          ).includes(normalizedDest),
         )
         .map((tour) => tour.id);
       const searchFilter: Prisma.TourWhereInput = {
@@ -178,39 +196,62 @@ export class TourService {
           { nameEn: { contains: dest, mode: 'insensitive' } },
           { destination: { name: { contains: dest, mode: 'insensitive' } } },
           { destination: { nameEn: { contains: dest, mode: 'insensitive' } } },
-          ...(matchingDestinationIds.length > 0 ? [{ destinationId: { in: matchingDestinationIds } }] : []),
-          ...(matchingTourIds.length > 0 ? [{ id: { in: matchingTourIds } }] : []),
+          ...(matchingDestinationIds.length > 0
+            ? [{ destinationId: { in: matchingDestinationIds } }]
+            : []),
+          ...(matchingTourIds.length > 0
+            ? [{ id: { in: matchingTourIds } }]
+            : []),
         ],
       };
       where.AND = Array.isArray(where.AND)
         ? [...where.AND, searchFilter]
-        : where.AND ? [where.AND, searchFilter] : [searchFilter];
+        : where.AND
+          ? [where.AND, searchFilter]
+          : [searchFilter];
     }
 
     if (travelScope) {
-      const scopeFilter: Prisma.TourWhereInput = { destination: { travelScope } };
+      const scopeFilter: Prisma.TourWhereInput = {
+        destination: { travelScope },
+      };
       where.AND = Array.isArray(where.AND)
         ? [...where.AND, scopeFilter]
-        : where.AND ? [where.AND, scopeFilter] : [scopeFilter];
+        : where.AND
+          ? [where.AND, scopeFilter]
+          : [scopeFilter];
     }
 
     if (minPrice || maxPrice) {
       where.price = {
         ...(minPrice ? { gte: parseFloat(minPrice) } : {}),
-        ...(maxPrice && maxPrice !== 'unlimited' ? { lte: parseFloat(maxPrice) } : {}),
+        ...(maxPrice && maxPrice !== 'unlimited'
+          ? { lte: parseFloat(maxPrice) }
+          : {}),
       };
     }
 
     // ══ Date filter: hỗ trợ cả tour dùng startDate lẫn TourDeparture ══
     // Công chúản: hiện tour khi startDate >= date OR có departure tương lai
     {
-      const isPublicUser = requesterRole !== 'SUPER_ADMIN' && requesterRole !== 'ADMIN' && requesterRole !== 'STAFF';
-      const effectiveDate = date ? new Date(date) : (isPublicUser ? new Date() : null);
+      const isPublicUser =
+        requesterRole !== 'SUPER_ADMIN' &&
+        requesterRole !== 'ADMIN' &&
+        requesterRole !== 'STAFF';
+      const effectiveDate = date
+        ? new Date(date)
+        : isPublicUser
+          ? new Date()
+          : null;
       if (effectiveDate) {
         appendAndFilter(where, {
           OR: [
             { startDate: { gte: effectiveDate } },
-            { departures: { some: { isActive: true, departureDate: { gte: effectiveDate } } } },
+            {
+              departures: {
+                some: { isActive: true, departureDate: { gte: effectiveDate } },
+              },
+            },
           ],
         });
       }
@@ -221,7 +262,9 @@ export class TourService {
       const dateFilter: Prisma.TourWhereInput = {
         startDate: {
           ...(startDateFrom ? { gte: new Date(startDateFrom) } : {}),
-          ...(startDateTo ? { lte: new Date(new Date(startDateTo).setHours(23, 59, 59, 999)) } : {}),
+          ...(startDateTo
+            ? { lte: new Date(new Date(startDateTo).setHours(23, 59, 59, 999)) }
+            : {}),
         },
       };
       appendAndFilter(where, dateFilter);
@@ -231,8 +274,15 @@ export class TourService {
     if (departure?.trim()) {
       appendAndFilter(where, {
         OR: [
-          { departurePoint: { contains: departure.trim(), mode: 'insensitive' } },
-          { departurePointEn: { contains: departure.trim(), mode: 'insensitive' } },
+          {
+            departurePoint: { contains: departure.trim(), mode: 'insensitive' },
+          },
+          {
+            departurePointEn: {
+              contains: departure.trim(),
+              mode: 'insensitive',
+            },
+          },
         ],
       });
     }
@@ -243,7 +293,10 @@ export class TourService {
       const ratingFilters = ratingBuckets.map((rating) => ({
         AND: [
           { reviews: { some: { isHidden: false } } },
-          { averageRating: rating === 5 ? { gte: 5 } : { gte: rating, lt: rating + 1 } },
+          {
+            averageRating:
+              rating === 5 ? { gte: 5 } : { gte: rating, lt: rating + 1 },
+          },
         ],
       }));
       appendAndFilter(
@@ -283,16 +336,32 @@ export class TourService {
         skip,
         take: limitNum,
         include: {
-          destination: { select: { id: true, name: true, nameEn: true, region: true, regionEn: true, travelScope: true, countryCode: true } },
+          destination: {
+            select: {
+              id: true,
+              name: true,
+              nameEn: true,
+              region: true,
+              regionEn: true,
+              travelScope: true,
+              countryCode: true,
+            },
+          },
           departures: {
             select: { price: true, note: true, noteEn: true },
-            where: { isActive: true, departureDate: { gte: getMinBookableDate() } },
+            where: {
+              isActive: true,
+              departureDate: { gte: getMinBookableDate() },
+            },
           },
           createdBy: { select: { id: true, fullName: true } },
           _count: { select: { reviews: { where: { isHidden: false } } } },
           bookings: {
             select: { numberOfPeople: true },
-            where: { status: { in: ['CONFIRMED', 'PENDING'] }, deletedAt: null },
+            where: {
+              status: { in: ['CONFIRMED', 'PENDING'] },
+              deletedAt: null,
+            },
           },
         },
       }),
@@ -303,7 +372,11 @@ export class TourService {
       data: tours.map((tour) => {
         const localizedTour = localizeTour(tour, locale);
         const reviewCount = localizedTour._count?.reviews ?? 0;
-        const bookedSeats = (tour.bookings ?? []).reduce((sum: number, b: { numberOfPeople: number }) => sum + b.numberOfPeople, 0);
+        const bookedSeats = (tour.bookings ?? []).reduce(
+          (sum: number, b: { numberOfPeople: number }) =>
+            sum + b.numberOfPeople,
+          0,
+        );
         const totalSeats = tour.availableSeats + bookedSeats;
         return {
           ...localizedTour,
@@ -324,37 +397,164 @@ export class TourService {
   }
 
   // Find/Update/Remove — delegated to TourQueryService
-  async findOne(id: number, requesterId?: number, requesterRole?: string, localeInput?: string) {
-    return this.queryService.findOne(id, requesterId, requesterRole, localeInput);
+  async findOne(
+    id: number,
+    requesterId?: number,
+    requesterRole?: string,
+    localeInput?: string,
+  ) {
+    return this.queryService.findOne(
+      id,
+      requesterId,
+      requesterRole,
+      localeInput,
+    );
   }
-  async update(id: number, updateTourDto: import('./dto/update-tour.dto').UpdateTourDto, requesterId?: number, requesterRole?: string) {
-    return this.queryService.update(id, updateTourDto, requesterId, requesterRole);
+  async update(
+    id: number,
+    updateTourDto: import('./dto/update-tour.dto').UpdateTourDto,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    return this.queryService.update(
+      id,
+      updateTourDto,
+      requesterId,
+      requesterRole,
+    );
   }
   async remove(id: number, requesterId?: number, requesterRole?: string) {
     return this.queryService.remove(id, requesterId, requesterRole);
   }
 
   // ─── Workflow ─── delegated to TourWorkflowService ─────────────────────────
-  async submitForReview(id: number, requesterId: number) { return this.workflowService.submitForReview(id, requesterId); }
-  async reviewTour(id: number, reviewerId: number, action: 'approve' | 'reject', note?: string) { return this.workflowService.reviewTour(id, reviewerId, action, note); }
-  async publishTour(id: number, publisherId: number) { return this.workflowService.publishTour(id, publisherId); }
-  async getPendingTours() { return this.workflowService.getPendingTours(); }
+  async submitForReview(id: number, requesterId: number) {
+    return this.workflowService.submitForReview(id, requesterId);
+  }
+  async reviewTour(
+    id: number,
+    reviewerId: number,
+    action: 'approve' | 'reject',
+    note?: string,
+  ) {
+    return this.workflowService.reviewTour(id, reviewerId, action, note);
+  }
+  async publishTour(id: number, publisherId: number) {
+    return this.workflowService.publishTour(id, publisherId);
+  }
+  async getPendingTours() {
+    return this.workflowService.getPendingTours();
+  }
 
   // ─── Content ─── delegated to TourContentService ────────────────────────────
-  async addGalleryImages(tourId: number, urls: string[], requesterId?: number, requesterRole?: string) { return this.contentService.addGalleryImages(tourId, urls, requesterId, requesterRole); }
-  async removeGalleryImage(tourId: number, imageId: number, requesterId?: number, requesterRole?: string) { return this.contentService.removeGalleryImage(tourId, imageId, requesterId, requesterRole); }
-  async upsertHighlights(tourId: number, highlights: Parameters<TourContentService['upsertHighlights']>[1], requesterId?: number, requesterRole?: string) { return this.contentService.upsertHighlights(tourId, highlights, requesterId, requesterRole); }
-  async upsertFaqs(tourId: number, faqs: Parameters<TourContentService['upsertFaqs']>[1], requesterId?: number, requesterRole?: string) { return this.contentService.upsertFaqs(tourId, faqs, requesterId, requesterRole); }
-  async upsertItinerary(tourId: number, itinerary: Parameters<TourContentService['upsertItinerary']>[1], requesterId?: number, requesterRole?: string) { return this.contentService.upsertItinerary(tourId, itinerary, requesterId, requesterRole); }
-  async updateItineraryDay(tourId: number, dayId: number, data: Parameters<TourContentService['updateItineraryDay']>[2], requesterId?: number, requesterRole?: string) { return this.contentService.updateItineraryDay(tourId, dayId, data, requesterId, requesterRole); }
+  async addGalleryImages(
+    tourId: number,
+    urls: string[],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    return this.contentService.addGalleryImages(
+      tourId,
+      urls,
+      requesterId,
+      requesterRole,
+    );
+  }
+  async removeGalleryImage(
+    tourId: number,
+    imageId: number,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    return this.contentService.removeGalleryImage(
+      tourId,
+      imageId,
+      requesterId,
+      requesterRole,
+    );
+  }
+  async upsertHighlights(
+    tourId: number,
+    highlights: Parameters<TourContentService['upsertHighlights']>[1],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    return this.contentService.upsertHighlights(
+      tourId,
+      highlights,
+      requesterId,
+      requesterRole,
+    );
+  }
+  async upsertFaqs(
+    tourId: number,
+    faqs: Parameters<TourContentService['upsertFaqs']>[1],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    return this.contentService.upsertFaqs(
+      tourId,
+      faqs,
+      requesterId,
+      requesterRole,
+    );
+  }
+  async upsertItinerary(
+    tourId: number,
+    itinerary: Parameters<TourContentService['upsertItinerary']>[1],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    return this.contentService.upsertItinerary(
+      tourId,
+      itinerary,
+      requesterId,
+      requesterRole,
+    );
+  }
+  async updateItineraryDay(
+    tourId: number,
+    dayId: number,
+    data: Parameters<TourContentService['updateItineraryDay']>[2],
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    return this.contentService.updateItineraryDay(
+      tourId,
+      dayId,
+      data,
+      requesterId,
+      requesterRole,
+    );
+  }
 
   // ─── Query ─── delegated to TourQueryService ─────────────────────────────────
-  async getAdminStats(requesterId?: number, requesterRole?: string) { return this.queryService.getAdminStats(requesterId, requesterRole); }
-  async getTrashedTours(page = 1, limit = 10, query: { search?: string; status?: string; deletable?: string } = {}) { return this.queryService.getTrashedTours(page, limit, query); }
-  async restoreTour(id: number) { return this.queryService.restoreTour(id); }
-  async permanentDelete(id: number) { return this.queryService.permanentDelete(id); }
-  async bulkRestoreTours(ids: number[]) { return this.queryService.bulkRestoreTours(ids); }
-  async bulkPermanentDelete(ids: number[]) { return this.queryService.bulkPermanentDelete(ids); }
-  async getRatingStats(tourId: number) { return this.queryService.getRatingStats(tourId); }
-  async getSaleDeals(localeInput?: string) { return this.queryService.getSaleDeals(localeInput); }
+  async getAdminStats(requesterId?: number, requesterRole?: string) {
+    return this.queryService.getAdminStats(requesterId, requesterRole);
+  }
+  async getTrashedTours(
+    page = 1,
+    limit = 10,
+    query: { search?: string; status?: string; deletable?: string } = {},
+  ) {
+    return this.queryService.getTrashedTours(page, limit, query);
+  }
+  async restoreTour(id: number) {
+    return this.queryService.restoreTour(id);
+  }
+  async permanentDelete(id: number) {
+    return this.queryService.permanentDelete(id);
+  }
+  async bulkRestoreTours(ids: number[]) {
+    return this.queryService.bulkRestoreTours(ids);
+  }
+  async bulkPermanentDelete(ids: number[]) {
+    return this.queryService.bulkPermanentDelete(ids);
+  }
+  async getRatingStats(tourId: number) {
+    return this.queryService.getRatingStats(tourId);
+  }
+  async getSaleDeals(localeInput?: string) {
+    return this.queryService.getSaleDeals(localeInput);
+  }
 }

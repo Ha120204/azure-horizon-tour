@@ -5,9 +5,9 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { TourModule } from '../tour/tour.module';
 
 @Module({
-    imports: [PrismaModule, TourModule],
-    controllers: [TourDepartureController],
-    providers: [TourDepartureService],
-    exports: [TourDepartureService],
+  imports: [PrismaModule, TourModule],
+  controllers: [TourDepartureController],
+  providers: [TourDepartureService],
+  exports: [TourDepartureService],
 })
 export class TourDepartureModule {}

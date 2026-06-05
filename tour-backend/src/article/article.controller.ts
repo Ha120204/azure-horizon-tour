@@ -5,16 +5,31 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request as ExpressRequest } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ArticleService } from './article.service';
 import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 
-const getAuthUserId = (req: any): number | undefined => {
+type JwtRequestUser = {
+  id?: number;
+  userId?: number;
+  sub?: number;
+  role?: string;
+};
+
+type AuthenticatedRequest = ExpressRequest & {
+  user?: JwtRequestUser;
+};
+
+const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
   const rawId = req.user?.id ?? req.user?.userId ?? req.user?.sub;
   return rawId == null ? undefined : Number(rawId);
 };
+
+const getAuthRole = (req: AuthenticatedRequest): string | undefined =>
+  req.user?.role;
 
 @Controller('article')
 export class ArticleController {
@@ -51,8 +66,8 @@ export class ArticleController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Get('admin/stats')
-  async getAdminStats(@Req() req: any) {
-    return this.articleService.getAdminStats(getAuthUserId(req), req.user?.role);
+  async getAdminStats(@Req() req: AuthenticatedRequest) {
+    return this.articleService.getAdminStats(getAuthUserId(req), getAuthRole(req));
   }
 
   /** GET /article/admin/all — Danh sách phân trang, filter, search */
@@ -60,18 +75,20 @@ export class ArticleController {
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Get('admin/all')
   async adminFindAll(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('category') category?: string,
     @Query('isFeatured') isFeatured?: string,
     @Query('status') status?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
   ) {
     return this.articleService.adminFindAll(
-      { page: Number(page), limit: Number(limit), search, category, isFeatured, status },
+      { page: Number(page), limit: Number(limit), search, category, isFeatured, status, sortBy, sortDir },
       getAuthUserId(req),
-      req.user?.role,
+      getAuthRole(req),
     );
   }
 
@@ -106,21 +123,44 @@ export class ArticleController {
     return { url: result.secure_url };
   }
 
+  /** POST /article/admin/bulk-action - Bulk article actions */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+  @Post('admin/bulk-action')
+  @AuditLog('UPDATE', 'Article')
+  async adminBulkAction(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: {
+      ids?: number[];
+      action?: 'publish' | 'draft' | 'trash' | 'feature' | 'unfeature' | 'category' | 'submit';
+      category?: string;
+    },
+  ) {
+    return this.articleService.adminBulkAction(
+      body.ids,
+      body.action!,
+      getAuthUserId(req),
+      getAuthRole(req),
+      body.category,
+    );
+  }
+
   /** POST /article/admin — Admin/Super Admin lưu nháp hoặc xuất bản ngay; Staff tạo DRAFT */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Post('admin')
   @AuditLog('CREATE', 'Article')
   async adminCreate(
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Body() dto: {
-      title?: string; category?: string; excerpt?: string;
+      slug?: string; title?: string; category?: string; excerpt?: string;
+      seoTitle?: string; seoDescription?: string;
       content?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
       saveMode?: 'draft' | 'publish';
     },
   ) {
-    return this.articleService.adminCreate(dto, getAuthUserId(req), req.user?.role);
+    return this.articleService.adminCreate(dto, getAuthUserId(req), getAuthRole(req));
   }
 
   /** POST /article/admin/:id/submit — Staff gửi DRAFT/REJECTED → PENDING_REVIEW */
@@ -130,7 +170,7 @@ export class ArticleController {
   @AuditLog('UPDATE', 'Article')
   async submitForReview(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     return this.articleService.submitForReview(id, getAuthUserId(req)!);
   }
@@ -142,7 +182,7 @@ export class ArticleController {
   @AuditLog('UPDATE', 'Article')
   async reviewArticle(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Body() body: { action: 'approve' | 'reject'; note?: string },
   ) {
     return this.articleService.reviewArticle(id, getAuthUserId(req)!, body.action, body.note);
@@ -155,15 +195,16 @@ export class ArticleController {
   @AuditLog('UPDATE', 'Article')
   async adminUpdate(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
     @Body() dto: {
-      title?: string; category?: string; excerpt?: string;
+      slug?: string; title?: string; category?: string; excerpt?: string;
+      seoTitle?: string; seoDescription?: string;
       content?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
       saveMode?: 'draft' | 'publish';
     },
   ) {
-    return this.articleService.adminUpdate(id, dto, getAuthUserId(req), req.user?.role);
+    return this.articleService.adminUpdate(id, dto, getAuthUserId(req), getAuthRole(req));
   }
 
   /** PATCH /article/admin/:id/toggle-featured — Bật/tắt nổi bật */
@@ -182,9 +223,9 @@ export class ArticleController {
   @AuditLog('DELETE', 'Article')
   async adminDelete(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.articleService.adminDelete(id, getAuthUserId(req), req.user?.role);
+    return this.articleService.adminDelete(id, getAuthUserId(req), getAuthRole(req));
   }
 
   // ─── Trash endpoints ──────────────────────────────────────────────────────

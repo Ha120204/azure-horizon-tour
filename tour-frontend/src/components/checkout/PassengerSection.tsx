@@ -41,36 +41,52 @@ interface PassengerSectionProps {
     t: (key: string) => string;
     /** Số ghế tối đa còn lại (availableSeats của departure/tour). Infant (<4) không tính ghế. */
     maxPassengers?: number;
+    /**
+     * Ngày khởi hành (ISO string). Dùng làm mốc tính tuổi chính xác.
+     * Nếu không có, fallback về ngày hiện tại.
+     */
+    departureDate?: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function calcAge(dob: string): number | null {
+
+/**
+ * Tính tuổi tại một mốc thời gian cụ thể.
+ * @param dob Ngày sinh (YYYY-MM-DD)
+ * @param referenceDate Mốc tính tuổi — mặc định là ngày hiện tại,
+ *   nên truyền vào ngày khởi hành để tính đúng nhóm giá.
+ */
+function calcAge(dob: string, referenceDate?: Date): number | null {
     if (!dob) return null;
     const birth = new Date(dob);
     if (isNaN(birth.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    const ref = referenceDate ?? new Date();
+    let age = ref.getFullYear() - birth.getFullYear();
+    const m = ref.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) age--;
     return age;
 }
 
-function getAgeError(type: PassengerType, dob: string): string | null {
+function getAgeError(type: PassengerType, dob: string, referenceDate?: Date): string | null {
     if (!dob) return null;
-    const age = calcAge(dob);
+    const age = calcAge(dob, referenceDate);
     if (age === null) return 'Ngày sinh không hợp lệ.';
     if (age < 0) return 'Ngày sinh không được là ngày trong tương lai.';
-    if (type === 'Adult (12+)' && age < 12) return `Người lớn phải từ 12 tuổi trở lên. Tuổi hiện tại: ${age} tuổi.`;
-    if (type === 'Child (4-11)' && (age < 4 || age > 11)) return `Trẻ em phải từ 4–11 tuổi. Tuổi hiện tại: ${age} tuổi.`;
-    if (type === 'Infant (<4)' && age >= 4) return `Em bé phải dưới 4 tuổi. Tuổi hiện tại: ${age} tuổi.`;
+    if (type === 'Adult (12+)' && age < 12) return `Người lớn phải từ 12 tuổi trở lên tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
+    if (type === 'Child (4-11)' && (age < 4 || age > 11)) return `Trẻ em phải từ 4–11 tuổi tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
+    if (type === 'Infant (<4)' && age >= 4) return `Em bé phải dưới 4 tuổi tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
     return null;
 }
 
-function getMinDate(type: PassengerType): string {
-    const today = new Date();
-    const y = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
+/**
+ * Ngày sinh tối thiểu hợp lệ theo loại hành khách, tính tại referenceDate.
+ * referenceDate nên là ngày khởi hành để date-picker giới hạn đúng.
+ */
+function getMinDate(type: PassengerType, referenceDate?: Date): string {
+    const ref = referenceDate ?? new Date();
+    const y = ref.getFullYear();
+    const mm = String(ref.getMonth() + 1).padStart(2, '0');
+    const dd = String(ref.getDate()).padStart(2, '0');
     if (type === 'Adult (12+)') {
         return `${y - 120}-${mm}-${dd}`;
     }
@@ -81,20 +97,20 @@ function getMinDate(type: PassengerType): string {
     return `${y - 3}-${mm}-${dd}`;
 }
 
-function getMaxDate(type: PassengerType): string {
-    const today = new Date();
-    const y = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
+function getMaxDate(type: PassengerType, referenceDate?: Date): string {
+    const ref = referenceDate ?? new Date();
+    const y = ref.getFullYear();
+    const mm = String(ref.getMonth() + 1).padStart(2, '0');
+    const dd = String(ref.getDate()).padStart(2, '0');
     if (type === 'Adult (12+)') {
-        // Must be >= 12 years old → max DOB = today - 12 years
+        // Phải >= 12 tuổi tại ngày khởi hành → max DOB = referenceDate - 12 năm
         return `${y - 12}-${mm}-${dd}`;
     }
     if (type === 'Child (4-11)') {
-        // 4 to 11: max DOB = today - 4 years
+        // 4 đến 11 tuổi tại ngày khởi hành → max DOB = referenceDate - 4 năm
         return `${y - 4}-${mm}-${dd}`;
     }
-    // Infant <4: max DOB = today
+    // Infant <4 tại ngày khởi hành → max DOB = referenceDate
     return `${y}-${mm}-${dd}`;
 }
 
@@ -120,8 +136,19 @@ export default function PassengerSection({
     editingPassengerIndex,
     t,
     maxPassengers,
+    departureDate,
 }: PassengerSectionProps) {
     const isEditingPassenger = editingPassengerIndex !== null;
+
+    // Mốc tính tuổi = ngày khởi hành (nếu có), fallback về today.
+    // Việc dùng ngày khởi hành đảm bảo trẻ 11 tuổi hôm nay nhưng 12 tuổi ngày đi
+    // được tính đúng là Adult, không bị charge sai giá Child.
+    const referenceDate: Date = (() => {
+        if (!departureDate) return new Date();
+        const d = new Date(departureDate);
+        return isNaN(d.getTime()) ? new Date() : d;
+    })();
+
     // ── Seat capacity logic ──────────────────────────────────────────────────────
     // Infant (<4) không chiếm ghế theo chuẩn du lịch (ngồi lòng người lớn)
     const seatConsumingPassengers = passengers.filter(p => p.type !== 'Infant (<4)');
@@ -148,7 +175,7 @@ export default function PassengerSection({
     // Trigger validation on save attempt
     const handleValidatedSave = () => {
         const nameErr = getNameError(tempFormData.fullName);
-        const ageErr = activeFormType ? getAgeError(activeFormType, tempFormData.dob) : null;
+        const ageErr = activeFormType ? getAgeError(activeFormType, tempFormData.dob, referenceDate) : null;
         const errors: { fullName?: string; dob?: string } = {};
         if (nameErr) errors.fullName = nameErr;
         if (ageErr) errors.dob = ageErr;
@@ -490,25 +517,25 @@ export default function PassengerSection({
                                     <input
                                         className={`w-full bg-white border rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm ${fieldErrors.dob ? 'border-error/60 bg-error/5' : 'border-outline-variant/20'}`}
                                         type="date"
-                                        min={getMinDate(activeFormType)}
-                                        max={getMaxDate(activeFormType)}
+                                        min={getMinDate(activeFormType, referenceDate)}
+                                        max={getMaxDate(activeFormType, referenceDate)}
                                         value={tempFormData.dob}
                                         onChange={(e) => {
                                             setTempFormData({ ...tempFormData, dob: e.target.value });
                                             if (fieldErrors.dob) setFieldErrors(prev => ({ ...prev, dob: undefined }));
                                         }}
                                         onBlur={(e) => {
-                                            const err = getAgeError(activeFormType, e.target.value);
+                                            const err = getAgeError(activeFormType, e.target.value, referenceDate);
                                             if (err) setFieldErrors(prev => ({ ...prev, dob: err }));
                                         }}
                                     />
-                                    {/* Real-time age display */}
+                                    {/* Hiển thị tuổi real-time tại ngày khởi hành */}
                                     {tempFormData.dob && !fieldErrors.dob && (() => {
-                                        const age = calcAge(tempFormData.dob);
+                                        const age = calcAge(tempFormData.dob, referenceDate);
                                         return age !== null ? (
                                             <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-[13px]">check_circle</span>
-                                                {age} {t('checkout.yearsOld')} - {t('checkout.valid').toLowerCase()}
+                                                {age} {t('checkout.yearsOld')} lúc khởi hành
                                             </p>
                                         ) : null;
                                     })()}

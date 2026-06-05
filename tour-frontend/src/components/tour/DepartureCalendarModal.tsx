@@ -9,8 +9,6 @@ interface DepartureCalendarModalProps {
     departures: TourDeparture[];
     selectedDeparture: TourDeparture | null;
     onSelectDeparture: (dep: TourDeparture) => void;
-    formatPrice: (n: number) => string;
-    tourPrice: number;
     t: TranslationFn;
     language: string;
 }
@@ -34,8 +32,6 @@ export default function DepartureCalendarModal({
     departures,
     selectedDeparture,
     onSelectDeparture,
-    formatPrice,
-    tourPrice,
     t,
     language,
 }: DepartureCalendarModalProps) {
@@ -100,6 +96,23 @@ export default function DepartureCalendarModal({
         const departure = departuresMap[dateStr];
         const isPast = dateStr < todayStr;
         const isSelected = selectedDeparture?.id === departure?.id;
+        const isSoldOut = departure?.availableSeats === 0;
+        const isRunningLow = Boolean(departure && departure.availableSeats > 0 && departure.availableSeats <= 5);
+        const statusText = isSoldOut
+            ? t('tour_detail.soldOut')
+            : isRunningLow
+                ? t('tour_detail.seatsLeft', { seats: departure.availableSeats })
+                : t('tour_detail.availableSeats');
+        const statusToneClass = isSoldOut
+            ? 'bg-red-50 text-red-600 border-red-100'
+            : isRunningLow
+                ? 'bg-amber-50 text-amber-700 border-amber-100'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-100';
+        const statusDotClass = isSoldOut
+            ? 'bg-red-400'
+            : isRunningLow
+                ? 'bg-amber-400'
+                : 'bg-emerald-400';
 
         cells.push(
             <div key={`day-${day}`} className="relative h-20 sm:h-24">
@@ -122,21 +135,11 @@ export default function DepartureCalendarModal({
                     >
                         <div className="w-full flex justify-between items-start">
                             <span className={`text-sm sm:text-base font-bold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{day}</span>
-                            {departure.availableSeats === 0 ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-100 hidden sm:block">{t('tour_detail.soldOutShort')}</span>
-                            ) : departure.availableSeats <= 5 ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 hidden sm:block">{t('tour_detail.seatsLeft', { seats: departure.availableSeats })}</span>
-                            ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 mr-0.5 hidden sm:block"></span>
-                            )}
+                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 mr-0.5 ${statusDotClass}`}></span>
                         </div>
                         <div className="w-full text-left mt-auto">
-                            <p className={`text-[10px] sm:text-[11px] font-extrabold leading-tight truncate ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
-                                {formatPrice(departure.price ?? tourPrice)}
-                            </p>
-                            {/* Mobile badge */}
-                            <p className="text-[9px] mt-0.5 sm:hidden font-medium">
-                                {departure.availableSeats === 0 ? <span className="text-red-500">{t('tour_detail.soldOut')}</span> : departure.availableSeats <= 5 ? <span className="text-amber-600">{t('tour_detail.seatsLeft', { seats: departure.availableSeats })}</span> : <span className="text-emerald-600">{t('tour_detail.availableSeats')}</span>}
+                            <p className={`inline-flex max-w-full rounded-md border px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold leading-tight ${statusToneClass}`}>
+                                <span className="truncate">{statusText}</span>
                             </p>
                         </div>
                     </button>
@@ -158,7 +161,6 @@ export default function DepartureCalendarModal({
                 <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20 shrink-0">
                     <div>
                         <h2 className="text-xl font-bold font-headline text-on-surface">{t('tour_detail.selectDeparture')}</h2>
-                        <p className="text-xs text-on-surface-variant mt-0.5">{t('tour_detail.departurePriceHint')}</p>
                     </div>
                     <button onClick={onClose} className="w-10 h-10 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant transition-colors">
                         <span className="material-symbols-outlined text-[20px]">close</span>

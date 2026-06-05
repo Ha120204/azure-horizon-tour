@@ -1,268 +1,225 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 interface AdminPaginationProps {
-    currentPage: number;
-    totalPages: number;
-    totalItems: number;
-    pageSize: number;
-    onPageChange: (page: number) => void;
-    onPageSizeChange: (size: number) => void;
-    itemLabel?: string;
-    pageSizeOptions?: number[];
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+  itemLabel?: string;
+  pageSizeOptions?: number[];
 }
 
-const DEFAULT_PAGE_SIZES = [5, 10, 20, 50];
+const DEFAULT_PAGE_SIZES = [10, 20, 50];
+
+function clampPage(page: number, totalPages: number) {
+  return Math.min(Math.max(page, 1), Math.max(totalPages, 1));
+}
 
 function generatePageNumbers(current: number, total: number): (number | '...')[] {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
 
-    const pages: (number | '...')[] = [1];
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
 
-    if (current > 3) pages.push('...');
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  for (let page = start; page <= end; page += 1) pages.push(page);
 
-    const start = Math.max(2, current - 1);
-    const end = Math.min(total - 1, current + 1);
-    for (let p = start; p <= end; p++) pages.push(p);
-
-    if (current < total - 2) pages.push('...');
-    pages.push(total);
-
-    return pages;
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
 }
 
 export default function AdminPagination({
-    currentPage,
-    totalPages,
-    totalItems,
-    pageSize,
-    onPageChange,
-    onPageSizeChange,
-    itemLabel = 'mục',
-    pageSizeOptions = DEFAULT_PAGE_SIZES,
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  itemLabel = 'mục',
+  pageSizeOptions = DEFAULT_PAGE_SIZES,
 }: AdminPaginationProps) {
-    const [sizeOpen, setSizeOpen] = useState(false);
-    const [jumpValue, setJumpValue] = useState('');
-    const sizeRef = useRef<HTMLDivElement>(null);
+  const [jumpValue, setJumpValue] = useState('');
 
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (sizeRef.current && !sizeRef.current.contains(e.target as Node)) setSizeOpen(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
+  const safeTotalPages = Math.max(totalPages || 1, 1);
+  const safeCurrentPage = clampPage(currentPage || 1, safeTotalPages);
+  const from = totalItems === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const to = Math.min(safeCurrentPage * pageSize, totalItems);
+  const pageNums = generatePageNumbers(safeCurrentPage, safeTotalPages);
+  const pageSizeChoices = [...new Set([...pageSizeOptions, pageSize])].sort((a, b) => a - b);
+  const progress = safeTotalPages > 1 ? Math.round((safeCurrentPage / safeTotalPages) * 100) : 100;
 
-    const from = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-    const to = Math.min(currentPage * pageSize, totalItems);
-    const pageNums = generatePageNumbers(currentPage, totalPages);
-    const progress = totalPages > 1 ? Math.round((currentPage / totalPages) * 100) : 100;
+  const goToPage = (page: number) => {
+    const nextPage = clampPage(page, safeTotalPages);
+    if (nextPage !== safeCurrentPage) onPageChange(nextPage);
+  };
 
-    const handleJump = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key !== 'Enter') return;
-        const p = parseInt(jumpValue, 10);
-        if (!isNaN(p) && p >= 1 && p <= totalPages) {
-            onPageChange(p);
-        }
-        setJumpValue('');
-    };
+  const submitJump = () => {
+    const page = Number.parseInt(jumpValue, 10);
+    if (!Number.isNaN(page)) goToPage(page);
+    setJumpValue('');
+  };
 
-    return (
-        <div className="space-y-3">
-            {/* ── Summary bar ── */}
-            <div
-                className="flex flex-wrap items-center justify-between gap-3 px-1"
+  return (
+    <nav className="space-y-3" aria-label={`Phân trang ${itemLabel}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-on-surface-variant">
+          <label className="inline-flex items-center gap-2">
+            <span className="font-medium">Dòng mỗi trang</span>
+            <select
+              value={pageSize}
+              onChange={event => onPageSizeChange(Number(event.target.value))}
+              className="h-9 rounded-lg border border-outline-variant/20 bg-surface px-2.5 text-sm font-semibold text-on-surface outline-none transition-colors hover:bg-surface-container focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Chọn số dòng mỗi trang"
             >
-                {/* Left: record range info */}
-                <div className="flex items-center gap-2.5 text-sm">
-                    {/* Page-size picker */}
-                    <div className="relative" ref={sizeRef}>
-                        <button
-                            onClick={() => setSizeOpen(v => !v)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50 text-sm font-semibold text-gray-700 transition-all"
-                            aria-label="Chọn số hàng hiển thị"
-                        >
-                            {pageSize}
-                            <span
-                                className="material-symbols-outlined text-[13px] text-gray-400 transition-transform duration-200"
-                                style={{ transform: sizeOpen ? 'rotate(180deg)' : 'rotate(0)' }}
-                            >
-                                expand_more
-                            </span>
-                        </button>
+              {pageSizeChoices.map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
 
-                        {sizeOpen && (
-                            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 min-w-[110px] z-50">
-                                {pageSizeOptions.map(size => (
-                                    <button
-                                        key={size}
-                                        onClick={() => { onPageSizeChange(size); setSizeOpen(false); }}
-                                        className={`w-full flex items-center justify-between px-3 py-1.5 text-sm transition-colors hover:bg-blue-50 ${size === pageSize
-                                            ? 'text-blue-600 font-bold'
-                                            : 'text-gray-700 font-medium'
-                                            }`}
-                                    >
-                                        <span>{size}</span>
-                                        {size === pageSize && (
-                                            <span className="material-symbols-outlined text-[15px] text-blue-600">check</span>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">table_rows</span>
+            {totalItems === 0 ? (
+              <span>Không có dữ liệu</span>
+            ) : (
+              <span>
+                Hiển thị <strong className="tabular-nums text-on-surface">{from}-{to}</strong>
+                {' '}trong <strong className="tabular-nums text-primary">{totalItems.toLocaleString('vi-VN')}</strong>
+                {' '}{itemLabel}
+              </span>
+            )}
+          </span>
+        </div>
 
-                    {/* Record counter */}
-                    <div className="flex items-center gap-1.5 text-gray-500">
-                        <span className="material-symbols-outlined text-[15px] text-gray-400">table_rows</span>
-                        {totalItems === 0 ? (
-                            <span>Không có dữ liệu</span>
-                        ) : (
-                            <span>
-                                Hiển thị{' '}
-                                <strong className="text-gray-800 tabular-nums">{from}–{to}</strong>
-                                {' '}trong{' '}
-                                <strong className="text-blue-600 tabular-nums">{totalItems.toLocaleString('vi-VN')}</strong>
-                                {' '}{itemLabel}
-                            </span>
-                        )}
-                    </div>
-                </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <span className="material-symbols-outlined text-[15px]" aria-hidden="true">auto_stories</span>
+            Trang <span className="tabular-nums text-on-surface">{safeCurrentPage}</span>/<span className="tabular-nums">{safeTotalPages}</span>
+          </span>
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-container-high" aria-hidden="true">
+            <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </div>
 
-                {/* Right: page progress */}
-                {totalPages > 1 && (
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span className="material-symbols-outlined text-[14px]">auto_stories</span>
-                        Trang{' '}
-                        <strong className="text-gray-700 tabular-nums">{currentPage}</strong>
-                        {' '}/ {totalPages}
+      {safeTotalPages > 1 && (
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <PaginationButton
+              icon="first_page"
+              label="Trang đầu"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => goToPage(1)}
+            />
+            <PaginationButton
+              icon="chevron_left"
+              label="Trước"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => goToPage(safeCurrentPage - 1)}
+              showLabel
+            />
 
-                        {/* Mini progress bar */}
-                        <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden ml-1">
-                            <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{
-                                    width: `${progress}%`,
-                                    background: 'linear-gradient(90deg, #1565C0, #2196F3)',
-                                }}
-                            />
-                        </div>
-                        <span className="tabular-nums text-blue-600 font-semibold">{progress}%</span>
-                    </div>
-                )}
+            <div className="flex items-center gap-1">
+              {pageNums.map((page, index) => page === '...' ? (
+                <span key={`dots-${index}`} className="flex h-9 w-9 items-center justify-center text-sm text-on-surface-variant/60">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => goToPage(page)}
+                  aria-current={page === safeCurrentPage ? 'page' : undefined}
+                  className={`h-9 min-w-9 rounded-lg px-3 text-sm font-bold transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none ${
+                    page === safeCurrentPage
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'border border-outline-variant/20 bg-surface text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                  }`}
+                  aria-label={`Trang ${page}`}
+                >
+                  {page}
+                </button>
+              ))}
             </div>
 
-            {/* ── Navigation row ── */}
-            {totalPages > 1 && (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    {/* Page buttons */}
-                    <div className="flex items-center gap-1">
-                        {/* First */}
-                        <button
-                            onClick={() => onPageChange(1)}
-                            disabled={currentPage <= 1}
-                            className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            aria-label="Trang đầu"
-                            title="Trang đầu"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">first_page</span>
-                        </button>
+            <PaginationButton
+              icon="chevron_right"
+              label="Sau"
+              disabled={safeCurrentPage >= safeTotalPages}
+              onClick={() => goToPage(safeCurrentPage + 1)}
+              showLabel
+            />
+            <PaginationButton
+              icon="last_page"
+              label="Trang cuối"
+              disabled={safeCurrentPage >= safeTotalPages}
+              onClick={() => goToPage(safeTotalPages)}
+            />
+          </div>
 
-                        {/* Prev */}
-                        <button
-                            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-                            disabled={currentPage <= 1}
-                            className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            aria-label="Trang trước"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-                        </button>
-
-                        {/* Page numbers */}
-                        <div className="flex items-center gap-1">
-                            {pageNums.map((p, idx) =>
-                                p === '...' ? (
-                                    <span
-                                        key={`dots-${idx}`}
-                                        className="w-8 h-8 flex items-center justify-center text-gray-400 text-sm select-none"
-                                    >
-                                        ···
-                                    </span>
-                                ) : (
-                                    <button
-                                        key={p}
-                                        onClick={() => onPageChange(p as number)}
-                                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all duration-200 ${p === currentPage
-                                            ? 'text-white shadow-sm scale-105'
-                                            : 'border border-gray-200 text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600'
-                                            }`}
-                                        style={
-                                            p === currentPage
-                                                ? { background: 'linear-gradient(135deg, #1565C0, #2196F3)' }
-                                                : {}
-                                        }
-                                        aria-label={`Trang ${p}`}
-                                        aria-current={p === currentPage ? 'page' : undefined}
-                                    >
-                                        {p}
-                                    </button>
-                                )
-                            )}
-                        </div>
-
-                        {/* Next */}
-                        <button
-                            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage >= totalPages}
-                            className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            aria-label="Trang sau"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-                        </button>
-
-                        {/* Last */}
-                        <button
-                            onClick={() => onPageChange(totalPages)}
-                            disabled={currentPage >= totalPages}
-                            className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            aria-label="Trang cuối"
-                            title="Trang cuối"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">last_page</span>
-                        </button>
-                    </div>
-
-                    {/* Jump to page */}
-                    {totalPages > 5 && (
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <span>Đến trang</span>
-                            <input
-                                type="number"
-                                min={1}
-                                max={totalPages}
-                                value={jumpValue}
-                                onChange={e => setJumpValue(e.target.value)}
-                                onKeyDown={handleJump}
-                                placeholder="…"
-                                className="w-14 h-8 rounded-xl border border-gray-200 text-center text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 bg-gray-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                aria-label="Nhảy đến trang"
-                            />
-                            <button
-                                onClick={() => {
-                                    const p = parseInt(jumpValue, 10);
-                                    if (!isNaN(p) && p >= 1 && p <= totalPages) onPageChange(p);
-                                    setJumpValue('');
-                                }}
-                                className="h-8 px-3 rounded-xl text-xs font-semibold text-white transition-all hover:opacity-90"
-                                style={{ background: 'linear-gradient(135deg, #1565C0, #2196F3)' }}
-                            >
-                                Đi
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
+          {safeTotalPages > 5 && (
+            <form
+              className="flex items-center gap-2 text-sm text-on-surface-variant"
+              onSubmit={event => {
+                event.preventDefault();
+                submitJump();
+              }}
+            >
+              <label htmlFor="admin-page-jump" className="font-medium">Đến trang</label>
+              <input
+                id="admin-page-jump"
+                type="number"
+                min={1}
+                max={safeTotalPages}
+                value={jumpValue}
+                onChange={event => setJumpValue(event.target.value)}
+                placeholder={String(safeCurrentPage)}
+                className="h-9 w-16 rounded-lg border border-outline-variant/20 bg-surface text-center text-sm font-semibold text-on-surface outline-none focus-visible:ring-2 focus-visible:ring-primary [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <button
+                type="submit"
+                className="inline-flex h-9 items-center rounded-lg bg-primary px-3 text-xs font-bold text-on-primary transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary outline-none"
+              >
+                Đi
+              </button>
+            </form>
+          )}
         </div>
-    );
+      )}
+    </nav>
+  );
+}
+
+function PaginationButton({
+  icon,
+  label,
+  disabled,
+  showLabel = false,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  disabled: boolean;
+  showLabel?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface px-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-primary outline-none ${showLabel ? 'min-w-[82px]' : 'w-9'}`}
+      aria-label={label}
+      title={label}
+    >
+      <span className="material-symbols-outlined text-[17px]" aria-hidden="true">{icon}</span>
+      {showLabel && <span>{label}</span>}
+    </button>
+  );
 }

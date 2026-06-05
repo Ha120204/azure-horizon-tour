@@ -37,6 +37,44 @@ export function ReviewKpiGrid({ kpis }: { kpis: ReviewKpiItem[] }) {
     );
 }
 
+interface ReviewQuickFiltersProps {
+    activeQuickFilter: string;
+    onQuickFilter: (filter: 'all' | 'unreplied' | 'low' | 'replied' | 'hidden') => void;
+}
+
+export function ReviewQuickFilters({ activeQuickFilter, onQuickFilter }: ReviewQuickFiltersProps) {
+    const filters = [
+        { key: 'all', label: 'Tất cả', icon: 'rate_review' },
+        { key: 'unreplied', label: 'Chưa phản hồi', icon: 'forum' },
+        { key: 'low', label: 'Cần kiểm tra', icon: 'report' },
+        { key: 'replied', label: 'Đã phản hồi', icon: 'mark_chat_read' },
+        { key: 'hidden', label: 'Đang ẩn', icon: 'visibility_off' },
+    ] as const;
+
+    return (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+            {filters.map((filter) => {
+                const isActive = activeQuickFilter === filter.key;
+                return (
+                    <button
+                        key={filter.key}
+                        type="button"
+                        onClick={() => onQuickFilter(filter.key)}
+                        aria-pressed={isActive}
+                        className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary ${isActive
+                            ? 'border-primary/35 bg-primary text-white shadow-sm shadow-primary/20'
+                            : 'border-outline-variant/15 bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined text-[17px]">{filter.icon}</span>
+                        {filter.label}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
 interface RatingBreakdownProps {
     stats: AdminStats;
     selectedRatings: string[];
@@ -174,8 +212,91 @@ export function ReviewFilters({
                     </span>
                 )}
             </div>
+
+            <ActiveFilterSummary
+                search={search}
+                ratingFilter={ratingFilter}
+                statusFilter={statusFilter}
+                replyFilter={replyFilter}
+                sortBy={sortBy}
+                hasFilter={hasFilter}
+                onSearchChange={onSearchChange}
+                onRatingChange={onRatingChange}
+                onStatusChange={onStatusChange}
+                onReplyChange={onReplyChange}
+                onSortChange={onSortChange}
+                onReset={onReset}
+            />
         </div>
     );
+}
+
+function ActiveFilterSummary({
+    search,
+    ratingFilter,
+    statusFilter,
+    replyFilter,
+    sortBy,
+    hasFilter,
+    onSearchChange,
+    onRatingChange,
+    onStatusChange,
+    onReplyChange,
+    onSortChange,
+    onReset,
+}: Pick<ReviewFiltersProps,
+    'search' | 'ratingFilter' | 'statusFilter' | 'replyFilter' | 'sortBy' | 'hasFilter' |
+    'onSearchChange' | 'onRatingChange' | 'onStatusChange' | 'onReplyChange' | 'onSortChange' | 'onReset'
+>) {
+    if (!hasFilter) return null;
+
+    const chips = [
+        search ? { key: 'search', label: `Từ khóa: ${search}`, onRemove: () => onSearchChange('') } : null,
+        ratingFilter ? { key: 'rating', label: ratingFilter === '1,2' ? '1-2 sao cần kiểm tra' : `${ratingFilter} sao`, onRemove: () => onRatingChange('') } : null,
+        statusFilter ? { key: 'status', label: statusFilter === 'hidden' ? 'Đang ẩn' : 'Đang hiển thị', onRemove: () => onStatusChange('') } : null,
+        replyFilter ? { key: 'reply', label: replyFilter === 'unreplied' ? 'Chưa phản hồi' : 'Đã phản hồi', onRemove: () => onReplyChange('') } : null,
+        sortBy !== 'newest' ? { key: 'sort', label: sortLabel(sortBy), onRemove: () => onSortChange('newest') } : null,
+    ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
+
+    return (
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-outline-variant/10 pt-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                Đang xem
+            </span>
+            {chips.map((chip) => (
+                <button
+                    key={chip.key}
+                    type="button"
+                    onClick={chip.onRemove}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+                    title={`Bỏ lọc ${chip.label}`}
+                >
+                    {chip.label}
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                </button>
+            ))}
+            <button
+                type="button"
+                onClick={onReset}
+                className="ml-auto text-xs font-bold text-on-surface-variant hover:text-primary"
+            >
+                Xóa tất cả
+            </button>
+        </div>
+    );
+}
+
+function sortLabel(sortBy: string) {
+    switch (sortBy) {
+        case 'oldest':
+            return 'Cũ nhất';
+        case 'rating_desc':
+            return 'Sao cao nhất';
+        case 'rating_asc':
+            return 'Sao thấp nhất';
+        default:
+            return 'Mới nhất';
+    }
 }
 
 function SelectFilter({
@@ -314,30 +435,61 @@ export function ReviewList({
 
 interface ReviewBulkActionBarProps {
     selectedCount: number;
+    selectedReviews: Review[];
     statusFilter: string;
     bulkLoading: boolean;
     onBulkVisibility: (isHidden: boolean) => void;
     onBulkDelete: () => void;
+    onExport: () => void;
     onClear: () => void;
 }
 
 export function ReviewBulkActionBar({
     selectedCount,
+    selectedReviews,
     statusFilter,
     bulkLoading,
     onBulkVisibility,
     onBulkDelete,
+    onExport,
     onClear,
 }: ReviewBulkActionBarProps) {
     if (selectedCount === 0) return null;
     const shouldShowHidden = statusFilter === 'hidden';
+    const lowRatingCount = selectedReviews.filter((review) => review.rating <= 2).length;
+    const unrepliedCount = selectedReviews.filter((review) => !review.adminReply?.trim()).length;
 
     return (
-        <div className="fixed bottom-8 left-1/2 md:translate-x-[calc(-50%+128px)] -translate-x-1/2 bg-surface-container-lowest/95 backdrop-blur-md px-6 py-3.5 rounded-full shadow-2xl border border-outline-variant/20 flex items-center gap-4 z-50 animate-fade-in-up">
-            <span className="text-sm font-bold text-on-surface">
+        <div className="fixed bottom-6 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 animate-fade-in-up flex-col gap-3 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest/95 px-4 py-3.5 shadow-2xl backdrop-blur-md md:bottom-8 md:w-auto md:min-w-[720px] md:translate-x-[calc(-50%+128px)] md:flex-row md:items-center md:gap-4 md:rounded-full md:px-6">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-bold text-on-surface">
+                    {selectedCount} đã chọn
+                </span>
+                {lowRatingCount > 0 && (
+                    <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-700">
+                        {lowRatingCount} cần kiểm tra
+                    </span>
+                )}
+                {unrepliedCount > 0 && (
+                    <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-bold text-cyan-700">
+                        {unrepliedCount} chưa phản hồi
+                    </span>
+                )}
+            </div>
+            <div className="hidden h-5 w-px bg-outline-variant/30 md:block" />
+            <button
+                type="button"
+                onClick={onExport}
+                disabled={bulkLoading}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container disabled:opacity-50"
+            >
+                <span className="material-symbols-outlined text-[16px]">download</span>
+                Xuất CSV
+            </button>
+            <span className="hidden text-sm font-bold text-on-surface">
                 {selectedCount} đã chọn
             </span>
-            <div className="h-5 w-px bg-outline-variant/30" />
+            <div className="hidden h-5 w-px bg-outline-variant/30" />
             <button
                 onClick={() => onBulkVisibility(!shouldShowHidden)}
                 disabled={bulkLoading}

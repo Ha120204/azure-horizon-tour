@@ -5,13 +5,16 @@ export interface Article {
     title: string;
     category: string;
     excerpt: string;
+    seoTitle?: string | null;
+    seoDescription?: string | null;
     content?: string;
     imageUrl: string;
     author: string;
     readTime: number;
     isFeatured: boolean;
-    publishedAt: string;
+    publishedAt?: string | null;
     createdAt?: string;
+    updatedAt?: string;
     status?: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
     reviewNote?: string | null;
     createdById?: number | null;
@@ -26,9 +29,12 @@ export interface ArticleDrawerProps {
 }
 
 export type ArticleForm = {
+    slug: string;
     title: string;
     category: string;
     excerpt: string;
+    seoTitle: string;
+    seoDescription: string;
     content: string;
     imageUrl: string;
     author: string;
@@ -40,9 +46,12 @@ export type SaveAction = 'draft' | 'submit' | 'publish';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const EMPTY_FORM: ArticleForm = {
+    slug: '',
     title: '',
     category: 'GUIDES',
     excerpt: '',
+    seoTitle: '',
+    seoDescription: '',
     content: '',
     imageUrl: '',
     author: '',
@@ -78,9 +87,12 @@ export const getErrorMessage = (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback;
 
 export const articleToForm = (article?: Partial<Article> | null): ArticleForm => ({
+    slug:       article?.slug       ?? '',
     title:      article?.title      ?? '',
     category:   article?.category   ?? 'GUIDES',
     excerpt:    article?.excerpt    ?? '',
+    seoTitle:   article?.seoTitle   ?? '',
+    seoDescription: article?.seoDescription ?? '',
     content:    article?.content    ?? '',
     imageUrl:   article?.imageUrl   ?? '',
     author:     article?.author     ?? '',

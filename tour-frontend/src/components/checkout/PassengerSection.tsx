@@ -6,7 +6,7 @@ import {
     getPassengerIdentityDocTypes,
     validatePassengerIdentityNo,
     type PassengerType,
-} from '@/lib/passengerDetails';
+} from '@/lib/booking/passengerDetails';
 import { CheckoutSelect } from './CheckoutSelect';
 
 interface Passenger {

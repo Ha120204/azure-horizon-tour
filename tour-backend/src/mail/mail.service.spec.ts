@@ -28,4 +28,22 @@ describe('MailService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  it('adds an unsubscribe link and header to marketing emails', async () => {
+    const sendMail = jest.spyOn(service, 'sendMail').mockResolvedValue({});
+
+    await service.sendMarketingCampaignEmail({
+      to: 'traveler@example.com',
+      subject: 'Summer',
+      body: 'Book now',
+      unsubscribeToken: 'unsubscribe-token',
+    });
+
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({
+      headers: {
+        'List-Unsubscribe': '<http://localhost:3001/vi/unsubscribe?token=unsubscribe-token>',
+      },
+      html: expect.stringContaining('unsubscribe-token'),
+    }));
+  });
 });

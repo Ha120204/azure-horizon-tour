@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TourPermissionService } from '../tour/tour-permission.service';
-import { localizePackage, normalizeLocale } from '../tour/tour-localization';
+import { localizePackage, normalizeLocale } from '../tour/localization';
 
 export interface CreatePackageDto {
   name: string;

@@ -5,9 +5,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { API_BASE_URL } from '@/lib/constants';
-import { clearClientUserStorage } from '@/lib/authSession';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { clearClientUserStorage } from '@/lib/auth/authSession';
 import { useLocale } from '@/context/LocaleContext';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import PersonalInfoForm from '@/components/profile/PersonalInfoForm';
@@ -66,10 +66,10 @@ export default function ProfilePage() {
 
     const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
     const [myVouchers, setMyVouchers] = useState<UserVoucher[]>([]);
-    const [showAllVouchers, setShowAllVouchers] = useState(false);
     const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
     const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
     const [activeTab, setActiveTab] = useState<'bookings' | 'support'>('bookings');
+    const [requestedSupportTicketId, setRequestedSupportTicketId] = useState<number | null>(null);
 
     // State cho đổi mật khẩu
     const [currentPassword, setCurrentPassword] = useState('');
@@ -103,8 +103,7 @@ export default function ProfilePage() {
                 setGender(data.gender || '');
                 setIdentityType(data.identityType || 'CCCD');
                 setIdentityNo(data.identityNo || '');
-                const nextAvatarUrl = data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200";
-                setAvatarUrl(nextAvatarUrl);
+                setAvatarUrl(data.avatarUrl || '');
                 localStorage.setItem('userName', data.fullName || '');
                 if (data.avatarUrl) localStorage.setItem('userAvatarUrl', data.avatarUrl);
                 else localStorage.removeItem('userAvatarUrl');
@@ -148,6 +147,23 @@ export default function ProfilePage() {
 
         fetchData();
     }, [t]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('tab') === 'support') {
+            setActiveTab('support');
+            const ticketId = Number(params.get('ticketId'));
+            setRequestedSupportTicketId(Number.isFinite(ticketId) && ticketId > 0 ? ticketId : null);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!requestedSupportTicketId) return;
+        const matchedTicket = myTickets.find(ticket => Number(ticket.id) === requestedSupportTicketId);
+        if (matchedTicket) {
+            setSelectedTicket(matchedTicket);
+        }
+    }, [myTickets, requestedSupportTicketId]);
 
     const handleUpdateInfo = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -356,13 +372,13 @@ export default function ProfilePage() {
                             <button
                                 type="button"
                                 onClick={() => setIsPersonalInfoOpen(v => !v)}
-                                className="w-full px-5 py-4 flex items-center justify-between hover:bg-surface-container-low transition-colors"
+                                className="group flex w-full items-center justify-between px-5 py-4 transition-[background-color,color] duration-200 ease-out hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 motion-reduce:transition-none"
                             >
                                 <span className="flex items-center gap-2 text-sm font-bold text-on-surface">
-                                    <span className="material-symbols-outlined text-[18px] text-primary">person</span>
+                                    <span className="material-symbols-outlined text-[18px] text-primary transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">person</span>
                                     Thông tin cá nhân
                                 </span>
-                                <span className={`material-symbols-outlined text-outline transition-transform duration-200 ${isPersonalInfoOpen ? 'rotate-180' : ''}`}>
+                                <span className={`material-symbols-outlined text-outline transition-[transform,color] duration-200 group-hover:text-primary motion-reduce:transition-none ${isPersonalInfoOpen ? 'rotate-180' : ''}`}>
                                     expand_more
                                 </span>
                             </button>
@@ -389,8 +405,6 @@ export default function ProfilePage() {
                         {/* 3) Voucher */}
                         <VoucherWallet
                             myVouchers={myVouchers}
-                            showAllVouchers={showAllVouchers}
-                            setShowAllVouchers={setShowAllVouchers}
                             t={t}
                             formatPrice={formatPrice}
                         />
@@ -403,10 +417,10 @@ export default function ProfilePage() {
                         <div className="flex items-center gap-1 bg-surface-container-low p-1.5 rounded-2xl w-fit">
                             <button
                                 onClick={() => setActiveTab('bookings')}
-                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-[transform,background-color,color,box-shadow] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 motion-reduce:transform-none motion-reduce:transition-none ${
                                     activeTab === 'bookings'
                                         ? 'bg-surface-container-lowest text-primary shadow-sm'
-                                        : 'text-outline hover:text-on-surface'
+                                        : 'text-outline hover:-translate-y-0.5 hover:bg-surface-container-lowest/70 hover:text-on-surface'
                                 }`}
                             >
                                 <span className="flex items-center gap-1.5">
@@ -416,10 +430,10 @@ export default function ProfilePage() {
                             </button>
                             <button
                                 onClick={() => setActiveTab('support')}
-                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-[transform,background-color,color,box-shadow] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 motion-reduce:transform-none motion-reduce:transition-none ${
                                     activeTab === 'support'
                                         ? 'bg-surface-container-lowest text-primary shadow-sm'
-                                        : 'text-outline hover:text-on-surface'
+                                        : 'text-outline hover:-translate-y-0.5 hover:bg-surface-container-lowest/70 hover:text-on-surface'
                                 }`}
                             >
                                 <span className="flex items-center gap-2">

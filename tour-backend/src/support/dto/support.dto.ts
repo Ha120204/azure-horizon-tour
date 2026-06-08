@@ -1,6 +1,6 @@
 import {
   IsIn, IsNotEmpty, IsOptional, IsString, MaxLength,
-  IsInt, Min, Max,
+  IsInt, Min, Max, IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -25,6 +25,10 @@ export class CreateTicketReplyDto {
   @IsOptional()
   @IsString()
   senderName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isInternal?: boolean;
 }
 
 // ─── Customer DTOs ────────────────────────────────────────────────────────────

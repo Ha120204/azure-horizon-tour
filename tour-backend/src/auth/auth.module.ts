@@ -7,7 +7,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { MailModule } from '../mail/mail.module';
-import { CloudinaryModule } from '../common/cloudinary/cloudinary.module';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({

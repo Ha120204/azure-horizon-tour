@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useAdminRealtime } from '@/hooks/useAdminRealtime';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { API_BASE_URL } from '@/lib/constants';
+import { useAdminRealtime } from '@/hooks/admin/useAdminRealtime';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
 import { SupportConversationPanel } from './_components/SupportConversationPanel';
 import { SupportSidebar } from './_components/SupportSidebar';
 import { SupportTicketList } from './_components/SupportTicketList';
@@ -29,9 +29,12 @@ import type {
     TicketCategory,
     TicketListResponse,
     TicketResponse,
+    TicketSort,
     TicketStatus,
     TicketView,
 } from './_lib/types';
+
+const PAGE_LIMIT = 20;
 
 export default function SupportPage() {
     const router = useRouter();
@@ -47,12 +50,25 @@ export default function SupportPage() {
     const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
     const [actionError, setActionError] = useState('');
     const [actionNotice, setActionNotice] = useState('');
+    const [replyError, setReplyError] = useState('');
     const [search, setSearch] = useState(searchParams.get('search') ?? '');
     const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '');
     const [activeStatus, setActiveStatus] = useState<TicketStatus | 'ALL'>(() => resolveInitialStatus(searchParams.get('status')));
     const [activeCategory, setActiveCategory] = useState<TicketCategory | 'ALL'>(() => resolveInitialCategory(searchParams.get('category')));
     const [activeView, setActiveView] = useState<TicketView>(() => resolveInitialView(searchParams.get('view')));
     const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+    const [page, setPage] = useState(() => {
+        const p = parseInt(searchParams.get('page') ?? '1', 10);
+        return isNaN(p) || p < 1 ? 1 : p;
+    });
+    const [totalPages, setTotalPages] = useState(1);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [sort, setSort] = useState<TicketSort>(() => {
+        const s = searchParams.get('sort');
+        return s === 'oldest' || s === 'overdue' ? s : 'updated';
+    });
+    const [replyIsInternal, setReplyIsInternal] = useState(false);
 
     const selectedTicketId = selected?.id;
     const selectedTicketStatus = selected?.status;
@@ -68,9 +84,11 @@ export default function SupportPage() {
         if (activeCategory !== 'ALL') params.set('category', activeCategory);
         if (activeView !== 'ALL') params.set('view', activeView === 'OPEN' ? 'open' : 'overdue');
         if (debouncedSearch) params.set('search', debouncedSearch);
+        if (page > 1) params.set('page', page.toString());
+        if (sort !== 'updated') params.set('sort', sort);
         const nextUrl = params.toString() ? `${pathname}?${params}` : pathname;
         router.replace(nextUrl, { scroll: false });
-    }, [activeCategory, activeStatus, activeView, debouncedSearch, pathname, router]);
+    }, [activeCategory, activeStatus, activeView, debouncedSearch, page, pathname, router, sort]);
 
     const fetchTickets = useCallback(async (options: FetchTicketsOptions = {}) => {
         if (!options.silent) setLoading(true);
@@ -80,6 +98,9 @@ export default function SupportPage() {
             if (activeCategory !== 'ALL') params.set('category', activeCategory);
             if (activeView !== 'ALL') params.set('view', activeView === 'OPEN' ? 'open' : 'overdue');
             if (debouncedSearch) params.set('search', debouncedSearch);
+            if (sort !== 'updated') params.set('sort', sort);
+            params.set('page', page.toString());
+            params.set('limit', PAGE_LIMIT.toString());
 
             const [ticketsRes, statsRes] = await Promise.all([
                 fetchWithAuth(`${API_BASE_URL}/support/tickets?${params}`),
@@ -92,8 +113,11 @@ export default function SupportPage() {
             const statsJson = (await statsRes.json()) as StatsResponse;
             const data = json?.data ?? json;
             const nextTickets = ((data.tickets ?? []) as Ticket[]).map(normalizeTicket);
+            const newTotalPages = data.meta?.totalPages ?? 1;
 
             setTickets(nextTickets);
+            setTotalPages(newTotalPages);
+            if (newTotalPages > 0 && page > newTotalPages) setPage(1);
             setKpi({ ...EMPTY_KPI, ...resolveStats(statsJson) });
             setLastSyncedAt(new Date());
             setSelected((prev) => {
@@ -114,7 +138,7 @@ export default function SupportPage() {
         } finally {
             if (!options.silent) setLoading(false);
         }
-    }, [activeStatus, activeCategory, activeView, debouncedSearch]);
+    }, [activeStatus, activeCategory, activeView, debouncedSearch, page, sort]);
 
     const fetchSelectedDetail = useCallback(async (ticketId: number) => {
         try {
@@ -179,7 +203,10 @@ export default function SupportPage() {
     const handleSelect = async (ticket: Ticket) => {
         setActionError('');
         setActionNotice('');
+        setReplyError('');
+        setReplyIsInternal(false);
         setSelected(ticket);
+        setPanelOpen(true);
         await fetchSelectedDetail(ticket.id);
     };
 
@@ -210,16 +237,35 @@ export default function SupportPage() {
         }
     };
 
+    const handleAssign = async (id: number) => {
+        setActionError('');
+        setActionNotice('');
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${id}/assign`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            if (!res.ok) throw new Error(await readApiError(res, 'Không thể nhận ticket'));
+            setActionNotice('Đã nhận ticket về cho bạn.');
+            await fetchSelectedDetail(id);
+            void fetchTickets({ silent: true });
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : 'Không thể nhận ticket');
+        }
+    };
+
     const handleSendReply = async () => {
         if (!reply.trim() || !selected) return;
         setSending(true);
         setActionError('');
         setActionNotice('');
+        setReplyError('');
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${selected.id}/reply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: reply.trim() }),
+                body: JSON.stringify({ content: reply.trim(), isInternal: replyIsInternal }),
             });
             if (!res.ok) throw new Error(await readApiError(res, 'Không thể gửi phản hồi'));
 
@@ -228,10 +274,11 @@ export default function SupportPage() {
             setSelected((prev) => prev ? { ...prev, status: 'IN_PROGRESS', replies: [...(prev.replies ?? []), newReply] } : prev);
             setTickets((prev) => prev.map((ticket) => ticket.id === selected.id ? { ...ticket, status: 'IN_PROGRESS' } : ticket));
             setReply('');
-            setActionNotice('Đã gửi phản hồi cho khách hàng.');
+            setReplyIsInternal(false);
+            setActionNotice(replyIsInternal ? 'Đã lưu ghi chú nội bộ.' : 'Đã gửi phản hồi cho khách hàng.');
             void fetchTickets({ silent: true });
         } catch (error) {
-            setActionError(error instanceof Error ? error.message : 'Không thể gửi phản hồi');
+            setReplyError(error instanceof Error ? error.message : 'Không thể gửi phản hồi');
         } finally {
             setSending(false);
         }
@@ -251,52 +298,106 @@ export default function SupportPage() {
         }, {} as Partial<Record<TicketCategory, number>>);
     }, [tickets]);
 
+    const handleSearchChange = (value: string) => {
+        setPage(1);
+        setSearch(value);
+    };
+
+    const handleCategoryChange = (category: TicketCategory | 'ALL') => {
+        setPage(1);
+        setActiveCategory(category);
+    };
+
     const handleStatusFilterChange = (status: TicketStatus | 'ALL') => {
+        setPage(1);
         setActiveView('ALL');
         setActiveStatus(status);
     };
 
     const handleViewToggle = (view: Exclude<TicketView, 'ALL'>) => {
+        setPage(1);
         setActiveStatus('ALL');
         setActiveView((current) => current === view ? 'ALL' : view);
     };
 
+    const sharedSidebarProps = {
+        search,
+        counts,
+        activeStatus,
+        activeCategory,
+        activeView,
+        categoryCounts,
+        onSearchChange: handleSearchChange,
+        onStatusChange: handleStatusFilterChange,
+        onCategoryChange: handleCategoryChange,
+    };
+
+    const sharedPanelProps = {
+        selected,
+        reply,
+        sending,
+        statusUpdatingId,
+        replyError,
+        replyIsInternal,
+        onStatusChange: (id: number, status: TicketStatus) => void handleStatusChange(id, status),
+        onReplyChange: setReply,
+        onSendReply: () => void handleSendReply(),
+        onAssign: (id: number) => void handleAssign(id),
+        onSetInternal: setReplyIsInternal,
+    };
+
     return (
-        <main className="flex h-[calc(100dvh-68px)] max-h-[calc(100dvh-68px)] min-h-0 flex-1 overflow-hidden bg-surface text-on-surface">
-            <SupportSidebar
-                search={search}
-                counts={counts}
-                activeStatus={activeStatus}
-                activeCategory={activeCategory}
-                activeView={activeView}
-                categoryCounts={categoryCounts}
-                onSearchChange={setSearch}
-                onStatusChange={handleStatusFilterChange}
-                onCategoryChange={setActiveCategory}
-            />
+        <>
+            <main className="flex h-[calc(100dvh-68px)] max-h-[calc(100dvh-68px)] min-h-0 flex-1 overflow-hidden bg-surface text-on-surface">
+                <SupportSidebar {...sharedSidebarProps} />
 
-            <SupportTicketList
-                tickets={tickets}
-                kpi={kpi}
-                loading={loading}
-                selectedId={selected?.id ?? null}
-                activeView={activeView}
-                lastSyncedAt={lastSyncedAt}
-                actionError={actionError}
-                actionNotice={actionNotice}
-                onViewToggle={handleViewToggle}
-                onSelect={(ticket) => void handleSelect(ticket)}
-            />
+                <SupportTicketList
+                    tickets={tickets}
+                    kpi={kpi}
+                    loading={loading}
+                    selectedId={selected?.id ?? null}
+                    activeView={activeView}
+                    lastSyncedAt={lastSyncedAt}
+                    actionError={actionError}
+                    actionNotice={actionNotice}
+                    currentPage={page}
+                    totalPages={totalPages}
+                    sort={sort}
+                    onViewToggle={handleViewToggle}
+                    onSelect={(ticket) => void handleSelect(ticket)}
+                    onPageChange={setPage}
+                    onFilterOpen={() => setSidebarOpen(true)}
+                    onSortChange={setSort}
+                />
 
-            <SupportConversationPanel
-                selected={selected}
-                reply={reply}
-                sending={sending}
-                statusUpdatingId={statusUpdatingId}
-                onStatusChange={(id, status) => void handleStatusChange(id, status)}
-                onReplyChange={setReply}
-                onSendReply={() => void handleSendReply()}
-            />
-        </main>
+                <SupportConversationPanel {...sharedPanelProps} />
+            </main>
+
+            {/* Filter sidebar drawer — hiện dưới xl */}
+            <div className={`fixed inset-0 z-50 xl:hidden transition-opacity duration-200 ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+                <div className={`absolute inset-y-0 left-0 flex w-72 flex-col shadow-2xl transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                    <SupportSidebar {...sharedSidebarProps} drawer onSearchChange={(v) => { handleSearchChange(v); }} onStatusChange={(s) => { handleStatusFilterChange(s); setSidebarOpen(false); }} onCategoryChange={(c) => { handleCategoryChange(c); setSidebarOpen(false); }} />
+                </div>
+            </div>
+
+            {/* Conversation panel drawer — hiện dưới lg */}
+            <div className={`fixed inset-0 z-50 lg:hidden transition-opacity duration-200 ${panelOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <div className="absolute inset-0 bg-black/50" onClick={() => setPanelOpen(false)} />
+                <div className={`absolute inset-y-0 right-0 flex w-full flex-col bg-surface shadow-2xl transition-transform duration-300 sm:w-[440px] ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                    <div className="shrink-0 flex items-center gap-2 border-b border-outline-variant/30 bg-surface px-4 py-3">
+                        <button
+                            type="button"
+                            onClick={() => setPanelOpen(false)}
+                            className="flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-bold text-on-surface-variant transition hover:bg-surface-container focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
+                        >
+                            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">arrow_back</span>
+                            Danh sách
+                        </button>
+                    </div>
+                    <SupportConversationPanel {...sharedPanelProps} drawer />
+                </div>
+            </div>
+        </>
     );
 }

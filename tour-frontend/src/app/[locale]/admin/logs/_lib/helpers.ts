@@ -100,14 +100,7 @@ export const getRecordTitle = (log: ActivityLog) => {
     return typeof candidate === 'string' && candidate.trim() ? candidate : `ID #${log.resourceId ?? log.id}`;
 };
 
-const getRecordStatus = (log: ActivityLog) => {
-    const record = isAuditRecord(log.newData) ? log.newData : isAuditRecord(log.oldData) ? log.oldData : null;
-    return typeof record?.status === 'string' ? record.status : null;
-};
-
 export const getAuditSeverity = (log: ActivityLog): AuditSeverity => {
-    const status = getRecordStatus(log);
-
     if (['ROLE_CHANGE', 'EXPORT'].includes(log.action)) {
         return { label: 'Nghiêm trọng', className: 'bg-red-50 text-red-700 border-red-200', icon: 'gpp_maybe' };
     }
@@ -116,11 +109,7 @@ export const getAuditSeverity = (log: ActivityLog): AuditSeverity => {
         return { label: 'Cần chú ý', className: 'bg-orange-50 text-orange-700 border-orange-200', icon: 'priority_high' };
     }
 
-    if (['Booking', 'User', 'Voucher'].includes(log.resource) && log.action === 'UPDATE') {
-        return { label: 'Quan trọng', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'warning' };
-    }
-
-    if (log.resource === 'Tour' && ['PUBLISHED', 'PENDING_REVIEW'].includes(status ?? '')) {
+    if (['Booking', 'User', 'Voucher', 'Tour'].includes(log.resource) && log.action === 'UPDATE') {
         return { label: 'Quan trọng', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'warning' };
     }
 

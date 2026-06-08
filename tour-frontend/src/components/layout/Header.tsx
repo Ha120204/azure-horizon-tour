@@ -6,12 +6,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLocale } from '@/context/LocaleContext';
 import LocaleSwitcher from './LocaleSwitcher';
-import { API_BASE_URL } from '@/lib/constants';
-import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/publicSettings';
-import { getDestinationDisplay } from '@/lib/formatDestination';
-import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
-import { getDefaultAdminPathForRole, isAdminRole } from '@/lib/adminAccess';
-import { toastEmitter } from '@/lib/toastEmitter';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
+import { getDestinationDisplay } from '@/lib/tour/formatDestination';
+import { clearClientUserStorage, fetchAuthProfile } from '@/lib/auth/authSession';
+import { getDefaultAdminPathForRole, isAdminRole } from '@/lib/admin/adminAccess';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 
 interface SearchResult {
     destinations: { id: number; name: string; type?: string; region?: string }[];

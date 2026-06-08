@@ -11,7 +11,9 @@ interface DatePickerDropdownProps {
     placeholder?: string;
     triggerId?: string;
     variant?: 'hero' | 'field';
+    dropdownPlacement?: 'top' | 'bottom';
     dropdownClassName?: string;
+    triggerClassName?: string;
 }
 
 const VI_MONTHS_SHORT = ['Th1', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7', 'Th8', 'Th9', 'Th10', 'Th11', 'Th12'];
@@ -51,7 +53,9 @@ export default function DatePickerDropdown({
     placeholder,
     triggerId,
     variant = 'hero',
+    dropdownPlacement = 'bottom',
     dropdownClassName = '',
+    triggerClassName = '',
 }: DatePickerDropdownProps) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -139,8 +143,12 @@ export default function DatePickerDropdown({
     const displayText = formatDisplay(value, language);
     const pickerLabel = label || (language === 'vi' ? 'Chọn ngày' : 'Select date');
     const dropdownPositionClass = variant === 'field'
-        ? 'top-[calc(100%+8px)] left-0 z-[300]'
-        : 'top-[calc(100%+16px)] left-1/2 -translate-x-1/2 z-[200]';
+        ? dropdownPlacement === 'bottom'
+            ? 'top-[calc(100%+12px)] left-0 z-[300]'
+            : 'bottom-[calc(100%+12px)] left-0 z-[300]'
+        : dropdownPlacement === 'bottom'
+            ? 'top-[calc(100%+16px)] left-1/2 -translate-x-1/2 z-[200]'
+            : 'bottom-[calc(100%+16px)] left-1/2 -translate-x-1/2 z-[200]';
 
     const isDisabled = (date: Date) => minDateObj ? date < minDateObj : date < today;
     const isSelectedDay = (date: Date) => value === toYMD(date);
@@ -172,8 +180,8 @@ export default function DatePickerDropdown({
                 aria-label={pickerLabel}
                 onClick={toggleOpen}
                 className={variant === 'field'
-                    ? 'flex h-[42px] w-full items-center justify-between gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-3 py-2.5 text-left text-sm outline-none transition-colors hover:bg-surface-container-low focus-visible:ring-2 focus-visible:ring-primary'
-                    : 'flex w-full flex-col items-center rounded-lg text-center outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                    ? `flex h-[42px] w-full items-center justify-between gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-3 py-2.5 text-left text-sm outline-none transition-colors hover:bg-surface-container-low focus-visible:ring-2 focus-visible:ring-primary ${triggerClassName}`
+                    : `flex w-full flex-col items-center rounded-lg text-center outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${triggerClassName}`
                 }
             >
                 {variant === 'field' ? (

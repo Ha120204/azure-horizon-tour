@@ -18,6 +18,13 @@ import {
     isAuditRecord,
 } from '../_lib/helpers';
 import type { ActivityLog } from '../_lib/types';
+import { LogSelect, type LogSelectOption } from './LogSelect';
+
+const PAGE_SIZE_OPTIONS: LogSelectOption[] = [
+    { value: '10', label: '10', icon: 'table_rows' },
+    { value: '25', label: '25', icon: 'table_rows' },
+    { value: '50', label: '50', icon: 'table_rows' },
+];
 
 interface LogsTableProps {
     logs: ActivityLog[];
@@ -26,11 +33,15 @@ interface LogsTableProps {
     copiedLogId: number | null;
     copyErrorLogId: number | null;
     page: number;
+    pageSize: number;
+    sortOrder: 'asc' | 'desc';
     totalPages: number;
     totalRecords: number;
     onToggleExpanded: (id: number | null) => void;
     onCopyReference: (log: ActivityLog) => void;
     onPageChange: (page: number | ((current: number) => number)) => void;
+    onPageSizeChange: (pageSize: number) => void;
+    onToggleCreatedAtSort: () => void;
 }
 
 export function LogsTable({
@@ -40,20 +51,35 @@ export function LogsTable({
     copiedLogId,
     copyErrorLogId,
     page,
+    pageSize,
+    sortOrder,
     totalPages,
     totalRecords,
     onToggleExpanded,
     onCopyReference,
     onPageChange,
+    onPageSizeChange,
+    onToggleCreatedAtSort,
 }: LogsTableProps) {
     return (
-        <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-xl shadow-sm overflow-visible flex flex-col">
             <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-surface-container-low border-b border-outline-variant/20 text-on-surface-variant font-label text-[11px] uppercase tracking-wider">
                             <th className="py-3 px-4 w-10"></th>
-                            <th className="py-3 px-4 font-semibold">Thời Gian</th>
+                            <th className="py-3 px-4 font-semibold" aria-sort={sortOrder === 'asc' ? 'ascending' : 'descending'}>
+                                <button
+                                    type="button"
+                                    onClick={onToggleCreatedAtSort}
+                                    className="inline-flex items-center gap-1 rounded-md text-left font-semibold uppercase tracking-wider transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                                >
+                                    Thời Gian
+                                    <span className="material-symbols-outlined text-[15px]" aria-hidden="true">
+                                        {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                                    </span>
+                                </button>
+                            </th>
                             <th className="py-3 px-4 font-semibold">Người Thực Hiện</th>
                             <th className="py-3 px-4 font-semibold">Hành Động</th>
                             <th className="py-3 px-4 font-semibold">Đối Tượng</th>
@@ -87,10 +113,24 @@ export function LogsTable({
                 </table>
             </div>
 
-            <div className="bg-surface-container-lowest border-t border-outline-variant/20 px-4 py-3 flex items-center justify-between text-sm">
-                <span className="text-on-surface-variant">
-                    Hiển thị <span className="font-semibold text-on-surface">{logs.length}</span> / <span className="font-semibold text-on-surface">{totalRecords}</span> bản ghi
-                </span>
+            <div className="flex flex-col gap-3 border-t border-outline-variant/20 bg-surface-container-lowest px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                    <span className="text-on-surface-variant">
+                        Hiển thị <span className="font-semibold text-on-surface">{logs.length}</span> / <span className="font-semibold text-on-surface">{totalRecords}</span> bản ghi
+                    </span>
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
+                        Số dòng
+                        <LogSelect
+                            ariaLabel="Chọn số dòng mỗi trang"
+                            value={String(pageSize)}
+                            options={PAGE_SIZE_OPTIONS}
+                            onChange={value => onPageSizeChange(Number(value))}
+                            className="w-20"
+                            menuClassName="min-w-20"
+                            placement="top"
+                        />
+                    </label>
+                </div>
                 <div className="flex items-center gap-1">
                     <button
                         type="button"
@@ -328,6 +368,7 @@ function AuditSummaryPanel({
                 {[
                     ['Đối tượng', `${resourceLabel} · ${targetTitle}`],
                     ['Người thực hiện', log.user?.fullName || 'Hệ thống'],
+                    ['Vai trò', log.user?.role || 'SYSTEM'],
                     ['Email', log.user?.email || '—'],
                     ['Thời gian', formatDateTimeValue(log.createdAt)],
                     ['IP', log.ipAddress || '—'],

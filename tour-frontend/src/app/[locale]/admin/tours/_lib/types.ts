@@ -72,6 +72,37 @@ export interface TourPackage {
   excludesEn?: string[] | string;
 }
 
+export type TransportType =
+  | "FLIGHT"
+  | "BUS"
+  | "PRIVATE_CAR"
+  | "COMBO"
+  | "SELF_ARRANGED";
+
+export interface TourDepartureTransport {
+  id: number;
+  type: TransportType;
+  airline?: string | null;
+  flightCode?: string | null;
+  departureAirport?: string | null;
+  arrivalAirport?: string | null;
+  departureTime?: string | null;
+  arrivalTime?: string | null;
+  flightClass?: string | null;
+  returnFlightCode?: string | null;
+  returnAirline?: string | null;
+  returnDepartureAirport?: string | null;
+  returnArrivalAirport?: string | null;
+  returnDepartureTime?: string | null;
+  returnArrivalTime?: string | null;
+  returnFlightClass?: string | null;
+  vehicleType?: string | null;
+  operator?: string | null;
+  boardingPoint?: string | null;
+  boardingTime?: string | null;
+  notes?: string | null;
+}
+
 export interface TourDeparture {
   id: number;
   departureDate: string;
@@ -81,6 +112,7 @@ export interface TourDeparture {
   note?: string;
   noteEn?: string;
   category?: string;
+  transport?: TourDepartureTransport | null;
 }
 
 export interface TourHighlight {

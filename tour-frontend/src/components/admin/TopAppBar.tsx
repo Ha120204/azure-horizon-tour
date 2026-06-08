@@ -4,10 +4,10 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/routing';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { saveClientUserStorage } from '@/lib/authSession';
-import type { AdminRole } from '@/lib/adminAccess';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { saveClientUserStorage } from '@/lib/auth/authSession';
+import type { AdminRole } from '@/lib/admin/adminAccess';
 import type { SearchTourResult, SearchDestinationResult } from './topAppBar/types';
 import {
     getPageMeta, canAccessRole, filterActionsByRole,

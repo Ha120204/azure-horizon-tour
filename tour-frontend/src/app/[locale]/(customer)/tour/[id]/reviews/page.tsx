@@ -7,7 +7,7 @@ import Footer from '@/components/layout/Footer';
 import ReviewModal from '@/components/review/ReviewModal';
 import { useParams } from 'next/navigation';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 
 type ReviewListItem = {
     id: number | string;

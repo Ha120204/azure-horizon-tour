@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
-import { useAdminRealtime } from '@/hooks/useAdminRealtime';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
+import { useAdminRealtime } from '@/hooks/admin/useAdminRealtime';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { EMPTY_ADMIN_STATS } from '../_lib/config';
 import type { AdminStats, Meta, Review, ReviewKpiItem } from '../_lib/types';
 

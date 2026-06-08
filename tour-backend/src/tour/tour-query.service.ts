@@ -10,7 +10,7 @@ import {
   normalizeLocale,
   localizeTour,
   toEnglishNameFallback,
-} from './tour-localization';
+} from './localization';
 import {
   getMinBookableDate,
   isAdminLikeRole,
@@ -65,6 +65,7 @@ export class TourQueryService {
             isActive: true,
             departureDate: { gte: getMinBookableDate() },
           },
+          include: { transport: true },
           orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }],
         },
         images: { orderBy: { sortOrder: 'asc' } },

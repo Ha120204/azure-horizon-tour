@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import { writeClipboardText } from '../_lib/helpers';
 import type { ActivityLog, KpiFilter, LogStats } from '../_lib/types';
 
@@ -28,8 +29,13 @@ export function useSystemLogs() {
     const [totalRecords, setTotalRecords] = useState(0);
     const [search, setSearch] = useState('');
     const [actionFilter, setActionFilter] = useState('');
+    const [resourceFilter, setResourceFilter] = useState('');
+    const [roleFilter, setRoleFilter] = useState('');
+    const [severityFilter, setSeverityFilter] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
+    const [pageSize, setPageSize] = useState(10);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [activeShortcut, setActiveShortcut] = useState<string>('');
     const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
@@ -85,6 +91,9 @@ export function useSystemLogs() {
         if (filter === 'all') {
             setSearch('');
             setActionFilter('');
+            setResourceFilter('');
+            setRoleFilter('');
+            setSeverityFilter('');
             setDateFrom('');
             setDateTo('');
             setActiveShortcut('');
@@ -105,15 +114,31 @@ export function useSystemLogs() {
         setPage(1);
     }, [applyShortcut]);
 
-    const fetchLogs = useCallback(async (currentPage: number, currentSearch: string, currentAction: string, from: string, to: string) => {
+    const fetchLogs = useCallback(async (
+        currentPage: number,
+        currentSearch: string,
+        currentAction: string,
+        currentResource: string,
+        currentRole: string,
+        currentSeverity: string,
+        from: string,
+        to: string,
+        currentPageSize: number,
+        currentSortOrder: 'asc' | 'desc',
+    ) => {
         setIsLoading(true);
         try {
             const queryParams = new URLSearchParams({
                 page: currentPage.toString(),
-                limit: '15',
+                limit: currentPageSize.toString(),
+                sortBy: 'createdAt',
+                sortOrder: currentSortOrder,
             });
             if (currentSearch) queryParams.append('search', currentSearch);
             if (currentAction) queryParams.append('action', currentAction);
+            if (currentResource) queryParams.append('resource', currentResource);
+            if (currentRole) queryParams.append('role', currentRole);
+            if (currentSeverity) queryParams.append('severity', currentSeverity);
             if (from) queryParams.append('dateFrom', from);
             if (to) queryParams.append('dateTo', to);
 
@@ -142,15 +167,15 @@ export function useSystemLogs() {
 
     useEffect(() => {
         const timer = setTimeout(() => {
-            fetchLogs(page, search, actionFilter, dateFrom, dateTo);
+            fetchLogs(page, search, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder);
         }, 400);
         return () => clearTimeout(timer);
-    }, [page, search, actionFilter, dateFrom, dateTo, fetchLogs]);
+    }, [page, search, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder, fetchLogs]);
 
     useAdminAutoRefresh({
         intervalMs: 60 * 1000,
         pause: Boolean(isExporting || expandedRow),
-        onRefresh: () => fetchLogs(page, search, actionFilter, dateFrom, dateTo),
+        onRefresh: () => fetchLogs(page, search, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder),
     });
 
     useEffect(() => {
@@ -222,8 +247,13 @@ export function useSystemLogs() {
         setIsExporting(true);
         try {
             const queryParams = new URLSearchParams();
+            queryParams.append('sortBy', 'createdAt');
+            queryParams.append('sortOrder', sortOrder);
             if (search) queryParams.append('search', search);
             if (actionFilter) queryParams.append('action', actionFilter);
+            if (resourceFilter) queryParams.append('resource', resourceFilter);
+            if (roleFilter) queryParams.append('role', roleFilter);
+            if (severityFilter) queryParams.append('severity', severityFilter);
             if (dateFrom) queryParams.append('dateFrom', dateFrom);
             if (dateTo) queryParams.append('dateTo', dateTo);
 
@@ -242,11 +272,11 @@ export function useSystemLogs() {
             document.body.removeChild(link);
         } catch (error) {
             console.error('Error exporting CSV:', error);
-            alert('Có lỗi xảy ra khi xuất dữ liệu!');
+            toastEmitter.error('Xuất CSV thất bại', 'Có lỗi xảy ra khi xuất dữ liệu. Vui lòng thử lại.');
         } finally {
             setIsExporting(false);
         }
-    }, [actionFilter, dateFrom, dateTo, search]);
+    }, [actionFilter, dateFrom, dateTo, resourceFilter, roleFilter, search, severityFilter, sortOrder]);
 
     const scheduleCopyFeedbackReset = useCallback(() => {
         if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
@@ -276,6 +306,21 @@ export function useSystemLogs() {
         setPage(1);
     }, []);
 
+    const changeResourceFilter = useCallback((value: string) => {
+        setResourceFilter(value);
+        setPage(1);
+    }, []);
+
+    const changeRoleFilter = useCallback((value: string) => {
+        setRoleFilter(value);
+        setPage(1);
+    }, []);
+
+    const changeSeverityFilter = useCallback((value: string) => {
+        setSeverityFilter(value);
+        setPage(1);
+    }, []);
+
     const changeDateFrom = useCallback((value: string) => {
         setDateFrom(value);
         setActiveShortcut('');
@@ -284,6 +329,28 @@ export function useSystemLogs() {
 
     const changeDateTo = useCallback((value: string) => {
         setDateTo(value);
+        setActiveShortcut('');
+        setPage(1);
+    }, []);
+
+    const changePageSize = useCallback((value: number) => {
+        setPageSize(value);
+        setPage(1);
+    }, []);
+
+    const toggleCreatedAtSort = useCallback(() => {
+        setSortOrder(current => current === 'desc' ? 'asc' : 'desc');
+        setPage(1);
+    }, []);
+
+    const clearAllFilters = useCallback(() => {
+        setSearch('');
+        setActionFilter('');
+        setResourceFilter('');
+        setRoleFilter('');
+        setSeverityFilter('');
+        setDateFrom('');
+        setDateTo('');
         setActiveShortcut('');
         setPage(1);
     }, []);
@@ -297,24 +364,35 @@ export function useSystemLogs() {
         copyErrorLogId,
         linkedLogError,
         page,
+        pageSize,
         totalPages,
         totalRecords,
         search,
         actionFilter,
+        resourceFilter,
+        roleFilter,
+        severityFilter,
         dateFrom,
         dateTo,
+        sortOrder,
         activeShortcut,
         expandedRow,
         setPage,
         setExpandedRow,
         applyShortcut,
         clearDateFilter,
+        clearAllFilters,
         applyKpiFilter,
         handleExport,
         copyAuditReference,
         changeSearch,
         changeActionFilter,
+        changeResourceFilter,
+        changeRoleFilter,
+        changeSeverityFilter,
         changeDateFrom,
         changeDateTo,
+        changePageSize,
+        toggleCreatedAtSort,
     };
 }

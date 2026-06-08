@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, TransportType } from '@prisma/client';
 
 type PromotionCategory = 'FLASH_SALE' | 'EARLY_BIRD' | 'LAST_MINUTE';
 
@@ -156,6 +156,69 @@ const promotionSeeds: PromotionSeed[] = [
   },
 ];
 
+// ── Flight configs for affected international tours ────────────────────────
+type FlightConfig = {
+  airline: string;
+  flightCode: string;
+  returnFlightCode: string;
+  departureAirport: string;
+  arrivalAirport: string;
+  departureHour: number;
+  flightDurationHours: number;
+  flightClass: string;
+  tourDays: number;
+};
+
+const FLIGHT_CONFIGS: Record<string, FlightConfig> = {
+  'INT-THA-001':  { airline: 'Vietnam Airlines', flightCode: 'VN-570', returnFlightCode: 'VN-571', departureAirport: 'HAN', arrivalAirport: 'BKK', departureHour: 7,  flightDurationHours: 2.5, flightClass: 'Economy', tourDays: 5 },
+  'INT-SGMY-002': { airline: 'Vietnam Airlines', flightCode: 'VN-630', returnFlightCode: 'VN-631', departureAirport: 'HAN', arrivalAirport: 'SIN', departureHour: 8,  flightDurationHours: 3.5, flightClass: 'Economy', tourDays: 5 },
+  'INT-HKMO-005': { airline: 'Vietnam Airlines', flightCode: 'VN-590', returnFlightCode: 'VN-591', departureAirport: 'HAN', arrivalAirport: 'HKG', departureHour: 7,  flightDurationHours: 2.5, flightClass: 'Economy', tourDays: 4 },
+  'INT-UAE-009':  { airline: 'Emirates',          flightCode: 'EK-392', returnFlightCode: 'EK-393', departureAirport: 'HAN', arrivalAirport: 'DXB', departureHour: 0,  flightDurationHours: 8,   flightClass: 'Economy', tourDays: 5 },
+  'INT-JPN-007':  { airline: 'Vietnam Airlines', flightCode: 'VN-310', returnFlightCode: 'VN-311', departureAirport: 'HAN', arrivalAirport: 'NRT', departureHour: 7,  flightDurationHours: 5,   flightClass: 'Economy', tourDays: 5 },
+  'INT-EUR-010':  { airline: 'Air France',        flightCode: 'AF-259', returnFlightCode: 'AF-258', departureAirport: 'SGN', arrivalAirport: 'CDG', departureHour: 22, flightDurationHours: 12,  flightClass: 'Economy', tourDays: 7 },
+};
+
+function buildFlightTransport(cfg: FlightConfig, departureDate: Date) {
+  const depTime = new Date(departureDate);
+  depTime.setHours(cfg.departureHour, 0, 0, 0);
+  const arrTime = new Date(depTime.getTime() + cfg.flightDurationHours * 3_600_000);
+  const retDepTime = new Date(departureDate);
+  retDepTime.setDate(retDepTime.getDate() + cfg.tourDays - 1);
+  retDepTime.setHours(14, 0, 0, 0);
+  const retArrTime = new Date(retDepTime.getTime() + cfg.flightDurationHours * 3_600_000);
+  return {
+    type: TransportType.FLIGHT,
+    airline: cfg.airline,
+    flightCode: cfg.flightCode,
+    departureAirport: cfg.departureAirport,
+    arrivalAirport: cfg.arrivalAirport,
+    departureTime: depTime,
+    arrivalTime: arrTime,
+    flightClass: cfg.flightClass,
+    returnAirline: cfg.airline,
+    returnFlightCode: cfg.returnFlightCode,
+    returnDepartureAirport: cfg.arrivalAirport,
+    returnArrivalAirport: cfg.departureAirport,
+    returnDepartureTime: retDepTime,
+    returnArrivalTime: retArrTime,
+    returnFlightClass: cfg.flightClass,
+    notes: 'Vé máy bay đã bao gồm trong giá tour. Hành lý ký gửi theo quy định hãng bay.',
+  };
+}
+
+function buildBusTransport(boardingPoint: string, departureDate: Date) {
+  const boardingTime = new Date(departureDate);
+  boardingTime.setHours(7, 0, 0, 0);
+  return {
+    type: TransportType.BUS,
+    vehicleType: 'Xe du lịch 45 chỗ',
+    operator: 'Xe riêng công ty',
+    boardingPoint,
+    boardingTime,
+    notes: 'Xe đón tại điểm tập trung đã thông báo. Quý khách có mặt trước 15 phút.',
+  };
+}
+
 function addDays(days: number): Date {
   const date = new Date();
   date.setHours(8, 0, 0, 0);
@@ -167,78 +230,74 @@ function salePrice(basePrice: number, discountPercent: number): number {
   return Math.round(basePrice * (1 - discountPercent / 100));
 }
 
-function regularDepartures(
-  basePrice: number,
-  maxSeats: number,
-  startOffset: number,
-) {
-  return [35, 60, 90].map((gap, index) => ({
-    departureDate: addDays(startOffset + gap),
-    price: basePrice,
-    availableSeats: Math.max(12, maxSeats - index * 4),
-    maxSeats,
-    note: 'Lich khoi hanh dinh ky',
-    category: null,
-    flashSaleEndsAt: null,
-    isActive: true,
-    sortOrder: index + 1,
-  }));
-}
-
 export async function seedPromotionDepartures(prisma: PrismaClient) {
   const affectedTourCodes = promotionSeeds.map((item) => item.tourCode);
 
   const tours = await prisma.tour.findMany({
     where: { tourCode: { in: affectedTourCodes }, deletedAt: null },
-    select: { id: true, tourCode: true, price: true },
+    select: { id: true, tourCode: true, price: true, departurePoint: true },
   });
   const tourByCode = new Map(tours.map((tour) => [tour.tourCode, tour]));
 
-  const missingCodes = affectedTourCodes.filter(
-    (code) => !tourByCode.has(code),
-  );
+  const missingCodes = affectedTourCodes.filter((code) => !tourByCode.has(code));
   if (missingCodes.length > 0) {
-    throw new Error(
-      `Missing tours for promotion seed: ${missingCodes.join(', ')}`,
-    );
+    throw new Error(`Missing tours for promotion seed: ${missingCodes.join(', ')}`);
   }
 
   for (const promo of promotionSeeds) {
     const tour = tourByCode.get(promo.tourCode);
     if (!tour) continue;
 
+    const flightCfg = FLIGHT_CONFIGS[promo.tourCode] ?? null;
+
+    const buildTransport = (date: Date) =>
+      flightCfg
+        ? { create: buildFlightTransport(flightCfg, date) }
+        : { create: buildBusTransport(tour.departurePoint ?? '', date) };
+
     await prisma.tourDeparture.deleteMany({ where: { tourId: tour.id } });
 
-    const departureDate = addDays(promo.departureOffsetDays);
+    const promoDate = addDays(promo.departureOffsetDays);
     const flashSaleEndsAt =
-      promo.category === 'FLASH_SALE'
-        ? addDays(promo.deadlineOffsetDays ?? 5)
-        : null;
+      promo.category === 'FLASH_SALE' ? addDays(promo.deadlineOffsetDays ?? 5) : null;
 
-    await prisma.tourDeparture.createMany({
-      data: [
-        {
-          tourId: tour.id,
-          departureDate,
-          price: salePrice(tour.price, promo.discountPercent),
-          availableSeats: promo.availableSeats,
-          maxSeats: promo.maxSeats,
-          note: promo.note,
-          category: promo.category,
-          flashSaleEndsAt,
-          isActive: true,
-          sortOrder: 0,
-        },
-        ...regularDepartures(
-          tour.price,
-          promo.maxSeats,
-          promo.departureOffsetDays,
-        ).map((departure) => ({
-          tourId: tour.id,
-          ...departure,
-        })),
-      ],
+    // Promotion departure
+    await prisma.tourDeparture.create({
+      data: {
+        tourId: tour.id,
+        departureDate: promoDate,
+        price: salePrice(tour.price, promo.discountPercent),
+        availableSeats: promo.availableSeats,
+        maxSeats: promo.maxSeats,
+        note: promo.note,
+        category: promo.category,
+        flashSaleEndsAt,
+        isActive: true,
+        sortOrder: 0,
+        transport: buildTransport(promoDate),
+      },
     });
+
+    // Regular departures at +35, +60, +90 days from promo offset
+    const regularOffsets = [35, 60, 90];
+    for (const [index, gap] of regularOffsets.entries()) {
+      const date = addDays(promo.departureOffsetDays + gap);
+      await prisma.tourDeparture.create({
+        data: {
+          tourId: tour.id,
+          departureDate: date,
+          price: tour.price,
+          availableSeats: Math.max(12, promo.maxSeats - index * 4),
+          maxSeats: promo.maxSeats,
+          note: 'Lịch khởi hành định kỳ',
+          category: null,
+          flashSaleEndsAt: null,
+          isActive: true,
+          sortOrder: index + 1,
+          transport: buildTransport(date),
+        },
+      });
+    }
   }
 
   const summary = await prisma.tourDeparture.groupBy({
@@ -252,9 +311,6 @@ export async function seedPromotionDepartures(prisma: PrismaClient) {
   });
 
   console.table(
-    summary.map((row) => ({
-      category: row.category,
-      count: row._count.category,
-    })),
+    summary.map((row) => ({ category: row.category, count: row._count.category })),
   );
 }

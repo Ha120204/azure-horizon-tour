@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { clearClientUserStorage } from '@/lib/authSession';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { clearClientUserStorage } from '@/lib/auth/authSession';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { PasswordFormSection, ProfileInfoFormSection } from './_components/ProfileForms';
 import { ProfileIdentityPanel } from './_components/ProfileIdentityPanel';
 import { Toast } from './_components/Toast';

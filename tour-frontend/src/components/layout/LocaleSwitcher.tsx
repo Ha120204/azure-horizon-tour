@@ -21,6 +21,21 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
     const [tempLang, setTempLang] = useState(language);
     const [tempCur, setTempCur] = useState(currency);
 
+    const optionButtonClass = (isActive: boolean) =>
+        `group w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 text-left transition-[background-color,border-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white motion-reduce:transform-none motion-reduce:transition-none ${
+            isActive
+                ? 'border-primary bg-primary/5 shadow-[0_10px_24px_rgba(0,63,135,0.10)] hover:bg-primary/10 hover:shadow-[0_14px_32px_rgba(0,63,135,0.16)]'
+                : 'border-slate-100 bg-white hover:border-primary/25 hover:bg-primary/[0.03] hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]'
+        }`;
+    const currencyGlyphClass = (isActive: boolean) =>
+        `text-base font-black px-2 py-0.5 rounded-md transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:transform-none ${
+            isActive
+                ? 'bg-primary/10 text-primary'
+                : 'text-slate-700 bg-slate-100 group-hover:bg-primary/10 group-hover:text-primary'
+        }`;
+    const activeCheckClass =
+        'w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-sm transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-110 motion-reduce:transform-none';
+
     // Chỉ đồng bộ state tạm khi modal VỪA MỞ (isOpen chuyển từ false → true)
     const handleClose = () => {
         setTempLang(language);
@@ -66,9 +81,10 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                         <button
                             type="button"
                             onClick={handleClose}
-                            className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors"
+                            aria-label="Close regional settings"
+                            className="group flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary active:translate-y-0 active:scale-95 motion-reduce:transform-none motion-reduce:transition-none"
                         >
-                            <span className="material-symbols-outlined text-slate-500 text-xl">close</span>
+                            <span className="material-symbols-outlined text-xl transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:rotate-90 motion-reduce:transform-none">close</span>
                         </button>
                     </div>
 
@@ -84,19 +100,15 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                                 <button
                                     type="button"
                                     onClick={() => setTempCur('VND')}
-                                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 text-left transition-all duration-200 active:scale-[0.98]
-                                        ${tempCur === 'VND'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-slate-100 hover:border-slate-200 bg-white'
-                                        }`}
+                                    className={optionButtonClass(tempCur === 'VND')}
                                 >
-                                    <span className="text-base font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">₫</span>
+                                    <span className={currencyGlyphClass(tempCur === 'VND')}>₫</span>
                                     <div className="flex-1">
                                         <p className={`text-sm font-bold ${tempCur === 'VND' ? 'text-primary' : 'text-slate-800'}`}>VND</p>
                                         <p className="text-[11px] text-slate-500">Vietnam Dong</p>
                                     </div>
                                     {tempCur === 'VND' && (
-                                        <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                        <div className={activeCheckClass}>
                                             <span className="material-symbols-outlined text-white text-xs">check</span>
                                         </div>
                                     )}
@@ -106,19 +118,15 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                                 <button
                                     type="button"
                                     onClick={() => setTempCur('USD')}
-                                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 text-left transition-all duration-200 active:scale-[0.98]
-                                        ${tempCur === 'USD'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-slate-100 hover:border-slate-200 bg-white'
-                                        }`}
+                                    className={optionButtonClass(tempCur === 'USD')}
                                 >
-                                    <span className="text-base font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">$</span>
+                                    <span className={currencyGlyphClass(tempCur === 'USD')}>$</span>
                                     <div className="flex-1">
                                         <p className={`text-sm font-bold ${tempCur === 'USD' ? 'text-primary' : 'text-slate-800'}`}>USD</p>
                                         <p className="text-[11px] text-slate-500">US Dollar</p>
                                     </div>
                                     {tempCur === 'USD' && (
-                                        <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                        <div className={activeCheckClass}>
                                             <span className="material-symbols-outlined text-white text-xs">check</span>
                                         </div>
                                     )}
@@ -136,25 +144,21 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                                 <button
                                     type="button"
                                     onClick={() => setTempLang('vi')}
-                                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 text-left transition-all duration-200 active:scale-[0.98]
-                                        ${tempLang === 'vi'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-slate-100 hover:border-slate-200 bg-white'
-                                        }`}
+                                    className={optionButtonClass(tempLang === 'vi')}
                                 >
                                     <Image
                                         src="https://flagcdn.com/w40/vn.png"
                                         alt="Cờ Việt Nam"
                                         width={28}
                                         height={21}
-                                        className="h-5 w-7 rounded-[3px] border border-slate-200 object-cover shadow-sm"
+                                        className="h-5 w-7 rounded-[3px] border border-slate-200 object-cover shadow-sm transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:transform-none"
                                     />
                                     <div className="flex-1">
                                         <p className={`text-sm font-bold ${tempLang === 'vi' ? 'text-primary' : 'text-slate-800'}`}>Tiếng Việt</p>
                                         <p className="text-[11px] text-slate-500">Việt Nam</p>
                                     </div>
                                     {tempLang === 'vi' && (
-                                        <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                        <div className={activeCheckClass}>
                                             <span className="material-symbols-outlined text-white text-xs">check</span>
                                         </div>
                                     )}
@@ -164,19 +168,15 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                                 <button
                                     type="button"
                                     onClick={() => setTempLang('en')}
-                                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 text-left transition-all duration-200 active:scale-[0.98]
-                                        ${tempLang === 'en'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-slate-100 hover:border-slate-200 bg-white'
-                                        }`}
+                                    className={optionButtonClass(tempLang === 'en')}
                                 >
-                                    <span className="text-lg">🌐</span>
+                                    <span className="text-lg transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-110 motion-reduce:transform-none">🌐</span>
                                     <div className="flex-1">
                                         <p className={`text-sm font-bold ${tempLang === 'en' ? 'text-primary' : 'text-slate-800'}`}>English</p>
                                         <p className="text-[11px] text-slate-500">International</p>
                                     </div>
                                     {tempLang === 'en' && (
-                                        <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                        <div className={activeCheckClass}>
                                             <span className="material-symbols-outlined text-white text-xs">check</span>
                                         </div>
                                     )}
@@ -193,7 +193,7 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
                         <button
                             type="button"
                             onClick={handleConfirm}
-                            className="px-8 py-2.5 bg-primary text-white font-headline font-bold text-sm rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/20"
+                            className="inline-flex items-center justify-center px-8 py-2.5 bg-primary text-white font-headline font-bold text-sm rounded-xl shadow-md shadow-primary/20 transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 motion-reduce:transform-none motion-reduce:transition-none"
                         >
                             {tempLang === 'vi' ? 'Xác nhận' : 'Confirm'}
                         </button>

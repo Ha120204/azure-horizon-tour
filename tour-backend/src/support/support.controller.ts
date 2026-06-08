@@ -83,6 +83,7 @@ export class SupportController {
     @Query('category') category?: string,
     @Query('search')   search?:   string,
     @Query('view')     view?:     string,
+    @Query('sort')     sort?:     string,
     @Query('page')     page?:     string,
     @Query('limit')    limit?:    string,
   ) {
@@ -91,6 +92,7 @@ export class SupportController {
       category,
       search,
       view,
+      sort,
       page:  page  ? parseInt(page)  : 1,
       limit: limit ? parseInt(limit) : 20,
     });
@@ -109,8 +111,10 @@ export class SupportController {
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTicketStatusDto,
+    @Request() req: AuthenticatedRequest,
   ) {
-    return this.supportService.updateStatus(id, dto.status);
+    const actorName = getAuthDisplayName(req, 'Admin');
+    return this.supportService.updateStatus(id, dto.status, actorName);
   }
 
   // PATCH /support/tickets/:id/assign
@@ -133,7 +137,7 @@ export class SupportController {
   ) {
     const staffName = getAuthDisplayName(req, 'Nhân viên');
     const staffId = getRequiredAuthUserId(req);
-    return this.supportService.replyTicket(id, dto.content, staffName, staffId);
+    return this.supportService.replyTicket(id, dto.content, staffName, staffId, dto.isInternal);
   }
 }
 

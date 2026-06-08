@@ -29,6 +29,7 @@ export default function MarketingPage() {
         onEditCampaign={marketing.openEditCampaign}
         onScheduleCampaign={marketing.openScheduleCampaign}
         onDeleteDraft={marketing.deleteCampaignDraft}
+        onCancelCampaign={marketing.setCancelCampaignTarget}
       />
 
       <SubscriberSection
@@ -79,6 +80,10 @@ export default function MarketingPage() {
         isScheduling={marketing.isScheduling}
         onCancelSchedule={() => marketing.setScheduleTarget(null)}
         onConfirmSchedule={marketing.scheduleCampaign}
+        cancelCampaignTarget={marketing.cancelCampaignTarget}
+        isCancellingCampaign={marketing.isCancellingCampaign}
+        onCloseCancelCampaign={() => marketing.setCancelCampaignTarget(null)}
+        onConfirmCancelCampaign={marketing.cancelScheduledCampaign}
         deleteTarget={marketing.deleteTarget}
         isDeleting={marketing.isDeleting}
         onCancelDelete={() => marketing.setDeleteTarget(null)}

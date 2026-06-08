@@ -1,8 +1,8 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchAuthProfile, fetchOptionalAuth } from '@/lib/authSession';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchAuthProfile, fetchOptionalAuth } from '@/lib/auth/authSession';
 import type { Message, ChatSessionSummary } from './types';
 
 export function useConcierge() {
@@ -16,7 +16,7 @@ export function useConcierge() {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = useState(false);
     const [hasAccessToken, setHasAccessToken] = useState(false);
-    const [isContactDockOpen, setIsContactDockOpen] = useState(true);
+    const [isContactDockOpen, setIsContactDockOpen] = useState(false);
     const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
     const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
     const [messages, setMessages] = useState<Message[]>([

@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import SupportTicketDetail from '@/components/profile/SupportTicketDetail';
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 import type { SupportTicket } from '@/components/profile/SupportTicketList';
 
 type TicketResponse = SupportTicket | { data?: SupportTicket; message?: string };

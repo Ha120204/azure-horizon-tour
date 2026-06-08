@@ -11,6 +11,7 @@ interface SupportSidebarProps {
     onSearchChange: (value: string) => void;
     onStatusChange: (status: TicketStatus | 'ALL') => void;
     onCategoryChange: (category: TicketCategory | 'ALL') => void;
+    drawer?: boolean;
 }
 
 export function SupportSidebar({
@@ -23,9 +24,13 @@ export function SupportSidebar({
     onSearchChange,
     onStatusChange,
     onCategoryChange,
+    drawer = false,
 }: SupportSidebarProps) {
     return (
-        <aside className="hidden min-h-0 w-72 shrink-0 flex-col border-r border-outline-variant/40 bg-surface-container-lowest xl:flex">
+        <aside className={drawer
+            ? 'flex min-h-0 w-72 flex-1 flex-col border-r border-outline-variant/40 bg-surface-container-lowest'
+            : 'hidden min-h-0 w-72 shrink-0 flex-col border-r border-outline-variant/40 bg-surface-container-lowest xl:flex'
+        }>
             <div className="shrink-0 border-b border-outline-variant/30 p-5">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Support Desk</p>
                 <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">Hỗ trợ khách hàng</h1>

@@ -5,7 +5,7 @@ import {
   localizeDestination,
   normalizeLocale,
   toEnglishNameFallback,
-} from '../tour/tour-localization';
+} from '../tour/localization';
 
 // ─── Helpers (internal) ───────────────────────────────────────────────────────
 

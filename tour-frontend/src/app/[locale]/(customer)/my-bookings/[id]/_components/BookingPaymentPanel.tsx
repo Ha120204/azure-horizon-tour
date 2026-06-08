@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useLocale } from '@/context/LocaleContext';
 import { EXPIRY_MINUTES, type BookingDetail, type CancellationPolicy, type PaymentIssueResult } from '../_lib/types';
+import { BookingCancellationPolicy } from './BookingCancellationPolicy';
 
 function StatusBadge({ status, paymentStatus }: { status: string; paymentStatus: string }) {
     if (paymentStatus === 'PAID' && status === 'CONFIRMED') {
@@ -96,7 +97,7 @@ type Props = {
 
 export function BookingPaymentPanel({
     booking, isPaid, isPending, isPaymentReviewing, isCancelled, isCancelRequested,
-    isExpired, canCancelBooking, cancellationPolicy, tripLifecycle, tripUnavailableReason,
+    isExpired, canCancelBooking, cancellationPolicy,
     totalPriceNumber, refundAmountNumber, secondsLeft, payError, isPaying,
     paymentIssueResult, paymentSupportTicket, onRetryPayment, onOpenCancelModal, onOpenIssueForm,
 }: Props) {
@@ -156,52 +157,47 @@ export function BookingPaymentPanel({
                 </div>
             )}
 
+            {/* Cancellation policy — rich display with deadline, tier, and amount */}
             {cancellationPolicy && !isCancelRequested && !isCancelled && (
-                <div className={`rounded-xl border px-4 py-3 text-sm ${canCancelBooking
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : tripLifecycle === 'COMPLETED'
-                        ? 'border-slate-200 bg-slate-50 text-slate-700'
-                        : 'border-amber-200 bg-amber-50 text-amber-800'
-                    }`}>
-                    <div className="flex items-start gap-2">
-                        <span className="material-symbols-outlined text-base mt-0.5">
-                            {canCancelBooking ? 'event_available' : tripLifecycle === 'COMPLETED' ? 'task_alt' : 'event_busy'}
-                        </span>
-                        <div>
-                            <p className="font-bold">
-                                {canCancelBooking
-                                    ? `Có thể hủy online - hoàn dự kiến ${cancellationPolicy.refundPercent}%`
-                                    : tripLifecycle === 'COMPLETED'
-                                        ? 'Chuyến đi đã hoàn thành'
-                                        : 'Không thể hủy online'}
-                            </p>
-                            <p className="mt-1 text-xs opacity-80">
-                                {canCancelBooking ? cancellationPolicy.refundNote : tripUnavailableReason}
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                <BookingCancellationPolicy
+                    cancellationPolicy={cancellationPolicy}
+                    bookingCreatedAt={booking.createdAt}
+                    isPaidBooking={isPaid}
+                />
             )}
 
             {isPaid ? (
-                <div className="space-y-3">
+                <>
+                    {/* Primary action: E-Ticket */}
                     <Link
                         href={`/success?bookingId=${booking.bookingCode}`}
-                        className="w-full bg-primary text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-md active:scale-95"
+                        className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary py-3.5 font-bold text-white shadow-md shadow-primary/20 outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-lg hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
                     >
-                        <span className="material-symbols-outlined text-lg">qr_code_scanner</span>
-                        {t('my_bookings.eTicket')}
+                        <span
+                            className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-white/20 opacity-0 transition-[opacity,transform] duration-500 ease-out group-hover:translate-x-[420%] group-hover:opacity-100 motion-reduce:hidden"
+                            aria-hidden="true"
+                        />
+                        <span className="material-symbols-outlined relative z-10 text-lg transition-transform duration-200 ease-out group-hover:scale-110 group-hover:-rotate-6 motion-reduce:transform-none">qr_code_scanner</span>
+                        <span className="relative z-10">{t('my_bookings.eTicket')}</span>
                     </Link>
+
+                    {/* Cancel — secondary action, only shown when cancelable */}
                     {canCancelBooking && (
-                        <button
-                            onClick={onOpenCancelModal}
-                            className="w-full border-2 border-red-200 text-red-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-50 transition-all text-sm"
-                        >
-                            <span className="material-symbols-outlined text-base">cancel</span>
-                            Yêu Cầu Hủy Tour
-                        </button>
+                        <div className="border-t border-slate-100 pt-4 space-y-2">
+                            <p className="text-center text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                                Hành động khác
+                            </p>
+                            <button
+                                type="button"
+                                onClick={onOpenCancelModal}
+                                className="group flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-transparent py-2.5 text-sm font-bold text-red-400 outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50 hover:text-red-600 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+                            >
+                                <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover:rotate-90 motion-reduce:transform-none">cancel</span>
+                                Yêu Cầu Hủy Tour
+                            </button>
+                        </div>
                     )}
-                </div>
+                </>
             ) : isCancelRequested ? (
                 <div className="space-y-3">
                     <div className="w-full bg-orange-50 border-2 border-orange-200 text-orange-600 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 text-sm">
@@ -211,9 +207,9 @@ export function BookingPaymentPanel({
                     <p className="text-xs text-center text-slate-400">Thời gian xử lý: 1–3 ngày làm việc</p>
                     <Link
                         href="/contact"
-                        className="w-full border border-slate-200 text-slate-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
+                        className="group/support flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-500 outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
                     >
-                        <span className="material-symbols-outlined text-base">support_agent</span>
+                        <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover/support:-translate-y-0.5 group-hover/support:scale-110 motion-reduce:transform-none">support_agent</span>
                         Liên Hệ Hỗ Trợ
                     </Link>
                 </div>
@@ -225,9 +221,9 @@ export function BookingPaymentPanel({
                     </div>
                     <Link
                         href="/destinations"
-                        className="w-full border border-primary text-primary py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary hover:text-white transition-all text-sm"
+                        className="group/explore flex w-full items-center justify-center gap-2 rounded-xl border border-primary py-3 text-sm font-bold text-primary outline-none transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary hover:text-white hover:shadow-md hover:shadow-primary/15 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
                     >
-                        <span className="material-symbols-outlined text-base">explore</span>
+                        <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover/explore:rotate-12 group-hover/explore:scale-110 motion-reduce:transform-none">explore</span>
                         Khám Phá Tour Mới
                     </Link>
                 </div>
@@ -237,8 +233,8 @@ export function BookingPaymentPanel({
                         <span className="material-symbols-outlined text-lg">timer_off</span>
                         Đã Hết Hạn Thanh Toán
                     </div>
-                    <Link href="/destinations" className="w-full border border-primary text-primary py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-primary hover:text-white transition-all text-sm">
-                        <span className="material-symbols-outlined text-lg">explore</span>
+                    <Link href="/destinations" className="group/explore flex w-full items-center justify-center gap-2 rounded-xl border border-primary py-3 text-sm font-bold text-primary outline-none transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary hover:text-white hover:shadow-md hover:shadow-primary/15 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none">
+                        <span className="material-symbols-outlined text-lg transition-transform duration-200 ease-out group-hover/explore:rotate-12 group-hover/explore:scale-110 motion-reduce:transform-none">explore</span>
                         Đặt Tour Mới
                     </Link>
                 </div>
@@ -247,9 +243,9 @@ export function BookingPaymentPanel({
                     {booking.paymentMethod === 'IN_STORE' ? (
                         <Link
                             href={`/success?bookingId=${booking.bookingCode}`}
-                            className="w-full bg-primary text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-md active:scale-95 text-center text-sm"
+                            className="group/guide flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-center text-sm font-bold text-white shadow-md outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-lg hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
                         >
-                            <span className="material-symbols-outlined text-lg">info</span>
+                            <span className="material-symbols-outlined text-lg transition-transform duration-200 ease-out group-hover/guide:scale-110 motion-reduce:transform-none">info</span>
                             Xem Hướng Dẫn và Vé Giữ Chỗ
                         </Link>
                     ) : isPaymentReviewing ? (
@@ -275,9 +271,9 @@ export function BookingPaymentPanel({
                             )}
                             <Link
                                 href="/contact"
-                                className="w-full border border-sky-200 bg-white text-sky-700 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sky-100 transition-all text-sm"
+                                className="group/support flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white py-2.5 text-sm font-bold text-sky-700 outline-none transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-100 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
                             >
-                                <span className="material-symbols-outlined text-base">support_agent</span>
+                                <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover/support:-translate-y-0.5 group-hover/support:scale-110 motion-reduce:transform-none">support_agent</span>
                                 Liên hệ hỗ trợ
                             </Link>
                         </div>
@@ -286,23 +282,25 @@ export function BookingPaymentPanel({
                             <button
                                 onClick={onRetryPayment}
                                 disabled={isPaying}
-                                className="w-full bg-amber-500 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-amber-600 transition-all shadow-md active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+                                className="group/payment flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold text-on-primary shadow-md outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-lg hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none"
                             >
                                 {isPaying ? (
                                     <><span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Đang tạo liên kết...</>
                                 ) : (
-                                    <><span className="material-symbols-outlined text-lg">account_balance_wallet</span>{t('my_bookings.payNow')}</>
+                                    <><span className="material-symbols-outlined text-lg transition-transform duration-200 ease-out group-hover/payment:-translate-y-0.5 group-hover/payment:scale-110 motion-reduce:transform-none">account_balance_wallet</span>{t('my_bookings.payNow')}</>
                                 )}
                             </button>
                             <button
                                 onClick={onOpenIssueForm}
-                                className="w-full border border-sky-200 text-sky-700 bg-sky-50 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-sky-100 transition-all text-sm"
+                                className="group/review flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-sm font-bold text-sky-700 outline-none transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-100 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
                             >
-                                <span className="material-symbols-outlined text-base">fact_check</span>
+                                <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover/review:scale-110 group-hover/review:-rotate-6 motion-reduce:transform-none">fact_check</span>
                                 Tôi đã chuyển khoản, yêu cầu kiểm tra
                             </button>
                         </>
                     )}
+
+                    {/* Cancel — secondary action, visually separated */}
                     {canCancelBooking && (
                         <div className="border-t border-slate-200/70 pt-3 space-y-2">
                             {(isPaymentReviewing || paymentIssueResult) && (
@@ -312,9 +310,9 @@ export function BookingPaymentPanel({
                             )}
                             <button
                                 onClick={onOpenCancelModal}
-                                className="w-full border-2 border-slate-200 text-slate-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-all text-sm"
+                                className="group/cancel flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-400 outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50 hover:text-red-600 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
                             >
-                                <span className="material-symbols-outlined text-base">cancel</span>
+                                <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover/cancel:rotate-90 motion-reduce:transform-none">cancel</span>
                                 Hủy Đặt Tour
                             </button>
                         </div>

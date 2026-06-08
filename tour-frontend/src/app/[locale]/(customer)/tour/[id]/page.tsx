@@ -20,7 +20,7 @@ import {
 import PackageCard from '@/components/tour/PackageCard';
 import BookingSidebarNew from '@/components/tour/BookingSidebar';
 import { Tour, TourPackage, Review, ReviewStats } from '@/types';
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 
 interface RatingBreakdownStats {
     averageRating: number;

@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from 'react';
 import { CampaignComposerDialog } from './CampaignComposerDialog';
+import { CancelCampaignDialog } from './CancelCampaignDialog';
 import { DeleteSubscriberDialog } from './DeleteSubscriberDialog';
 import { MarketingToast } from './MarketingToast';
 import { ScheduleCampaignDialog } from './ScheduleCampaignDialog';
@@ -45,6 +46,10 @@ interface MarketingOverlaysProps {
   isScheduling: boolean;
   onCancelSchedule: () => void;
   onConfirmSchedule: () => void;
+  cancelCampaignTarget: CampaignDraft | null;
+  isCancellingCampaign: boolean;
+  onCloseCancelCampaign: () => void;
+  onConfirmCancelCampaign: () => void;
   deleteTarget: Subscriber | null;
   isDeleting: boolean;
   onCancelDelete: () => void;
@@ -82,6 +87,10 @@ export function MarketingOverlays({
   isScheduling,
   onCancelSchedule,
   onConfirmSchedule,
+  cancelCampaignTarget,
+  isCancellingCampaign,
+  onCloseCancelCampaign,
+  onConfirmCancelCampaign,
   deleteTarget,
   isDeleting,
   onCancelDelete,
@@ -134,6 +143,15 @@ export function MarketingOverlays({
           isDeleting={isDeleting}
           onCancel={onCancelDelete}
           onConfirm={onConfirmDelete}
+        />
+      )}
+
+      {cancelCampaignTarget && (
+        <CancelCampaignDialog
+          campaign={cancelCampaignTarget}
+          isCancelling={isCancellingCampaign}
+          onCancel={onCloseCancelCampaign}
+          onConfirm={onConfirmCancelCampaign}
         />
       )}
 

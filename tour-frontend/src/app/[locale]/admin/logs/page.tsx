@@ -2,6 +2,7 @@
 
 import {
     LinkedLogAlert,
+    LogsAdvancedFilterPanel,
     LogsDateFilterBar,
     LogsFilterBar,
     LogsKpiGrid,
@@ -12,6 +13,7 @@ import { useSystemLogs } from './_hooks/useSystemLogs';
 
 export default function SystemLogsPage() {
     const logs = useSystemLogs();
+    const hasActiveFilters = Boolean(logs.search || logs.actionFilter || logs.resourceFilter || logs.roleFilter || logs.severityFilter || logs.dateFrom || logs.dateTo);
 
     return (
         <main className="flex-1 p-6 md:p-8 lg:p-10 w-full max-w-[1600px] mx-auto overflow-y-auto font-body bg-surface min-h-screen text-on-surface">
@@ -24,6 +26,9 @@ export default function SystemLogsPage() {
                 stats={logs.stats}
                 search={logs.search}
                 actionFilter={logs.actionFilter}
+                resourceFilter={logs.resourceFilter}
+                roleFilter={logs.roleFilter}
+                severityFilter={logs.severityFilter}
                 dateFrom={logs.dateFrom}
                 dateTo={logs.dateTo}
                 activeShortcut={logs.activeShortcut}
@@ -33,8 +38,19 @@ export default function SystemLogsPage() {
             <LogsFilterBar
                 search={logs.search}
                 actionFilter={logs.actionFilter}
+                resourceFilter={logs.resourceFilter}
+                hasActiveFilters={hasActiveFilters}
                 onSearchChange={logs.changeSearch}
                 onActionFilterChange={logs.changeActionFilter}
+                onResourceFilterChange={logs.changeResourceFilter}
+                onClearAllFilters={logs.clearAllFilters}
+            />
+
+            <LogsAdvancedFilterPanel
+                roleFilter={logs.roleFilter}
+                severityFilter={logs.severityFilter}
+                onRoleFilterChange={logs.changeRoleFilter}
+                onSeverityFilterChange={logs.changeSeverityFilter}
             />
 
             <LogsDateFilterBar
@@ -56,11 +72,15 @@ export default function SystemLogsPage() {
                 copiedLogId={logs.copiedLogId}
                 copyErrorLogId={logs.copyErrorLogId}
                 page={logs.page}
+                pageSize={logs.pageSize}
+                sortOrder={logs.sortOrder}
                 totalPages={logs.totalPages}
                 totalRecords={logs.totalRecords}
                 onToggleExpanded={logs.setExpandedRow}
                 onCopyReference={logs.copyAuditReference}
                 onPageChange={logs.setPage}
+                onPageSizeChange={logs.changePageSize}
+                onToggleCreatedAtSort={logs.toggleCreatedAtSort}
             />
         </main>
     );

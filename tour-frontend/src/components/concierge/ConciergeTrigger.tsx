@@ -17,7 +17,7 @@ export default function ConciergeTrigger({
     return (
         <div className="fixed bottom-6 right-5 z-40 flex flex-col items-end gap-3 sm:right-6">
             {isContactDockOpen ? (
-                <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_14px_40px_rgba(15,23,42,0.16)] backdrop-blur">
+                <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_14px_40px_rgba(15,23,42,0.16)] backdrop-blur animate-fade-in-up">
                     {QUICK_CONTACTS.map((contact) => (
                         <a
                             key={contact.label}
@@ -56,9 +56,13 @@ export default function ConciergeTrigger({
                     type="button"
                     onClick={() => setIsContactDockOpen(true)}
                     aria-label="Mở kênh liên hệ nhanh"
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-primary shadow-[0_12px_34px_rgba(15,23,42,0.18)] ring-1 ring-slate-200 transition-all hover:-translate-y-0.5 hover:bg-primary hover:text-white"
+                    aria-expanded={isContactDockOpen}
+                    className="group flex min-h-12 items-center gap-2 rounded-full bg-white px-3.5 py-2 text-primary shadow-[0_12px_34px_rgba(15,23,42,0.18)] ring-1 ring-slate-200 transition-all hover:-translate-y-0.5 hover:bg-primary hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
-                    <span className="material-symbols-outlined text-[22px]">support_agent</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 transition-colors group-hover:bg-white/15">
+                        <span className="material-symbols-outlined text-[20px]">support_agent</span>
+                    </span>
+                    <span className="hidden pr-1 text-xs font-black sm:block">Liên hệ</span>
                 </button>
             )}
 

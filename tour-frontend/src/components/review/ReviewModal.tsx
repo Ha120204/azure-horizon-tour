@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
 import { useLocale } from '@/context/LocaleContext';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { API_BASE_URL } from '@/lib/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import Modal from '@/components/ui/Modal';
 
 type ReviewModalProps = {
     isOpen: boolean;
@@ -19,7 +20,6 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [images, setImages] = useState<string[]>([]);
-    const dialogRef = useRef<HTMLDivElement>(null);
     const titleId = 'review-modal-title';
     const errorId = 'review-modal-error';
     const commentId = 'review-modal-comment';
@@ -33,21 +33,6 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
         onClose();
     };
 
-    useEffect(() => {
-        if (!isOpen) return;
-
-        dialogRef.current?.focus();
-
-        const handleKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') handleCloseModal();
-        };
-
-        window.addEventListener('keydown', handleKey);
-        return () => window.removeEventListener('keydown', handleKey);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
-
-    if (!isOpen) return null;
 
     const handleRatingKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, star: number) => {
         if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
@@ -115,21 +100,13 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
     };
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-            onClick={(event) => {
-                if (event.target === event.currentTarget) handleCloseModal();
-            }}
+        <Modal
+            open={isOpen}
+            onClose={handleCloseModal}
+            size="sm"
+            labelledBy={titleId}
+            className="bg-surface-container-lowest"
         >
-            <div
-                ref={dialogRef}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                aria-describedby={errorMsg ? errorId : undefined}
-                tabIndex={-1}
-                className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-200 focus:outline-none"
-            >
                 <button 
                     type="button"
                     onClick={handleCloseModal}
@@ -247,7 +224,6 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                         </form>
                     )}
                 </div>
-            </div>
-        </div>
+        </Modal>
     );
 }

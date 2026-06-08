@@ -1,7 +1,39 @@
 'use client';
 
+import { useState } from 'react';
 import type React from 'react';
+import { RESOURCE_LABELS } from '../_lib/config';
 import type { KpiFilter, LogStats } from '../_lib/types';
+import { LogSelect, type LogSelectOption } from './LogSelect';
+
+const ACTION_FILTER_OPTIONS: LogSelectOption[] = [
+    { value: '', label: 'Tất cả hành động', icon: 'view_list' },
+    { value: 'CREATE', label: 'Tạo mới (CREATE)', icon: 'add_circle' },
+    { value: 'UPDATE', label: 'Cập nhật (UPDATE)', icon: 'edit' },
+    { value: 'DELETE', label: 'Xóa (DELETE)', icon: 'delete' },
+    { value: 'LOGIN', label: 'Đăng nhập (LOGIN)', icon: 'login' },
+    { value: 'LOGOUT', label: 'Đăng xuất (LOGOUT)', icon: 'logout' },
+    { value: 'ROLE_CHANGE', label: 'Đổi quyền (ROLE_CHANGE)', icon: 'admin_panel_settings' },
+    { value: 'CANCEL_BOOKING', label: 'Hủy đơn (CANCEL_BOOKING)', icon: 'event_busy' },
+];
+const RESOURCE_FILTER_OPTIONS: LogSelectOption[] = [
+    { value: '', label: 'Tất cả tài nguyên', icon: 'inventory_2' },
+    ...Object.entries(RESOURCE_LABELS).map(([value, label]) => ({ value, label, icon: 'category' })),
+];
+const ROLE_FILTER_OPTIONS: LogSelectOption[] = [
+    { value: '', label: 'Tất cả vai trò', icon: 'groups' },
+    { value: 'SUPER_ADMIN', label: 'Siêu quản trị' },
+    { value: 'ADMIN', label: 'Quản trị viên' },
+    { value: 'STAFF', label: 'Nhân viên' },
+    { value: 'SYSTEM', label: 'Hệ thống' },
+];
+const SEVERITY_FILTER_OPTIONS: LogSelectOption[] = [
+    { value: '', label: 'Tất cả mức độ', icon: 'rule' },
+    { value: 'CRITICAL', label: 'Nghiêm trọng' },
+    { value: 'ATTENTION', label: 'Cần chú ý' },
+    { value: 'IMPORTANT', label: 'Quan trọng' },
+    { value: 'NORMAL', label: 'Bình thường' },
+];
 
 interface LogsPageHeaderProps {
     isExporting: boolean;
@@ -31,6 +63,9 @@ interface LogsKpiGridProps {
     stats: LogStats | null;
     search: string;
     actionFilter: string;
+    resourceFilter: string;
+    roleFilter: string;
+    severityFilter: string;
     dateFrom: string;
     dateTo: string;
     activeShortcut: string;
@@ -41,6 +76,9 @@ export function LogsKpiGrid({
     stats,
     search,
     actionFilter,
+    resourceFilter,
+    roleFilter,
+    severityFilter,
     dateFrom,
     dateTo,
     activeShortcut,
@@ -52,7 +90,7 @@ export function LogsKpiGrid({
         onApplyFilter(filter);
     };
 
-    const isAllActive = !search && !actionFilter && !dateFrom && !dateTo;
+    const isAllActive = !search && !actionFilter && !resourceFilter && !roleFilter && !severityFilter && !dateFrom && !dateTo;
     const cards = [
         {
             filter: 'all' as KpiFilter,
@@ -70,7 +108,7 @@ export function LogsKpiGrid({
         {
             filter: 'today' as KpiFilter,
             label: 'Hôm nay',
-            value: `+${stats?.todayCount?.toLocaleString() || 0}`,
+            value: stats?.todayCount?.toLocaleString() || 0,
             icon: 'today',
             valueClassName: 'text-emerald-700',
             iconClassName: 'text-emerald-400',
@@ -147,15 +185,23 @@ export function LogsKpiGrid({
 interface LogsFilterBarProps {
     search: string;
     actionFilter: string;
+    resourceFilter: string;
+    hasActiveFilters: boolean;
     onSearchChange: (value: string) => void;
     onActionFilterChange: (value: string) => void;
+    onResourceFilterChange: (value: string) => void;
+    onClearAllFilters: () => void;
 }
 
 export function LogsFilterBar({
     search,
     actionFilter,
+    resourceFilter,
+    hasActiveFilters,
     onSearchChange,
     onActionFilterChange,
+    onResourceFilterChange,
+    onClearAllFilters,
 }: LogsFilterBarProps) {
     return (
         <div className="bg-surface-container-lowest rounded-xl p-3 mb-3 flex flex-col md:flex-row gap-3 border border-outline-variant/20 shadow-sm" role="search" aria-label="Tìm kiếm và lọc nhật ký hệ thống">
@@ -174,28 +220,102 @@ export function LogsFilterBar({
                 />
             </div>
             <div className="w-px bg-outline-variant/20 hidden md:block" />
-            <div className="relative min-w-[190px]">
-                <label htmlFor="audit-action-filter" className="sr-only">Lọc theo hành động</label>
-                <select
-                    id="audit-action-filter"
-                    name="audit-action-filter"
-                    aria-label="Lọc nhật ký theo hành động"
+            <div className="grid gap-3 sm:grid-cols-2 md:flex md:items-center">
+                <LogSelect
                     value={actionFilter}
-                    onChange={event => onActionFilterChange(event.target.value)}
-                    className="w-full bg-surface border border-outline-variant/25 rounded-lg pl-4 pr-10 py-2 text-sm focus:border-primary/40 focus:ring-2 focus:ring-primary/20 outline-none appearance-none cursor-pointer"
-                >
-                    <option value="">Tất cả hành động</option>
-                    <option value="CREATE">Tạo mới (CREATE)</option>
-                    <option value="UPDATE">Cập nhật (UPDATE)</option>
-                    <option value="DELETE">Xóa (DELETE)</option>
-                    <option value="LOGIN">Đăng nhập (LOGIN)</option>
-                    <option value="LOGOUT">Đăng xuất (LOGOUT)</option>
-                    <option value="ROLE_CHANGE">Đổi quyền (ROLE_CHANGE)</option>
-                    <option value="CANCEL_BOOKING">Hủy đơn (CANCEL_BOOKING)</option>
-                </select>
-                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline text-[18px] pointer-events-none" aria-hidden="true">expand_more</span>
+                    options={ACTION_FILTER_OPTIONS}
+                    onChange={onActionFilterChange}
+                    ariaLabel="Lọc nhật ký theo hành động"
+                    className="min-w-[210px]"
+                    menuClassName="min-w-[260px]"
+                    align="right"
+                />
+                <LogSelect
+                    value={resourceFilter}
+                    options={RESOURCE_FILTER_OPTIONS}
+                    onChange={onResourceFilterChange}
+                    ariaLabel="Lọc nhật ký theo loại tài nguyên"
+                    className="min-w-[200px]"
+                    menuClassName="min-w-[240px]"
+                    align="right"
+                />
+                {hasActiveFilters && (
+                    <button
+                        type="button"
+                        onClick={onClearAllFilters}
+                        className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-outline-variant/25 bg-surface px-3 py-2 text-sm font-semibold text-on-surface-variant transition-colors hover:border-error/30 hover:bg-error/5 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/20 sm:col-span-2 md:col-span-1"
+                    >
+                        <span className="material-symbols-outlined text-[17px]" aria-hidden="true">filter_alt_off</span>
+                        Xóa tất cả
+                    </button>
+                )}
             </div>
         </div>
+    );
+}
+
+interface LogsAdvancedFilterPanelProps {
+    roleFilter: string;
+    severityFilter: string;
+    onRoleFilterChange: (value: string) => void;
+    onSeverityFilterChange: (value: string) => void;
+}
+
+export function LogsAdvancedFilterPanel({
+    roleFilter,
+    severityFilter,
+    onRoleFilterChange,
+    onSeverityFilterChange,
+}: LogsAdvancedFilterPanelProps) {
+    const [isOpen, setIsOpen] = useState(Boolean(roleFilter || severityFilter));
+    const activeCount = [roleFilter, severityFilter].filter(Boolean).length;
+
+    return (
+        <section className="mb-3 rounded-xl border border-outline-variant/20 bg-surface-container-lowest shadow-sm">
+            <button
+                type="button"
+                aria-expanded={isOpen}
+                onClick={() => setIsOpen(current => !current)}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-semibold text-on-surface-variant transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+            >
+                <span className="inline-flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">tune</span>
+                    Bộ lọc nâng cao
+                    {activeCount > 0 && (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                            {activeCount}
+                        </span>
+                    )}
+                </span>
+                <span
+                    className="material-symbols-outlined text-[18px] transition-transform"
+                    style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                    aria-hidden="true"
+                >
+                    expand_more
+                </span>
+            </button>
+
+            {isOpen && (
+                <div className="grid gap-3 border-t border-outline-variant/15 px-3 py-3 sm:grid-cols-2">
+                    <LogSelect
+                        value={roleFilter}
+                        options={ROLE_FILTER_OPTIONS}
+                        onChange={onRoleFilterChange}
+                        ariaLabel="Lọc nhật ký theo vai trò người thực hiện"
+                        menuClassName="min-w-full"
+                    />
+
+                    <LogSelect
+                        value={severityFilter}
+                        options={SEVERITY_FILTER_OPTIONS}
+                        onChange={onSeverityFilterChange}
+                        ariaLabel="Lọc nhật ký theo mức độ"
+                        menuClassName="min-w-full"
+                    />
+                </div>
+            )}
+        </section>
     );
 }
 

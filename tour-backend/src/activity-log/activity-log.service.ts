@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { IsOptional, IsString, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -26,7 +26,45 @@ export class LogQueryDto {
     @IsOptional() @IsString() search?: string;
     @IsOptional() @IsString() dateFrom?: string;
     @IsOptional() @IsString() dateTo?: string;
+    @IsOptional() @IsString() role?: string;
+    @IsOptional() @IsString() severity?: string;
+    @IsOptional() @IsString() sortBy?: string;
+    @IsOptional() @IsString() sortOrder?: string;
 }
+
+const IMPORTANT_RESOURCES = ['Booking', 'User', 'Voucher', 'Tour'];
+
+const normalizeRoleFilter = (role?: string): Role | 'SYSTEM' | null => {
+    const normalized = role?.trim().toUpperCase();
+    if (!normalized) return null;
+    if (normalized === 'SYSTEM') return 'SYSTEM';
+    return Object.values(Role).includes(normalized as Role) ? normalized as Role : null;
+};
+
+const buildSeverityWhere = (severity?: string): Prisma.SystemLogWhereInput | null => {
+    const normalized = severity?.trim().toUpperCase();
+    if (!normalized) return null;
+
+    const critical: Prisma.SystemLogWhereInput = { action: { in: ['ROLE_CHANGE', 'EXPORT'] } };
+    const attention: Prisma.SystemLogWhereInput = { action: { in: ['DELETE', 'CANCEL_BOOKING'] } };
+    const important: Prisma.SystemLogWhereInput = {
+        action: 'UPDATE',
+        resource: { in: IMPORTANT_RESOURCES },
+    };
+
+    switch (normalized) {
+        case 'CRITICAL':
+            return critical;
+        case 'ATTENTION':
+            return attention;
+        case 'IMPORTANT':
+            return important;
+        case 'NORMAL':
+            return { NOT: [critical, attention, important] };
+        default:
+            return null;
+    }
+};
 
 @Injectable()
 export class ActivityLogService {
@@ -57,16 +95,28 @@ export class ActivityLogService {
         const skip  = (page - 1) * limit;
 
         // Build WHERE with only guaranteed-safe fields
-        const where: any = {};
+        const where: Prisma.SystemLogWhereInput = {};
 
         if (query.action)   where.action   = query.action;
         if (query.resource) where.resource = query.resource;
         if (query.userId)   where.userId   = Number(query.userId);
 
+        const role = normalizeRoleFilter(query.role);
+        if (role === 'SYSTEM') {
+            where.userId = null;
+        } else if (role) {
+            where.user = { is: { role } };
+        }
+
+        const severityWhere = buildSeverityWhere(query.severity);
+        if (severityWhere) {
+            where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), severityWhere];
+        }
+
         const search = query.search?.trim();
         if (search) {
             const numericSearch = Number(search.replace(/^#/, '').replace(/^log\s*#/i, '').trim());
-            where.OR = [
+            const searchConditions: Prisma.SystemLogWhereInput[] = [
                 { description: { contains: search, mode: 'insensitive' } },
                 { targetName:  { contains: search, mode: 'insensitive' } },
                 { action:      { contains: search, mode: 'insensitive' } },
@@ -78,9 +128,14 @@ export class ActivityLogService {
             ];
 
             if (Number.isInteger(numericSearch) && numericSearch > 0) {
-                where.OR.push({ id: numericSearch });
+                searchConditions.push({ id: numericSearch });
             }
+
+            where.OR = searchConditions;
         }
+
+        const sortOrder: Prisma.SortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
+        const sortBy = query.sortBy === 'createdAt' ? query.sortBy : 'createdAt';
 
         if (query.dateFrom || query.dateTo) {
             where.createdAt = {};
@@ -104,7 +159,7 @@ export class ActivityLogService {
                 where,
                 skip,
                 take: limit,
-                orderBy: { createdAt: 'desc' },
+                orderBy: { [sortBy]: sortOrder },
                 include: {
                     user: {
                         select: { id: true, fullName: true, email: true, role: true, avatarUrl: true },
@@ -117,7 +172,7 @@ export class ActivityLogService {
                 where,
                 skip,
                 take: limit,
-                orderBy: { createdAt: 'desc' },
+                orderBy: { [sortBy]: sortOrder },
             }) as any);
         }
 

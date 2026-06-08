@@ -4,18 +4,18 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { useLocale } from '@/context/LocaleContext';
 import ErrorToast from '@/components/checkout/ErrorToast';
 import ContactInfoForm from '@/components/checkout/ContactInfoForm';
 import PassengerSection from '@/components/checkout/PassengerSection';
 import OrderSummary from '@/components/checkout/OrderSummary';
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 import ConfirmBookingModal from '@/components/checkout/ConfirmBookingModal';
-import { buildLocalizedLoginPath } from '@/lib/authRedirect';
-import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
-import type { PassengerType } from '@/lib/passengerDetails';
-import { PASSENGER_MULTIPLIERS } from '@/lib/passengerPricing';
+import { buildLocalizedLoginPath } from '@/lib/auth/authRedirect';
+import { clearClientUserStorage, fetchAuthProfile } from '@/lib/auth/authSession';
+import type { PassengerType } from '@/lib/booking/passengerDetails';
+import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
 
 interface Passenger {
     type: PassengerType;

@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import QRCode from 'react-qr-code';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 
 interface EBookedTour {
     id: number;
@@ -141,6 +141,7 @@ function PaymentSelectorContent() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
     const [qrPaymentData, setQrPaymentData] = useState<QRPaymentData | null>(null);
+    const [qrSuccess, setQrSuccess] = useState(false);
 
     // Cuộn lên đầu trang khi component mount (kể cả khi bấm back/forward)
     useEffect(() => {
@@ -273,8 +274,12 @@ function PaymentSelectorContent() {
                 const data = result.data ?? result;
                 if (res.ok && data?.synced === true) {
                     clearInterval(poll);
-                    setQrPaymentData(null);
-                    router.push(`/${language}/success?bookingId=${bookingCode}`);
+                    setQrSuccess(true);
+                    setTimeout(() => {
+                        setQrPaymentData(null);
+                        setQrSuccess(false);
+                        router.push(`/${language}/success?bookingId=${bookingCode}`);
+                    }, 1500);
                 }
             } catch {
                 // ignore poll errors
@@ -618,10 +623,11 @@ function PaymentSelectorContent() {
                 <QRPaymentModal
                     data={qrPaymentData}
                     timeLeft={timeLeft}
+                    isSuccess={qrSuccess}
                     d={d}
                     formatPrice={formatPrice}
                     formatTime={formatTime}
-                    onClose={() => setQrPaymentData(null)}
+                    onClose={() => { setQrPaymentData(null); setQrSuccess(false); }}
                 />
             )}
 
@@ -638,14 +644,16 @@ function PaymentSelectorContent() {
 interface QRPaymentModalProps {
     data: QRPaymentData;
     timeLeft: number | null;
+    isSuccess: boolean;
     d: typeof dict['vi'];
     formatPrice: (n: number) => string;
     formatTime: (s: number) => string;
     onClose: () => void;
 }
 
-function QRPaymentModal({ data, timeLeft, d, formatPrice, formatTime, onClose }: QRPaymentModalProps) {
+function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime, onClose }: QRPaymentModalProps) {
     const [copied, setCopied] = useState<string | null>(null);
+    const qrRef = useRef<HTMLDivElement>(null);
 
     const copy = (text: string, key: string) => {
         navigator.clipboard.writeText(text);
@@ -653,13 +661,61 @@ function QRPaymentModal({ data, timeLeft, d, formatPrice, formatTime, onClose }:
         setTimeout(() => setCopied(null), 2000);
     };
 
+    const handleDownload = () => {
+        const svgEl = qrRef.current?.querySelector('svg');
+        if (!svgEl) return;
+
+        const serializer = new XMLSerializer();
+        const svgStr = serializer.serializeToString(svgEl);
+        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+
+        const img = new window.Image();
+        img.onload = () => {
+            const padding = 24;
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width + padding * 2;
+            canvas.height = img.height + padding * 2;
+            const ctx = canvas.getContext('2d')!;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, padding, padding);
+            URL.revokeObjectURL(svgUrl);
+
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `QR-${data.description}.png`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            }, 'image/png');
+        };
+        img.src = svgUrl;
+    };
+
     const isExpired = timeLeft === 0;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={!isSuccess ? onClose : undefined} />
 
             <div className="relative z-10 bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-[440px] flex flex-col overflow-hidden">
+
+                {/* Success overlay */}
+                {isSuccess && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white rounded-3xl gap-4">
+                        <div className="w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
+                            <span className="material-symbols-outlined text-5xl text-emerald-500">check_circle</span>
+                        </div>
+                        <div className="text-center">
+                            <p className="font-bold text-lg text-on-surface">Thanh toán thành công!</p>
+                            <p className="text-sm text-outline mt-1">Đang chuyển đến trang xác nhận...</p>
+                        </div>
+                        <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="flex items-center justify-between px-7 pt-7 pb-5">
                     <div className="flex items-center gap-2">
@@ -676,7 +732,7 @@ function QRPaymentModal({ data, timeLeft, d, formatPrice, formatTime, onClose }:
 
                 {/* QR Code */}
                 <div className="flex flex-col items-center px-7 pb-5">
-                    <div className={`bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-opacity ${isExpired ? 'opacity-30 grayscale' : ''}`}>
+                    <div ref={qrRef} className={`bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-opacity ${isExpired ? 'opacity-30 grayscale' : ''}`}>
                         {data.qrCode ? (
                             <QRCode
                                 value={data.qrCode}
@@ -757,15 +813,35 @@ function QRPaymentModal({ data, timeLeft, d, formatPrice, formatTime, onClose }:
                 </div>
 
                 {/* Note */}
-                <p className="mx-7 mb-5 text-xs text-outline text-center leading-relaxed">
+                <p className="mx-7 mb-4 text-xs text-outline text-center leading-relaxed">
                     {d.qrNote.replace('{code}', data.description)}
                 </p>
 
+                {/* Waiting indicator */}
+                {!isExpired && !isSuccess && (
+                    <div className="mx-7 mb-5 flex items-center justify-center gap-2 text-xs text-slate-400">
+                        <span className="flex gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:-0.3s]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:-0.15s]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce" />
+                        </span>
+                        <span>Đang chờ xác nhận thanh toán...</span>
+                    </div>
+                )}
+
                 {/* Footer */}
-                <div className="px-7 pb-7">
+                <div className="px-7 pb-7 flex gap-3">
+                    <button
+                        onClick={handleDownload}
+                        disabled={isExpired || !data.qrCode}
+                        className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <span className="material-symbols-outlined text-base">download</span>
+                        Tải mã QR
+                    </button>
                     <button
                         onClick={onClose}
-                        className="w-full py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors"
+                        className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors"
                     >
                         {d.qrClose}
                     </button>

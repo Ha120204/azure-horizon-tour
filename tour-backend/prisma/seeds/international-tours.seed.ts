@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, TourStatus } from '@prisma/client';
+import { Prisma, PrismaClient, TourStatus, TransportType } from '@prisma/client';
 
 type Region = 'Đông Nam Á' | 'Đông Bắc Á' | 'Trung Đông' | 'Châu Âu';
 
@@ -205,14 +205,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-THA-001',
-      name: 'Thái Lan Bangkok - Pattaya 5 Ngay 4 Dem',
+      name: 'Thái Lan Bangkok - Pattaya 5 Ngày 4 Đêm',
       description: buildDescription(
         'Tour Thái Lan kinh dien cho khach Viet, kết hợp Bangkok, Pattaya, chua Wat Arun, mua sắm va cac diem giải trí nổi bật.',
         'văn hóa Thái Lan, city tour, mua sắm va nghỉ dưỡng ngắn ngày',
         'gia đình, nhóm bạn, khach lần đầu di nuoc ngoai va khach muon tour giá dễ tiep can',
       ),
       price: 9_900_000,
-      duration: '5 ngay 4 dem',
+      duration: '5 ngày 4 đêm',
       availableSeats: 120,
       imageUrl: IMAGES.bangkokPattaya[0],
       tourType: 'Khám Phá',
@@ -259,10 +259,19 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Pattaya - Bangkok',
           description:
-            'Trả phòng, mua đặc sản, quay lai Bangkok va chuan bi hành trình ve Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
-          activities: ['Mua đặc sản', 'Bay về Việt Nam'],
+            'Trả phòng, mua đặc sản và quay lại Bangkok nghỉ đêm trước khi về nước.',
+          accommodation: 'Khách sạn Bangkok theo gói',
+          transport: 'Xe du lịch',
+          activities: ['Trả phòng Pattaya', 'Mua đặc sản', 'Nghỉ đêm Bangkok'],
           imageUrl: IMAGES.bangkokPattaya[0],
+        },
+        {
+          title: 'Bangkok - Việt Nam',
+          description:
+            'Ăn sáng, ra sân bay Suvarnabhumi và bay về Việt Nam, kết thúc hành trình.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Sân bay Suvarnabhumi', 'Bay về Việt Nam'],
+          imageUrl: IMAGES.bangkokPattaya[2],
         },
       ],
       faqs: [
@@ -291,14 +300,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-SGMY-002',
-      name: 'Singapore - Malaysia 5 Ngay 4 Dem',
+      name: 'Singapore - Malaysia 5 Ngày 4 Đêm',
       description: buildDescription(
         'Hành trình Singapore - Malaysia kết hợp Marina Bay, Gardens by the Bay, Kuala Lumpur, Petronas Towers va cao nguyên Genting.',
         'do thi hien dai, công trình biểu tượng, mua sắm va giải trí gia đình',
         'gia đình, nhóm bạn, khach muon mot tour Đông Nam Á sach đẹp, de demo va nhieu điểm check-in',
       ),
       price: 14_500_000,
-      duration: '5 ngay 4 dem',
+      duration: '5 ngày 4 đêm',
       availableSeats: 100,
       imageUrl: IMAGES.singaporeMalaysia[0],
       tourType: 'Nghỉ Dưỡng',
@@ -339,16 +348,25 @@ const internationalTours: InternationalTourSeed[] = [
           imageUrl: IMAGES.singaporeMalaysia[1],
         },
         {
-          title: 'Genting/Malacca - Việt Nam',
+          title: 'Genting hoặc Malacca',
           description:
-            'Tham quan cao nguyên Genting hoac Malacca theo chương trình, sau do bay về Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
+            'Tham quan cao nguyên Genting hoặc phố cổ Malacca theo chương trình, trở về Kuala Lumpur nghỉ đêm.',
+          accommodation: 'Khách sạn Kuala Lumpur theo gói',
+          transport: 'Xe du lịch',
           activities: [
-            'Genting hoac Malacca',
-            'Mua đặc sản',
-            'Bay về Việt Nam',
+            'Genting hoặc Malacca',
+            'Mua đặc sản Malaysia',
+            'Trở về Kuala Lumpur',
           ],
           imageUrl: IMAGES.singaporeMalaysia[2],
+        },
+        {
+          title: 'Kuala Lumpur - Việt Nam',
+          description:
+            'Ăn sáng, tự do mua đặc sản cuối chuyến tại Kuala Lumpur và ra sân bay KLIA bay về Việt Nam.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Mua đặc sản Malaysia', 'Sân bay KLIA', 'Bay về Việt Nam'],
+          imageUrl: IMAGES.singaporeMalaysia[0],
         },
       ],
       faqs: [
@@ -377,14 +395,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-IDN-003',
-      name: 'Bali Ubud - Den Ulun Danu - Nghi Duong Biển 4 Ngay 3 Dem',
+      name: 'Bali Ubud - Den Ulun Danu - Nghi Duong Biển 4 Ngày 3 Đêm',
       description: buildDescription(
         'Tour Bali dảnh cho khach yeu nghỉ dưỡng, kết hợp Ubud, den Ulun Danu, ruộng bậc thang va thời gian thư giãn ben biển.',
         'nghỉ dưỡng dao, văn hóa Hindu Bali, ruộng bậc thang va resort biển',
         'cặp đôi, khach honeymoon, gia đình va nhóm bạn muon lịch trình đẹp nhung khong qua gap',
       ),
       price: 16_900_000,
-      duration: '4 ngay 3 dem',
+      duration: '4 ngày 3 đêm',
       availableSeats: 80,
       imageUrl: IMAGES.bali[0],
       tourType: 'Nghỉ Dưỡng',
@@ -458,14 +476,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-TWN-004',
-      name: 'Đài Loan Đài Bắc - Đài Trung - Cao Hùng 5 Ngay 4 Dem',
+      name: 'Đài Loan Đài Bắc - Đài Trung - Cao Hùng 5 Ngày 4 Đêm',
       description: buildDescription(
         'Tour Đài Loan kết hợp Đài Bắc 101, cho dem, Cửu Phần, Đài Trung, Cao Hùng va cac diem city tour phổ biến.',
         'city tour, ẩm thực cho dem, mua sắm va cảnh quan dong bac A',
         'khách trẻ, gia đình, nhóm bạn va khach muon tour gan Việt Nam voi chi phí vừa phải',
       ),
       price: 17_900_000,
-      duration: '5 ngay 4 dem',
+      duration: '5 ngày 4 đêm',
       availableSeats: 90,
       imageUrl: IMAGES.taiwan[0],
       tourType: 'Khám Phá',
@@ -506,11 +524,19 @@ const internationalTours: InternationalTourSeed[] = [
           imageUrl: IMAGES.taiwan[2],
         },
         {
-          title: 'Cao Hùng - Việt Nam',
-          description: 'Tham quan Cao Hùng, mua đặc sản va bay về Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
-          activities: ['Cao Hùng', 'Mua đặc sản', 'Bay về Việt Nam'],
+          title: 'Cao Hùng',
+          description: 'Tham quan Cao Hùng, cảng Pier 2 Arts Center, chợ Lục Hợp và mua đặc sản Đài Loan.',
+          accommodation: 'Khách sạn Cao Hùng theo gói',
+          transport: 'Xe du lịch',
+          activities: ['Pier 2 Arts Center', 'Chợ Lục Hợp', 'Mua đặc sản Đài Loan'],
           imageUrl: IMAGES.taiwan[0],
+        },
+        {
+          title: 'Đài Loan - Việt Nam',
+          description: 'Ăn sáng, trả phòng và ra sân bay bay về Việt Nam, kết thúc hành trình.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Sân bay Cao Hùng/Đài Bắc', 'Bay về Việt Nam'],
+          imageUrl: IMAGES.taiwan[1],
         },
       ],
       faqs: [
@@ -539,14 +565,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-HKMO-005',
-      name: 'Hong Kong - Macau 4 Ngay 3 Dem',
+      name: 'Hong Kong - Macau 4 Ngày 3 Đêm',
       description: buildDescription(
         'Tour Hong Kong - Macau kết hợp Victoria Harbour, cac khu mua sắm, city tour Hong Kong va di sản Ruins of St. Paul tai Macau.',
         'do thi chau A, mua sắm, ẩm thực Quang Dong va di sản Macau',
         'khach thich city break, mua sắm, gia đình va nhóm bạn muon tour ngắn ngày',
       ),
       price: 18_900_000,
-      duration: '4 ngay 3 dem',
+      duration: '4 ngày 3 đêm',
       availableSeats: 80,
       imageUrl: IMAGES.hongKongMacau[0],
       tourType: 'Nghỉ Dưỡng',
@@ -620,14 +646,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-KOR-006',
-      name: 'Hàn Quốc Seoul - Nami - Everland 5 Ngay 4 Dem',
+      name: 'Hàn Quốc Seoul - Nami - Everland 5 Ngày 4 Đêm',
       description: buildDescription(
         'Tour Hàn Quốc kết hợp cung điện Gyeongbokgung, dao Nami, mua sắm Seoul va Everland hoac diem thay the theo mùa.',
         'văn hóa Hàn Quốc, cảnh quan theo mùa, mua sắm va trải nghiệm giải trí',
         'gia đình, khách trẻ, nhóm bạn va khach yeu K-culture',
       ),
       price: 22_900_000,
-      duration: '5 ngay 4 dem',
+      duration: '5 ngày 4 đêm',
       availableSeats: 100,
       imageUrl: IMAGES.seoulNami[0],
       tourType: 'Văn Hóa & Lịch Sử',
@@ -667,10 +693,18 @@ const internationalTours: InternationalTourSeed[] = [
           imageUrl: IMAGES.seoulNami[2],
         },
         {
+          title: 'Mua sắm cuối chuyến - Myeongdong',
+          description: 'Tự do mua sắm mỹ phẩm, nhân sâm, quà lưu niệm tại Myeongdong hoặc Dongdaemun và thưởng thức ẩm thực đường phố Seoul.',
+          accommodation: 'Khách sạn Seoul theo gói',
+          transport: 'Xe du lịch',
+          activities: ['Myeongdong', 'Mua sắm mỹ phẩm Hàn Quốc', 'Ẩm thực đường phố Seoul'],
+          imageUrl: IMAGES.seoulNami[1],
+        },
+        {
           title: 'Seoul - Việt Nam',
-          description: 'Mua sắm đặc sản, hoan tat thủ tục va bay về Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
-          activities: ['Mua sắm', 'Bay về Việt Nam'],
+          description: 'Ăn sáng, trả phòng và ra sân bay Incheon bay về Việt Nam, kết thúc hành trình.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Sân bay Incheon', 'Bay về Việt Nam'],
           imageUrl: IMAGES.seoulNami[0],
         },
       ],
@@ -700,14 +734,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-JPN-007',
-      name: 'Nhật Bản Tokyo - Fuji - Hakone 5 Ngay 4 Dem',
+      name: 'Nhật Bản Tokyo - Fuji - Hakone 5 Ngày 4 Đêm',
       description: buildDescription(
         'Tour Nhật Bản tuyến Tokyo - Fuji - Hakone, phù hợp khach lần đầu den Nhat voi cac điểm biểu tượng va thời gian mua sắm.',
         'núi Phú Sĩ, do thi Tokyo, văn hóa Nhat va mua sắm',
         'gia đình, cặp đôi, nhóm bạn va khach muon sản phẩm Nhật Bản kinh dien',
       ),
       price: 32_900_000,
-      duration: '5 ngay 4 dem',
+      duration: '5 ngày 4 đêm',
       availableSeats: 90,
       imageUrl: IMAGES.tokyoFuji[0],
       tourType: 'Khám Phá',
@@ -747,10 +781,18 @@ const internationalTours: InternationalTourSeed[] = [
           imageUrl: IMAGES.tokyoFuji[1],
         },
         {
+          title: 'Akihabara - Asakusa - Mua sắm Tokyo',
+          description: 'Tự do mua sắm điện tử tại Akihabara, đồ lưu niệm tại Asakusa hoặc thưởng thức ẩm thực tại Shibuya và Shinjuku.',
+          accommodation: 'Khách sạn Tokyo theo gói',
+          transport: 'Xe du lịch',
+          activities: ['Akihabara', 'Asakusa', 'Mua sắm Tokyo'],
+          imageUrl: IMAGES.tokyoFuji[0],
+        },
+        {
           title: 'Tokyo - Việt Nam',
-          description: 'Mua sắm, trả phòng va bay về Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
-          activities: ['Mua sắm', 'Bay về Việt Nam'],
+          description: 'Ăn sáng, trả phòng và ra sân bay Narita hoặc Haneda bay về Việt Nam.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Sân bay Narita/Haneda', 'Bay về Việt Nam'],
           imageUrl: IMAGES.tokyoFuji[2],
         },
       ],
@@ -780,14 +822,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-JPN-008',
-      name: 'Nhật Bản Osaka - Kyoto - Nara 5 Ngay 4 Dem',
+      name: 'Nhật Bản Osaka - Kyoto - Nara 5 Ngày 4 Đêm',
       description: buildDescription(
         'Tour Kansai kết hợp Osaka, Kyoto, Nara voi Osaka Castle, Arashiyama, đền chùa va cac khu pho ẩm thực nổi tiếng.',
         'văn hóa cổ đô Nhật Bản, thành phố Osaka, đền chùa va ẩm thực Kansai',
         'khach yeu văn hóa Nhat, gia đình va nhóm bạn muon tuyến Nhat khac Tokyo',
       ),
       price: 34_500_000,
-      duration: '5 ngay 4 dem',
+      duration: '5 ngày 4 đêm',
       availableSeats: 90,
       imageUrl: IMAGES.osakaKyoto[0],
       tourType: 'Văn Hóa & Lịch Sử',
@@ -827,12 +869,21 @@ const internationalTours: InternationalTourSeed[] = [
           imageUrl: IMAGES.osakaKyoto[0],
         },
         {
-          title: 'Nara - Việt Nam',
+          title: 'Nara - Đền Todai-ji',
           description:
-            'Tham quan Nara hoac diem thay the theo mùa, mua sắm va bay về Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
-          activities: ['Nara', 'Mua sắm', 'Bay về Việt Nam'],
+            'Tham quan Nara, đền Todai-ji và công viên hươu nổi tiếng, sau đó trở về Osaka nghỉ đêm.',
+          accommodation: 'Khách sạn Osaka theo gói',
+          transport: 'Xe du lịch',
+          activities: ['Nara', 'Đền Todai-ji', 'Công viên hươu Nara'],
           imageUrl: IMAGES.osakaKyoto[2],
+        },
+        {
+          title: 'Osaka - Việt Nam',
+          description:
+            'Ăn sáng, tự do mua đặc sản Osaka và ra sân bay Kansai bay về Việt Nam.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Mua đặc sản Osaka', 'Sân bay Kansai', 'Bay về Việt Nam'],
+          imageUrl: IMAGES.osakaKyoto[1],
         },
       ],
       faqs: [
@@ -861,14 +912,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-UAE-009',
-      name: 'Dubai - Abu Dhabi 5 Ngay 4 Dem',
+      name: 'Dubai - Abu Dhabi 5 Ngày 4 Đêm',
       description: buildDescription(
         'Tour Dubai - Abu Dhabi kết hợp công trình hien dai, sa mạc, mua sắm va đại thánh đường Sheikh Zayed tai Abu Dhabi.',
         'kiến trúc hien dai, desert safari, mua sắm va trải nghiệm Trung Đông',
         'khach cao cap, gia đình, nhóm bạn va khach muon điểm đến khac biet de demo phân khúc giá cảo',
       ),
       price: 29_900_000,
-      duration: '5 ngay 4 dem',
+      duration: '5 ngày 4 đêm',
       availableSeats: 80,
       imageUrl: IMAGES.dubaiAbuDhabi[0],
       tourType: 'Tour Cao Cấp',
@@ -912,16 +963,25 @@ const internationalTours: InternationalTourSeed[] = [
           imageUrl: IMAGES.dubaiAbuDhabi[2],
         },
         {
-          title: 'Abu Dhabi - Việt Nam',
+          title: 'Abu Dhabi - Sheikh Zayed Grand Mosque',
           description:
-            'Tham quan Sheikh Zayed Grand Mosque tai Abu Dhabi, sau do bay về Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
+            'Di chuyển đến Abu Dhabi, tham quan Sheikh Zayed Grand Mosque và Corniche, trở về Dubai nghỉ đêm.',
+          accommodation: 'Khách sạn Dubai theo gói',
+          transport: 'Xe du lịch',
           activities: [
-            'Abu Dhabi',
             'Sheikh Zayed Grand Mosque',
-            'Bay về Việt Nam',
+            'Corniche Abu Dhabi',
+            'Trở về Dubai',
           ],
           imageUrl: IMAGES.dubaiAbuDhabi[1],
+        },
+        {
+          title: 'Dubai - Việt Nam',
+          description:
+            'Ăn sáng, mua sắm tự do tại Dubai Mall và ra sân bay DXB bay về Việt Nam, kết thúc hành trình.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Mua đặc sản', 'Sân bay Dubai DXB', 'Bay về Việt Nam'],
+          imageUrl: IMAGES.dubaiAbuDhabi[0],
         },
       ],
       faqs: [
@@ -950,14 +1010,14 @@ const internationalTours: InternationalTourSeed[] = [
     },
     tour: {
       tourCode: 'INT-EUR-010',
-      name: 'Châu Âu Paris - Brussels - Amsterdam 8 Ngay 7 Dem',
+      name: 'Châu Âu Paris - Brussels - Amsterdam 8 Ngày 7 Đêm',
       description: buildDescription(
         'Tour chau Au kinh dien cho khach Viet, kết hợp Paris, Brussels, Amsterdam, cac công trình biểu tượng va trải nghiệm do thi Tay Au.',
         'kiến trúc chau Au, city tour, văn hóa Tay Au va mua sắm',
         'khach co ngân sách cao, gia đình, cặp đôi va khach muon sản phẩm chau Au de demo cap do phuc tap hon',
       ),
       price: 59_900_000,
-      duration: '8 ngay 7 dem',
+      duration: '8 ngày 7 đêm',
       availableSeats: 70,
       imageUrl: IMAGES.europeClassic[0],
       tourType: 'Văn Hóa & Lịch Sử',
@@ -973,44 +1033,70 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Việt Nam - Paris',
           description:
-            'Bay đến Paris, đón khách va nghỉ ngơi sau chang bay dai.',
-          accommodation: 'Khách sạn Paris theo goi',
-          transport: 'Máy bay va xe du lịch',
+            'Bay đến Paris, đón khách tại sân bay CDG, nhận phòng và tự do nghỉ ngơi sau chuyến bay dài.',
+          accommodation: 'Khách sạn Paris theo gói',
+          transport: 'Máy bay và xe du lịch',
           activities: ['Bay đến Paris', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.europeClassic[0],
         },
         {
-          title: 'Paris city tour',
+          title: 'Paris city tour - Tháp Eiffel',
           description:
-            'Tham quan tháp Eiffel, cac dai lo va điểm biểu tượng Paris theo lịch trình.',
-          accommodation: 'Khách sạn Paris theo goi',
+            'Tham quan tháp Eiffel, Khải Hoàn Môn, Champs-Élysées và dạo phố mua sắm trung tâm Paris.',
+          accommodation: 'Khách sạn Paris theo gói',
           transport: 'Xe du lịch',
-          activities: ['Tháp Eiffel', 'City tour Paris', 'Mua sắm'],
+          activities: ['Tháp Eiffel', 'Champs-Élysées', 'Mua sắm Paris'],
           imageUrl: IMAGES.europeClassic[0],
+        },
+        {
+          title: 'Paris - Cung điện Versailles',
+          description:
+            'Tham quan cung điện Versailles nổi tiếng và khu vườn hoàng gia, buổi tối trở về Paris tự do.',
+          accommodation: 'Khách sạn Paris theo gói',
+          transport: 'Xe du lịch',
+          activities: ['Cung điện Versailles', 'Vườn hoàng gia Versailles', 'Montmartre buổi tối'],
+          imageUrl: IMAGES.europeClassic[1],
         },
         {
           title: 'Paris - Brussels',
           description:
-            'Di chuyển den Brussels, tham quan trung tâm va khong gian phố cổ chau Au.',
-          accommodation: 'Khách sạn Brussels theo goi',
-          transport: 'Xe du lịch hoac tau theo lich',
-          activities: ['Brussels', 'Phố cổ chau Au', 'Ẩm thực địa phương'],
+            'Di chuyển đến Brussels bằng tàu cao tốc, tham quan Grand Place, Atomium và thưởng thức chocolate/waffle Bỉ.',
+          accommodation: 'Khách sạn Brussels theo gói',
+          transport: 'Xe du lịch hoặc tàu theo lịch',
+          activities: ['Grand Place Brussels', 'Atomium', 'Ẩm thực Bỉ'],
           imageUrl: IMAGES.europeClassic[1],
         },
         {
           title: 'Brussels - Amsterdam',
           description:
-            'Tiếp tục den Amsterdam, tham quan thành phố kênh đào va nghi dem.',
-          accommodation: 'Khách sạn Amsterdam theo goi',
-          transport: 'Xe du lịch hoac tau theo lich',
-          activities: ['Amsterdam', 'Kênh đào', 'City tour'],
+            'Di chuyển đến Amsterdam, tham quan khu kênh đào, Nhà Anne Frank và bảo tàng Van Gogh.',
+          accommodation: 'Khách sạn Amsterdam theo gói',
+          transport: 'Xe du lịch hoặc tàu theo lịch',
+          activities: ['Kênh đào Amsterdam', 'Nhà Anne Frank', 'Bảo tàng Van Gogh'],
           imageUrl: IMAGES.europeClassic[2],
         },
         {
-          title: 'Amsterdam - Việt Nam',
-          description: 'Mua sắm, trả phòng va bay về Việt Nam.',
-          transport: 'Xe du lịch va máy bay',
-          activities: ['Mua sắm', 'Bay về Việt Nam'],
+          title: 'Amsterdam - Volendam - Zaanse Schans',
+          description:
+            'Tham quan làng chài Volendam và khu cối xay gió Zaanse Schans, trải nghiệm văn hóa Hà Lan truyền thống.',
+          accommodation: 'Khách sạn Amsterdam theo gói',
+          transport: 'Xe du lịch',
+          activities: ['Làng chài Volendam', 'Cối xay gió Zaanse Schans', 'Trải nghiệm Hà Lan'],
+          imageUrl: IMAGES.europeClassic[0],
+        },
+        {
+          title: 'Tự do Amsterdam - Khởi hành',
+          description:
+            'Tự do buổi sáng mua đặc sản Hà Lan, buổi chiều ra sân bay Schiphol khởi hành chuyến bay đêm về Việt Nam.',
+          transport: 'Xe du lịch và máy bay',
+          activities: ['Mua đặc sản Hà Lan', 'Sân bay Schiphol Amsterdam', 'Khởi hành về Việt Nam'],
+          imageUrl: IMAGES.europeClassic[2],
+        },
+        {
+          title: 'Về đến Việt Nam',
+          description: 'Máy bay hạ cánh tại Việt Nam, kết thúc hành trình Châu Âu 8 ngày.',
+          transport: 'Máy bay',
+          activities: ['Về đến Việt Nam', 'Kết thúc hành trình'],
           imageUrl: IMAGES.europeClassic[0],
         },
       ],
@@ -1030,7 +1116,120 @@ const internationalTours: InternationalTourSeed[] = [
   },
 ];
 
-function departureData(basePrice: number, baseSeats: number) {
+type FlightConfig = {
+  airline: string;
+  airlineEn: string;
+  flightCode: string;
+  returnFlightCode: string;
+  departureAirport: string;
+  arrivalAirport: string;
+  departureHour: number;
+  flightDurationHours: number;
+  flightClass: string;
+  tourDays: number; // used to compute return day offset
+};
+
+// tourCode → flight config
+const FLIGHT_CONFIGS: Record<string, FlightConfig> = {
+  'INT-THA-001': {
+    airline: 'Vietnam Airlines', airlineEn: 'Vietnam Airlines',
+    flightCode: 'VN-570', returnFlightCode: 'VN-571',
+    departureAirport: 'HAN', arrivalAirport: 'BKK',
+    departureHour: 7, flightDurationHours: 2.5, flightClass: 'Economy', tourDays: 5,
+  },
+  'INT-SGMY-002': {
+    airline: 'Vietnam Airlines', airlineEn: 'Vietnam Airlines',
+    flightCode: 'VN-630', returnFlightCode: 'VN-631',
+    departureAirport: 'HAN', arrivalAirport: 'SIN',
+    departureHour: 8, flightDurationHours: 3.5, flightClass: 'Economy', tourDays: 5,
+  },
+  'INT-IDN-003': {
+    airline: 'Vietjet Air', airlineEn: 'Vietjet Air',
+    flightCode: 'VJ-780', returnFlightCode: 'VJ-781',
+    departureAirport: 'SGN', arrivalAirport: 'DPS',
+    departureHour: 6, flightDurationHours: 3, flightClass: 'Economy', tourDays: 4,
+  },
+  'INT-TWN-004': {
+    airline: 'Vietjet Air', airlineEn: 'Vietjet Air',
+    flightCode: 'VJ-850', returnFlightCode: 'VJ-851',
+    departureAirport: 'SGN', arrivalAirport: 'TPE',
+    departureHour: 7, flightDurationHours: 3.5, flightClass: 'Economy', tourDays: 5,
+  },
+  'INT-HKMO-005': {
+    airline: 'Vietnam Airlines', airlineEn: 'Vietnam Airlines',
+    flightCode: 'VN-590', returnFlightCode: 'VN-591',
+    departureAirport: 'HAN', arrivalAirport: 'HKG',
+    departureHour: 7, flightDurationHours: 2.5, flightClass: 'Economy', tourDays: 4,
+  },
+  'INT-KOR-006': {
+    airline: 'Vietnam Airlines', airlineEn: 'Vietnam Airlines',
+    flightCode: 'VN-410', returnFlightCode: 'VN-411',
+    departureAirport: 'SGN', arrivalAirport: 'ICN',
+    departureHour: 8, flightDurationHours: 5, flightClass: 'Economy', tourDays: 5,
+  },
+  'INT-JPN-007': {
+    airline: 'Vietnam Airlines', airlineEn: 'Vietnam Airlines',
+    flightCode: 'VN-310', returnFlightCode: 'VN-311',
+    departureAirport: 'HAN', arrivalAirport: 'NRT',
+    departureHour: 7, flightDurationHours: 5, flightClass: 'Economy', tourDays: 5,
+  },
+  'INT-JPN-008': {
+    airline: 'Vietnam Airlines', airlineEn: 'Vietnam Airlines',
+    flightCode: 'VN-340', returnFlightCode: 'VN-341',
+    departureAirport: 'HAN', arrivalAirport: 'KIX',
+    departureHour: 7, flightDurationHours: 5, flightClass: 'Economy', tourDays: 5,
+  },
+  'INT-UAE-009': {
+    airline: 'Emirates', airlineEn: 'Emirates',
+    flightCode: 'EK-392', returnFlightCode: 'EK-393',
+    departureAirport: 'HAN', arrivalAirport: 'DXB',
+    departureHour: 0, flightDurationHours: 8, flightClass: 'Economy', tourDays: 5,
+  },
+  'INT-EUR-010': {
+    airline: 'Air France', airlineEn: 'Air France',
+    flightCode: 'AF-259', returnFlightCode: 'AF-258',
+    departureAirport: 'SGN', arrivalAirport: 'CDG',
+    departureHour: 22, flightDurationHours: 12, flightClass: 'Economy', tourDays: 7,
+  },
+};
+
+function buildFlightCreate(cfg: FlightConfig, departureDate: Date) {
+  const depTime = new Date(departureDate);
+  depTime.setHours(cfg.departureHour, 0, 0, 0);
+
+  const arrTime = new Date(depTime.getTime() + cfg.flightDurationHours * 3_600_000);
+
+  const retDepTime = new Date(departureDate);
+  retDepTime.setDate(retDepTime.getDate() + cfg.tourDays - 1);
+  retDepTime.setHours(14, 0, 0, 0);
+
+  const retArrTime = new Date(retDepTime.getTime() + cfg.flightDurationHours * 3_600_000);
+
+  return {
+    type: TransportType.FLIGHT,
+    airline: cfg.airline,
+    airlineEn: cfg.airlineEn,
+    flightCode: cfg.flightCode,
+    departureAirport: cfg.departureAirport,
+    arrivalAirport: cfg.arrivalAirport,
+    departureTime: depTime,
+    arrivalTime: arrTime,
+    flightClass: cfg.flightClass,
+    returnAirline: cfg.airline,
+    returnAirlineEn: cfg.airlineEn,
+    returnFlightCode: cfg.returnFlightCode,
+    returnDepartureAirport: cfg.arrivalAirport,
+    returnArrivalAirport: cfg.departureAirport,
+    returnDepartureTime: retDepTime,
+    returnArrivalTime: retArrTime,
+    returnFlightClass: cfg.flightClass,
+    notes: 'Vé máy bay đã bao gồm trong giá tour. Hành lý ký gửi theo quy định hãng bay.',
+    notesEn: 'Airfare included in tour price. Checked baggage subject to airline policy.',
+  };
+}
+
+function departureData(basePrice: number, baseSeats: number, tourCode: string) {
+  const flightCfg = FLIGHT_CONFIGS[tourCode];
   const offsets = [30, 45, 60, 90];
   return offsets.map((offset, index) => {
     const departureDate = addDays(offset);
@@ -1039,11 +1238,14 @@ function departureData(basePrice: number, baseSeats: number) {
       price: basePrice,
       availableSeats: Math.max(10, baseSeats - index * 4),
       maxSeats: baseSeats,
-      note: 'Lich khởi hành dinh ky',
+      note: 'Lịch khởi hành định kỳ',
       category: null,
       flashSaleEndsAt: null,
       isActive: true,
       sortOrder: index,
+      transport: flightCfg
+        ? { create: buildFlightCreate(flightCfg, departureDate) }
+        : undefined,
     };
   });
 }
@@ -1129,6 +1331,7 @@ export async function seedInternationalTours(prisma: PrismaClient) {
       ...departureData(
         item.tour.price,
         Math.min(item.tour.availableSeats, 36),
+        item.tour.tourCode,
       ).map((departure) =>
         prisma.tourDeparture.create({
           data: {

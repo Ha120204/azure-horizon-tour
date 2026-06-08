@@ -9,7 +9,7 @@ import type { Request as ExpressRequest } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ArticleService } from './article.service';
-import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 
 type JwtRequestUser = {

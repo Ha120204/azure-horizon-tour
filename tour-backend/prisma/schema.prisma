@@ -43,6 +43,14 @@ enum ArticleStatus {
   REJECTED
 }
 
+enum TransportType {
+  FLIGHT
+  BUS
+  PRIVATE_CAR
+  COMBO
+  SELF_ARRANGED
+}
+
 // =============================================
 // BẢNG NGƯỜI DÙNG (USER)
 // =============================================
@@ -128,21 +136,22 @@ model Tour {
 
   startDate        DateTime
   durationEn       String?
-  duration         String   @default("Chưa xác định")
+  duration         String        @default("Chưa xác định")
   availableSeats   Int
   imageUrl         String?
-  averageRating    Float    @default(0)
-  tourType         String   @default("Luxury Retreat")
+  averageRating    Float         @default(0)
+  tourType         String        @default("Luxury Retreat")
+  primaryTransport TransportType @default(SELF_ARRANGED)
   departurePoint   String? // Điểm khởi hành mặc định (VD: "TP. Hồ Chí Minh")
   departurePointEn String?
   // ── Workflow fields ──────────────────────────────────────────────
-  status       TourStatus @default(PUBLISHED) // Trạng thái duyệt
-  publishedAt  DateTime? // Thời điểm xuất bản
-  reviewNote   String?    @db.Text // Lý do từ chối (Admin ghi)
-  createdById  Int? // Staff/Admin tạo
-  reviewedById Int? // Admin duyệt/từ chối
-  createdBy    User?      @relation("TourCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  reviewedBy   User?      @relation("TourReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  status           TourStatus    @default(PUBLISHED) // Trạng thái duyệt
+  publishedAt      DateTime? // Thời điểm xuất bản
+  reviewNote       String?       @db.Text // Lý do từ chối (Admin ghi)
+  createdById      Int? // Staff/Admin tạo
+  reviewedById     Int? // Admin duyệt/từ chối
+  createdBy        User?         @relation("TourCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reviewedBy       User?         @relation("TourReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   // ─────────────────────────────────────────────────────────────────
 
   createdAt DateTime  @default(now())
@@ -305,8 +314,56 @@ model TourDeparture {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  transport TourDepartureTransport?
+
   @@index([tourId, departureDate])
   @@index([category, flashSaleEndsAt]) // [FLASH SALE] Tăng tốc query lọc khuyến mãi
+}
+
+// =============================================
+// BẢNG PHƯƠNG TIỆN THEO LỊCH KHỞI HÀNH
+// =============================================
+model TourDepartureTransport {
+  id          Int           @id @default(autoincrement())
+  departureId Int           @unique
+  departure   TourDeparture @relation(fields: [departureId], references: [id], onDelete: Cascade)
+
+  type TransportType
+
+  // ── Thông tin chuyến bay chiều đi ─────────────────────────────────────────
+  airline          String? // "Vietnam Airlines"
+  airlineEn        String?
+  flightCode       String? // "VN-123"
+  departureAirport String? // "HAN" hoặc "Sân bay Nội Bài"
+  arrivalAirport   String? // "DAD"
+  departureTime    DateTime?
+  arrivalTime      DateTime?
+  flightClass      String? // "Economy" | "Business"
+
+  // ── Thông tin chuyến bay chiều về (chỉ dùng khi khứ hồi) ─────────────────
+  returnFlightCode       String?
+  returnAirline          String?
+  returnAirlineEn        String?
+  returnDepartureAirport String?
+  returnArrivalAirport   String?
+  returnDepartureTime    DateTime?
+  returnArrivalTime      DateTime?
+  returnFlightClass      String?
+
+  // ── Thông tin xe/ô tô ────────────────────────────────────────────────────
+  vehicleType     String? // "Xe 45 chỗ", "Limousine 9 chỗ"
+  vehicleTypeEn   String?
+  operator        String? // "Nhà xe Hoàng Long"
+  operatorEn      String?
+  boardingPoint   String? // Địa chỉ đón khách
+  boardingPointEn String?
+  boardingTime    DateTime?
+
+  notes   String? @db.Text
+  notesEn String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // --- CÁC ENUM CHO ĐẶT TOUR ---
@@ -383,12 +440,13 @@ model Booking {
   deletedAt DateTime? // [PHASE 1] Soft Delete
 
   // Kết nối (Relations)
-  user           User                  @relation(fields: [userId], references: [id])
-  tour           Tour                  @relation(fields: [tourId], references: [id])
-  assistedDraft  AssistedBookingDraft? @relation(fields: [assistedDraftId], references: [id], onDelete: SetNull)
-  transactions   PaymentTransaction[] // [PHASE 1] Log thanh toán
-  notifications  BookingNotification[]
-  supportTickets SupportTicket[] // [PHASE 1] Ticket hỗ trợ liên quan đến đơn
+  user                User                        @relation(fields: [userId], references: [id])
+  tour                Tour                        @relation(fields: [tourId], references: [id])
+  assistedDraft       AssistedBookingDraft?       @relation(fields: [assistedDraftId], references: [id], onDelete: SetNull)
+  transactions        PaymentTransaction[] // [PHASE 1] Log thanh toán
+  notifications       BookingNotification[]
+  supportTickets      SupportTicket[] // [PHASE 1] Ticket hỗ trợ liên quan đến đơn
+  transportAssignment BookingTransportAssignment?
 
   @@index([userId, status]) // [PHASE 1] Index: lịch sử booking user
   @@index([status, paymentStatus, createdAt]) // [PHASE 1] Index: cron job quét đơn hết hạn
@@ -446,6 +504,37 @@ model AssistedBookingDraft {
   @@index([status, createdAt])
   @@index([createdByStaffId, status])
   @@index([sourceTicketId])
+}
+
+// =============================================
+// BẢNG GÁN VÉ / PHƯƠNG TIỆN CHO BOOKING
+// Admin điền sau khi booking được CONFIRMED
+// =============================================
+model BookingTransportAssignment {
+  id        Int     @id @default(autoincrement())
+  bookingId Int     @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  // ── Chiều đi ─────────────────────────────────────────────────────────────
+  outboundTicketCodes String[] @default([]) // Mã vé mỗi hành khách
+  outboundSeatNumbers String[] @default([]) // Số ghế mỗi hành khách
+  outboundPnrCode     String? // PNR code cả nhóm
+
+  // ── Chiều về (chỉ dùng khi tour bay khứ hồi) ────────────────────────────
+  returnTicketCodes String[] @default([])
+  returnSeatNumbers String[] @default([])
+  returnPnrCode     String?
+
+  // ── Xe / ô tô ────────────────────────────────────────────────────────────
+  vehiclePlate String?
+  seatNumbers  String[] @default([])
+
+  notes        String?  @db.Text
+  assignedAt   DateTime @default(now())
+  assignedById Int? // Admin thực hiện gán
+  updatedAt    DateTime @updatedAt
+
+  @@index([bookingId])
 }
 
 model PaymentTransaction {
@@ -622,22 +711,22 @@ model UserVoucher {
 
 // --- HỆ THỐNG BÀI VIẾT (JOURNAL / BLOG) ---
 model Article {
-  id          Int       @id @default(autoincrement())
-  slug        String    @unique // URL thân thiện
-  category    String // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
-  title       String
-  excerpt     String    @db.Text // Tóm tắt ngắn hiển thị trên card
-  seoTitle    String?
-  seoDescription String? @db.Text
-  content     String    @db.Text // Nội dung đầy đủ (HTML)
-  imageUrl    String
-  author      String
-  readTime    Int       @default(5) // Thời gian đọc (phút)
-  isFeatured  Boolean   @default(false) // Bài nổi bật hiện trên hero
-  publishedAt DateTime? // Nullable để hỗ trợ DRAFT
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime? // Soft Delete (thùng rác)
+  id             Int       @id @default(autoincrement())
+  slug           String    @unique // URL thân thiện
+  category       String // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
+  title          String
+  excerpt        String    @db.Text // Tóm tắt ngắn hiển thị trên card
+  seoTitle       String?
+  seoDescription String?   @db.Text
+  content        String    @db.Text // Nội dung đầy đủ (HTML)
+  imageUrl       String
+  author         String
+  readTime       Int       @default(5) // Thời gian đọc (phút)
+  isFeatured     Boolean   @default(false) // Bài nổi bật hiện trên hero
+  publishedAt    DateTime? // Nullable để hỗ trợ DRAFT
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime? // Soft Delete (thùng rác)
 
   // ── Workflow fields ──────────────────────────────────────────────
   status       ArticleStatus @default(PUBLISHED) // Trạng thái duyệt
@@ -698,10 +787,13 @@ model Review {
 // BẢNG NGƯỜI ĐĂNG KÝ NHẬN TIN (NEWSLETTER)
 // =============================================
 model Subscriber {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  isActive          Boolean   @default(true)
+  unsubscribeToken  String    @unique @default(uuid())
+  unsubscribedAt    DateTime?
+  unsubscribeReason String?
+  createdAt         DateTime  @default(now())
 }
 
 // =============================================
@@ -747,6 +839,7 @@ model SupportTicket {
 
   assistedDrafts AssistedBookingDraft[]
   replies        TicketReply[]
+  auditLogs      SupportAuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -764,7 +857,20 @@ model TicketReply {
   senderType String // "staff" | "customer"
   senderName String
   content    String        @db.Text
+  isInternal Boolean       @default(false)
   createdAt  DateTime      @default(now())
+
+  @@index([ticketId])
+}
+
+model SupportAuditLog {
+  id        Int           @id @default(autoincrement())
+  ticketId  Int
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorName String
+  eventType String // 'ASSIGNED' | 'STATUS_CHANGED'
+  meta      Json?
+  createdAt DateTime      @default(now())
 
   @@index([ticketId])
 }

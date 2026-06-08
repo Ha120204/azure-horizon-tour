@@ -10,11 +10,12 @@ import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingQueryService } from './booking-query.service';
 import { BookingPaymentService } from './booking-payment.service';
+import { BookingTransportService } from './booking-transport.service';
 
 @Module({
   imports: [PaymentModule, HttpModule, VoucherModule, MailModule],
   controllers: [BookingController],
-  providers: [BookingService, BookingCronService, AssistedDraftService, BookingCancellationService, BookingQueryService, BookingPaymentService],
-  exports: [BookingService, AssistedDraftService, BookingCancellationService, BookingQueryService, BookingPaymentService],
+  providers: [BookingService, BookingCronService, AssistedDraftService, BookingCancellationService, BookingQueryService, BookingPaymentService, BookingTransportService],
+  exports: [BookingService, AssistedDraftService, BookingCancellationService, BookingQueryService, BookingPaymentService, BookingTransportService],
 })
 export class BookingModule {}

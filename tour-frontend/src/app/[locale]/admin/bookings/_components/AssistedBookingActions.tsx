@@ -1,6 +1,6 @@
 'use client';
 
-import { getPassengerAgeLabel, hasPassengerDetails } from '@/lib/passengerDetails';
+import { getPassengerAgeLabel, hasPassengerDetails } from '@/lib/booking/passengerDetails';
 import { ASSISTED_STATUS_CFG, PASSENGER_PRICING, SOURCE_CHANNEL_OPTIONS, getSelectOptionLabel } from '../_lib/config';
 import { fmt, formatPassengerBreakdown, normalizePassengerTypeLabel } from '../_lib/helpers';
 import type { AssistedDraft, AssistedDraftAction, DraftPassenger, PassengerType } from '../_lib/types';

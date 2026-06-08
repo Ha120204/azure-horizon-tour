@@ -11,7 +11,7 @@
  */
 
 import type { Metadata } from 'next';
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 import HomeClient, { type TourSummary } from './_components/HomeClient';
 
 // ─── SEO Metadata ─────────────────────────────────────────────────────────────

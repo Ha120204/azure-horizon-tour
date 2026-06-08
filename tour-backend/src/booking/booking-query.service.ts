@@ -25,6 +25,8 @@ import type { CancellationPolicy } from './types';
 
 // Stream type for image proxy
 type ProxiedStream = Readable & { pipe(destination: Response): Response };
+type CustomerVoucherStatus = 'PENDING_PAYMENT' | 'ISSUED' | 'CANCELLED' | 'NOT_AVAILABLE';
+type CustomerRefundStatus = 'NONE' | 'NOT_REQUIRED' | 'REQUESTED' | 'PROCESSING' | 'REFUNDED';
 
 @Injectable()
 export class BookingQueryService {
@@ -36,6 +38,38 @@ export class BookingQueryService {
     private readonly httpService: HttpService,
     private readonly cancellationService: BookingCancellationService,
   ) {}
+
+  private getCustomerVoucherStatus(booking: {
+    status: BookingStatus;
+    paymentStatus: PaymentStatus;
+  }): CustomerVoucherStatus {
+    if (booking.status === 'CANCELLED' || booking.status === 'CANCEL_REQUESTED') {
+      return 'CANCELLED';
+    }
+    if (booking.status === 'CONFIRMED' && booking.paymentStatus === 'PAID') {
+      return 'ISSUED';
+    }
+    if (booking.status === 'PENDING') {
+      return 'PENDING_PAYMENT';
+    }
+    return 'NOT_AVAILABLE';
+  }
+
+  private getCustomerRefundStatus(booking: {
+    status: BookingStatus;
+    paymentStatus: PaymentStatus;
+    refundAmount?: number | Prisma.Decimal | null;
+    refundedAt?: Date | null;
+  }): CustomerRefundStatus {
+    if (booking.refundedAt) return 'REFUNDED';
+    if (booking.status === 'CANCEL_REQUESTED') return 'REQUESTED';
+    if (booking.status !== 'CANCELLED') return 'NONE';
+
+    const refundAmount =
+      booking.refundAmount == null ? 0 : Number(booking.refundAmount);
+    if (refundAmount > 0) return 'PROCESSING';
+    return 'NOT_REQUIRED';
+  }
 
   private async replacePendingPayosTransaction(
     bookingId: number,
@@ -90,6 +124,9 @@ export class BookingQueryService {
       totalPrice: number | Prisma.Decimal; cancelReason?: string | null;
       cancelRequestedAt?: Date | null; cancelledAt?: Date | null;
       refundAmount?: number | Prisma.Decimal | null; refundNote?: string | null;
+      unitPriceAtBooking?: number | null;
+      discountAmount?: number | Prisma.Decimal | null;
+      voucherCode?: string | null;
       departureId?: number | null;
       tour: { id: number; name: string; tourCode: string; imageUrl?: string | null; duration?: string | null; startDate: Date };
     },
@@ -101,6 +138,9 @@ export class BookingQueryService {
       createdAt: booking.createdAt, holdExpiresAt: booking.holdExpiresAt ?? null,
       numberOfPeople: booking.numberOfPeople,
       totalPrice: Number(booking.totalPrice),
+      unitPriceAtBooking: booking.unitPriceAtBooking == null ? null : Number(booking.unitPriceAtBooking),
+      discountAmount: Number(booking.discountAmount ?? 0),
+      voucherCode: booking.voucherCode ?? null,
       cancelReason: booking.cancelReason ?? null,
       cancelRequestedAt: booking.cancelRequestedAt ?? null,
       cancelledAt: booking.cancelledAt ?? null,
@@ -148,11 +188,66 @@ export class BookingQueryService {
         id: true, bookingCode: true, status: true, paymentStatus: true,
         paymentMethod: true, holdExpiresAt: true,
         createdAt: true, numberOfPeople: true, totalPrice: true,
-        tour: { select: { id: true, name: true, tourCode: true, imageUrl: true } },
+        departureId: true,
+        cancelRequestedAt: true, cancelledAt: true,
+        refundAmount: true, refundNote: true, refundedAt: true,
+        tour: {
+          select: {
+            id: true,
+            name: true,
+            tourCode: true,
+            imageUrl: true,
+            startDate: true,
+            departurePoint: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
-    return bookings.map((b) => ({ ...b, totalPrice: Number(b.totalPrice) }));
+    const departureIds = bookings
+      .map((booking) => booking.departureId)
+      .filter((id): id is number => typeof id === 'number');
+    const departures =
+      departureIds.length > 0
+        ? await this.prisma.tourDeparture.findMany({
+            where: { id: { in: departureIds } },
+            select: {
+              id: true,
+              departureDate: true,
+              transport: {
+                select: {
+                  boardingPoint: true,
+                  boardingTime: true,
+                  departureTime: true,
+                },
+              },
+            },
+          })
+        : [];
+    const departureMap = new Map(
+      departures.map((departure) => [departure.id, departure]),
+    );
+
+    return bookings.map((b) => {
+      const departure = b.departureId
+        ? departureMap.get(b.departureId)
+        : undefined;
+      return {
+        ...b,
+        departureDate: departure?.departureDate ?? b.tour.startDate,
+        meetingTime:
+          departure?.transport?.boardingTime ??
+          departure?.transport?.departureTime ??
+          null,
+        pickupLocation:
+          departure?.transport?.boardingPoint ?? b.tour.departurePoint ?? null,
+        voucherStatus: this.getCustomerVoucherStatus(b),
+        refundStatus: this.getCustomerRefundStatus(b),
+        totalPrice: Number(b.totalPrice),
+        refundAmount:
+          b.refundAmount == null ? null : Number(b.refundAmount),
+      };
+    });
   }
 
   async getMyBookingById(bookingId: number, userId: number) {
@@ -163,8 +258,10 @@ export class BookingQueryService {
         holdExpiresAt: true,
         createdAt: true, numberOfPeople: true, totalPrice: true, cancelReason: true,
         cancelRequestedAt: true, cancelledAt: true, refundAmount: true, refundNote: true,
-        departureId: true,
-        tour: { select: { id: true, name: true, tourCode: true, imageUrl: true, duration: true, startDate: true } },
+        unitPriceAtBooking: true, discountAmount: true, voucherCode: true,
+        departureId: true, contactInfo: true, passengers: true,
+        user: { select: { fullName: true, email: true, phone: true } },
+        tour: { select: { id: true, name: true, tourCode: true, imageUrl: true, duration: true, startDate: true, departurePoint: true } },
         transactions: {
           select: { id: true, gateway: true, transactionRef: true, amount: true, status: true, confirmedSource: true, confirmedAt: true, createdAt: true },
           orderBy: { createdAt: 'desc' }, take: 5,
@@ -174,15 +271,52 @@ export class BookingQueryService {
           select: { id: true, status: true, subject: true, createdAt: true },
           orderBy: { createdAt: 'desc' }, take: 3,
         },
+        transportAssignment: true,
       },
     });
     if (!booking) throw new NotFoundException('Booking not found');
     const cancellationPolicy = await this.cancellationService.getCancellationPolicyForBooking(booking);
     const base = this.toCustomerBookingDetail(booking, cancellationPolicy);
+    const departure = booking.departureId
+      ? await this.prisma.tourDeparture.findUnique({
+          where: { id: booking.departureId },
+          select: {
+            departureDate: true,
+            transport: {
+              select: {
+                type: true,
+                airline: true,
+                flightCode: true,
+                departureAirport: true,
+                arrivalAirport: true,
+                boardingPoint: true,
+                boardingTime: true,
+                departureTime: true,
+                arrivalTime: true,
+                vehicleType: true,
+                operator: true,
+                notes: true,
+              },
+            },
+          },
+        })
+      : null;
     return {
       ...base,
+      departureDate: departure?.departureDate ?? booking.tour.startDate,
+      meetingTime:
+        departure?.transport?.boardingTime ??
+        departure?.transport?.departureTime ??
+        null,
+      pickupLocation:
+        departure?.transport?.boardingPoint ?? booking.tour.departurePoint ?? null,
+      departureTransport: departure?.transport ?? null,
+      contactInfo: booking.contactInfo ?? null,
+      passengers: booking.passengers ?? null,
+      user: booking.user,
       transactions: booking.transactions.map(t => ({ ...t, amount: Number(t.amount) })),
       supportTickets: booking.supportTickets,
+      transportAssignment: booking.transportAssignment ?? null,
     };
   }
 
@@ -267,7 +401,7 @@ export class BookingQueryService {
         numberOfPeople: true, totalPrice: true, departureId: true,
         contactInfo: true, passengers: true, discountAmount: true, voucherCode: true, createdAt: true,
         user: { select: { fullName: true, email: true } },
-        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true, tourCode: true } },
+        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true, tourCode: true, departurePoint: true } },
       },
     });
     if (!booking) throw new NotFoundException('Khong tim thay don dat tour');
@@ -283,7 +417,42 @@ export class BookingQueryService {
       throw new ForbiddenException('Thong tin xac thuc khong chinh xac');
     }
 
-    return booking;
+    const departure = booking.departureId
+      ? await this.prisma.tourDeparture.findUnique({
+          where: { id: booking.departureId },
+          select: {
+            departureDate: true,
+            transport: {
+              select: {
+                type: true,
+                airline: true,
+                flightCode: true,
+                departureAirport: true,
+                arrivalAirport: true,
+                boardingPoint: true,
+                boardingTime: true,
+                departureTime: true,
+                arrivalTime: true,
+                vehicleType: true,
+                operator: true,
+                notes: true,
+              },
+            },
+          },
+        })
+      : null;
+
+    return {
+      ...booking,
+      departureDate: departure?.departureDate ?? booking.tour.startDate,
+      meetingTime:
+        departure?.transport?.boardingTime ??
+        departure?.transport?.departureTime ??
+        null,
+      pickupLocation:
+        departure?.transport?.boardingPoint ?? booking.tour.departurePoint ?? null,
+      departureTransport: departure?.transport ?? null,
+    };
   }
 
   async publicRetryPayment(bookingCode: string, email: string) {
@@ -460,6 +629,7 @@ export class BookingQueryService {
             orderBy: { createdAt: 'desc' },
             take: 5,
           },
+          transportAssignment: true,
         },
         orderBy: { createdAt: 'desc' }, skip, take: limit,
       }),

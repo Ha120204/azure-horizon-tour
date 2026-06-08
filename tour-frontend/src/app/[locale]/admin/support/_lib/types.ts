@@ -1,12 +1,22 @@
 export type TicketStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 export type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
 export type TicketView = 'ALL' | 'OPEN' | 'OVERDUE';
+export type TicketSort = 'updated' | 'oldest' | 'overdue';
 
 export interface Reply {
     id: number;
     senderType: string;
     senderName: string;
     content: string;
+    isInternal?: boolean;
+    createdAt: string;
+}
+
+export interface AuditEvent {
+    id: number;
+    actorName: string;
+    eventType: 'ASSIGNED' | 'STATUS_CHANGED';
+    meta?: Record<string, unknown>;
     createdAt: string;
 }
 
@@ -26,6 +36,11 @@ export interface LinkedBooking {
     createdAt: string;
 }
 
+export interface SupportRequestDetail {
+    label: string;
+    value: string;
+}
+
 export interface Ticket {
     id: number;
     customerName: string;
@@ -36,11 +51,13 @@ export interface Ticket {
     subject: string;
     message: string;
     status: TicketStatus;
-    assignedStaffId?: number;
+    assignedStaffId?: number | null;
+    assignedStaffName?: string | null;
     linkedBooking?: LinkedBooking | null;
     bookingMatchStatus?: 'NO_REFERENCE' | 'MATCHED' | 'NOT_FOUND';
     createdAt: string;
     replies: Reply[];
+    auditLogs?: AuditEvent[];
 }
 
 export interface Kpi {
@@ -57,11 +74,20 @@ export type FetchTicketsOptions = {
     silent?: boolean;
 };
 
+export type PaginationMeta = {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
 export type TicketListResponse = {
     data?: {
         tickets?: Ticket[];
+        meta?: PaginationMeta;
     };
     tickets?: Ticket[];
+    meta?: PaginationMeta;
 };
 
 export type TicketResponse = Ticket | { data: Ticket };

@@ -704,17 +704,24 @@ export class BookingService {
 
     let processedCount = 0;
     for (const booking of expiredBookings) {
-      const seatsToRestore = calcSeatCount(booking.passengers, booking.numberOfPeople);
-      await this.cancelAndRestoreSeats(
-        booking.id,
-        booking.tourId,
-        seatsToRestore,
-        booking.departureId,
-      );
-      processedCount += 1;
-      this.logger.log(
-        `[CRON] Cancelled bookingId=${booking.id}, restored ${seatsToRestore} seats (total people=${booking.numberOfPeople}) for tourId=${booking.tourId}`,
-      );
+      try {
+        const seatsToRestore = calcSeatCount(booking.passengers, booking.numberOfPeople);
+        await this.cancelAndRestoreSeats(
+          booking.id,
+          booking.tourId,
+          seatsToRestore,
+          booking.departureId,
+        );
+        processedCount += 1;
+        this.logger.log(
+          `[CRON] Cancelled bookingId=${booking.id}, restored ${seatsToRestore} seats (total people=${booking.numberOfPeople}) for tourId=${booking.tourId}`,
+        );
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          `[CRON] Failed to cancel bookingId=${booking.id}: ${msg}`,
+        );
+      }
     }
 
     this.logger.log(

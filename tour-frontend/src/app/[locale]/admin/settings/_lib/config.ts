@@ -1,15 +1,15 @@
 import type { SettingMeta, SettingsPanel, SystemHealthStatus } from './types';
 
 export const SETTING_META: Record<string, SettingMeta> = {
-    company_name: { type: 'text', maxLength: 120, impact: 'Hiển thị ở header, footer và email hệ thống.' },
-    company_address: { type: 'text', maxLength: 250, impact: 'Dùng trong thông tin liên hệ và chứng từ gửi khách.' },
-    company_phone: { type: 'tel', maxLength: 32, impact: 'Hiển thị ở email vé và kênh hỗ trợ khách hàng.' },
-    company_email: { type: 'email', maxLength: 120, impact: 'Email hỗ trợ khách hàng và biểu mẫu liên hệ.' },
+    company_name: { type: 'text', maxLength: 120, required: true, impact: 'Hiển thị ở header, footer và email hệ thống.' },
+    company_address: { type: 'text', maxLength: 250, required: true, impact: 'Dùng trong thông tin liên hệ và chứng từ gửi khách.' },
+    company_phone: { type: 'tel', maxLength: 32, required: true, impact: 'Hiển thị ở email vé và kênh hỗ trợ khách hàng.' },
+    company_email: { type: 'email', maxLength: 120, required: true, impact: 'Email hỗ trợ khách hàng và biểu mẫu liên hệ.' },
     company_description: { type: 'text', maxLength: 180, impact: 'Ảnh hưởng nội dung giới thiệu thương hiệu.' },
-    booking_hold_minutes: { type: 'number', min: 5, max: 120, impact: 'Ảnh hưởng trực tiếp thời gian giữ ghế trước thanh toán.', risky: true },
-    booking_max_people: { type: 'number', min: 1, max: 99, impact: 'Giới hạn số khách tối đa trong một lượt đặt.', risky: true },
-    booking_min_people: { type: 'number', min: 1, max: 99, impact: 'Giới hạn số khách tối thiểu trong một lượt đặt.', risky: true },
-    announcement_enabled: { type: 'boolean', impact: 'Bật/tắt banner thông báo trên website công khai.', risky: true },
+    booking_hold_minutes: { type: 'number', min: 5, max: 120, required: true, impact: 'Ảnh hưởng trực tiếp thời gian giữ ghế trước thanh toán.', risky: true },
+    booking_max_people: { type: 'number', min: 1, max: 99, required: true, impact: 'Giới hạn số khách tối đa trong một lượt đặt.', risky: true },
+    booking_min_people: { type: 'number', min: 1, max: 99, required: true, impact: 'Giới hạn số khách tối thiểu trong một lượt đặt.', risky: true },
+    announcement_enabled: { type: 'boolean', required: true, impact: 'Bật/tắt banner thông báo trên website công khai.', risky: true },
     announcement_text: { type: 'text', maxLength: 240, impact: 'Nội dung banner thông báo hiển thị cho khách.' },
 };
 

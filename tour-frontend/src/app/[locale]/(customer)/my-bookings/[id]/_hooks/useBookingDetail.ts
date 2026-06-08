@@ -2,10 +2,10 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { API_BASE_URL } from '@/lib/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
 import { useLocale } from '@/context/LocaleContext';
-import { EXPIRY_MINUTES, type BookingDetail, type BankOption, type PaymentIssueResult } from '../_lib/types';
+import { EXPIRY_MINUTES, type BookingDetail, type BankOption, type PaymentIssueResult, type QRPaymentData } from '../_lib/types';
 
 export const FALLBACK_BANK_OPTIONS: BankOption[] = [
     { shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại thương Việt Nam' },
@@ -49,6 +49,7 @@ export function useBookingDetail() {
 
     const [booking, setBooking] = useState<BookingDetail | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(false);
     const [isPaying, setIsPaying] = useState(false);
     const [payError, setPayError] = useState('');
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -56,6 +57,8 @@ export function useBookingDetail() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [showIssueForm, setShowIssueForm] = useState(false);
     const [paymentIssueResult, setPaymentIssueResult] = useState<PaymentIssueResult | null>(null);
+    const [paymentData, setPaymentData] = useState<QRPaymentData | null>(null);
+    const [qrSuccess, setQrSuccess] = useState(false);
     const [banksList, setBanksList] = useState<BankOption[]>(FALLBACK_BANK_OPTIONS);
     const [isBankListLoading, setIsBankListLoading] = useState(false);
 
@@ -64,6 +67,7 @@ export function useBookingDetail() {
     }, []);
 
     const fetchBooking = useCallback(async () => {
+        setFetchError(false);
         const urlParams = new URLSearchParams(window.location.search);
         const emailParam = urlParams.get('email');
         const codeParam = urlParams.get('code');
@@ -78,9 +82,14 @@ export function useBookingDetail() {
                 const result = await res.json();
                 if (result.data) setBooking(result.data);
                 else router.push(emailParam && codeParam ? '/' : '/my-bookings');
+            } else if (res.status === 404) {
+                setBooking(null);
+            } else {
+                setFetchError(true);
             }
         } catch (error) {
             console.error('Lỗi tải chi tiết đơn hàng:', error);
+            setFetchError(true);
         } finally {
             setIsLoading(false);
         }
@@ -122,11 +131,47 @@ export function useBookingDetail() {
             }
             const result = await res.json();
             const checkoutUrl = result.data?.checkoutUrl || result.checkoutUrl;
-            if (res.ok && checkoutUrl) { window.location.href = checkoutUrl; }
-            else { setPayError(result.message ?? 'Không thể tạo liên kết thanh toán. Vui lòng thử lại.'); }
+            if (res.ok && checkoutUrl) {
+                const data = result.data ?? result;
+                if (data.qrCode && data.accountNumber) {
+                    setPaymentData({
+                        checkoutUrl,
+                        qrCode: data.qrCode,
+                        accountNumber: data.accountNumber,
+                        accountName: data.accountName,
+                        description: data.description,
+                        amount: data.amount,
+                        expiresAt: data.expiresAt,
+                    });
+                } else {
+                    window.location.href = checkoutUrl;
+                }
+            } else { setPayError(result.message ?? 'Không thể tạo liên kết thanh toán. Vui lòng thử lại.'); }
         } catch { setPayError('Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại.'); }
         finally { setIsPaying(false); }
     }, [booking, isPaying]);
+
+    // Poll for payment confirmation while QR modal is open
+    useEffect(() => {
+        if (!paymentData || !booking) return;
+        const poll = setInterval(async () => {
+            try {
+                const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/check-payment`, { method: 'POST' });
+                const result = await res.json();
+                const data = result.data ?? result;
+                if (res.ok && data?.synced === true) {
+                    clearInterval(poll);
+                    setQrSuccess(true);
+                    setTimeout(() => {
+                        setPaymentData(null);
+                        setQrSuccess(false);
+                        router.push(`/success?bookingId=${booking.bookingCode}`);
+                    }, 1500);
+                }
+            } catch { /* ignore poll errors */ }
+        }, 4000);
+        return () => clearInterval(poll);
+    }, [paymentData, booking, router]);
 
     const handleCancelSuccess = useCallback(() => {
         setShowCancelModal(false);
@@ -187,7 +232,9 @@ export function useBookingDetail() {
     const cancellationPolicy = booking?.cancellationPolicy;
     const canCancelBooking = Boolean(cancellationPolicy?.canCancel) && isLoggedIn;
     const tripLifecycle = cancellationPolicy?.tripLifecycle ?? 'UPCOMING';
-    const departureDate = (cancellationPolicy?.departureDate ?? booking?.tour?.startDate) ?? undefined;
+    const departureDate =
+        (booking?.departureDate ?? cancellationPolicy?.departureDate ?? booking?.tour?.startDate) ??
+        undefined;
     const tripUnavailableReason =
         cancellationPolicy?.cancelUnavailableReason ??
         (tripLifecycle === 'COMPLETED' ? 'Chuyến đi đã hoàn thành.' : 'Không thể hủy online ở thời điểm này.');
@@ -201,6 +248,8 @@ export function useBookingDetail() {
     return {
         booking,
         isLoading,
+        fetchError,
+        refetchBooking: fetchBooking,
         isPaying,
         payError,
         showCancelModal,
@@ -228,6 +277,9 @@ export function useBookingDetail() {
         totalPriceNumber,
         refundAmountNumber,
         paymentSupportTicket,
+        paymentData,
+        qrSuccess,
+        clearPaymentData: () => { setPaymentData(null); setQrSuccess(false); },
         handleRetryPayment,
         handleCancelSuccess,
         submitPaymentIssue,

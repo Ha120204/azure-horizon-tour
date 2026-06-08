@@ -139,10 +139,10 @@ export function PaymentIssueModal({ booking, banksList, isBankListLoading, total
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                            className="group/close flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white outline-none transition-[background-color,transform] duration-200 ease-out hover:scale-105 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-sky-700 active:scale-95 motion-reduce:transform-none motion-reduce:transition-none"
                             aria-label="Đóng form kiểm tra thanh toán"
                         >
-                            <span className="material-symbols-outlined text-xl">close</span>
+                            <span className="material-symbols-outlined text-xl transition-transform duration-200 ease-out group-hover/close:rotate-90 motion-reduce:transform-none">close</span>
                         </button>
                     </div>
                 </div>
@@ -326,14 +326,14 @@ export function PaymentIssueModal({ booking, banksList, isBankListLoading, total
                         <button
                             type="button"
                             onClick={onClose}
-                            className="h-11 rounded-2xl border border-slate-200 px-6 text-sm font-bold text-slate-500 transition hover:bg-slate-50 sm:min-w-32"
+                            className="h-11 rounded-xl border border-slate-200 px-6 text-sm font-bold text-slate-500 outline-none transition-[background-color,border-color,color,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none sm:min-w-32"
                         >
                             Hủy
                         </button>
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="h-11 rounded-2xl bg-sky-600 px-6 text-sm font-extrabold text-white shadow-lg shadow-sky-600/20 transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-40"
+                            className="h-11 rounded-xl bg-sky-600 px-6 text-sm font-extrabold text-white shadow-lg shadow-sky-600/20 outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-sky-700 hover:shadow-xl hover:shadow-sky-600/25 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-lg motion-reduce:transform-none motion-reduce:transition-none sm:min-w-40"
                         >
                             {isSubmitting ? (
                                 <span className="inline-flex items-center justify-center gap-2">

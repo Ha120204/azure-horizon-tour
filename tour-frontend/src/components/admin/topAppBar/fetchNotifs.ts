@@ -1,7 +1,7 @@
 import type { Notif } from './types';
-import { API_BASE_URL } from '@/lib/constants';
-import { ADMIN_AND_SUPER_ROLES, ALL_ADMIN_ROLES, canAccessRole } from '@/lib/adminAccess';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { ADMIN_AND_SUPER_ROLES, ALL_ADMIN_ROLES, canAccessRole } from '@/lib/admin/adminAccess';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 
 const NOTIF_TYPES = new Set<Notif['type']>([
     'booking_pending',

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import type { Article } from '@/components/admin/ArticleDrawer';
+import type { Article } from './ArticleDrawer';
 import { getStatusCfg } from '../_lib/helpers';
 
 export function SubmitReviewDialog({ article, onConfirm, onCancel, isSubmitting }: {

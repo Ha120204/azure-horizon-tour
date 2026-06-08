@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import type { TourFormModalProps } from '@/components/admin/tourForm/types';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import type { TourFormModalProps } from '../_components/tourForm/types';
 import { useTourTrash } from './useTourTrash';
 import { EMPTY_TOUR_STATS } from '../_lib/constants';
 import { exportToursCsv } from '../_lib/exportCsv';

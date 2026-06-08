@@ -1,8 +1,23 @@
-import type { Article } from '@/components/admin/ArticleDrawer';
+import type { Article } from '../_components/ArticleDrawer';
 
 export type ArticleStatus = 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
 export type ArticleViewMode = 'list' | 'grid';
 export type ArticleReviewAction = 'approve' | 'reject';
+
+export interface SharedArticleViewProps {
+  articles: Article[];
+  isLoading: boolean;
+  hasFilter: boolean;
+  isAdmin: boolean;
+  userId: number | null;
+  isSubmitting: number | null;
+  onCreate: () => void;
+  onOpenEdit: (article: Article) => void;
+  onToggleFeatured: (article: Article) => void;
+  onReview: (target: { article: Article; action: ArticleReviewAction }) => void;
+  onSubmit: (article: Article) => void;
+  onDelete: (article: Article) => void;
+}
 export type ArticleBulkAction = 'publish' | 'draft' | 'trash' | 'feature' | 'unfeature' | 'category' | 'submit';
 export type ArticleBulkActionOptions = { category?: string; skipConfirm?: boolean };
 export type ArticleSortKey = 'title' | 'category' | 'author' | 'publishedAt' | 'status' | 'isFeatured';

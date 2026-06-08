@@ -10,6 +10,7 @@ import type {
     Reply,
     ReplyResponse,
     StatsResponse,
+    SupportRequestDetail,
     Ticket,
     TicketCategory,
     TicketResponse,
@@ -18,7 +19,11 @@ import type {
 } from './types';
 
 export function normalizeTicket(ticket: Ticket): Ticket {
-    return { ...ticket, replies: Array.isArray(ticket.replies) ? ticket.replies : [] };
+    return {
+        ...ticket,
+        replies:   Array.isArray(ticket.replies)   ? ticket.replies   : [],
+        auditLogs: Array.isArray(ticket.auditLogs) ? ticket.auditLogs : [],
+    };
 }
 
 export function resolveTicket(payload: TicketResponse): Ticket | undefined {
@@ -76,6 +81,41 @@ export function formatSupportMessageLines(message: string) {
         .filter(Boolean);
 }
 
+export function parseSupportRequestMessage(message: string): {
+    message: string;
+    details: SupportRequestDetail[];
+} {
+    const normalized = message.replace(/\r\n/g, '\n').trim();
+    const marker = '\n---\nThông tin bổ sung:\n';
+    const markerIndex = normalized.indexOf(marker);
+
+    if (markerIndex === -1) {
+        return { message: normalized, details: [] };
+    }
+
+    const baseMessage = normalized.slice(0, markerIndex).trim();
+    const detailText = normalized.slice(markerIndex + marker.length).trim();
+    const details = detailText
+        .split('\n')
+        .map((line) => line.trim().replace(/^[-•]\s*/, ''))
+        .map((line) => {
+            const separatorIndex = line.indexOf(':');
+            if (separatorIndex === -1) return null;
+
+            const label = line.slice(0, separatorIndex).trim();
+            const value = line.slice(separatorIndex + 1).trim();
+            if (!label || !value) return null;
+
+            return { label, value };
+        })
+        .filter((detail): detail is SupportRequestDetail => detail !== null);
+
+    return {
+        message: baseMessage || normalized,
+        details,
+    };
+}
+
 export function isOpenTicket(status?: TicketStatus) {
     return Boolean(status && OPEN_TICKET_STATUSES.has(status));
 }
@@ -118,6 +158,18 @@ export function fmtResponse(minutes: number | null) {
 
 export function fmtSyncTime(date: Date) {
     return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+export function calcOverdueSLA(createdAt: string, status: string): string | null {
+    if (status === 'RESOLVED') return null;
+    const SLA_MS = 2 * 60 * 60 * 1000;
+    const elapsed = Date.now() - new Date(createdAt).getTime();
+    if (elapsed <= SLA_MS) return null;
+    const overdueMins = Math.floor((elapsed - SLA_MS) / 60000);
+    if (overdueMins < 60) return `${overdueMins}p`;
+    const h = Math.floor(overdueMins / 60);
+    const m = overdueMins % 60;
+    return m ? `${h}h ${m}p` : `${h}h`;
 }
 
 export function fmtMoney(value: number) {

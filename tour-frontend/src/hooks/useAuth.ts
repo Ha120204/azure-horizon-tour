@@ -10,8 +10,8 @@
 'use client';
 
 import { useCallback } from 'react';
-import { API_BASE_URL } from '@/lib/constants';
-import { clearClientUserStorage, fetchAuthProfile } from '@/lib/authSession';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { clearClientUserStorage, fetchAuthProfile } from '@/lib/auth/authSession';
 
 export function useAuth() {
     /** Kiểm tra user đã đăng nhập chưa */

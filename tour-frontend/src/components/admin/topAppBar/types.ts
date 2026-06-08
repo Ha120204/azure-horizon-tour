@@ -1,5 +1,5 @@
 // ── Types ────────────────────────────────────────────────────────────────────
-import type { AdminRole } from '@/lib/adminAccess';
+import type { AdminRole } from '@/lib/admin/adminAccess';
 
 export type { AdminRole };
 

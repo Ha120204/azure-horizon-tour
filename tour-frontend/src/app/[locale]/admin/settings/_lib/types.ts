@@ -7,6 +7,7 @@ export interface Setting {
     group: string;
     updatedAt: string;
     updatedBy?: number | null;
+    updatedByName?: string | null;
 }
 
 export type GroupedSettings = Record<string, Setting[]>;
@@ -18,6 +19,7 @@ export interface SettingMeta {
     min?: number;
     max?: number;
     maxLength?: number;
+    required?: boolean;
     impact: string;
     risky?: boolean;
 }

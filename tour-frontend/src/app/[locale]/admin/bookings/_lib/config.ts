@@ -1,5 +1,5 @@
 import type { AssistedDraftFormErrors, AssistedDraftStatus, DraftSelectOption, PassengerType } from './types';
-import { PASSENGER_MULTIPLIERS } from '@/lib/passengerPricing';
+import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
 
 export type { DraftSelectOption };
 

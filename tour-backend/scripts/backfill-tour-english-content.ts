@@ -1,7 +1,8 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { isUsableEnglishText, localizeTour } from '../src/tour/tour-localization';
+import { isUsableEnglishText } from '../src/tour/localization/translation-engine';
+import { localizeTour } from '../src/tour/localization/entity-localizers';
 
 const connectionString =
   process.env.DATABASE_URL ??

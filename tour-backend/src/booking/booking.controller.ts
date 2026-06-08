@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   UseGuards,
@@ -44,6 +45,7 @@ import {
 import { PaymentService } from '../payment/payment.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 import { BookingPaymentService } from './booking-payment.service';
+import { BookingTransportService, AssignBookingTransportDto } from './booking-transport.service';
 
 type AuthenticatedRequest = {
   user?: {
@@ -105,6 +107,7 @@ export class BookingController {
     private readonly paymentService: PaymentService,
     private readonly configService: ConfigService,
     private readonly bookingPaymentService: BookingPaymentService,
+    private readonly bookingTransportService: BookingTransportService,
   ) {}
 
   // ============== PAYOS PAYMENT FLOW ==============
@@ -740,5 +743,35 @@ export class BookingController {
   @AuditLog('DELETE', 'Booking')
   remove(@Param('id') id: string) {
     return this.bookingService.remove(+id);
+  }
+
+  // ============== TRANSPORT ASSIGNMENT ==============
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':id/transport')
+  getTransportAssignment(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    return this.bookingTransportService.getTransportAssignment(
+      Number(id),
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
+  }
+
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Put(':id/transport')
+  @AuditLog('UPDATE', 'Booking')
+  assignTransport(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: AssignBookingTransportDto,
+  ) {
+    return this.bookingTransportService.assignTransport(
+      Number(id),
+      dto,
+      getAuthUserId(req),
+    );
   }
 }

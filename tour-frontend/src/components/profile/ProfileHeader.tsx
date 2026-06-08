@@ -31,7 +31,13 @@ export default function ProfileHeader({
         <section className="flex flex-col md:flex-row items-center md:items-end gap-8 bg-surface-container-lowest p-8 rounded-xl ambient-shadow">
             <div className="relative group">
                 <div className={`w-32 h-32 md:w-44 md:h-44 rounded-full overflow-hidden border-4 border-surface-container relative ${isAvatarUploading ? 'opacity-70' : ''}`}>
-                    <Image alt={name} className="object-cover" src={avatarUrl} fill sizes="(min-width: 768px) 176px, 128px" />
+                    {avatarUrl ? (
+                        <Image alt={name} className="object-cover" src={avatarUrl} fill sizes="(min-width: 768px) 176px, 128px" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-primary text-white font-bold text-5xl">
+                            {name ? name.charAt(0).toUpperCase() : '?'}
+                        </div>
+                    )}
                     {isAvatarUploading && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                             <span className="material-symbols-outlined text-white animate-spin text-4xl">progress_activity</span>
@@ -43,9 +49,10 @@ export default function ProfileHeader({
                     onClick={onAvatarClick}
                     type="button"
                     disabled={isAvatarUploading}
-                    className={`absolute bottom-2 right-2 bg-white p-2 rounded-full shadow-lg text-primary hover:bg-primary-fixed transition-colors ${isAvatarUploading ? 'cursor-not-allowed opacity-50' : 'active:scale-95'}`}
+                    aria-label={t('profile.changeAvatar') || 'Thay ảnh đại diện'}
+                    className={`group absolute bottom-2 right-2 flex h-10 w-10 items-center justify-center rounded-full bg-white text-primary shadow-lg transition-[transform,background-color,color,box-shadow] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none ${isAvatarUploading ? 'cursor-not-allowed opacity-50' : 'hover:-translate-y-1 hover:bg-primary hover:text-white hover:shadow-xl hover:shadow-primary/20 active:translate-y-0 active:scale-95'}`}
                 >
-                    <span className="material-symbols-outlined text-xl">photo_camera</span>
+                    <span className="material-symbols-outlined text-xl transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">photo_camera</span>
                 </button>
 
                 <input type="file" ref={fileInputRef} onChange={onFileChange} accept="image/*" hidden />

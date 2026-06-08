@@ -83,16 +83,23 @@ export class MailService {
     previewText?: string;
     body: string;
     campaignName?: string;
+    unsubscribeToken: string;
   }) {
     const safeSubject = this.escapeHtml(data.subject);
     const safePreview = this.escapeHtml(data.previewText ?? '');
     const safeBody = this.escapeHtml(data.body).replace(/\n/g, '<br/>');
     const safeCampaignName = this.escapeHtml(data.campaignName || 'Bản tin Azure Horizon');
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
+    const unsubscribeUrl = `${frontendUrl.replace(/\/$/, '')}/vi/unsubscribe?token=${encodeURIComponent(data.unsubscribeToken)}`;
+    const safeUnsubscribeUrl = this.escapeHtml(unsubscribeUrl);
 
     const info: unknown = await this.sendMail({
       from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
       to: data.to,
       subject: data.subject,
+      headers: {
+        'List-Unsubscribe': `<${unsubscribeUrl}>`,
+      },
       html: `
         <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
           <div style="background:#0f3d8a;padding:34px 28px;color:white;">
@@ -105,6 +112,7 @@ export class MailService {
             <div style="color:#1e293b;font-size:15px;line-height:1.75;">${safeBody}</div>
             <div style="margin-top:28px;padding-top:18px;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;line-height:1.6;">
               Bạn nhận được email này vì đã đăng ký nhận tin từ Azure Horizon.
+              <br/><a href="${safeUnsubscribeUrl}" style="color:#64748b;text-decoration:underline;">Hủy đăng ký nhận tin</a>
             </div>
           </div>
           <div style="padding:18px 28px;background:#f1f5f9;color:#94a3b8;font-size:12px;text-align:center;">
@@ -564,6 +572,184 @@ export class MailService {
   /**
    * Email thông báo yêu cầu hủy bị TỪ CHỐI (Admin reject)
    */
+  async sendTransportAssignedEmail(data: {
+    to: string;
+    customerName: string;
+    bookingCode: string;
+    tourName: string;
+    outboundTicketCodes: string[];
+    outboundSeatNumbers: string[];
+    outboundPnrCode?: string | null;
+    returnTicketCodes: string[];
+    returnSeatNumbers: string[];
+    returnPnrCode?: string | null;
+    vehiclePlate?: string | null;
+    seatNumbers: string[];
+    notes?: string | null;
+  }) {
+    const hasOutbound = data.outboundTicketCodes.length > 0 || data.outboundPnrCode;
+    const hasReturn = data.returnTicketCodes.length > 0 || data.returnPnrCode;
+    const hasVehicle = data.vehiclePlate || data.seatNumbers.length > 0;
+
+    const ticketRow = (label: string, value: string) =>
+      `<tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#94a3b8;font-size:13px;width:150px;">${label}</td><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;color:#1e293b;font-size:14px;font-weight:600;font-family:'Courier New',monospace;">${this.escapeHtml(value)}</td></tr>`;
+
+    const outboundSection = hasOutbound ? `
+      <div style="margin-bottom:20px;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#0f3f9f;">✈️ Chiều đi</p>
+        <table style="width:100%;border-collapse:collapse;">
+          ${data.outboundPnrCode ? ticketRow('PNR', data.outboundPnrCode) : ''}
+          ${data.outboundTicketCodes.map((c, i) => ticketRow(`Mã vé ${i + 1}`, c)).join('')}
+          ${data.outboundSeatNumbers.length > 0 ? ticketRow('Số ghế', data.outboundSeatNumbers.join(', ')) : ''}
+        </table>
+      </div>` : '';
+
+    const returnSection = hasReturn ? `
+      <div style="margin-bottom:20px;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#0f3f9f;">✈️ Chiều về</p>
+        <table style="width:100%;border-collapse:collapse;">
+          ${data.returnPnrCode ? ticketRow('PNR', data.returnPnrCode) : ''}
+          ${data.returnTicketCodes.map((c, i) => ticketRow(`Mã vé ${i + 1}`, c)).join('')}
+          ${data.returnSeatNumbers.length > 0 ? ticketRow('Số ghế', data.returnSeatNumbers.join(', ')) : ''}
+        </table>
+      </div>` : '';
+
+    const vehicleSection = hasVehicle ? `
+      <div style="margin-bottom:20px;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#0f3f9f;">🚌 Phương tiện</p>
+        <table style="width:100%;border-collapse:collapse;">
+          ${data.vehiclePlate ? ticketRow('Biển số', data.vehiclePlate) : ''}
+          ${data.seatNumbers.length > 0 ? ticketRow('Số ghế', data.seatNumbers.join(', ')) : ''}
+        </table>
+      </div>` : '';
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
+
+    const mailOptions = {
+      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+      to: data.to,
+      subject: `🎫 Thông Tin Vé Của Bạn — ${data.bookingCode} | Azure Horizon`,
+      html: `
+        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+          <div style="background:linear-gradient(135deg,#003f87,#0066cc);padding:40px 32px;text-align:center;">
+            <h1 style="color:white;margin:0;font-size:26px;font-weight:700;">Azure Horizon</h1>
+            <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:13px;text-transform:uppercase;letter-spacing:2px;">Thông Tin Vé & Phương Tiện</p>
+          </div>
+          <div style="padding:36px 32px;">
+            <div style="text-align:center;margin-bottom:28px;">
+              <div style="width:64px;height:64px;background:#eff6ff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+                <span style="font-size:32px;">🎫</span>
+              </div>
+              <h2 style="color:#1a1a2e;margin:0;font-size:20px;font-weight:700;">Vé của bạn đã sẵn sàng!</h2>
+              <p style="color:#64748b;margin:8px 0 0;font-size:14px;">Xin chào <strong>${this.escapeHtml(data.customerName)}</strong>, thông tin vé cho chuyến đi của bạn đã được cập nhật.</p>
+            </div>
+
+            <div style="background:#f0f6ff;border:2px dashed #003f87;border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:24px;">
+              <p style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:2px;margin:0 0 4px;">Mã Đặt Tour</p>
+              <p style="color:#003f87;font-size:24px;font-weight:800;letter-spacing:2px;margin:0 0 4px;font-family:'Courier New',monospace;">${this.escapeHtml(data.bookingCode)}</p>
+              <p style="color:#64748b;font-size:13px;margin:0;">${this.escapeHtml(data.tourName)}</p>
+            </div>
+
+            <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:24px;">
+              ${outboundSection}${returnSection}${vehicleSection}
+              ${data.notes ? `<p style="color:#64748b;font-size:13px;margin:12px 0 0;padding-top:12px;border-top:1px solid #f1f5f9;">${this.escapeHtml(data.notes)}</p>` : ''}
+            </div>
+
+            <div style="text-align:center;margin:24px 0 0;">
+              <a href="${frontendUrl}/vi/my-bookings"
+                 style="background:linear-gradient(135deg,#003f87,#0066cc);color:white;padding:12px 36px;text-decoration:none;border-radius:50px;font-weight:600;font-size:14px;display:inline-block;box-shadow:0 4px 15px rgba(0,63,135,0.3);">
+                Xem chi tiết đặt tour
+              </a>
+            </div>
+
+            <p style="color:#94a3b8;font-size:12px;text-align:center;line-height:1.6;margin:20px 0 0;">
+              Mọi thắc mắc xin liên hệ hotline: <strong>+84 900 888 999</strong>
+            </p>
+          </div>
+          <div style="background:#f8fafc;padding:20px 32px;text-align:center;border-top:1px solid #e2e8f0;">
+            <p style="color:#94a3b8;font-size:11px;margin:0;">© 2026 Azure Horizon. All rights reserved.</p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('Error sending transport assigned email:', getErrorMessage(error));
+    }
+  }
+
+  async sendSupportStaffReplyEmail(data: {
+    to: string;
+    customerName: string;
+    ticketId: number;
+    subject: string;
+    replyContent: string;
+    staffName: string;
+    accessCode?: string;
+  }) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
+    const trackUrl = data.accessCode
+      ? `${frontendUrl}/support/track/${data.ticketId}?accessCode=${encodeURIComponent(data.accessCode)}`
+      : `${frontendUrl}/support/track/${data.ticketId}`;
+
+    const safeCustomerName = this.escapeHtml(data.customerName);
+    const safeSubject      = this.escapeHtml(data.subject);
+    const safeReply        = this.escapeHtml(data.replyContent).replace(/\n/g, '<br/>');
+    const safeStaffName    = this.escapeHtml(data.staffName);
+    const safeTrackUrl     = this.escapeHtml(trackUrl);
+
+    try {
+      await this.sendMail({
+        from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+        to: data.to,
+        subject: `[Yêu cầu #${data.ticketId}] Nhân viên đã phản hồi yêu cầu của bạn`,
+        html: `
+          <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:640px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
+            <div style="background:linear-gradient(135deg,#003f87,#0066cc);padding:32px 28px;">
+              <h1 style="color:white;margin:0;font-size:24px;font-weight:700;">Azure Horizon</h1>
+              <p style="color:rgba(255,255,255,0.75);margin:6px 0 0;font-size:13px;">Hỗ trợ khách hàng</p>
+            </div>
+            <div style="padding:32px 28px;">
+              <p style="color:#1e293b;font-size:15px;margin:0 0 6px;">Xin chào <strong>${safeCustomerName}</strong>,</p>
+              <p style="color:#64748b;font-size:14px;line-height:1.7;margin:0 0 24px;">
+                Nhân viên hỗ trợ đã phản hồi yêu cầu <strong>#${data.ticketId}</strong> của bạn.
+              </p>
+
+              <div style="background:#f8fafc;border-left:4px solid #003f87;border-radius:0 12px 12px 0;padding:16px 20px;margin-bottom:24px;">
+                <p style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Chủ đề yêu cầu</p>
+                <p style="color:#1e293b;font-size:14px;font-weight:600;margin:0;">${safeSubject}</p>
+              </div>
+
+              <div style="border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin-bottom:28px;">
+                <p style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 12px;">Phản hồi từ ${safeStaffName}</p>
+                <p style="color:#1e293b;font-size:14px;line-height:1.75;margin:0;">${safeReply}</p>
+              </div>
+
+              <div style="text-align:center;">
+                <a href="${safeTrackUrl}"
+                   style="display:inline-block;background:linear-gradient(135deg,#003f87,#0066cc);color:white;text-decoration:none;border-radius:999px;padding:12px 32px;font-size:14px;font-weight:700;box-shadow:0 4px 14px rgba(0,63,135,0.25);">
+                  Xem yêu cầu hỗ trợ
+                </a>
+              </div>
+
+              <p style="color:#94a3b8;font-size:12px;text-align:center;line-height:1.6;margin:24px 0 0;">
+                Bạn có thể trả lời trực tiếp trên trang theo dõi yêu cầu.<br/>
+                Mọi thắc mắc: <strong>+84 900 888 999</strong>
+              </p>
+            </div>
+            <div style="background:#f1f5f9;padding:18px 28px;text-align:center;border-top:1px solid #e2e8f0;">
+              <p style="color:#94a3b8;font-size:12px;margin:0;">© 2026 Azure Horizon. All rights reserved.</p>
+            </div>
+          </div>
+        `,
+      });
+    } catch (error) {
+      console.error('Error sending support reply email:', getErrorMessage(error));
+    }
+  }
+
   async sendCancellationRejected(data: {
     to: string;
     customerName: string;

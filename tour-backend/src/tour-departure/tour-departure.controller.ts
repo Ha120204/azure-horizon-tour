@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -13,7 +15,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TourDepartureService } from './tour-departure.service';
-import type { CreateDepartureDto } from './tour-departure.service';
+import type { CreateDepartureDto, UpsertDepartureTransportDto } from './tour-departure.service';
 
 type AuthenticatedRequest = {
   user?: {
@@ -58,4 +60,44 @@ export class TourDepartureController {
     );
   }
 
+  @Get(':departureId/transport')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  getTransport(@Param('departureId', ParseIntPipe) departureId: number) {
+    return this.tourDepartureService.getTransport(departureId);
+  }
+
+  @Put(':departureId/transport')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  upsertTransport(
+    @Req() req: AuthenticatedRequest,
+    @Param('tourId', ParseIntPipe) tourId: number,
+    @Param('departureId', ParseIntPipe) departureId: number,
+    @Body() dto: UpsertDepartureTransportDto,
+  ) {
+    return this.tourDepartureService.upsertTransport(
+      tourId,
+      departureId,
+      dto,
+      getAuthUserId(req),
+      req.user?.role,
+    );
+  }
+
+  @Delete(':departureId/transport')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+  deleteTransport(
+    @Req() req: AuthenticatedRequest,
+    @Param('tourId', ParseIntPipe) tourId: number,
+    @Param('departureId', ParseIntPipe) departureId: number,
+  ) {
+    return this.tourDepartureService.deleteTransport(
+      tourId,
+      departureId,
+      getAuthUserId(req),
+      req.user?.role,
+    );
+  }
 }

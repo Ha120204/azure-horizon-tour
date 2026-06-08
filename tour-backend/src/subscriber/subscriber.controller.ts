@@ -22,6 +22,18 @@ export class SubscriberController {
   }
 
   // Admin/Super Admin: GET /subscriber — danh sách subscribers
+  @Get('unsubscribe')
+  async getUnsubscribeDetails(@Query('token') token?: string) {
+    if (!token?.trim()) throw new BadRequestException('Token hủy đăng ký là bắt buộc');
+    return this.subscriberService.getUnsubscribeDetails(token.trim());
+  }
+
+  @Post('unsubscribe')
+  async unsubscribe(@Body() body: { token?: string; reason?: string }) {
+    if (!body.token?.trim()) throw new BadRequestException('Token hủy đăng ký là bắt buộc');
+    return this.subscriberService.unsubscribe(body.token.trim(), body.reason);
+  }
+
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
@@ -52,6 +64,14 @@ export class SubscriberController {
   @Roles('ADMIN', 'SUPER_ADMIN')
   async getCampaigns() {
     return this.subscriberService.getCampaigns();
+  }
+
+  @Patch('campaigns/:id/cancel')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async cancelCampaign(@Param('id') id: string) {
+    if (!id.trim()) throw new BadRequestException('ID chiến dịch là bắt buộc');
+    return this.subscriberService.cancelCampaign(id.trim());
   }
 
   @Patch(':id/status')

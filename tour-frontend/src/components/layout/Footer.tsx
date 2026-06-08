@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/constants';
-import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/publicSettings';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
 
 export default function Footer() {
     const { t, language } = useLocale();

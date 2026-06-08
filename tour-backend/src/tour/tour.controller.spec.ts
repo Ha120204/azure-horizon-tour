@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TourController } from './tour.controller';
 import { TourService } from './tour.service';
-import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { TourPermissionService } from './tour-permission.service';
 
 describe('TourController', () => {

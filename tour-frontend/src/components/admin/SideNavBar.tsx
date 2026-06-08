@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { logoutAuthSession } from '@/lib/authSession';
-import { canAccessRole, getCleanAdminPath, type AdminRole } from '@/lib/adminAccess';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { logoutAuthSession } from '@/lib/auth/authSession';
+import { canAccessRole, getCleanAdminPath, type AdminRole } from '@/lib/admin/adminAccess';
 import React, { useState } from 'react';
 
 type NavItem = {

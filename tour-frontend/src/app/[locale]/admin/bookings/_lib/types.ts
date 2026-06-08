@@ -1,4 +1,4 @@
-import type { PassengerType as SharedPassengerType } from '@/lib/passengerDetails';
+import type { PassengerType as SharedPassengerType } from '@/lib/booking/passengerDetails';
 
 export interface BookingUser {
   id: number;
@@ -44,6 +44,19 @@ export interface PaymentTransaction {
   createdAt: string;
 }
 
+export interface BookingTransportAssignment {
+  outboundTicketCodes: string[];
+  outboundSeatNumbers: string[];
+  outboundPnrCode?: string | null;
+  returnTicketCodes: string[];
+  returnSeatNumbers: string[];
+  returnPnrCode?: string | null;
+  vehiclePlate?: string | null;
+  seatNumbers: string[];
+  notes?: string | null;
+  assignedAt: string;
+}
+
 export interface Booking {
   id: number;
   bookingCode: string;
@@ -71,6 +84,7 @@ export interface Booking {
   notifications?: BookingNotification[];
   transactions?: PaymentTransaction[];
   supportTickets?: { id: number; status: string; category: string; subject?: string | null; createdAt: string }[];
+  transportAssignment?: BookingTransportAssignment | null;
 }
 
 export interface Stats {

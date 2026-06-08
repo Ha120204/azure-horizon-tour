@@ -1,7 +1,7 @@
 'use client';
 
-import VoucherDetailDrawer from '@/components/admin/VoucherDetailDrawer';
-import VoucherFormModal from '@/components/admin/VoucherFormModal';
+import VoucherDetailDrawer from './_components/VoucherDetailDrawer';
+import VoucherFormModal from './_components/VoucherFormModal';
 import { VoucherBulkActionBar } from './_components/VoucherBulkActionBar';
 import { DeleteVoucherDialog, VoucherToast } from './_components/VoucherDialogs';
 import { VoucherFilters, VoucherKpiGrid, VoucherPageHeader } from './_components/VoucherPageSections';

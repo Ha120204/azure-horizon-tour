@@ -1,6 +1,7 @@
 'use client';
 
 import AdminPagination from '@/components/admin/AdminPagination';
+import { LogSelect } from '../../logs/_components/LogSelect';
 import { statusOptions } from '../_lib/config';
 import { formatDate } from '../_lib/helpers';
 import type { Meta, Subscriber, SubscriberStatus } from '../_lib/types';
@@ -52,13 +53,16 @@ export function SubscriberSection({
             className="w-full h-12 rounded-xl bg-slate-50 border border-slate-200 pl-12 pr-4 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
           />
         </div>
-        <select
+        <LogSelect
           value={status}
-          onChange={e => onStatusChange(e.target.value as SubscriberStatus)}
-          className="h-12 rounded-xl bg-slate-50 border border-slate-200 px-4 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-        >
-          {statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
+          options={statusOptions}
+          onChange={value => onStatusChange(value as SubscriberStatus)}
+          ariaLabel="Lọc người đăng ký theo trạng thái"
+          align="right"
+          className="w-full lg:w-[190px]"
+          triggerClassName="!min-h-12 !rounded-xl !border-slate-200 !bg-slate-50 !px-4 !font-semibold !text-slate-700 hover:!border-blue-200 hover:!bg-blue-50/60"
+          menuClassName="w-full min-w-[220px]"
+        />
         <div className="h-12 rounded-xl bg-slate-50 border border-slate-200 px-4 flex items-center text-sm font-semibold text-slate-500 whitespace-nowrap">
           {filteredSummary}
         </div>

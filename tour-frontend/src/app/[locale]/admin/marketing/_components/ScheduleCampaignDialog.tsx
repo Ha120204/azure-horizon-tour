@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, type Dispatch, type SetStateAction } from 'react';
+import DatePickerDropdown from '@/components/search/DatePickerDropdown';
 import {
   buildLocalScheduleValue,
   formatDate,
@@ -50,7 +51,7 @@ export function ScheduleCampaignDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button className="absolute inset-0 bg-slate-950/55" onClick={onCancel} aria-label="Đóng lịch gửi" />
-      <div className="relative w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden">
+      <div className="relative w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-100">
         <div className="p-6 border-b border-slate-100">
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-4">
             <span className="material-symbols-outlined">event_upcoming</span>
@@ -72,19 +73,24 @@ export function ScheduleCampaignDialog({
           <div className="space-y-3">
             <div className={`rounded-2xl border bg-slate-50 p-3 ${scheduleError ? 'border-rose-300' : 'border-slate-200'}`}>
               <div className="grid grid-cols-1 md:grid-cols-[1fr_188px] gap-3">
-                <label className="space-y-1.5">
+                <div className="space-y-1.5">
                   <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Ngày</span>
-                  <input
-                    type="date"
+                  <DatePickerDropdown
                     value={scheduleDate}
-                    min={getLocalDatePart(toDateTimeLocalValue(new Date()))}
-                    onChange={e => {
-                      setScheduleDate(e.target.value);
+                    minDate={getLocalDatePart(toDateTimeLocalValue(new Date()))}
+                    onChange={value => {
+                      setScheduleDate(value);
                       setScheduleError('');
                     }}
-                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                    language="vi"
+                    label="Ngày gửi chiến dịch"
+                    placeholder="Chọn ngày gửi"
+                    variant="field"
+                    dropdownPlacement="top"
+                    triggerClassName="!h-11 !border-slate-200 !bg-white !px-3 !font-bold !text-slate-800 hover:!bg-emerald-50/40 focus-visible:!ring-emerald-200"
+                    dropdownClassName="w-[310px] max-w-[calc(100vw-2rem)]"
                   />
-                </label>
+                </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Thời gian</span>

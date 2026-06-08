@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { roleConfig } from '../_lib/config';
 import {
     formatDateToISOInputValue,

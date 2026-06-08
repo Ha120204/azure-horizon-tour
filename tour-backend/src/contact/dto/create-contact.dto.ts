@@ -48,5 +48,60 @@ export class SendContactDto {
   attachmentName?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  tourInterest?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  preferredTravelDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  guestCount?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  preferredContactMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  requestedChangeDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  cancellationReason?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  issueOccurredAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  partnerType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  website?: string;
+
+  @IsOptional()
   userId?: number; // Liên kết ticket với tài khoản user (nếu đã đăng nhập)
 }

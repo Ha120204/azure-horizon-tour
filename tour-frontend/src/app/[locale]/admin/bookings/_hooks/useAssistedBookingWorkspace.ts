@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { API_BASE_URL } from '@/lib/constants';
+import { useAssistedDraftData } from './useAssistedDraftData';
+import { useAssistedDraftActions } from './useAssistedDraftActions';
 import {
   getPassengerAgeLabel,
   getPassengerMaxDate,
   getPassengerMinDate,
   hasPassengerDetails,
-} from '@/lib/passengerDetails';
+} from '@/lib/booking/passengerDetails';
 import { PASSENGER_PRICING, passengerTypeOrder } from '../_lib/config';
 import {
   CONFIRMATION_CHANNEL_OPTIONS,
@@ -21,11 +21,8 @@ import {
   fmt,
   fmtDate,
   formatPassengerBreakdown,
-  getApiErrorMessage,
-  getErrorMessage,
   getPassengerCounts,
   hasDetailedDeparture,
-  hasLoadedBookingOptions,
   isValidCccd,
   isValidEmail,
   isValidVietnamPhone,
@@ -42,68 +39,19 @@ import type {
   PassengerType,
   TourOption,
 } from '../_lib/types';
+import {
+  EMPTY_FORM,
+  buildDraftActionDialogConfig,
+  digitsOnly,
+  getPackageDisplayName,
+} from '../_lib/assistedBookingUtils';
+export type {
+  CreateAssistedDraftEventDetail,
+  GeneratedPassengerRow,
+} from '../_lib/assistedBookingUtils';
 
 // re-export so the component doesn't need to import from types directly
 export type { DraftSelectOption };
-
-type GeneratedPassengerRow = {
-  id: string;
-  index: number;
-  type: PassengerType;
-  label: string;
-  ageLabel: string;
-  icon: string;
-  canUseRepresentative: boolean;
-  usesRepresentative: boolean;
-  hasDetails: boolean;
-  detailLabel: string;
-  passenger: DraftPassenger;
-};
-
-type CreateAssistedDraftEventDetail = {
-  bookingCode?: string;
-  customerName?: string;
-  customerEmail?: string;
-  customerPhone?: string;
-  tourId?: number;
-  numberOfPeople?: number;
-  voucherCode?: string;
-  internalNote?: string;
-};
-
-const PACKAGE_NAME_LABELS: Record<string, string> = {
-  'Goi Tieu Chuan': 'Gói Tiêu Chuẩn',
-  'Goi Cao Cap': 'Gói Cao Cấp',
-  'Goi Rieng Tu': 'Gói Riêng Tư',
-};
-
-function getPackageDisplayName(name: string | null | undefined) {
-  if (!name) return '';
-  return PACKAGE_NAME_LABELS[name.trim()] ?? name;
-}
-
-function digitsOnly(value: string) {
-  return value.replace(/\D/g, '');
-}
-
-const EMPTY_FORM: AssistedDraftForm = {
-  customerName: '',
-  customerEmail: '',
-  customerPhone: '',
-  customerIdentityNo: '',
-  sourceChannel: 'LIVE_CHAT',
-  confirmationChannel: 'ZALO',
-  emailForTicket: '',
-  tourId: '',
-  departureId: '',
-  packageId: '',
-  adultCount: '1',
-  childCount: '0',
-  infantCount: '0',
-  voucherCode: '',
-  specialRequests: '',
-  internalNote: '',
-};
 
 export interface UseAssistedBookingWorkspaceReturn {
   // state
@@ -240,15 +188,10 @@ export function useAssistedBookingWorkspace({
   onChanged: () => void;
   showToast: (msg: string, ok?: boolean) => void;
 }) {
-  const [drafts, setDrafts] = useState<AssistedDraft[]>([]);
-  const [tours, setTours] = useState<TourOption[]>([]);
-  const [role, setRole] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [editingDraft, setEditingDraft] = useState<AssistedDraft | null>(null);
   const [viewingDraft, setViewingDraft] = useState<AssistedDraft | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [isTourPickerOpen, setIsTourPickerOpen] = useState(false);
@@ -259,20 +202,14 @@ export function useAssistedBookingWorkspace({
   const [passengerDrafts, setPassengerDrafts] = useState<DraftPassenger[]>([{ type: 'Adult (12+)' }]);
   const [useRepresentativeAsFirstPassenger, setUseRepresentativeAsFirstPassenger] = useState(true);
   const [editingPassengerIndex, setEditingPassengerIndex] = useState<number | null>(null);
-  const [draftActionDialog, setDraftActionDialog] = useState<{
-    draft: AssistedDraft;
-    action: AssistedDraftAction;
-    reason: string;
-    validationIssues?: string[];
-    error?: string;
-    isSubmitting: boolean;
-  } | null>(null);
-  const [draftDeleteDialog, setDraftDeleteDialog] = useState<{
-    draft: AssistedDraft;
-    error?: string;
-    isSubmitting: boolean;
-  } | null>(null);
   const [form, setForm] = useState<AssistedDraftForm>({ ...EMPTY_FORM });
+
+  const { drafts, setDrafts, tours, role, isLoading, fetchDrafts } = useAssistedDraftData({
+    statusFilter,
+    search,
+    formTourId: form.tourId,
+    showToast,
+  });
 
   const normalizedRole = role.toUpperCase();
   const isAdmin = normalizedRole === 'ADMIN' || normalizedRole === 'SUPER_ADMIN';
@@ -448,114 +385,12 @@ export function useAssistedBookingWorkspace({
     .filter(key => Boolean(submitErrors[key]))
     .map(key => [key, submitErrors[key] as string] as const);
 
-  const draftActionDialogConfig = draftActionDialog?.action === 'submit'
-    ? {
-        eyebrow: 'Gửi duyệt',
-        title: 'Rà soát trước khi gửi admin duyệt',
-        description: 'Kiểm tra lại thông tin người đại diện, tour, lịch khởi hành, số khách và kênh xác nhận trước khi chuyển bản nháp sang trạng thái chờ duyệt.',
-        icon: 'approval_delegation',
-        iconClass: 'bg-blue-50 text-blue-700 ring-blue-100',
-        label: '',
-        placeholder: '',
-        submitLabel: 'Xác nhận gửi duyệt',
-        submitClass: 'bg-blue-700 text-white hover:bg-blue-800 focus-visible:ring-blue-500',
-        hint: 'Sau khi gửi, admin sẽ kiểm tra và duyệt tạo booking thật. Staff vẫn xem được bản nháp trong danh sách chờ duyệt.',
-        requiresReason: false,
-        showReason: false,
-      }
-    : draftActionDialog?.action === 'reject'
-    ? {
-        eyebrow: 'Từ chối duyệt',
-        title: 'Từ chối bản nháp đặt hộ',
-        description: 'Bản nháp sẽ chuyển sang trạng thái từ chối. Staff vẫn xem được lý do để trao đổi lại với khách.',
-        icon: 'block',
-        iconClass: 'bg-red-50 text-red-700 ring-red-100',
-        label: 'Lý do từ chối',
-        placeholder: 'Ví dụ: Không đủ thông tin người đại diện, tour đã hết chỗ, giá/voucher không hợp lệ...',
-        submitLabel: 'Từ chối bản nháp',
-        submitClass: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
-        hint: 'Viết rõ nguyên nhân nghiệp vụ để staff không phải hỏi lại admin.',
-        requiresReason: true,
-        showReason: true,
-      }
-    : draftActionDialog?.action === 'request-revision'
-      ? {
-          eyebrow: 'Yêu cầu chỉnh sửa',
-          title: 'Gửi yêu cầu sửa cho staff',
-          description: 'Bản nháp sẽ quay về trạng thái cần sửa. Staff sẽ dùng nội dung này làm checklist trước khi gửi duyệt lại.',
-          icon: 'rate_review',
-          iconClass: 'bg-amber-50 text-amber-700 ring-amber-100',
-          label: 'Nội dung cần chỉnh sửa',
-          placeholder: 'Ví dụ: Bổ sung CCCD người đại diện, chọn ngày khởi hành 18/06, xác nhận lại email nhận vé...',
-          submitLabel: 'Gửi yêu cầu sửa',
-          submitClass: 'bg-amber-600 text-white hover:bg-amber-700 focus-visible:ring-amber-500',
-          hint: 'Ưu tiên gạch đầu dòng các việc cần sửa để staff xử lý nhanh.',
-          requiresReason: true,
-          showReason: true,
-        }
-      : draftActionDialog?.action === 'approve'
-        ? {
-            eyebrow: 'Xác nhận duyệt',
-            title: 'Duyệt bản nháp và tạo booking',
-            description: 'Sau khi duyệt, hệ thống sẽ tạo booking thật, giữ chỗ tour và gửi yêu cầu thanh toán cho khách theo kênh đã chọn.',
-            icon: 'task_alt',
-            iconClass: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-            label: 'Ghi chú duyệt',
-            placeholder: 'Ví dụ: Đã kiểm tra thông tin khách, lịch khởi hành và giá tour.',
-            submitLabel: 'Duyệt và tạo booking',
-            submitClass: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500',
-            hint: 'Ghi chú là tùy chọn. Kiểm tra kỹ thông tin trước khi xác nhận vì thao tác này tạo đơn thật.',
-            requiresReason: false,
-            showReason: true,
-          }
-        : null;
+  const draftActionDialogConfig = buildDraftActionDialogConfig(draftActionDialog?.action);
 
   const pendingCount = drafts.filter(d => d.status === 'PENDING_APPROVAL').length;
   const needsApprovalValidation = draftActionDialog?.action === 'submit' || draftActionDialog?.action === 'approve';
   const approvalValidationIssues = needsApprovalValidation ? (draftActionDialog.validationIssues ?? []) : [];
   const hasBlockingApprovalIssues = approvalValidationIssues.length > 0;
-
-  // ─── data fetching ────────────────────────────────────────────────────────
-
-  const fetchDrafts = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const qs = new URLSearchParams();
-      if (statusFilter) qs.set('status', statusFilter);
-      if (search) qs.set('search', search);
-      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/assisted-drafts?${qs}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.message ?? 'Load failed');
-      const payload = json?.data ?? json;
-      setDrafts(Array.isArray(payload) ? payload : []);
-    } catch {
-      showToast('Không tải được danh sách bản nháp đặt hộ', false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [search, statusFilter, showToast]);
-
-  useEffect(() => {
-    fetchWithAuth(`${API_BASE_URL}/auth/profile`)
-      .then(r => r.json())
-      .then(json => {
-        const data = json?.data ?? json;
-        setRole(String(data?.role ?? ''));
-      })
-      .catch(() => setRole(''));
-  }, []);
-
-  useEffect(() => {
-    fetchWithAuth(`${API_BASE_URL}/tour?limit=100&sortBy=recommended`)
-      .then(r => r.json())
-      .then(json => {
-        const payload = json?.data ?? json;
-        setTours(Array.isArray(payload) ? payload : (payload?.data ?? []));
-      })
-      .catch(() => showToast('Không tải được danh sách tour', false));
-  }, [showToast]);
-
-  useEffect(() => { fetchDrafts(); }, [fetchDrafts]);
 
   useEffect(() => {
     if (!isTourPickerOpen) return;
@@ -565,20 +400,6 @@ export function useAssistedBookingWorkspace({
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [isTourPickerOpen]);
-
-  useEffect(() => {
-    const tourId = Number(form.tourId);
-    if (!tourId) return;
-    const current = tours.find(t => t.id === tourId);
-    if (hasLoadedBookingOptions(current)) return;
-    fetchWithAuth(`${API_BASE_URL}/tour/${tourId}`)
-      .then(r => r.json())
-      .then(json => {
-        const detail = json?.data ?? json;
-        setTours(prev => prev.map(t => t.id === tourId ? { ...t, ...detail } : t));
-      })
-      .catch(() => {});
-  }, [form.tourId, tours]);
 
   // ─── validation ───────────────────────────────────────────────────────────
 
@@ -621,46 +442,6 @@ export function useAssistedBookingWorkspace({
     const firstErrorKey = DRAFT_FIELD_ORDER.find(key => errors[key]);
     if (firstErrorKey) window.setTimeout(() => scrollToDraftField(firstErrorKey), 50);
     return Object.keys(errors).length === 0;
-  };
-
-  const validateDraftForApproval = (draft: AssistedDraft) => {
-    const issues: string[] = [];
-    const customerEmail = draft.customerEmail?.trim() ?? '';
-    const customerPhone = draft.customerPhone?.trim() ?? '';
-    const customerIdentityNo = draft.customerIdentityNo?.trim() ?? '';
-    const emailForTicket = draft.emailForTicket?.trim() ?? '';
-    const confirmationChannel = String(draft.confirmationChannel || 'ZALO').toUpperCase();
-    const passengerCount = Number(draft.numberOfPeople) || 0;
-    const draftPassengerList = Array.isArray(draft.passengers) ? draft.passengers : [];
-    const passengerCounts = getPassengerCounts(draft.passengers, passengerCount || 1);
-    const countedPassengerTotal = passengerTypeOrder.reduce((total, type) => total + passengerCounts[type], 0);
-    const draftTour = tours.find(tour => tour.id === draft.tourId);
-    const activeDepartures = (draftTour?.departures ?? []).filter(d => d.isActive !== false).filter(hasDetailedDeparture);
-    const draftDeparture = activeDepartures.find(d => d.id === draft.departureId);
-
-    if (!draft.customerName?.trim()) issues.push('Thiếu tên người đại diện.');
-    if (!customerEmail) issues.push('Thiếu email người đại diện để tạo hồ sơ.');
-    else if (!isValidEmail(customerEmail)) issues.push(`Email người đại diện không hợp lệ: ${customerEmail}.`);
-    if (!customerPhone) issues.push('Thiếu số điện thoại người đại diện.');
-    else if (!isValidVietnamPhone(customerPhone)) issues.push(`Số điện thoại không đúng định dạng Việt Nam: ${customerPhone}.`);
-    if (customerIdentityNo && !isValidCccd(customerIdentityNo)) issues.push('CCCD phải gồm đúng 12 chữ số.');
-    if (emailForTicket && !isValidEmail(emailForTicket)) issues.push(`Email nhận vé không hợp lệ: ${emailForTicket}.`);
-    if (!CONFIRMATION_CHANNEL_OPTIONS.some(o => o.value === confirmationChannel)) issues.push('Kênh gửi xác nhận không hợp lệ.');
-    if (confirmationChannel === 'EMAIL' && !emailForTicket && !customerEmail) issues.push('Kênh email cần email nhận vé hoặc email người đại diện.');
-    if (!draft.tourId) issues.push('Chưa chọn tour cần đặt hộ.');
-    if (passengerCount < 1) issues.push('Số khách phải từ 1 trở lên.');
-    if (draftPassengerList.length !== passengerCount) issues.push('Danh sách khách đi tour chưa khớp tổng số khách.');
-    if (countedPassengerTotal !== passengerCount) issues.push('Cơ cấu khách chưa khớp tổng số khách.');
-    if (passengerCounts['Adult (12+)'] < 1) issues.push('Cần ít nhất 1 người lớn trong đoàn.');
-    if (passengerCounts['Infant (<4)'] > passengerCounts['Adult (12+)']) issues.push('Số em bé không được vượt quá số người lớn.');
-    if (activeDepartures.length > 0 && !draft.departureId) issues.push('Tour có lịch khởi hành cụ thể, cần chọn lịch trước khi duyệt.');
-    if (draft.departureId && draftDeparture?.availableSeats !== undefined && draftDeparture.availableSeats < passengerCount) {
-      issues.push(`Lịch khởi hành chỉ còn ${draftDeparture.availableSeats} ghế, không đủ cho ${passengerCount} khách.`);
-    } else if (!draft.departureId && draftTour?.availableSeats !== undefined && draftTour.availableSeats < passengerCount) {
-      issues.push(`Tour chỉ còn ${draftTour.availableSeats} ghế, không đủ cho ${passengerCount} khách.`);
-    }
-
-    return issues;
   };
 
   // ─── form handlers ────────────────────────────────────────────────────────
@@ -755,6 +536,37 @@ export function useAssistedBookingWorkspace({
     setPassengerDrafts(buildPassengerDraftPayload(nextForm));
     setForm(nextForm);
   };
+
+  const {
+    isSaving,
+    draftActionDialog,
+    setDraftActionDialog,
+    draftDeleteDialog,
+    createDraft,
+    runDraftAction,
+    closeDraftActionDialog,
+    canDeleteDraft,
+    openDeleteDraft,
+    closeDeleteDraftDialog,
+    submitDraftActionDialog,
+    confirmDeleteDraft,
+  } = useAssistedDraftActions({
+    form,
+    editingDraft,
+    tours,
+    isAdmin,
+    hasResolvedRole,
+    completionActionText,
+    effectivePassengerDrafts,
+    validateForApproval,
+    resetDraftForm,
+    setDraftFormError,
+    setIsDrawerOpen,
+    setViewingDraft,
+    setDrafts,
+    onChanged,
+    showToast,
+  });
 
   const openCreateDraft = () => {
     resetDraftForm();
@@ -852,197 +664,6 @@ export function useAssistedBookingWorkspace({
 
   const openDraftDetail = (draft: AssistedDraft) => {
     setViewingDraft(draft);
-  };
-
-  // ─── API mutations ────────────────────────────────────────────────────────
-
-  const createDraft = async (submitAfterCreate: boolean) => {
-    setDraftFormError(null);
-    if (submitAfterCreate && !hasResolvedRole) {
-      showToast('Đang xác thực quyền thao tác, vui lòng thử lại sau giây lát', false);
-      return;
-    }
-    if (submitAfterCreate && !validateForApproval()) {
-      const msg = 'Vui lòng kiểm tra các trường bắt buộc được đánh dấu bên dưới.';
-      setDraftFormError(msg);
-      showToast(`Vui lòng hoàn tất các trường bắt buộc trước khi ${completionActionText}`, false);
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const passengers = effectivePassengerDrafts;
-      const body = {
-        customerName: form.customerName.trim() || undefined,
-        customerEmail: form.customerEmail.trim() || undefined,
-        customerPhone: form.customerPhone.trim() || undefined,
-        customerIdentityNo: form.customerIdentityNo.trim() || undefined,
-        sourceChannel: form.sourceChannel,
-        confirmationChannel: form.confirmationChannel,
-        emailForTicket: form.emailForTicket.trim() || form.customerEmail.trim() || undefined,
-        tourId: form.tourId ? Number(form.tourId) : undefined,
-        departureId: form.departureId ? Number(form.departureId) : undefined,
-        packageId: form.packageId ? Number(form.packageId) : undefined,
-        numberOfPeople: passengers.length,
-        passengers,
-        voucherCode: form.voucherCode.trim() || undefined,
-        specialRequests: form.specialRequests.trim() || undefined,
-        internalNote: form.internalNote.trim() || undefined,
-      };
-
-      if (submitAfterCreate && (!body.customerName || !body.customerEmail || !body.tourId)) {
-        const msg = 'Vui lòng nhập người đại diện và chọn tour';
-        setDraftFormError(msg);
-        showToast(msg, false);
-        return;
-      }
-
-      const res = await fetchWithAuth(
-        editingDraft
-          ? `${API_BASE_URL}/booking/admin/assisted-drafts/${editingDraft.id}`
-          : `${API_BASE_URL}/booking/admin/assisted-drafts`,
-        {
-          method: editingDraft ? 'PATCH' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-      );
-      const json = await res.json();
-      if (!res.ok) throw new Error(getApiErrorMessage(json, editingDraft ? 'Cập nhật bản nháp thất bại' : 'Tạo bản nháp thất bại'));
-      let draft: AssistedDraft = json?.data ?? json;
-
-      if (submitAfterCreate) {
-        const action = isAdmin ? 'approve' : 'submit';
-        const submitRes = await fetchWithAuth(`${API_BASE_URL}/booking/admin/assisted-drafts/${draft.id}/${action}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: isAdmin ? JSON.stringify({ note: 'Admin duyệt trực tiếp từ màn hình đặt hộ' }) : undefined,
-        });
-        const submitJson = await submitRes.json();
-        if (!submitRes.ok) throw new Error(getApiErrorMessage(submitJson, isAdmin ? 'Duyệt bản nháp thất bại' : 'Gửi duyệt thất bại'));
-        const actionPayload = submitJson?.data ?? submitJson;
-        draft = actionPayload?.draft ?? actionPayload;
-        onChanged();
-      }
-
-      setDrafts(prev => editingDraft
-        ? prev.map(item => item.id === draft.id ? draft : item)
-        : [draft, ...prev]);
-      setIsDrawerOpen(false);
-      resetDraftForm();
-      showToast(submitAfterCreate
-        ? (isAdmin ? 'Đã lưu, duyệt và tạo booking thật' : 'Đã lưu và gửi duyệt bản nháp')
-        : (editingDraft ? 'Đã cập nhật bản nháp' : 'Đã lưu bản nháp đặt hộ'));
-    } catch (e: unknown) {
-      const msg = getErrorMessage(e, 'Thao tác thất bại');
-      setDraftFormError(msg);
-      showToast(msg, false);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const executeDraftAction = async (draft: AssistedDraft, action: AssistedDraftAction, reason = '') => {
-    try {
-      const body =
-        action === 'approve'
-          ? { note: reason || 'Admin duyệt từ màn hình quản lý đặt tour' }
-          : action === 'reject' || action === 'request-revision'
-            ? { reason }
-            : {};
-      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/assisted-drafts/${draft.id}/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(getApiErrorMessage(json, 'Thao tác thất bại'));
-      const payload = json?.data ?? json;
-      const updated = payload?.draft ?? payload;
-      setDrafts(prev => prev.map(item => item.id === draft.id ? updated : item));
-      if (action === 'approve') onChanged();
-      const successMessage =
-        action === 'approve' ? 'Đã duyệt bản nháp và tạo booking thật.'
-        : action === 'submit' ? 'Đã gửi bản nháp sang admin chờ duyệt.'
-        : action === 'request-revision' ? 'Đã gửi yêu cầu chỉnh sửa cho staff.'
-        : action === 'reject' ? 'Đã từ chối bản nháp đặt hộ.'
-        : 'Đã cập nhật bản nháp.';
-      showToast(successMessage);
-      return { ok: true as const };
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, 'Thao tác thất bại');
-      showToast(message, false);
-      return { ok: false as const, error: message };
-    }
-  };
-
-  const runDraftAction = (draft: AssistedDraft, action: AssistedDraftAction) => {
-    if (action === 'submit' || action === 'approve' || action === 'reject' || action === 'request-revision') {
-      const validationIssues = action === 'submit' || action === 'approve' ? validateDraftForApproval(draft) : [];
-      setDraftActionDialog({ draft, action, reason: '', validationIssues, isSubmitting: false });
-      return;
-    }
-    void executeDraftAction(draft, action);
-  };
-
-  const closeDraftActionDialog = () => {
-    setDraftActionDialog(current => current?.isSubmitting ? current : null);
-  };
-
-  const canDeleteDraft = (draft: AssistedDraft) =>
-    ['DRAFT', 'NEEDS_REVISION', 'REJECTED'].includes(draft.status) && !draft.convertedBooking;
-
-  const openDeleteDraft = (draft: AssistedDraft) => {
-    setDraftDeleteDialog({ draft, isSubmitting: false });
-  };
-
-  const closeDeleteDraftDialog = () => {
-    setDraftDeleteDialog(current => current?.isSubmitting ? current : null);
-  };
-
-  const submitDraftActionDialog = async () => {
-    if (!draftActionDialog) return;
-    const reason = draftActionDialog.reason.trim();
-    if (draftActionDialog.action === 'submit' || draftActionDialog.action === 'approve') {
-      const validationIssues = validateDraftForApproval(draftActionDialog.draft);
-      if (validationIssues.length > 0) {
-        setDraftActionDialog(current => current ? { ...current, validationIssues, error: undefined } : current);
-        return;
-      }
-    }
-    if ((draftActionDialog.action === 'reject' || draftActionDialog.action === 'request-revision') && !reason) {
-      setDraftActionDialog(current => current ? { ...current, error: 'Vui lòng nhập nội dung phản hồi trước khi gửi.' } : current);
-      return;
-    }
-    setDraftActionDialog(current => current ? { ...current, reason, error: undefined, isSubmitting: true } : current);
-    const result = await executeDraftAction(draftActionDialog.draft, draftActionDialog.action, reason);
-    if (result.ok) {
-      setDraftActionDialog(null);
-    } else {
-      setDraftActionDialog(current => current ? { ...current, error: result.error, isSubmitting: false } : current);
-    }
-  };
-
-  const confirmDeleteDraft = async () => {
-    if (!draftDeleteDialog) return;
-    const { draft } = draftDeleteDialog;
-    setDraftDeleteDialog(current => current ? { ...current, error: undefined, isSubmitting: true } : current);
-    try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/assisted-drafts/${draft.id}`, {
-        method: 'DELETE',
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(getApiErrorMessage(json, 'Xóa bản nháp thất bại'));
-      setDrafts(prev => prev.filter(item => item.id !== draft.id));
-      setViewingDraft(current => current?.id === draft.id ? null : current);
-      setDraftDeleteDialog(null);
-      onChanged();
-      showToast(`Đã xóa bản nháp ${draft.draftCode}`);
-    } catch (error: unknown) {
-      setDraftDeleteDialog(current => current
-        ? { ...current, error: getErrorMessage(error, 'Xóa bản nháp thất bại'), isSubmitting: false }
-        : current);
-    }
   };
 
   return {

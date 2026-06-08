@@ -1,5 +1,5 @@
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { PAY_CFG, STATUS_CFG } from './config';
 import { fmtDate } from './helpers';
 import type { Booking } from './types';

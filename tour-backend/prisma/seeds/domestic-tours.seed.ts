@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, TourStatus } from '@prisma/client';
+import { Prisma, PrismaClient, TourStatus, TransportType } from '@prisma/client';
 
 type Region = 'Miền Bắc' | 'Miền Trung' | 'Miền Nam';
 
@@ -1623,10 +1623,12 @@ const remainingDomesticTours: DomesticTourSeed[] = [
   },
 ];
 
-function departureData(basePrice: number, baseSeats: number) {
+function departureData(basePrice: number, baseSeats: number, boardingPoint: string) {
   const offsets = [21, 35, 49, 70];
   return offsets.map((offset, index) => {
     const departureDate = addDays(offset);
+    const boardingTime = new Date(departureDate);
+    boardingTime.setHours(7, 0, 0, 0);
     return {
       departureDate,
       price: basePrice,
@@ -1642,6 +1644,20 @@ function departureData(basePrice: number, baseSeats: number) {
       flashSaleEndsAt: null,
       isActive: true,
       sortOrder: index,
+      transport: {
+        create: {
+          type: TransportType.BUS,
+          vehicleType: 'Xe du lịch 45 chỗ',
+          vehicleTypeEn: '45-seat tour bus',
+          operator: 'Xe riêng công ty',
+          operatorEn: 'Company vehicle',
+          boardingPoint,
+          boardingPointEn: boardingPoint,
+          boardingTime,
+          notes: 'Xe đón tại điểm tập trung đã thông báo. Quý khách có mặt trước 15 phút.',
+          notesEn: 'Pick-up at the designated meeting point. Please arrive 15 minutes early.',
+        },
+      },
     };
   });
 }
@@ -1729,6 +1745,7 @@ export async function seedDomesticTours(prisma: PrismaClient) {
       ...departureData(
         item.tour.price,
         Math.min(item.tour.availableSeats, 40),
+        item.tour.departurePoint,
       ).map((departure) =>
         prisma.tourDeparture.create({
           data: {

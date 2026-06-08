@@ -1,14 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { PANEL_META } from '../_lib/config';
 import { canEdit, formatDuration } from '../_lib/helpers';
 import type { GroupedSettings, SettingsPanel, SystemHealth } from '../_lib/types';
 
+const resolveSettingsPanel = (value: string | null): SettingsPanel =>
+    value && Object.prototype.hasOwnProperty.call(PANEL_META, value) ? value as SettingsPanel : 'company';
+
 export function useSystemSettings() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [grouped, setGrouped] = useState<GroupedSettings>({});
     const [userRole, setUserRole] = useState('');
     const [health, setHealth] = useState<SystemHealth | null>(null);
@@ -16,7 +23,7 @@ export function useSystemSettings() {
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [loading, setLoading] = useState(true);
     const [now, setNow] = useState(new Date());
-    const [activePanel, setActivePanel] = useState<SettingsPanel>('company');
+    const activePanel = resolveSettingsPanel(searchParams.get('tab'));
 
     useEffect(() => {
         const t = setInterval(() => setNow(new Date()), 1000);
@@ -96,6 +103,12 @@ export function useSystemSettings() {
         onRefresh: checkSystemHealth,
     });
 
+    const setActivePanel = useCallback((panel: SettingsPanel) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('tab', panel);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }, [pathname, router, searchParams]);
+
     const handleManualHealthCheck = useCallback(async () => {
         setActivePanel('runtime');
         const ok = await checkSystemHealth();
@@ -103,7 +116,7 @@ export function useSystemSettings() {
             ok ? 'Đã cập nhật trạng thái hệ thống.' : 'Không kiểm tra được trạng thái hệ thống. Hãy restart backend nếu vừa cập nhật code.',
             ok ? 'success' : 'error',
         );
-    }, [checkSystemHealth, showToast]);
+    }, [checkSystemHealth, setActivePanel, showToast]);
 
     const handleSave = useCallback(async (updates: Record<string, string>) => {
         try {

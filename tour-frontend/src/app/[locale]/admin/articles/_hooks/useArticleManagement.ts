@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import type { Article } from '@/components/admin/ArticleDrawer';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import type { Article } from '../_components/ArticleDrawer';
 import { EMPTY_STATS } from '../_lib/config';
 import { getCatCfg } from '../_lib/helpers';
 import { buildArticleKpiCards } from '../_lib/kpis';

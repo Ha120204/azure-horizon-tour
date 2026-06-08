@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import {
     dispatchAdminRealtimeNotification,
     parseAdminRealtimeNotification,
-} from '@/lib/adminRealtimeEvents';
+} from '@/lib/admin/adminRealtimeEvents';
 
 type UseAdminNotificationStreamOptions = {
     enabled: boolean;

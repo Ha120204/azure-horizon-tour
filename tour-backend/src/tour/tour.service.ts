@@ -7,7 +7,7 @@ import { TourPermissionService } from './tour-permission.service';
 import { TourWorkflowService } from './tour-workflow.service';
 import { TourContentService } from './tour-content.service';
 import { TourQueryService } from './tour-query.service';
-import { localizeTour, normalizeLocale } from './tour-localization';
+import { localizeTour, normalizeLocale } from './localization';
 import {
   getTomorrow,
   getMinBookableDate,

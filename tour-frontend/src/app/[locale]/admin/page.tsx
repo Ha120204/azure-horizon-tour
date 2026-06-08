@@ -5,11 +5,11 @@ import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
     PieChart, Pie, Cell,
 } from 'recharts';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { Link, useRouter } from '@/i18n/routing';
-import StaffDashboard from '@/components/admin/StaffDashboard';
-import { useAdminAutoRefresh } from '@/hooks/useAdminAutoRefresh';
+import StaffDashboard from './_components/StaffDashboard';
+import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 
 // ─── Preset Config ────────────────────────────────────────────────────────────
 

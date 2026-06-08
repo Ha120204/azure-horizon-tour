@@ -15,10 +15,10 @@ export const EMPTY_CAMPAIGN_FORM: CampaignForm = {
   selectedSubscriberEmails: [],
 };
 
-export const statusOptions: { value: SubscriberStatus; label: string }[] = [
-  { value: 'all', label: 'Tất cả trạng thái' },
-  { value: 'active', label: 'Đang nhận tin' },
-  { value: 'inactive', label: 'Đã tạm dừng' },
+export const statusOptions: { value: SubscriberStatus; label: string; icon: string }[] = [
+  { value: 'all', label: 'Tất cả trạng thái', icon: 'filter_list' },
+  { value: 'active', label: 'Đang nhận tin', icon: 'mark_email_read' },
+  { value: 'inactive', label: 'Đã tạm dừng', icon: 'unsubscribe' },
 ];
 
 export const campaignTypeConfig: Record<CampaignType, { label: string; icon: string; tone: string }> = {
@@ -33,4 +33,5 @@ export const campaignStatusConfig: Record<CampaignDraft['status'], { label: stri
   SENDING: { label: 'ĐANG GỬI', tone: 'bg-amber-50 text-amber-700' },
   SENT: { label: 'ĐÃ GỬI', tone: 'bg-emerald-50 text-emerald-700' },
   FAILED: { label: 'LỖI GỬI', tone: 'bg-rose-50 text-rose-700' },
+  CANCELLED: { label: 'ĐÃ HỦY', tone: 'bg-slate-100 text-slate-500' },
 };

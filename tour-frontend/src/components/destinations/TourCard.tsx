@@ -26,9 +26,10 @@ interface TourCardProps {
     tour: TourCardData;
     t: (key: string) => string;
     formatPrice: (price: number) => string;
+    index?: number;
 }
 
-export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
+export default function TourCard({ tour, t, formatPrice, index = 0 }: TourCardProps) {
     const displayPrice = formatPrice(
         tour.departures && tour.departures.length > 0
             ? Math.min(...tour.departures.map((d) => d.price ?? tour.price))
@@ -49,7 +50,8 @@ export default function TourCard({ tour, t, formatPrice }: TourCardProps) {
          */
         <Link
             href={`/tour/${tour.id}`}
-            className="block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-all duration-300 hover:-translate-y-1"
+            className="destination-card-enter block bg-surface-container-lowest rounded-2xl overflow-hidden editorial-shadow group transition-[box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-slate-900/10 active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
+            style={{ animationDelay: `${Math.min(index, 8) * 70 + 180}ms` }}
         >
             {/*
               The shared element — viewTransitionName must be unique per tour.

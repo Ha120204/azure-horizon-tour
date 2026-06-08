@@ -1,0 +1,651 @@
+.authTheme {
+  --auth-surface: oklch(98.4% 0.01 255);
+  --auth-surface-soft: oklch(99.4% 0.006 255);
+  --auth-ink: oklch(24% 0.032 255);
+  --auth-muted: oklch(48% 0.044 255);
+  --auth-panel: #003f87;
+  --auth-panel-strong: #002e66;
+  --auth-panel-soft: #2d75c8;
+  --auth-panel-wash: #d7e2ff;
+  --auth-panel-text: oklch(99% 0.004 255);
+  --auth-panel-muted: oklch(91% 0.04 255);
+  --auth-primary: #003f87;
+  --auth-primary-strong: #0056b3;
+  --auth-primary-hover: #004c9f;
+  --auth-input-surface: oklch(99.5% 0.004 255);
+  --auth-input-border: oklch(86.5% 0.035 255);
+  --auth-input-shadow: 0 12px 28px oklch(36% 0.13 257 / 8%);
+  --auth-focus-ring: 0 0 0 4px oklch(65% 0.13 257 / 24%);
+  --auth-danger: oklch(50% 0.16 28);
+  --auth-danger-surface: oklch(96% 0.03 28);
+  --auth-success: oklch(54% 0.13 151);
+  --auth-radius-sm: 12px;
+  --auth-radius-md: 18px;
+  --auth-radius-lg: 28px;
+  --auth-space-xs: 4px;
+  --auth-space-sm: 8px;
+  --auth-space-md: 12px;
+  --auth-space-lg: 16px;
+  --auth-space-xl: 24px;
+  --auth-space-2xl: 32px;
+  --auth-space-3xl: 48px;
+  --auth-space-4xl: 64px;
+}
+
+.commandPanel {
+  background: linear-gradient(160deg, #05091a 0%, #070e24 55%, #04091c 100%);
+}
+
+.auroraA {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 55% at 95% -5%, oklch(58% 0.22 264 / 28%), transparent 55%),
+    radial-gradient(ellipse 60% 45% at -5% 92%, oklch(46% 0.18 290 / 20%), transparent 50%),
+    radial-gradient(ellipse 45% 35% at 35% 105%, oklch(44% 0.15 210 / 14%), transparent 45%);
+  animation: auroraFloat 20s ease-in-out infinite;
+}
+
+.auroraB {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 50% 40% at 15% 12%, oklch(52% 0.18 245 / 12%), transparent 50%),
+    radial-gradient(ellipse 40% 30% at 88% 78%, oklch(50% 0.16 298 / 10%), transparent 45%);
+  animation: auroraFloat2 15s ease-in-out infinite;
+}
+
+.dotGrid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(oklch(100% 0 0 / 11%) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 85% 85% at center, black, transparent 75%);
+  opacity: 0.55;
+}
+
+.trustPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid oklch(100% 0 0 / 16%);
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 7%);
+  padding: 7px 15px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--auth-panel-muted);
+  backdrop-filter: blur(10px);
+  width: fit-content;
+}
+
+.trustDot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: oklch(74% 0.19 152);
+  box-shadow: 0 0 8px oklch(74% 0.19 152 / 80%);
+  animation: dotPulse 2.2s ease-in-out infinite;
+}
+
+.gradientText {
+  background: linear-gradient(105deg, oklch(78% 0.13 198) 0%, oklch(76% 0.19 252) 55%, oklch(80% 0.15 290) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.destChip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid oklch(100% 0 0 / 15%);
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 7%);
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--auth-panel-text);
+  backdrop-filter: blur(8px);
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.destChip:hover {
+  background: oklch(100% 0 0 / 13%);
+  border-color: oklch(100% 0 0 / 28%);
+}
+
+.infoCard {
+  border: 1px solid oklch(100% 0 0 / 18%);
+  border-radius: 12px;
+  background: linear-gradient(135deg, oklch(100% 0 0 / 11%), oklch(100% 0 0 / 6%));
+  box-shadow: 0 12px 36px oklch(0% 0 0 / 22%);
+  padding: 16px 18px;
+  backdrop-filter: blur(20px);
+}
+
+.boardingPass {
+  position: relative;
+  width: min(100%, 640px);
+  border: 1px solid oklch(100% 0 0 / 24%);
+  border-radius: 14px;
+  background: linear-gradient(135deg, oklch(100% 0 0 / 14%), oklch(100% 0 0 / 7%));
+  box-shadow: 0 30px 80px oklch(0% 0 0 / 36%);
+  padding: 30px;
+  backdrop-filter: blur(22px);
+  animation: authGlassReveal 760ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+  transition: box-shadow 500ms cubic-bezier(0.22, 1, 0.36, 1), transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.boardingPass:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 36px 92px oklch(0% 0 0 / 42%);
+}
+
+.flightPath {
+  position: relative;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(100% 0 0 / 38%) 18% 82%, transparent);
+}
+
+.flightNode {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-secondary-container, #fd8b00);
+  box-shadow: 0 0 16px oklch(72% 0.17 65 / 92%);
+  transform: translate(-50%, -50%);
+  animation: nodePulse 3000ms ease-in-out infinite;
+}
+
+
+.guideIcon {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border-radius: 8px;
+  background: oklch(100% 0 0 / 16%);
+  color: white;
+}
+
+.routeRibbon {
+  position: absolute;
+  left: -14%;
+  top: 23%;
+  height: 280px;
+  width: 118%;
+  border-top: 1px solid oklch(100% 0 0 / 22%);
+  border-radius: 999px;
+  transform: rotate(-18deg);
+}
+
+.routeRibbon::after {
+  content: "";
+  position: absolute;
+  inset: 18px 12% auto 18%;
+  height: 1px;
+  border-top: 1px dashed oklch(100% 0 0 / 28%);
+}
+
+.routeNodeStart,
+.routeNodeEnd {
+  position: absolute;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid oklch(100% 0 0 / 72%);
+  border-radius: 999px;
+  background: var(--auth-panel);
+}
+
+.routeNodeStart {
+  left: 16%;
+  top: -7px;
+}
+
+.routeNodeEnd {
+  right: 14%;
+  top: -7px;
+}
+
+.panelEnter {
+  animation: authFadeUp 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brandEnter {
+  animation: authFadeUp 580ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+
+.imageEnter {
+  animation: authImageReveal 760ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+}
+
+.copyEnter {
+  animation: authFadeUp 640ms cubic-bezier(0.22, 1, 0.36, 1) 260ms both;
+}
+
+.metaEnter {
+  animation: authFadeUp 640ms cubic-bezier(0.22, 1, 0.36, 1) 360ms both;
+}
+
+.inlineReveal {
+  animation: authInlineReveal 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 14%);
+  padding: 8px 12px;
+  color: var(--auth-panel-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.routeArrow {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--auth-panel-text);
+  color: var(--auth-primary);
+  box-shadow: 0 12px 30px oklch(12% 0.08 257 / 22%);
+}
+
+.photoThumb {
+  width: 88px;
+  height: 68px;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  background: var(--auth-panel-wash);
+  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 20%);
+}
+
+.signalTile {
+  border: 1px solid oklch(100% 0 0 / 14%);
+  border-radius: 18px;
+  background: oklch(100% 0 0 / 10%);
+  padding: 14px;
+  backdrop-filter: blur(12px);
+}
+
+.benefitChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid oklch(100% 0 0 / 14%);
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 10%);
+  padding: 10px 13px;
+  color: var(--auth-panel-text);
+  font-size: 0.82rem;
+  font-weight: 750;
+  backdrop-filter: blur(12px);
+}
+
+.formPanel {
+  background: var(--auth-surface-soft);
+  border: 1px solid var(--auth-input-border);
+  border-radius: var(--auth-radius-lg);
+  box-shadow: 0 24px 70px oklch(36% 0.13 257 / 10%);
+  animation: authFadeUp 620ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+.fieldLabel {
+  color: var(--auth-ink);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.fieldControl {
+  min-height: 56px;
+  width: 100%;
+  border: 1px solid var(--auth-input-border);
+  border-radius: var(--auth-radius-md);
+  background: var(--auth-input-surface);
+  color: var(--auth-ink);
+  box-shadow: var(--auth-input-shadow);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.fieldControl:focus-within {
+  border-color: var(--auth-primary);
+  box-shadow: var(--auth-focus-ring), var(--auth-input-shadow);
+  transform: translateY(-1px);
+}
+
+.fieldControlError {
+  border-color: var(--auth-danger);
+}
+
+.fieldControlError:focus-within {
+  border-color: var(--auth-danger);
+  box-shadow: 0 0 0 4px oklch(67% 0.12 28 / 20%), var(--auth-input-shadow);
+}
+
+.primaryButton {
+  min-height: 56px;
+  border-radius: var(--auth-radius-md);
+  background: linear-gradient(90deg, var(--auth-primary), var(--auth-primary-strong));
+  color: var(--auth-panel-text);
+  box-shadow: 0 18px 42px oklch(36% 0.13 257 / 22%);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1), filter 180ms ease;
+}
+
+.primaryButton:not(:disabled):hover {
+  filter: brightness(0.98);
+  box-shadow: 0 20px 48px oklch(36% 0.13 257 / 28%);
+  transform: translateY(-2px);
+}
+
+.primaryButton:not(:disabled):active {
+  transform: translateY(0) scale(0.985);
+}
+
+.primaryButton:focus-visible {
+  outline: none;
+  box-shadow: var(--auth-focus-ring), 0 18px 42px oklch(36% 0.13 257 / 22%);
+}
+
+.googleButton {
+  box-shadow: 0 10px 26px oklch(36% 0.13 257 / 4%);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.googleButton:not(:disabled):hover {
+  border-color: var(--auth-primary);
+  background: oklch(99.2% 0.008 255);
+  box-shadow: 0 16px 34px oklch(36% 0.13 257 / 10%);
+  transform: translateY(-1px);
+}
+
+.googleButton:not(:disabled):active {
+  transform: translateY(0) scale(0.985);
+}
+
+.googleButton:focus-visible {
+  outline: none;
+  border-color: var(--auth-primary);
+  box-shadow: var(--auth-focus-ring), 0 10px 26px oklch(36% 0.13 257 / 4%);
+}
+
+.buttonIcon {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.primaryButton:not(:disabled):hover .buttonIcon {
+  transform: translateX(4px);
+}
+
+.linkText {
+  color: var(--auth-primary);
+  font-weight: 700;
+  transition: color 160ms ease, text-underline-offset 160ms ease;
+}
+
+.linkText:hover {
+  color: var(--auth-primary-hover);
+  text-underline-offset: 3px;
+}
+
+.errorMessage {
+  border: 1px solid oklch(67% 0.12 28 / 40%);
+  border-radius: var(--auth-radius-sm);
+  background: var(--auth-danger-surface);
+  color: var(--auth-danger);
+  animation: authInlineReveal 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Register panel ── */
+.regPanel {
+  background: linear-gradient(150deg, #050b1e 0%, #071226 55%, #04091a 100%);
+}
+
+.regAuroraA {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 55% at 90% -8%, oklch(55% 0.22 258 / 28%), transparent 55%),
+    radial-gradient(ellipse 60% 45% at -8% 90%, oklch(48% 0.20 268 / 20%), transparent 50%),
+    radial-gradient(ellipse 45% 35% at 30% 105%, oklch(42% 0.17 278 / 14%), transparent 45%);
+  animation: auroraFloat 22s ease-in-out infinite;
+}
+
+.regAuroraB {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 50% 40% at 12% 15%, oklch(50% 0.18 248 / 11%), transparent 50%),
+    radial-gradient(ellipse 40% 30% at 85% 72%, oklch(48% 0.16 272 / 10%), transparent 45%);
+  animation: auroraFloat2 17s ease-in-out infinite;
+}
+
+.regFreePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid oklch(70% 0.22 258 / 32%);
+  border-radius: 999px;
+  background: oklch(70% 0.22 258 / 9%);
+  padding: 7px 15px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: oklch(78% 0.18 258);
+  backdrop-filter: blur(10px);
+  width: fit-content;
+}
+
+.regGradientText {
+  background: linear-gradient(105deg, oklch(76% 0.18 248) 0%, oklch(74% 0.20 262) 55%, oklch(72% 0.18 278) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.regFeatureCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid oklch(100% 0 0 / 11%);
+  border-radius: 14px;
+  background: linear-gradient(135deg, oklch(100% 0 0 / 7%), oklch(100% 0 0 / 3.5%));
+  padding: 16px 18px;
+  backdrop-filter: blur(16px);
+  transition: background 250ms ease, border-color 250ms ease, transform 250ms ease;
+}
+
+.regFeatureCard:hover {
+  background: linear-gradient(135deg, oklch(100% 0 0 / 11%), oklch(100% 0 0 / 6%));
+  border-color: oklch(70% 0.22 258 / 30%);
+  transform: translateX(4px);
+}
+
+.regFeatureCardAccent {
+  border-color: oklch(70% 0.22 258 / 22%);
+  background: linear-gradient(135deg, oklch(70% 0.22 258 / 10%), oklch(70% 0.22 258 / 4.5%));
+}
+
+.regFeatureCardAccent:hover {
+  border-color: oklch(70% 0.22 258 / 38%);
+  background: linear-gradient(135deg, oklch(70% 0.22 258 / 14%), oklch(70% 0.22 258 / 7%));
+}
+
+.regFeatureIcon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 10px;
+  background: oklch(70% 0.22 258 / 14%);
+  color: oklch(78% 0.18 258);
+}
+
+.regTestimonial {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid oklch(100% 0 0 / 14%);
+  border-radius: 14px;
+  background: linear-gradient(135deg, oklch(100% 0 0 / 9%), oklch(100% 0 0 / 4.5%));
+  padding: 16px 18px;
+  backdrop-filter: blur(16px);
+}
+
+.regTestimonialAvatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, oklch(62% 0.22 255 / 65%), oklch(55% 0.20 278 / 65%));
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: white;
+}
+
+@keyframes authFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authImageReveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes authInlineReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authGlassReveal {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes nodePulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.45);
+  }
+}
+
+@keyframes auroraFloat {
+  0%,
+  100% {
+    transform: scale(1) translate(0%, 0%);
+  }
+
+  33% {
+    transform: scale(1.04) translate(-1.5%, 1.5%);
+  }
+
+  66% {
+    transform: scale(0.97) translate(1%, -1%);
+  }
+}
+
+@keyframes auroraFloat2 {
+  0%,
+  100% {
+    transform: scale(1) translate(0%, 0%);
+  }
+
+  50% {
+    transform: scale(1.07) translate(2%, -2%);
+  }
+}
+
+@keyframes dotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px oklch(74% 0.19 152 / 70%);
+  }
+
+  50% {
+    box-shadow: 0 0 14px oklch(74% 0.19 152 / 100%), 0 0 26px oklch(74% 0.19 152 / 38%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelEnter,
+  .brandEnter,
+  .imageEnter,
+  .copyEnter,
+  .metaEnter,
+  .inlineReveal,
+  .formPanel,
+  .errorMessage,
+  .boardingPass,
+  .flightNode,
+  .auroraA,
+  .auroraB,
+  .regAuroraA,
+  .regAuroraB,
+  .trustDot {
+    animation: none;
+  }
+
+  .regFeatureCard:hover {
+    transform: none;
+  }
+
+  .fieldControl:focus-within,
+  .primaryButton:not(:disabled):hover,
+  .primaryButton:active,
+  .googleButton:not(:disabled):hover,
+  .googleButton:active,
+  .primaryButton:not(:disabled):hover .buttonIcon {
+    transform: none;
+  }
+}

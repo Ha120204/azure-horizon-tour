@@ -14,6 +14,52 @@ export type CancellationPolicy = {
     daysUntilDeparture: number;
 };
 
+export type BookingTransportAssignment = {
+    outboundTicketCodes: string[];
+    outboundSeatNumbers: string[];
+    outboundPnrCode?: string | null;
+    returnTicketCodes: string[];
+    returnSeatNumbers: string[];
+    returnPnrCode?: string | null;
+    vehiclePlate?: string | null;
+    seatNumbers: string[];
+    notes?: string | null;
+    assignedAt: string;
+};
+
+export type BookingDepartureTransport = {
+    type: 'FLIGHT' | 'BUS' | 'PRIVATE_CAR' | 'COMBO' | 'SELF_ARRANGED';
+    airline?: string | null;
+    flightCode?: string | null;
+    departureAirport?: string | null;
+    arrivalAirport?: string | null;
+    boardingPoint?: string | null;
+    boardingTime?: string | null;
+    departureTime?: string | null;
+    arrivalTime?: string | null;
+    vehicleType?: string | null;
+    operator?: string | null;
+    notes?: string | null;
+};
+
+export type BookingContactInfo = {
+    fullName?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    identityType?: string | null;
+    identityNo?: string | null;
+};
+
+export type BookingPassenger = {
+    type?: string | null;
+    fullName?: string | null;
+    dob?: string | null;
+    gender?: string | null;
+    identityType?: string | null;
+    identityNo?: string | null;
+    notes?: string | null;
+};
+
 export type BookingDetail = {
     id: number;
     bookingCode: string;
@@ -21,8 +67,21 @@ export type BookingDetail = {
     paymentStatus: string;
     paymentMethod?: string | null;
     createdAt: string;
+    departureDate?: string | null;
+    meetingTime?: string | null;
+    pickupLocation?: string | null;
+    contactInfo?: BookingContactInfo | null;
+    passengers?: BookingPassenger[] | null;
+    user?: {
+        fullName?: string | null;
+        email?: string | null;
+        phone?: string | null;
+    } | null;
     numberOfPeople: number;
     totalPrice: number | string;
+    unitPriceAtBooking?: number | null;
+    discountAmount?: number;
+    voucherCode?: string | null;
     cancelReason?: string | null;
     cancelRequestedAt?: string | null;
     cancelledAt?: string | null;
@@ -30,6 +89,8 @@ export type BookingDetail = {
     refundNote?: string | null;
     cancellationPolicy?: CancellationPolicy;
     supportTickets?: { id: number; status: string; subject?: string | null; createdAt: string }[];
+    transportAssignment?: BookingTransportAssignment | null;
+    departureTransport?: BookingDepartureTransport | null;
     tour?: {
         id?: number;
         name?: string;
@@ -53,6 +114,16 @@ export type PaymentIssueResult = {
     message: string;
     ticketId?: number;
     accessCode?: string;
+};
+
+export type QRPaymentData = {
+    checkoutUrl: string;
+    qrCode?: string;
+    accountNumber?: string;
+    accountName?: string;
+    description: string;
+    amount: number;
+    expiresAt: string;
 };
 
 export type BankOption = {

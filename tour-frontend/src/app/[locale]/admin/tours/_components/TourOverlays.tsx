@@ -1,9 +1,9 @@
 'use client';
 
-import TourContentDrawer from '@/components/admin/TourContentDrawer';
-import TourFormModal from '@/components/admin/TourFormModal';
-import ReviewTourModal from '@/components/admin/ReviewTourModal';
-import type { TourFormModalProps } from '@/components/admin/tourForm/types';
+import TourContentDrawer from './TourContentDrawer';
+import TourFormModal from './TourFormModal';
+import ReviewTourModal from './ReviewTourModal';
+import type { TourFormModalProps } from './tourForm/types';
 import { TourReferenceDrawer } from './TourReferenceDrawer';
 import {
     BulkHideConfirmDialog,

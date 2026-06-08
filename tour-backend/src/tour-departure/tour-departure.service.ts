@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { TransportType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TourPermissionService } from '../tour/tour-permission.service';
-import { localizeDeparture, normalizeLocale } from '../tour/tour-localization';
+import { localizeDeparture, normalizeLocale } from '../tour/localization';
 
 export interface CreateDepartureDto {
   departureDate: string;
@@ -13,6 +14,39 @@ export interface CreateDepartureDto {
   category?: string;
   flashSaleEndsAt?: string | null;
   sortOrder?: number;
+}
+
+export interface UpsertDepartureTransportDto {
+  type: TransportType;
+  // Chuyến bay chiều đi
+  airline?: string;
+  airlineEn?: string;
+  flightCode?: string;
+  departureAirport?: string;
+  arrivalAirport?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  flightClass?: string;
+  // Chuyến bay chiều về
+  returnFlightCode?: string;
+  returnAirline?: string;
+  returnAirlineEn?: string;
+  returnDepartureAirport?: string;
+  returnArrivalAirport?: string;
+  returnDepartureTime?: string;
+  returnArrivalTime?: string;
+  returnFlightClass?: string;
+  // Xe / ô tô
+  vehicleType?: string;
+  vehicleTypeEn?: string;
+  operator?: string;
+  operatorEn?: string;
+  boardingPoint?: string;
+  boardingPointEn?: string;
+  boardingTime?: string;
+  // Ghi chú
+  notes?: string;
+  notesEn?: string;
 }
 
 const getMinBookableDateKey = () => {
@@ -50,6 +84,7 @@ export class TourDepartureService {
         isActive: true,
         departureDate: { gte: getMinBookableDate() },
       },
+      include: { transport: true },
       orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }],
     });
     return departures.map((departure) => localizeDeparture(departure, locale));
@@ -186,8 +221,85 @@ export class TourDepartureService {
 
   /** Admin: get one departure for checkout validation. */
   async findOne(id: number) {
-    const dep = await this.prisma.tourDeparture.findUnique({ where: { id } });
+    const dep = await this.prisma.tourDeparture.findUnique({
+      where: { id },
+      include: { transport: true },
+    });
     if (!dep) throw new NotFoundException(`Departure #${id} not found`);
     return dep;
+  }
+
+  async getTransport(departureId: number) {
+    const transport = await this.prisma.tourDepartureTransport.findUnique({
+      where: { departureId },
+    });
+    if (!transport) throw new NotFoundException(`Departure #${departureId} chưa có thông tin phương tiện`);
+    return transport;
+  }
+
+  async deleteTransport(
+    tourId: number,
+    departureId: number,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(tourId, requesterId, requesterRole);
+
+    const dep = await this.prisma.tourDeparture.findFirst({
+      where: { id: departureId, tourId },
+    });
+    if (!dep) throw new NotFoundException(`Departure #${departureId} không tồn tại trong tour #${tourId}`);
+
+    await this.prisma.tourDepartureTransport.deleteMany({ where: { departureId } });
+  }
+
+  async upsertTransport(
+    tourId: number,
+    departureId: number,
+    dto: UpsertDepartureTransportDto,
+    requesterId?: number,
+    requesterRole?: string,
+  ) {
+    await this.tourPermission.assertCanMutateTour(tourId, requesterId, requesterRole);
+
+    const dep = await this.prisma.tourDeparture.findFirst({
+      where: { id: departureId, tourId },
+    });
+    if (!dep) throw new NotFoundException(`Departure #${departureId} không tồn tại trong tour #${tourId}`);
+
+    const data = {
+      type: dto.type,
+      airline: dto.airline ?? null,
+      airlineEn: dto.airlineEn ?? null,
+      flightCode: dto.flightCode ?? null,
+      departureAirport: dto.departureAirport ?? null,
+      arrivalAirport: dto.arrivalAirport ?? null,
+      departureTime: dto.departureTime ? new Date(dto.departureTime) : null,
+      arrivalTime: dto.arrivalTime ? new Date(dto.arrivalTime) : null,
+      flightClass: dto.flightClass ?? null,
+      returnFlightCode: dto.returnFlightCode ?? null,
+      returnAirline: dto.returnAirline ?? null,
+      returnAirlineEn: dto.returnAirlineEn ?? null,
+      returnDepartureAirport: dto.returnDepartureAirport ?? null,
+      returnArrivalAirport: dto.returnArrivalAirport ?? null,
+      returnDepartureTime: dto.returnDepartureTime ? new Date(dto.returnDepartureTime) : null,
+      returnArrivalTime: dto.returnArrivalTime ? new Date(dto.returnArrivalTime) : null,
+      returnFlightClass: dto.returnFlightClass ?? null,
+      vehicleType: dto.vehicleType ?? null,
+      vehicleTypeEn: dto.vehicleTypeEn ?? null,
+      operator: dto.operator ?? null,
+      operatorEn: dto.operatorEn ?? null,
+      boardingPoint: dto.boardingPoint ?? null,
+      boardingPointEn: dto.boardingPointEn ?? null,
+      boardingTime: dto.boardingTime ? new Date(dto.boardingTime) : null,
+      notes: dto.notes ?? null,
+      notesEn: dto.notesEn ?? null,
+    };
+
+    return this.prisma.tourDepartureTransport.upsert({
+      where: { departureId },
+      create: { departureId, ...data },
+      update: data,
+    });
   }
 }

@@ -4,8 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/constants';
-import { getDestinationDisplay } from '@/lib/formatDestination';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { getDestinationDisplay } from '@/lib/tour/formatDestination';
 import DatePickerDropdown from './DatePickerDropdown';
 
 type TravelScope = 'DOMESTIC' | 'INTERNATIONAL';
@@ -326,13 +326,13 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             </div>
         <form
             onSubmit={handleSearch}
-            className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:grid md:grid-cols-[230px_1px_1fr_1px_200px_1px_260px_auto] items-center p-2 border border-slate-100 w-full"
+            className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:grid md:grid-cols-[250px_1px_1fr_1px_210px_1px_270px_auto] items-center p-3 border border-slate-100 w-full"
         >
             {/* 0. Điểm khởi hành */}
-            <div ref={departureRef} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { departureInputRef.current?.focus(); setIsDepartureOpen(true); }}>
+            <div ref={departureRef} className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { departureInputRef.current?.focus(); setIsDepartureOpen(true); }}>
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 motion-reduce:transform-none">flight_takeoff</span>
                 <div className="flex flex-col min-w-0 flex-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">
                         {language === 'vi' ? 'Khởi hành từ' : 'Departure'}
                     </label>
                     <div className="flex items-center gap-1">
@@ -377,47 +377,42 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                         )}
                     </div>
                 </div>
-                {/* Departure dropdown — styled like Destination */}
+                {/* Departure dropdown */}
                 {isDepartureOpen && (
                     <div
-                        className="absolute top-[calc(100%+24px)] left-0 w-full md:w-[400px] z-[100] animate-fade-in-up"
+                        className="absolute bottom-[calc(100%+12px)] left-0 w-full md:w-[320px] z-[100] animate-fade-in-up"
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="overflow-hidden rounded-[1.5rem] border border-white/70 bg-white shadow-2xl shadow-slate-950/20 ring-1 ring-slate-900/5">
+                        <div className="overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl shadow-slate-950/20 ring-1 ring-slate-900/5">
                             {/* Header */}
-                            <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+                            <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
                                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
                                     {language === 'vi' ? 'Khởi hành từ' : 'Departure'}
                                 </p>
-                                <p className="mt-1 text-xs font-medium text-slate-500">
-                                    {language === 'vi'
-                                        ? 'Chọn thành phố xuất phát hoặc tìm kiếm tất cả.'
-                                        : 'Select a departure city or search all.'}
+                                <p className="text-xs font-medium text-slate-500">
+                                    {language === 'vi' ? 'Chọn thành phố xuất phát.' : 'Select a departure city.'}
                                 </p>
                             </div>
 
-                            <div className="max-h-[360px] overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
+                            <div className="max-h-[220px] overflow-y-auto p-1.5 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
                                 {/* Option: Tất cả điểm khởi hành */}
                                 <button
                                     type="button"
                                     onClick={() => { setDeparture(''); setIsAllDepartureSelected(true); setIsDepartureOpen(false); }}
-                                    className={`group mb-2 flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-blue-50/70 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none ${
+                                    className={`group mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-[background-color,box-shadow] duration-200 hover:bg-blue-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                                         isAllDepartureSelected && !departure ? 'bg-blue-50 text-primary' : 'text-slate-700'
                                     }`}
                                 >
-                                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-sm shadow-primary/20">
-                                        <span className="material-symbols-outlined text-[22px]" aria-hidden="true">travel_explore</span>
+                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm shadow-primary/20">
+                                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">travel_explore</span>
                                     </span>
                                     <span className="min-w-0 flex-1">
                                         <span className="block text-sm font-extrabold">
                                             {language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities'}
                                         </span>
-                                        <span className="mt-0.5 block text-xs font-medium text-slate-500">
-                                            {language === 'vi' ? 'Không giới hạn điểm xuất phát.' : 'No departure city filter.'}
-                                        </span>
                                     </span>
                                     {isAllDepartureSelected && !departure && (
-                                        <span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">check_circle</span>
+                                        <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">check_circle</span>
                                     )}
                                 </button>
 
@@ -428,7 +423,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     );
                                     return filtered.length > 0 ? (
                                         <div>
-                                            <div className="px-3 pb-2 pt-1 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">
+                                            <div className="px-3 pb-1 pt-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">
                                                 {language === 'vi' ? 'Thành phố khởi hành' : 'Departure cities'}
                                             </div>
                                             {filtered.map((pt, idx) => (
@@ -436,15 +431,15 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                                     key={idx}
                                                     type="button"
                                                     onClick={() => { setDeparture(pt.label); setIsAllDepartureSelected(false); setIsDepartureOpen(false); }}
-                                                    className={`group flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none ${
+                                                    className={`group flex w-full items-center gap-3 rounded-xl px-3 py-1.5 text-left transition-[background-color,box-shadow] duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                                                         departure === pt.label ? 'text-primary bg-blue-50/70' : 'text-slate-700'
                                                     }`}
                                                 >
-                                                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100">
-                                                        <span className="material-symbols-outlined text-slate-400 text-[20px]">location_city</span>
+                                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100">
+                                                        <span className="material-symbols-outlined text-slate-400 text-[16px]">location_city</span>
                                                     </span>
                                                     <span className="min-w-0 flex-1">
-                                                        <span className="block truncate text-sm font-extrabold" dangerouslySetInnerHTML={{ __html: departure ? pt.label.replace(new RegExp(escapeRegExp(departure), 'gi'), (m: string) => `<span class="text-primary">${m}</span>`) : pt.label }} />
+                                                        <span className="block truncate text-sm font-bold" dangerouslySetInnerHTML={{ __html: departure ? pt.label.replace(new RegExp(escapeRegExp(departure), 'gi'), (m: string) => `<span class="text-primary">${m}</span>`) : pt.label }} />
                                                     </span>
                                                     {departure === pt.label && (
                                                         <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">check_circle</span>
@@ -453,9 +448,9 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                             ))}
                                         </div>
                                     ) : departure && !isAllDepartureSelected ? (
-                                        <div className="px-4 py-6 text-center">
-                                            <span className="material-symbols-outlined text-3xl text-slate-300">search_off</span>
-                                            <p className="mt-2 text-sm font-bold text-slate-600">{language === 'vi' ? 'Không tìm thấy thành phố' : 'No city found'}</p>
+                                        <div className="px-4 py-4 text-center">
+                                            <span className="material-symbols-outlined text-2xl text-slate-300">search_off</span>
+                                            <p className="mt-1 text-sm font-bold text-slate-600">{language === 'vi' ? 'Không tìm thấy' : 'No city found'}</p>
                                         </div>
                                     ) : null;
                                 })()}
@@ -466,14 +461,14 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             </div>
 
             {/* Divider col-span in grid: tự render là 1px column */}
-            <div className="hidden md:block w-px h-10 bg-slate-200"></div>
+            <div className="hidden md:block w-px h-12 bg-slate-200"></div>
 
             {/* 1. Destination */}
-            <div ref={destRef} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative min-w-0 motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { destInputRef.current?.focus(); setIsDestFocused(true); }}>
+            <div ref={destRef} className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative min-w-0 motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { destInputRef.current?.focus(); setIsDestFocused(true); }}>
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] text-[18px] flex-shrink-0 motion-reduce:transform-none">location_on</span>
 
                 <div className="flex flex-col flex-1 min-w-0">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center w-full">{t('search.destination')}</label>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center w-full">{t('search.destination')}</label>
                     <div className="flex items-center justify-center gap-2 min-w-0 w-full">
                         {isAllDestinationsSelected ? (
                             <>
@@ -506,25 +501,24 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                         )}
                     </div>
                 </div>
-
-                {/* Dropdown — direct child of relative destRef, NOT inside inner div */}
+                {/* Dropdown destination */}
                 {isDestFocused && (
-                    <div className="absolute top-full left-0 mt-3 w-[430px] z-[200] animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-                        <div className="overflow-hidden rounded-[1.5rem] border border-white/70 bg-white shadow-2xl shadow-slate-950/20 ring-1 ring-slate-900/5">
-                            <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+                    <div className="absolute bottom-[calc(100%+12px)] left-0 w-[340px] z-[200] animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+                        <div className="overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl shadow-slate-950/20 ring-1 ring-slate-900/5">
+                            <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
                                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">{t('search.destination')}</p>
-                                <p className="mt-1 text-xs font-medium text-slate-500">{t('search.destinationHint')}</p>
+                                <p className="text-xs font-medium text-slate-500">{t('search.destinationHint')}</p>
                             </div>
-                            <div className="max-h-[360px] overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
-                                <button type="button" onClick={handleSelectAllDestinations} className={`group mb-2 flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-blue-50/70 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none ${isAllDestinationsSelected ? 'bg-blue-50 text-primary' : 'text-slate-700'}`}>
-                                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-sm shadow-primary/20">
-                                        <span className="material-symbols-outlined text-[22px]" aria-hidden="true">travel_explore</span>
+                            <div className="max-h-[220px] overflow-y-auto p-1.5 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
+                                <button type="button" onClick={handleSelectAllDestinations} className={`group mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-[background-color,box-shadow] duration-200 hover:bg-blue-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isAllDestinationsSelected ? 'bg-blue-50 text-primary' : 'text-slate-700'}`}>
+                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-sm shadow-primary/20">
+                                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">travel_explore</span>
                                     </span>
                                     <span className="min-w-0 flex-1">
                                         <span className="block text-sm font-extrabold">{t('search.allDestinations')}</span>
-                                        <span className="mt-0.5 block text-xs font-medium text-slate-500">{t('search.allDestinationsDesc')}</span>
+                                        <span className="block text-xs font-medium text-slate-500">{t('search.allDestinationsDesc')}</span>
                                     </span>
-                                    {isAllDestinationsSelected && <span className="material-symbols-outlined text-[20px] text-primary" aria-hidden="true">check_circle</span>}
+                                    {isAllDestinationsSelected && <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">check_circle</span>}
                                 </button>
 
                                 {isSearching && (
@@ -535,24 +529,24 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 )}
 
                                 {displayDestinations.length > 0 && (
-                                    <div className="mb-2">
-                                        <div className="px-3 pb-2 pt-1 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{t('search.destinations')}</div>
+                                    <div className="mb-1">
+                                        <div className="px-3 pb-1 pt-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{t('search.destinations')}</div>
                                         {displayDestinations.map(item => {
                                             const display = getDestinationDisplay(item, language);
                                             return (
-                                                <button key={`dest-${item.id}`} type="button" onClick={() => handleSelectSuggestion(display.name)} className="group flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none">
+                                                <button key={`dest-${item.id}`} type="button" onClick={() => handleSelectSuggestion(display.name)} className="group flex w-full items-center gap-3 rounded-xl px-3 py-1.5 text-left transition-[background-color,box-shadow] duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                                                     {item.imageUrl ? (
-                                                        <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100 shadow-sm">
-                                                            <Image src={item.imageUrl} alt={display.name} fill sizes="48px" unoptimized className="object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=100&q=80'; }} />
+                                                        <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-lg bg-slate-100 shadow-sm">
+                                                            <Image src={item.imageUrl} alt={display.name} fill sizes="28px" unoptimized className="object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=100&q=80'; }} />
                                                         </span>
                                                     ) : (
-                                                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100"><span className="material-symbols-outlined text-slate-400">location_city</span></span>
+                                                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100"><span className="material-symbols-outlined text-slate-400 text-[16px]">location_city</span></span>
                                                     )}
                                                     <span className="min-w-0 flex-1">
                                                         <span className="block truncate text-sm font-extrabold text-slate-800">{display.name}</span>
                                                         {display.region && <span className="text-[11px] text-slate-400">{display.region}</span>}
                                                     </span>
-                                                    <span className="material-symbols-outlined text-[18px] text-slate-300 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-primary motion-reduce:transform-none" aria-hidden="true">arrow_forward</span>
+                                                    <span className="material-symbols-outlined text-[16px] text-slate-300 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-primary motion-reduce:transform-none" aria-hidden="true">arrow_forward</span>
                                                 </button>
                                             );
                                         })}
@@ -560,12 +554,12 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 )}
 
                                 {displayTours.length > 0 && (
-                                    <div className="border-t border-slate-100 pt-2">
-                                        <div className="px-3 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{t('search.attractions')}</div>
+                                    <div className="border-t border-slate-100 pt-1">
+                                        <div className="px-3 pb-1 pt-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{t('search.attractions')}</div>
                                         {displayTours.map(item => (
-                                            <button key={`tour-${item.id}`} type="button" onClick={() => handleSelectSuggestion(item.name)} className="group flex w-full items-center gap-4 rounded-2xl px-3 py-3 text-left transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transform-none">
-                                                <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center border border-slate-200">
-                                                    <span className="material-symbols-outlined text-slate-500 text-[20px]">pin_drop</span>
+                                            <button key={`tour-${item.id}`} type="button" onClick={() => handleSelectSuggestion(item.name)} className="group flex w-full items-center gap-3 rounded-xl px-3 py-1.5 text-left transition-[background-color,box-shadow] duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                                                <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-200">
+                                                    <span className="material-symbols-outlined text-slate-500 text-[18px]">pin_drop</span>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <span className="text-sm font-medium text-slate-600 truncate block" dangerouslySetInnerHTML={{ __html: destination ? item.name.replace(new RegExp(escapeRegExp(destination), 'gi'), (m: string) => `<span class="text-primary font-bold">${m}</span>`) : item.name }} />
@@ -577,9 +571,9 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 )}
 
                                 {!isSearching && displayDestinations.length === 0 && displayTours.length === 0 && hasSearchQuery && (
-                                    <div className="px-4 py-6 text-center">
-                                        <span className="material-symbols-outlined text-3xl text-slate-300" aria-hidden="true">search_off</span>
-                                        <p className="mt-2 text-sm font-bold text-slate-600">{t('search.noResults')}</p>
+                                    <div className="px-4 py-4 text-center">
+                                        <span className="material-symbols-outlined text-2xl text-slate-300" aria-hidden="true">search_off</span>
+                                        <p className="mt-1 text-sm font-bold text-slate-600">{t('search.noResults')}</p>
                                         <p className="mt-1 text-xs text-slate-400">{t('search.tryAllDestinations')}</p>
                                     </div>
                                 )}
@@ -592,10 +586,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
 
             {/* Divider */}
-            <div className="hidden md:block w-px h-10 bg-slate-200"></div>
+            <div className="hidden md:block w-px h-12 bg-slate-200"></div>
 
             {/* 2. Dates */}
-            <div className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { const btn = document.getElementById('date-picker-trigger'); btn?.click(); }}>
+            <div className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { const btn = document.getElementById('date-picker-trigger'); btn?.click(); }}>
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] text-[18px] flex-shrink-0 motion-reduce:transform-none">calendar_today</span>
                 <div className="flex flex-col flex-1 min-w-0">
                     <DatePickerDropdown
@@ -610,13 +604,13 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             </div>
 
             {/* Divider */}
-            <div className="hidden md:block w-px h-10 bg-slate-200"></div>
+            <div className="hidden md:block w-px h-12 bg-slate-200"></div>
 
             {/* 3. Budget (CUSTOM DROPDOWN) */}
-            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex items-center gap-3 px-4 py-2 md:py-0 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none">
+            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none">
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 motion-reduce:transform-none">account_balance_wallet</span>
                 <div className="flex flex-col flex-1 min-w-0">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{t('search.budget')}</label>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{t('search.budget')}</label>
                     <div className="flex items-center gap-2 min-w-0">
                         <span className={`text-sm font-bold truncate flex-1 text-center ${currentBudgetLabel ? 'text-slate-800' : 'text-slate-300'}`}>
                             {currentBudgetLabel || t('search.selectBudget')}
@@ -636,7 +630,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
                 {/* Hộp thả xuống của Budget */}
                 {isBudgetOpen && (
-                    <div className="absolute top-[calc(100%+24px)] left-0 w-full md:w-[280px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] animate-fade-in-up">
+                    <div className="absolute bottom-[calc(100%+12px)] left-0 w-full md:w-[260px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] animate-fade-in-up">
                         {BUDGET_OPTIONS.map((opt, idx) => (
                             <div
                                 key={idx}
@@ -644,7 +638,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     e.stopPropagation();
                                     handleSelectBudget(opt.value);
                                 }}
-                                className={`px-5 py-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-1 active:translate-x-0 motion-reduce:transform-none ${budget === opt.value ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
+                                className={`px-5 py-2.5 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-1 active:translate-x-0 motion-reduce:transform-none ${budget === opt.value ? 'text-primary bg-blue-50/50' : 'text-slate-600'}`}
                             >
                                 <span className="text-sm font-bold">{opt.label}</span>
                                 {budget === opt.value && (

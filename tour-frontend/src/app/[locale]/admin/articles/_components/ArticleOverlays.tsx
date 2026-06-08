@@ -1,6 +1,6 @@
 'use client';
 
-import ArticleDrawer, { type Article } from '@/components/admin/ArticleDrawer';
+import ArticleDrawer, { type Article } from './ArticleDrawer';
 import { ArticleHardDeleteDialog, ArticleReviewDialog, ArticleToast, ArticleTrashPanel } from './ArticleDialogs';
 import { DeleteDialog } from './DeleteDialog';
 import { SubmitReviewDialog } from './SubmitReviewDialog';

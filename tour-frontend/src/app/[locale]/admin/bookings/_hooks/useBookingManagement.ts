@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAdminRealtime } from '@/hooks/useAdminRealtime';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { useAdminRealtime } from '@/hooks/admin/useAdminRealtime';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { exportBookingsCsv } from '../_lib/exportCsv';
 import {
   getApiErrorMessage,

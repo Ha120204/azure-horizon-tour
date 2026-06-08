@@ -1,5 +1,5 @@
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { escapeCsv, formatDate } from './helpers';
 import type { Subscriber, SubscriberStatus } from './types';
 

@@ -9,9 +9,10 @@ import { useLocale } from '@/context/LocaleContext';
 import FilterSidebar from '@/components/destinations/FilterSidebar';
 import TourCard from '@/components/destinations/TourCard';
 import Pagination from '@/components/destinations/Pagination';
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 
 type TravelScope = '' | 'DOMESTIC' | 'INTERNATIONAL';
+type HeroVisualKey = 'ALL' | 'DOMESTIC' | 'INTERNATIONAL';
 
 interface DestinationOption {
     id: number;
@@ -50,6 +51,21 @@ interface AppliedFilters {
 const normalizeTravelScope = (value: string | null): TravelScope =>
     value === 'DOMESTIC' || value === 'INTERNATIONAL' ? value : '';
 
+const HERO_BACKDROPS: Record<HeroVisualKey, { src: string; alt: string }> = {
+    ALL: {
+        src: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=2000',
+        alt: 'Layered mountain valleys at sunrise',
+    },
+    DOMESTIC: {
+        src: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&q=80&w=2000',
+        alt: 'Limestone islands rising from a quiet Vietnamese bay',
+    },
+    INTERNATIONAL: {
+        src: 'https://images.unsplash.com/photo-1491555103944-7c647fd857e6?auto=format&fit=crop&q=80&w=2000',
+        alt: 'European mountain village beside a blue lake',
+    },
+};
+
 function DestinationsContent() {
     const searchParams = useSearchParams();
     const { t, formatPrice, language } = useLocale();
@@ -72,6 +88,7 @@ function DestinationsContent() {
     const [filteredTours, setFilteredTours] = useState<TourListItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [hasLoadedTours, setHasLoadedTours] = useState(false);
+    const [resultRevision, setResultRevision] = useState(0);
 
     // 4. State cho bộ lọc sidebar
     const [sidebarBudget, setSidebarBudget] = useState(initialBudget);
@@ -147,6 +164,7 @@ function DestinationsContent() {
                 setFilteredTours(Array.isArray(json) ? json : []);
                 setTotalItems(Array.isArray(json) ? json.length : 0);
             }
+            setResultRevision((revision) => revision + 1);
             setHasLoadedTours(true);
         } catch (error) {
             if (!(error instanceof DOMException && error.name === 'AbortError')) {
@@ -239,6 +257,7 @@ function DestinationsContent() {
             : `Showing ${filteredTours.length} tours on this page`;
     const showInitialLoading = isLoading && !hasLoadedTours;
     const showRefetchOverlay = isLoading && hasLoadedTours;
+    const heroVisualKey: HeroVisualKey = travelScope || 'ALL';
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
@@ -247,6 +266,85 @@ function DestinationsContent() {
                 input[type=number]::-webkit-outer-spin-button,
                 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
                 input[type=number] { -moz-appearance: textfield; }
+
+                @keyframes destination-rise {
+                    from {
+                        opacity: 0;
+                        transform: translate3d(0, 24px, 0);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translate3d(0, 0, 0);
+                    }
+                }
+
+                @keyframes destination-panel-rise {
+                    from {
+                        opacity: 0;
+                        transform: translate3d(0, 18px, 0) scale(0.99);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translate3d(0, 0, 0) scale(1);
+                    }
+                }
+
+                @keyframes destination-mobile-filter {
+                    from {
+                        opacity: 0;
+                        transform: translate3d(0, -8px, 0) scale(0.985);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translate3d(0, 0, 0) scale(1);
+                    }
+                }
+
+                .destination-hero-bg {
+                    opacity: 0;
+                    transform: scale(1.035);
+                    transition: opacity 900ms cubic-bezier(0.16, 1, 0.3, 1), transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+                }
+
+                .destination-hero-bg.is-active {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+
+                .destination-enter {
+                    animation: destination-rise 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
+                }
+
+                .destination-panel-enter {
+                    animation: destination-panel-rise 0.62s cubic-bezier(0.16, 1, 0.3, 1) both;
+                }
+
+                .destination-card-enter {
+                    animation: destination-panel-rise 0.58s cubic-bezier(0.16, 1, 0.3, 1) both;
+                }
+
+                .destination-filter-enter {
+                    animation: destination-mobile-filter 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+                    transform-origin: top center;
+                }
+
+                .destination-d1 { animation-delay: 80ms; }
+                .destination-d2 { animation-delay: 180ms; }
+                .destination-d3 { animation-delay: 300ms; }
+                .destination-d4 { animation-delay: 420ms; }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .destination-hero-bg,
+                    .destination-enter,
+                    .destination-panel-enter,
+                    .destination-card-enter,
+                    .destination-filter-enter {
+                        animation: none !important;
+                        opacity: 1 !important;
+                        transform: none !important;
+                        transition: none !important;
+                    }
+                }
             `}} />
 
             <Header />
@@ -254,21 +352,35 @@ function DestinationsContent() {
             <main className="pt-28 pb-20 flex-grow">
                 {/* Hero Section */}
                 <section className="px-4 md:px-8 max-w-screen-2xl mx-auto mb-16">
-                    <div className="relative overflow-hidden rounded-3xl min-h-[320px] flex flex-col items-center justify-center text-center p-6 md:p-12 hero-gradient">
-                        <div className="absolute inset-0 opacity-20 mix-blend-overlay">
-                            <Image
-                                alt="Travel background"
-                                className="object-cover"
-                                src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=2000"
-                                fill
-                                sizes="100vw"
-                                preload
-                                loading="eager"
-                            />
+                    <div className="relative min-h-[360px] overflow-hidden rounded-3xl bg-slate-950 p-6 text-center shadow-2xl shadow-slate-900/10 md:min-h-[420px] md:p-12">
+                        <div className="absolute inset-0">
+                            {(Object.entries(HERO_BACKDROPS) as [HeroVisualKey, { src: string; alt: string }][]).map(([key, image]) => (
+                                <Image
+                                    key={key}
+                                    alt={image.alt}
+                                    className={`destination-hero-bg object-cover ${heroVisualKey === key ? 'is-active' : ''}`}
+                                    src={image.src}
+                                    fill
+                                    sizes="100vw"
+                                    preload={heroVisualKey === key}
+                                    loading={heroVisualKey === key ? 'eager' : 'lazy'}
+                                />
+                            ))}
                         </div>
-                        <div className="relative z-10 max-w-4xl w-full">
-                            <h1 className="font-headline text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-6 tracking-tight">{t('dest.heroTitle')}</h1>
-                            <p className="text-base md:text-lg text-white/90 font-medium max-w-2xl mx-auto leading-relaxed">
+                        <div
+                            className="absolute inset-0"
+                            style={{ background: 'linear-gradient(to bottom, rgba(0,31,71,0.70) 0%, rgba(0,63,135,0.30) 48%, rgba(0,35,78,0.76) 100%)' }}
+                        />
+                        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-white/10" />
+                        <div className="relative z-10 mx-auto flex min-h-[312px] w-full max-w-4xl flex-col items-center justify-center md:min-h-[360px]">
+                            <span className="destination-enter destination-d1 mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-white/90 backdrop-blur-sm">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                {activeFilterCount > 0
+                                    ? `${activeFilterCount} ${t('filter.active')}`
+                                    : t('hero.badge')}
+                            </span>
+                            <h1 className="destination-enter destination-d2 font-headline text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-6 tracking-tight drop-shadow-2xl">{t('dest.heroTitle')}</h1>
+                            <p className="destination-enter destination-d3 text-base md:text-lg text-white/90 font-medium max-w-2xl mx-auto leading-relaxed">
                                 {t('dest.heroSubtitle')}
                             </p>
                         </div>
@@ -278,10 +390,10 @@ function DestinationsContent() {
                 {/* Main Content Area */}
                 <div className="px-4 md:px-8 max-w-screen-2xl mx-auto">
                     {/* Mobile Filter Toggle */}
-                    <div className="lg:hidden mb-6">
+                    <div className="destination-panel-enter destination-d1 lg:hidden mb-6">
                         <button
                             onClick={() => setShowMobileFilter(!showMobileFilter)}
-                            className="w-full flex items-center justify-center gap-2 py-3 bg-surface-container-lowest rounded-xl border border-outline-variant/15 font-semibold text-sm text-on-surface active:scale-[0.98] transition-all"
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-surface-container-lowest rounded-xl border border-outline-variant/15 font-semibold text-sm text-on-surface active:scale-[0.98] transition-[background-color,border-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-primary/20 hover:shadow-lg hover:shadow-slate-900/5 motion-reduce:transform-none"
                         >
                             <span className="material-symbols-outlined text-primary text-lg">tune</span>
                             {showMobileFilter ? t('filter.hide') : t('filter.show')}
@@ -290,7 +402,7 @@ function DestinationsContent() {
                             )}
                         </button>
                         {showMobileFilter && (
-                            <div className="mt-4">
+                            <div className="destination-filter-enter mt-4">
                                 <FilterSidebar
                                     travelScope={travelScope} setTravelScope={setTravelScope}
                                     dest={dest} setDest={setDest}
@@ -313,7 +425,7 @@ function DestinationsContent() {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                         {/* Desktop Sidebar Filter */}
                         <aside className="hidden lg:block lg:col-span-3">
-                            <div className="sticky top-28">
+                            <div className="destination-panel-enter destination-d1 sticky top-28">
                                 <FilterSidebar
                                     travelScope={travelScope} setTravelScope={setTravelScope}
                                     dest={dest} setDest={setDest}
@@ -335,7 +447,7 @@ function DestinationsContent() {
                         {/* Right Content Area: Tour Grid */}
                         <section className="lg:col-span-9">
                             {/* Top Bar */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+                            <div className="destination-panel-enter destination-d2 flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
                                 <div>
                                     <p className="text-on-surface-variant font-medium">
                                         <span className="text-on-surface font-bold">{resultSummary}</span>
@@ -350,7 +462,7 @@ function DestinationsContent() {
                                         <select
                                             value={sortBy}
                                             onChange={(e) => setSortBy(e.target.value)}
-                                            className="bg-surface-container-low border-none rounded-lg pl-4 pr-10 py-2 text-sm font-semibold focus:ring-2 focus:ring-primary/20 appearance-none w-full cursor-pointer outline-none"
+                                            className="bg-surface-container-low border-none rounded-lg pl-4 pr-10 py-2 text-sm font-semibold focus:ring-2 focus:ring-primary/20 appearance-none w-full cursor-pointer outline-none transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-surface-container-high active:scale-[0.98] motion-reduce:transform-none"
                                         >
                                             <option value="recommended">{t('dest.recommended')}</option>
                                             <option value="priceLowHigh">{t('dest.priceLowHigh')}</option>
@@ -364,22 +476,22 @@ function DestinationsContent() {
                             {/* Tour Grid */}
                             <div className="relative min-h-[420px]">
                             {showInitialLoading ? (
-                                <div className="text-center text-xl text-primary font-bold py-10">{t('dest.loadingData')}</div>
+                                <div className="destination-panel-enter text-center text-xl text-primary font-bold py-10">{t('dest.loadingData')}</div>
                             ) : filteredTours.length > 0 ? (
-                                <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 transition-opacity duration-200 ${showRefetchOverlay ? 'opacity-55 pointer-events-none' : 'opacity-100'}`}>
-                                    {filteredTours.map((tour) => (
-                                        <TourCard key={tour.id} tour={tour} t={t} formatPrice={formatPrice} />
+                                <div key={resultRevision} className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 transition-opacity duration-200 ${showRefetchOverlay ? 'opacity-55 pointer-events-none' : 'opacity-100'}`}>
+                                    {filteredTours.map((tour, index) => (
+                                        <TourCard key={tour.id} tour={tour} t={t} formatPrice={formatPrice} index={index} />
                                     ))}
                                 </div>
                             ) : (
-                                <div className={`text-center py-20 bg-surface-container-lowest rounded-2xl transition-opacity duration-200 ${showRefetchOverlay ? 'opacity-55' : 'opacity-100'}`}>
+                                <div className={`destination-panel-enter text-center py-20 bg-surface-container-lowest rounded-2xl transition-opacity duration-200 ${showRefetchOverlay ? 'opacity-55' : 'opacity-100'}`}>
                                     <span className="material-symbols-outlined text-4xl text-outline mb-2">search_off</span>
                                     <p className="font-bold text-on-surface">{t('dest.noMatch')}</p>
                                 </div>
                             )}
                             {showRefetchOverlay && (
                                 <div className="absolute inset-x-0 top-0 z-10 flex justify-center pt-2 pointer-events-none">
-                                    <div className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-xs font-bold text-primary shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/5">
+                                    <div className="destination-filter-enter inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-xs font-bold text-primary shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/5">
                                         <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
                                         {language === 'vi' ? 'Đang cập nhật kết quả' : 'Updating results'}
                                     </div>
@@ -387,14 +499,16 @@ function DestinationsContent() {
                             )}
                             </div>
 
-                            <Pagination 
-                                page={page} 
-                                totalPages={totalPages} 
-                                setPage={setPage} 
-                                totalItems={totalItems}
-                                limit={limit}
-                                setLimit={setLimit}
-                            />
+                            <div className="destination-panel-enter destination-d4">
+                                <Pagination
+                                    page={page}
+                                    totalPages={totalPages}
+                                    setPage={setPage}
+                                    totalItems={totalItems}
+                                    limit={limit}
+                                    setLimit={setLimit}
+                                />
+                            </div>
                         </section>
                     </div>
                 </div>

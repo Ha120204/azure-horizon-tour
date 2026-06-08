@@ -11,10 +11,10 @@ import {
     getDefaultAdminPathForRole,
     isAdminRole,
     type AdminRole,
-} from '@/lib/adminAccess';
-import { API_BASE_URL } from '@/lib/constants';
-import { saveClientUserStorage } from '@/lib/authSession';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+} from '@/lib/admin/adminAccess';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { saveClientUserStorage } from '@/lib/auth/authSession';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();

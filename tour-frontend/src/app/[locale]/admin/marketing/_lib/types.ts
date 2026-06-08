@@ -44,9 +44,35 @@ export interface CampaignDraft {
   updatedAt: string;
   scheduledAt?: string;
   sentAt?: string;
+  cancelledAt?: string;
+  processedCount?: number;
   sentCount?: number;
   failedCount?: number;
-  status: 'DRAFT' | 'SCHEDULED' | 'SENDING' | 'SENT' | 'FAILED';
+  errorMessage?: string;
+  status: 'DRAFT' | 'SCHEDULED' | 'SENDING' | 'SENT' | 'FAILED' | 'CANCELLED';
+}
+
+export interface BackendMarketingCampaign {
+  id: string;
+  campaignName: string;
+  type?: string;
+  subject: string;
+  previewText?: string;
+  body: string;
+  audience: AudienceType;
+  audienceFilter?: { status?: SubscriberStatus; search?: string; recipientIds?: number[] };
+  recipientIds?: number[];
+  scheduledAt: string;
+  status: Exclude<CampaignDraft['status'], 'DRAFT'>;
+  recipientEstimate: number;
+  processedCount?: number;
+  sentCount: number;
+  failedCount: number;
+  createdAt: string;
+  updatedAt: string;
+  sentAt?: string;
+  cancelledAt?: string;
+  errorMessage?: string;
 }
 
 export interface CampaignForm {

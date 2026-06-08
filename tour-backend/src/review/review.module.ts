@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ReviewController, ReviewAdminController } from './review.controller';
 import { ReviewService } from './review.service';
-import { CloudinaryModule } from '../common/cloudinary/cloudinary.module';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
   imports: [CloudinaryModule],

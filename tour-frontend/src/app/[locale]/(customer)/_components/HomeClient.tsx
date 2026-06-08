@@ -173,6 +173,36 @@ function StatsRow({ t }: { t: (key: string) => string }) {
   );
 }
 
+function useRevealOnScroll<T extends HTMLElement>() {
+  const [isVisible, setIsVisible] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  );
+  const ref = useRef<T>(null);
+
+  useEffect(() => {
+    if (isVisible) return;
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.22, rootMargin: '0px 0px -12% 0px' }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isVisible]);
+
+  return [ref, isVisible] as const;
+}
+
 function HeroVideoBackground({ travelScope }: { travelScope: TravelScope }) {
   const activeScopeRef = useRef(travelScope);
   const [videoState, setVideoState] = useState({
@@ -273,6 +303,8 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
     { icon: 'explore',     title: t('philosophy.concierge'),     desc: t('philosophy.conciergeDesc') },
     { icon: 'route',       title: t('philosophy.tailored'),      desc: t('philosophy.tailoredDesc') },
   ];
+  const [philosophyRef, philosophyVisible] = useRevealOnScroll<HTMLDivElement>();
+  const philosophyRevealClass = philosophyVisible ? 'is-visible' : '';
 
   return (
     <div className="bg-background text-on-surface font-body antialiased min-h-screen flex flex-col">
@@ -311,6 +343,17 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
             }
           }
 
+          @keyframes home-philosophy-reveal {
+            from {
+              opacity: 0;
+              transform: translate3d(var(--philosophy-x, 0), var(--philosophy-y, 26px), 0) scale(var(--philosophy-scale, 0.985));
+            }
+            to {
+              opacity: 1;
+              transform: translate3d(0, 0, 0) scale(1);
+            }
+          }
+
           .home-hero-enter {
             animation: home-hero-rise 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
           }
@@ -323,6 +366,37 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
             animation: home-stat-rise 0.62s cubic-bezier(0.16, 1, 0.3, 1) both;
           }
 
+          .home-philosophy-reveal {
+            opacity: 0;
+            transform: translate3d(var(--philosophy-x, 0), var(--philosophy-y, 26px), 0) scale(var(--philosophy-scale, 0.985));
+            will-change: transform, opacity;
+          }
+
+          .home-philosophy-reveal.is-visible {
+            animation: home-philosophy-reveal 0.74s cubic-bezier(0.16, 1, 0.3, 1) both;
+          }
+
+          .home-philosophy-reveal.is-visible.home-philosophy-hover-lift:hover {
+            transform: translate3d(0, -2px, 0) scale(1);
+          }
+
+          .home-philosophy-from-left {
+            --philosophy-x: -34px;
+            --philosophy-y: 18px;
+            --philosophy-scale: 0.98;
+          }
+
+          .home-philosophy-from-right {
+            --philosophy-x: 30px;
+            --philosophy-y: 22px;
+            --philosophy-scale: 0.985;
+          }
+
+          .home-philosophy-float {
+            --philosophy-y: 30px;
+            --philosophy-scale: 0.975;
+          }
+
           .home-hero-d1 { animation-delay: 80ms; }
           .home-hero-d2 { animation-delay: 180ms; }
           .home-hero-d3 { animation-delay: 300ms; }
@@ -331,14 +405,23 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
           .home-stat-d1 { animation-delay: 600ms; }
           .home-stat-d2 { animation-delay: 680ms; }
           .home-stat-d3 { animation-delay: 760ms; }
+          .home-philosophy-d1 { animation-delay: 80ms; }
+          .home-philosophy-d2 { animation-delay: 180ms; }
+          .home-philosophy-d3 { animation-delay: 300ms; }
+          .home-philosophy-d4 { animation-delay: 420ms; }
+          .home-philosophy-d5 { animation-delay: 520ms; }
+          .home-philosophy-d6 { animation-delay: 620ms; }
+          .home-philosophy-d7 { animation-delay: 720ms; }
 
           @media (prefers-reduced-motion: reduce) {
             .home-hero-enter,
             .home-hero-search-enter,
-            .home-stat-enter {
+            .home-stat-enter,
+            .home-philosophy-reveal {
               animation: none !important;
               opacity: 1 !important;
               transform: none !important;
+              will-change: auto !important;
             }
           }
         `
@@ -486,36 +569,39 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
 
       {/* ── OUR PHILOSOPHY ── */}
       <section className="overflow-hidden bg-surface-container-low px-6 py-20 md:px-8 md:py-28">
-        <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:gap-20">
+        <div
+          ref={philosophyRef}
+          className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:gap-20"
+        >
           <div className="relative min-h-[560px] sm:min-h-[520px]">
-            <div className="absolute left-0 top-0 h-[78%] w-[82%] overflow-hidden rounded-[2rem] bg-slate-200 shadow-2xl shadow-slate-900/10">
+            <div className={`home-philosophy-reveal home-philosophy-from-left home-philosophy-d1 ${philosophyRevealClass} absolute left-0 top-0 h-[78%] w-[82%] overflow-hidden rounded-[2rem] bg-slate-200 shadow-2xl shadow-slate-900/10`}>
               <Image src={PHILOSOPHY_IMAGES.primary.src} alt={PHILOSOPHY_IMAGES.primary.alt} fill sizes="(min-width: 1024px) 52vw, 92vw" className="object-cover" />
             </div>
-            <div className="absolute bottom-0 right-0 w-[48%] overflow-hidden rounded-3xl border-[10px] border-surface-container-low bg-white shadow-2xl shadow-slate-900/15 sm:w-[54%]">
+            <div className={`home-philosophy-reveal home-philosophy-from-right home-philosophy-d2 ${philosophyRevealClass} absolute bottom-0 right-0 w-[48%] overflow-hidden rounded-3xl border-[10px] border-surface-container-low bg-white shadow-2xl shadow-slate-900/15 sm:w-[54%]`}>
               <div className="relative aspect-[4/5]">
                 <Image src={PHILOSOPHY_IMAGES.secondary.src} alt={PHILOSOPHY_IMAGES.secondary.alt} fill sizes="(min-width: 1024px) 28vw, 52vw" className="object-cover" />
               </div>
             </div>
-            <div className="absolute bottom-8 left-4 right-24 rounded-2xl bg-white/95 p-5 shadow-xl shadow-slate-900/10 backdrop-blur sm:bottom-10 sm:left-6 sm:right-auto sm:max-w-[18rem]">
+            <div className={`home-philosophy-reveal home-philosophy-float home-philosophy-d3 ${philosophyRevealClass} absolute bottom-8 left-4 right-24 rounded-2xl bg-white/95 p-5 shadow-xl shadow-slate-900/10 backdrop-blur sm:bottom-10 sm:left-6 sm:right-auto sm:max-w-[18rem]`}>
               <p className="text-[0.68rem] font-label font-bold uppercase tracking-[0.18em] text-primary">{t('philosophy.noteLabel')}</p>
               <p className="mt-3 text-sm font-semibold leading-6 text-on-surface">{t('philosophy.note')}</p>
             </div>
           </div>
 
           <div className="max-w-2xl">
-            <span className="mb-5 block text-[0.6875rem] font-label font-bold uppercase tracking-[0.18em] text-primary">
+            <span className={`home-philosophy-reveal home-philosophy-d1 ${philosophyRevealClass} mb-5 block text-[0.6875rem] font-label font-bold uppercase tracking-[0.18em] text-primary`}>
               {t('philosophy.badge')}
             </span>
-            <h2 className="max-w-xl text-4xl font-headline font-extrabold leading-[1.05] text-on-surface text-balance md:text-6xl">
+            <h2 className={`home-philosophy-reveal home-philosophy-d2 ${philosophyRevealClass} max-w-xl text-4xl font-headline font-extrabold leading-[1.05] text-on-surface text-balance md:text-6xl`}>
               {t('philosophy.title')}
             </h2>
-            <p className="mt-7 max-w-xl text-base leading-8 text-on-surface-variant md:text-lg">
+            <p className={`home-philosophy-reveal home-philosophy-d3 ${philosophyRevealClass} mt-7 max-w-xl text-base leading-8 text-on-surface-variant md:text-lg`}>
               {t('philosophy.desc')}
             </p>
 
             <ul className="mt-10 grid gap-4">
-              {philosophyHighlights.map((item) => (
-                <li key={item.title} className="group flex gap-4 rounded-2xl bg-white/70 p-4 ring-1 ring-slate-900/5 transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-lg hover:shadow-slate-900/10">
+              {philosophyHighlights.map((item, index) => (
+                <li key={item.title} className={`home-philosophy-reveal home-philosophy-hover-lift home-philosophy-d${index + 4} ${philosophyRevealClass} group flex gap-4 rounded-2xl bg-white/70 p-4 ring-1 ring-slate-900/5 transition-[background-color,transform,box-shadow] duration-200 hover:bg-white hover:shadow-lg hover:shadow-slate-900/10`}>
                   <span className="material-symbols-outlined mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-fixed text-[20px] text-primary" aria-hidden="true">
                     {item.icon}
                   </span>
@@ -527,7 +613,7 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
               ))}
             </ul>
 
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+            <div className={`home-philosophy-reveal home-philosophy-d7 ${philosophyRevealClass} mt-10 flex flex-col gap-3 sm:flex-row`}>
               <Link
                 href="/about"
                 className="group inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-4 font-headline text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[background-color,transform,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low motion-reduce:transform-none"

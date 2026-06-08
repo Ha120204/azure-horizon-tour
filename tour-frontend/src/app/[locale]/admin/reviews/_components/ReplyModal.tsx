@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import Modal, { ModalBody } from '@/components/ui/Modal';
 import { fmtDate } from '../_lib/helpers';
 import type { Review } from '../_lib/types';
 import { StarRating } from './StarRating';
@@ -63,18 +64,6 @@ export function ReplyModal({
         return 'more-info';
     }, [review.rating]);
 
-    useEffect(() => {
-        textareaRef.current?.focus();
-        const handler = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', handler);
-        document.body.style.overflow = 'hidden';
-        return () => {
-            window.removeEventListener('keydown', handler);
-            document.body.style.overflow = '';
-        };
-    }, [onClose]);
 
     const handleTemplateClick = (template: (typeof REPLY_TEMPLATES)[number]) => {
         setValue(template.build(review));
@@ -89,9 +78,7 @@ export function ReplyModal({
     };
 
     return (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-surface shadow-2xl animate-fade-slide-up">
+        <Modal open onClose={onClose} size="lg" zIndex={65} className="rounded-3xl">
                 <div className="relative border-b border-outline-variant/15 bg-primary p-5 pr-14 text-on-primary">
                     <button
                         type="button"
@@ -108,7 +95,7 @@ export function ReplyModal({
                     <p className="mt-0.5 truncate text-xs text-white/70">{review.tour.name}</p>
                 </div>
 
-                <div className="grid max-h-[calc(92vh-96px)] overflow-y-auto md:grid-cols-[0.9fr_1.1fr]">
+                <ModalBody className="grid md:grid-cols-[0.9fr_1.1fr]">
                     <section className="border-b border-outline-variant/10 p-5 md:border-b-0 md:border-r">
                         <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-low p-4">
                             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -238,8 +225,7 @@ export function ReplyModal({
                             </button>
                         </div>
                     </section>
-                </div>
-            </div>
-        </div>
+                </ModalBody>
+        </Modal>
     );
 }

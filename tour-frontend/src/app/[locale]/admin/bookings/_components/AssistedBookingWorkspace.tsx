@@ -3,7 +3,7 @@
 import {
   getPassengerMaxDate,
   getPassengerMinDate,
-} from '@/lib/passengerDetails';
+} from '@/lib/booking/passengerDetails';
 import {
   CONFIRMATION_CHANNEL_OPTIONS,
   PASSENGER_PRICING,

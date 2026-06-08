@@ -3,8 +3,8 @@
 import { useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from '@/i18n/routing';
-import { clearClientUserStorage } from '@/lib/authSession';
-import { getSafeRedirectPath } from '@/lib/authRedirect';
+import { clearClientUserStorage } from '@/lib/auth/authSession';
+import { getSafeRedirectPath } from '@/lib/auth/authRedirect';
 
 /**
  * Trang callback sau Google OAuth.

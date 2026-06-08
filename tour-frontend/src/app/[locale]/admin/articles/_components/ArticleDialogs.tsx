@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import type { Article } from '@/components/admin/ArticleDrawer';
+import type { Article } from './ArticleDrawer';
 import type { ArticleReviewAction, ArticleToastState, TrashArticle } from '../_lib/types';
 
 interface ArticleReviewDialogProps {

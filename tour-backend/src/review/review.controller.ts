@@ -24,7 +24,7 @@ import { ReviewService } from './review.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { AdminQueryReviewDto, AdminReplyDto } from './dto/admin-query-review.dto';
 import { AuthGuard } from '@nestjs/passport';
-import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 

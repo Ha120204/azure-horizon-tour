@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
-import { API_BASE_URL } from '@/lib/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
 import { PAYMENT_METHOD_CFG } from '../_lib/config';
 import { getErrorMessage } from '../_lib/helpers';
 import type { Booking } from '../_lib/types';

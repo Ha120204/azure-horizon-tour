@@ -2,6 +2,7 @@ import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/commo
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
+import { MailService } from '../mail/mail.service';
 
 type TicketStatus   = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
@@ -29,6 +30,7 @@ export class SupportService {
   constructor(
     private prisma: PrismaService,
     private readonly adminNotifications: AdminNotificationService,
+    private readonly mailService: MailService,
   ) {}
 
   private normalizeBookingRef(bookingRef?: string | null) {
@@ -169,7 +171,10 @@ export class SupportService {
         },
       }),
       this.prisma.supportTicket.findMany({
-        where: { replies: { some: { senderType: 'staff' } } },
+        where: {
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          replies: { some: { senderType: 'staff' } },
+        },
         select: {
           createdAt: true,
           replies: {
@@ -218,6 +223,7 @@ export class SupportService {
     category?: string;
     search?:   string;
     view?:     string;
+    sort?:     string;
     page?:     number;
     limit?:    number;
   }) {
@@ -248,12 +254,23 @@ export class SupportService {
       ];
     }
 
+    let orderBy: Prisma.SupportTicketOrderByWithRelationInput;
+    if (query.sort === 'oldest') {
+      orderBy = { createdAt: 'asc' };
+    } else if (query.sort === 'overdue') {
+      orderBy = { createdAt: 'asc' };
+      if (!where.status) where.status = { in: ['NEW', 'IN_PROGRESS'] };
+    } else {
+      orderBy = { updatedAt: 'desc' };
+    }
+
     const [tickets, total] = await Promise.all([
       this.prisma.supportTicket.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
+        include: { replies: { where: { isInternal: false }, orderBy: { createdAt: 'desc' }, take: 1 } },
       }),
       this.prisma.supportTicket.count({ where }),
     ]);
@@ -271,8 +288,23 @@ export class SupportService {
     }
     const ticketsWithBooking = await this.attachBookingSummaries(tickets);
 
+    const staffIds = [...new Set(
+      ticketsWithBooking.map((t) => t.assignedStaffId).filter((id): id is number => id != null),
+    )];
+    const staffUsers = staffIds.length > 0
+      ? await this.prisma.user.findMany({
+          where: { id: { in: staffIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const staffMap = new Map(staffUsers.map((s) => [s.id, s.fullName]));
+    const ticketsWithStaff = ticketsWithBooking.map((t) => ({
+      ...t,
+      assignedStaffName: t.assignedStaffId != null ? (staffMap.get(t.assignedStaffId) ?? null) : null,
+    }));
+
     return {
-      tickets: ticketsWithBooking,
+      tickets: ticketsWithStaff,
       meta: {
         total,
         page,
@@ -291,45 +323,97 @@ export class SupportService {
   async getTicketById(id: number) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id },
-      include: { replies: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        replies:   { orderBy: { createdAt: 'asc' } },
+        auditLogs: { orderBy: { createdAt: 'asc' } },
+      },
     });
 
     if (!ticket) return null;
     const [ticketWithBooking] = await this.attachBookingSummaries([ticket]);
-    return ticketWithBooking;
+
+    let assignedStaffName: string | null = null;
+    if (ticketWithBooking.assignedStaffId != null) {
+      const staff = await this.prisma.user.findUnique({
+        where: { id: ticketWithBooking.assignedStaffId },
+        select: { fullName: true },
+      });
+      assignedStaffName = staff?.fullName ?? null;
+    }
+
+    return { ...ticketWithBooking, assignedStaffName };
   }
 
   // ─── [ADMIN/STAFF] Assign staff vào ticket ───────────────────────────────────
   async assignTicket(id: number, staffId: number) {
-    return this.prisma.supportTicket.update({
-      where: { id },
-      data: { assignedStaffId: staffId, status: 'IN_PROGRESS' },
+    const staff = await this.prisma.user.findUnique({
+      where: { id: staffId },
+      select: { fullName: true },
     });
+    const actorName = staff?.fullName ?? `Staff #${staffId}`;
+
+    const [ticket] = await Promise.all([
+      this.prisma.supportTicket.update({
+        where: { id },
+        data: { assignedStaffId: staffId, status: 'IN_PROGRESS' },
+      }),
+      this.prisma.supportAuditLog.create({
+        data: { ticketId: id, actorName, eventType: 'ASSIGNED', meta: { staffId } },
+      }),
+    ]);
+    return ticket;
   }
 
   // ─── [ADMIN/STAFF] Cập nhật trạng thái ──────────────────────────────────────
-  async updateStatus(id: number, status: TicketStatus) {
-    return this.prisma.supportTicket.update({
-      where: { id },
-      data:  { status },
-    });
+  async updateStatus(id: number, status: TicketStatus, actorName = 'Admin') {
+    const [ticket] = await Promise.all([
+      this.prisma.supportTicket.update({ where: { id }, data: { status } }),
+      this.prisma.supportAuditLog.create({
+        data: { ticketId: id, actorName, eventType: 'STATUS_CHANGED', meta: { to: status } },
+      }),
+    ]);
+    return ticket;
   }
 
   // ─── [ADMIN/STAFF] Staff phản hồi ticket ────────────────────────────────────
-  async replyTicket(id: number, content: string, staffName: string, staffId: number) {
-    const reply = await this.prisma.ticketReply.create({
-      data: {
-        ticketId:   id,
-        senderType: 'staff',
-        senderName: staffName,
-        content,
-      },
-    });
-    // Tự chuyển sang IN_PROGRESS và assign staff nếu vẫn NEW
-    await this.prisma.supportTicket.update({
+  async replyTicket(id: number, content: string, staffName: string, staffId: number, isInternal = false) {
+    const ticket = await this.prisma.supportTicket.findUnique({
       where: { id },
-      data:  { status: 'IN_PROGRESS', assignedStaffId: staffId },
+      select: { customerEmail: true, customerName: true, subject: true, accessCode: true, assignedStaffId: true },
     });
+    if (!ticket) throw new NotFoundException('Ticket không tồn tại');
+
+    const reply = await this.prisma.ticketReply.create({
+      data: { ticketId: id, senderType: 'staff', senderName: staffName, content, isInternal },
+    });
+
+    if (isInternal) {
+      // Ghi chú nội bộ: chỉ tự nhận ticket nếu chưa có người phụ trách, không đổi status, không email khách
+      if (ticket.assignedStaffId == null) {
+        await this.prisma.supportTicket.update({
+          where: { id },
+          data:  { assignedStaffId: staffId },
+        });
+      }
+    } else {
+      // Chỉ assign nếu chưa có người phụ trách, tránh override khi ticket đang thuộc người khác
+      await this.prisma.supportTicket.update({
+        where: { id },
+        data:  { status: 'IN_PROGRESS', assignedStaffId: ticket.assignedStaffId ?? staffId },
+      });
+
+      // Fire-and-forget — email failure không block luồng reply
+      void this.mailService.sendSupportStaffReplyEmail({
+        to:           ticket.customerEmail,
+        customerName: ticket.customerName,
+        ticketId:     id,
+        subject:      ticket.subject,
+        replyContent: content,
+        staffName,
+        accessCode:   ticket.accessCode ?? undefined,
+      });
+    }
+
     return reply;
   }
 
@@ -389,8 +473,9 @@ export class SupportService {
       orderBy: { updatedAt: 'desc' },
       include: {
         replies: {
+          where: { isInternal: false },
           orderBy: { createdAt: 'desc' },
-          take: 1,  // Chỉ lấy reply mới nhất để hiện preview
+          take: 1,
         },
       },
     });
@@ -400,7 +485,7 @@ export class SupportService {
   async getTicketDetailForCustomer(id: number, identifier: { accessCode?: string; userId?: number }) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id },
-      include: { replies: { orderBy: { createdAt: 'asc' } } },
+      include: { replies: { where: { isInternal: false }, orderBy: { createdAt: 'asc' } } },
     });
 
     if (!ticket) throw new NotFoundException('Ticket không tồn tại');
@@ -442,6 +527,11 @@ export class SupportService {
         senderName: identifier.name,
         content,
       },
+    });
+
+    await this.prisma.supportTicket.update({
+      where: { id },
+      data: { updatedAt: new Date() },
     });
 
     await this.adminNotifications.createSafe({

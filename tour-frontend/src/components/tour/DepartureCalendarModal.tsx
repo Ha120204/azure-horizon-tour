@@ -13,6 +13,8 @@ interface DepartureCalendarModalProps {
     language: string;
 }
 
+const LOW_SEAT_THRESHOLD = 10;
+
 function getInitialCalendarDate(selectedDeparture: TourDeparture | null, departures: TourDeparture[]) {
     if (selectedDeparture) {
         return new Date(selectedDeparture.departureDate);
@@ -97,7 +99,7 @@ export default function DepartureCalendarModal({
         const isPast = dateStr < todayStr;
         const isSelected = selectedDeparture?.id === departure?.id;
         const isSoldOut = departure?.availableSeats === 0;
-        const isRunningLow = Boolean(departure && departure.availableSeats > 0 && departure.availableSeats <= 5);
+        const isRunningLow = Boolean(departure && departure.availableSeats > 0 && departure.availableSeats <= LOW_SEAT_THRESHOLD);
         const statusText = isSoldOut
             ? t('tour_detail.soldOut')
             : isRunningLow

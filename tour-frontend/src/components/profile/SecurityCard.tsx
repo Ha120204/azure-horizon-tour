@@ -1,8 +1,8 @@
 ﻿'use client';
 
 import { useState } from 'react';
-import { API_BASE_URL } from '@/lib/constants';
-import { fetchWithAuth } from '@/lib/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 
 // ── Google G Logo ─────────────────────────────────────────────
 const GoogleLogo = () => (
@@ -13,6 +13,18 @@ const GoogleLogo = () => (
         <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
     </svg>
 );
+
+const compactActionClass =
+    'group inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[11px] font-bold text-primary transition-[transform,background-color,color,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-primary hover:bg-primary hover:text-white hover:shadow-md hover:shadow-primary/20 active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none';
+
+const iconActionClass =
+    'group flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-outline transition-[transform,background-color,color] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/10 hover:text-primary active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 motion-reduce:transform-none motion-reduce:transition-none';
+
+const closeActionClass =
+    'group flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-outline transition-[transform,background-color,color] duration-200 ease-out hover:rotate-6 hover:bg-error/10 hover:text-error active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/25 motion-reduce:transform-none motion-reduce:transition-none';
+
+const primaryActionClass =
+    'w-full rounded-lg bg-primary py-3 text-sm font-bold text-white shadow-sm transition-[transform,background-color,box-shadow,opacity] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-lg hover:shadow-primary/20 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-sm motion-reduce:transform-none motion-reduce:transition-none';
 
 // ── Props ──────────────────────────────────────────────────────
 type SecurityCardProps = {
@@ -129,9 +141,9 @@ export default function SecurityCard({
                         <button
                             type="button"
                             onClick={() => { window.location.href = `${API_BASE_URL}/auth/google`; }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/5 border border-primary/20 px-3 py-1.5 rounded-full hover:bg-primary/10 active:scale-95 transition-all flex-shrink-0"
+                            className={compactActionClass}
                         >
-                            <span className="material-symbols-outlined text-[13px]">add_link</span>
+                            <span className="material-symbols-outlined text-[13px] transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">add_link</span>
                             Liên kết
                         </button>
                     )}
@@ -160,17 +172,22 @@ export default function SecurityCard({
                             <button
                                 type="button"
                                 onClick={() => setShowPasswordSection(true)}
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/5 border border-primary/20 px-3 py-1.5 rounded-full hover:bg-primary/10 active:scale-95 transition-all flex-shrink-0"
+                                className={compactActionClass}
                             >
-                                <span className="material-symbols-outlined text-[13px]">
+                                <span className="material-symbols-outlined text-[13px] transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">
                                     {isGoogleOnly ? 'add' : 'edit'}
                                 </span>
                                 {isGoogleOnly ? 'Tạo mật khẩu' : (hasLocalPassword ? 'Đổi' : '')}
                             </button>
                         )}
                         {showPasswordSection && (
-                            <button type="button" onClick={() => setShowPasswordSection(false)} className="text-outline hover:text-error transition-colors">
-                                <span className="material-symbols-outlined text-lg">close</span>
+                            <button
+                                type="button"
+                                onClick={() => setShowPasswordSection(false)}
+                                className={closeActionClass}
+                                aria-label="Đóng phần mật khẩu"
+                            >
+                                <span className="material-symbols-outlined text-lg transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">close</span>
                             </button>
                         )}
                     </div>
@@ -201,8 +218,8 @@ export default function SecurityCard({
                                     onChange={e => setSetPassNew(e.target.value)}
                                     required
                                 />
-                                <button type="button" onClick={() => setShowSetNew(v => !v)} className="text-outline hover:text-primary">
-                                    <span className="material-symbols-outlined text-[18px]">{showSetNew ? 'visibility' : 'visibility_off'}</span>
+                                <button type="button" onClick={() => setShowSetNew(v => !v)} className={iconActionClass} aria-label={showSetNew ? 'Ẩn mật khẩu mới' : 'Hiện mật khẩu mới'}>
+                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">{showSetNew ? 'visibility' : 'visibility_off'}</span>
                                 </button>
                             </div>
                             <div className={`flex items-center rounded-lg px-3 focus-within:ring-1 transition-all border ${passConfirmVal && passConfirmVal !== setPassNew ? 'border-error/50 focus-within:ring-error bg-error/5' : 'border-transparent bg-surface-container-low focus-within:ring-primary'}`}>
@@ -215,14 +232,14 @@ export default function SecurityCard({
                                     onChange={e => setPassConfirmVal(e.target.value)}
                                     required
                                 />
-                                <button type="button" onClick={() => setShowSetConfirm(v => !v)} className="text-outline hover:text-primary">
-                                    <span className="material-symbols-outlined text-[18px]">{showSetConfirm ? 'visibility' : 'visibility_off'}</span>
+                                <button type="button" onClick={() => setShowSetConfirm(v => !v)} className={iconActionClass} aria-label={showSetConfirm ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}>
+                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">{showSetConfirm ? 'visibility' : 'visibility_off'}</span>
                                 </button>
                             </div>
                             <button
                                 type="submit"
                                 disabled={isSettingPassword}
-                                className="w-full py-3 bg-primary text-white rounded-lg font-bold text-sm hover:opacity-90 transition-opacity active:scale-95 disabled:opacity-60"
+                                className={primaryActionClass}
                             >
                                 {isSettingPassword ? 'Đang thiết lập...' : 'Thiết lập mật khẩu'}
                             </button>
@@ -243,8 +260,8 @@ export default function SecurityCard({
                                     onChange={e => setCurrentPassword(e.target.value)}
                                     required
                                 />
-                                <button type="button" onClick={() => setShowCurrent(v => !v)} className="text-outline hover:text-primary">
-                                    <span className="material-symbols-outlined text-[18px]">{showCurrent ? 'visibility' : 'visibility_off'}</span>
+                                <button type="button" onClick={() => setShowCurrent(v => !v)} className={iconActionClass} aria-label={showCurrent ? 'Ẩn mật khẩu hiện tại' : 'Hiện mật khẩu hiện tại'}>
+                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">{showCurrent ? 'visibility' : 'visibility_off'}</span>
                                 </button>
                             </div>
                             {/* New */}
@@ -258,8 +275,8 @@ export default function SecurityCard({
                                     onChange={e => setNewPassword(e.target.value)}
                                     required
                                 />
-                                <button type="button" onClick={() => setShowNew(v => !v)} className="text-outline hover:text-primary">
-                                    <span className="material-symbols-outlined text-[18px]">{showNew ? 'visibility' : 'visibility_off'}</span>
+                                <button type="button" onClick={() => setShowNew(v => !v)} className={iconActionClass} aria-label={showNew ? 'Ẩn mật khẩu mới' : 'Hiện mật khẩu mới'}>
+                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">{showNew ? 'visibility' : 'visibility_off'}</span>
                                 </button>
                             </div>
                             {/* Confirm */}
@@ -273,8 +290,8 @@ export default function SecurityCard({
                                     onChange={e => setConfirmNewPassword(e.target.value)}
                                     required
                                 />
-                                <button type="button" onClick={() => setShowConfirm(v => !v)} className="text-outline hover:text-primary">
-                                    <span className="material-symbols-outlined text-[18px]">{showConfirm ? 'visibility' : 'visibility_off'}</span>
+                                <button type="button" onClick={() => setShowConfirm(v => !v)} className={iconActionClass} aria-label={showConfirm ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}>
+                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none">{showConfirm ? 'visibility' : 'visibility_off'}</span>
                                 </button>
                             </div>
                             {confirmNewPassword && confirmNewPassword !== newPassword && (
@@ -286,7 +303,7 @@ export default function SecurityCard({
                             <button
                                 type="submit"
                                 disabled={isChangingPassword}
-                                className="w-full py-3 bg-primary text-white rounded-lg font-bold text-sm hover:opacity-90 transition-opacity active:scale-95 disabled:opacity-60"
+                                className={primaryActionClass}
                             >
                                 {isChangingPassword ? 'Đang cập nhật...' : (t('profile.updatePasswordBtn') || 'Cập nhật mật khẩu')}
                             </button>

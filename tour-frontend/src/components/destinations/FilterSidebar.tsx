@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { API_BASE_URL } from '@/lib/constants';
-import { getDestinationDisplay, getDestinationDisplayName } from '@/lib/formatDestination';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { getDestinationDisplay, getDestinationDisplayName } from '@/lib/tour/formatDestination';
+import DatePickerDropdown from '@/components/search/DatePickerDropdown';
 
 type TravelScope = '' | 'DOMESTIC' | 'INTERNATIONAL';
 
@@ -44,6 +45,14 @@ interface FilterSidebarProps {
     language: string;
 }
 
+const normalizeSearchText = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[đĐ]/g, 'd')
+        .toLowerCase()
+        .trim();
+
 export default function FilterSidebar({
     travelScope, setTravelScope,
     dest, setDest,
@@ -65,6 +74,7 @@ export default function FilterSidebar({
     const [departurePoints, setDeparturePoints] = useState<{ label: string }[]>([]);
     const [isDepartureOpen, setIsDepartureOpen] = useState(false);
     const departureRef = useRef<HTMLDivElement>(null);
+    const departureInputRef = useRef<HTMLInputElement>(null);
 
     const handleSidebarDestChange = useCallback((value: string) => {
         setIsAllDestinationsSelected(false);
@@ -115,6 +125,12 @@ export default function FilterSidebar({
         };
         fetchDepartures();
     }, [travelScope, language]);
+
+    const filteredDeparturePoints = useMemo(() => {
+        const query = normalizeSearchText(departure);
+        if (!query) return departurePoints;
+        return departurePoints.filter((pt) => normalizeSearchText(pt.label).includes(query));
+    }, [departure, departurePoints]);
 
     const tourTypes = [
         { value: 'Tour Gia Đình',    icon: 'family_restroom', label: t('filter.tourType_family'),    desc: t('filter.tourType_familyDesc') },
@@ -206,31 +222,60 @@ export default function FilterSidebar({
                     {language === 'vi' ? 'Điểm khởi hành' : 'Departure City'}
                 </h3>
                 <div ref={departureRef} className="relative">
-                    <button
-                        type="button"
-                        onClick={() => setIsDepartureOpen(!isDepartureOpen)}
-                        className="w-full flex items-center justify-between bg-surface-container-low border border-outline-variant/15 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary/30 hover:bg-white transition-all"
+                    <div
+                        onClick={() => {
+                            departureInputRef.current?.focus();
+                            setIsDepartureOpen(true);
+                        }}
+                        className="w-full flex items-center justify-between bg-surface-container-low border border-outline-variant/15 rounded-xl px-4 py-3 text-sm font-medium focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/30 hover:bg-white transition-all cursor-text"
                     >
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="material-symbols-outlined text-outline text-[18px] flex-shrink-0">location_city</span>
-                            <span className={`truncate ${departure ? 'text-on-surface font-semibold' : 'text-outline-variant'}`}>
-                                {departure || (language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities')}
-                            </span>
+                            <input
+                                ref={departureInputRef}
+                                type="text"
+                                value={departure}
+                                onChange={(e) => {
+                                    setDeparture(e.target.value);
+                                    setIsDepartureOpen(true);
+                                }}
+                                onFocus={() => setIsDepartureOpen(true)}
+                                placeholder={language === 'vi' ? 'Bạn đi từ đâu?' : 'Where from?'}
+                                className="min-w-0 flex-1 bg-transparent p-0 text-sm font-semibold text-on-surface outline-none placeholder:text-outline-variant"
+                            />
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                             {departure && (
-                                <span
+                                <button
+                                    type="button"
                                     className="w-5 h-5 flex items-center justify-center rounded-full bg-outline-variant/20 hover:bg-error/10 hover:text-error transition-colors"
-                                    onClick={(e) => { e.stopPropagation(); setDeparture(''); }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeparture('');
+                                        setIsDepartureOpen(true);
+                                        departureInputRef.current?.focus();
+                                    }}
+                                    aria-label={language === 'vi' ? 'Xóa điểm khởi hành' : 'Clear departure city'}
                                 >
                                     <span className="material-symbols-outlined text-[13px]">close</span>
-                                </span>
+                                </button>
                             )}
-                            <span className="material-symbols-outlined text-outline text-[18px]">
-                                {isDepartureOpen ? 'expand_less' : 'expand_more'}
-                            </span>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isDepartureOpen) departureInputRef.current?.focus();
+                                    setIsDepartureOpen((open) => !open);
+                                }}
+                                className="w-5 h-5 flex items-center justify-center rounded-full text-outline hover:bg-outline-variant/15 transition-colors"
+                                aria-label={isDepartureOpen ? (language === 'vi' ? 'Đóng danh sách' : 'Close list') : (language === 'vi' ? 'Mở danh sách' : 'Open list')}
+                            >
+                                <span className="material-symbols-outlined text-[18px]">
+                                    {isDepartureOpen ? 'expand_less' : 'expand_more'}
+                                </span>
+                            </button>
                         </div>
-                    </button>
+                    </div>
 
                     {isDepartureOpen && (
                         <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-[100] max-h-[240px] overflow-y-auto">
@@ -238,14 +283,13 @@ export default function FilterSidebar({
                             <button
                                 type="button"
                                 onClick={() => { setDeparture(''); setIsDepartureOpen(false); }}
-                                className={`w-full px-4 py-2.5 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors ${!departure ? 'text-primary' : 'text-slate-600'}`}
+                                className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-slate-600 hover:bg-slate-50 transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[16px]">travel_explore</span>
                                 <span className="text-sm font-bold">{language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities'}</span>
-                                {!departure && <span className="material-symbols-outlined text-[14px] text-primary ml-auto">check</span>}
                             </button>
                             <div className="mx-3 my-1 border-t border-slate-100" />
-                            {departurePoints.map((pt, idx) => (
+                            {filteredDeparturePoints.map((pt, idx) => (
                                 <button
                                     key={idx}
                                     type="button"
@@ -259,6 +303,13 @@ export default function FilterSidebar({
                                     {departure === pt.label && <span className="material-symbols-outlined text-[14px] text-primary">check</span>}
                                 </button>
                             ))}
+                            {filteredDeparturePoints.length === 0 && departure.trim() && (
+                                <div className="px-4 py-4 text-center">
+                                    <span className="material-symbols-outlined text-2xl text-slate-300">search_off</span>
+                                    <p className="mt-1 text-xs font-semibold text-slate-500">{language === 'vi' ? 'Không có gợi ý phù hợp' : 'No matching suggestions'}</p>
+                                    <p className="mt-0.5 text-[11px] text-slate-400">{language === 'vi' ? 'Bạn vẫn có thể áp dụng từ khóa đã nhập' : 'You can still apply the typed keyword'}</p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -360,15 +411,16 @@ export default function FilterSidebar({
                     <span className="material-symbols-outlined text-sm text-primary">calendar_today</span>
                     {language === 'vi' ? 'Ngày khởi hành' : 'Departure Date'}
                 </h3>
-                <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-lg">event</span>
-                    <input
-                        className="w-full bg-surface-container-low border border-outline-variant/15 rounded-xl pl-11 pr-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary/30 focus:bg-white transition-all outline-none cursor-pointer"
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                    />
-                </div>
+                <DatePickerDropdown
+                    value={date}
+                    onChange={setDate}
+                    language={language}
+                    placeholder="dd/mm/yyyy"
+                    triggerId="filter-departure-date"
+                    variant="field"
+                    dropdownPlacement="bottom"
+                    dropdownClassName="w-full"
+                />
             </div>
 
             {/* Price Range Section */}

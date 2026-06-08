@@ -15,3 +15,13 @@ export const getCatCfg = (cat: string) =>
   };
 
 export const getStatusCfg = (s: string) => STATUS_CFG[s as ArticleStatus] ?? STATUS_CFG.DRAFT;
+
+export const getWorkflowHint = (status: ArticleStatus) => {
+  const hints: Record<ArticleStatus, string> = {
+    DRAFT: 'Có thể chỉnh sửa',
+    PENDING_REVIEW: 'Đang chờ Admin',
+    PUBLISHED: 'Đang hiển thị',
+    REJECTED: 'Cần sửa rồi gửi lại',
+  };
+  return hints[status];
+};

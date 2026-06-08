@@ -1,6 +1,6 @@
 'use client';
 
-import { API_BASE_URL } from '@/lib/constants';
+import { API_BASE_URL } from '@/lib/http/constants';
 import { EditableSection } from './_components/EditableSection';
 import { HealthStatusSection } from './_components/HealthStatusSection';
 import { InfoSection } from './_components/InfoSection';
@@ -23,7 +23,7 @@ export default function SystemSettingsPage() {
     return (
         <main className="flex-1 pt-8 px-8 pb-16 overflow-y-auto w-full max-w-[1100px] mx-auto">
             {settings.toast && (
-                <div className="fixed top-6 right-8 z-50">
+                <div className="fixed top-6 right-8 z-50" role="alert" aria-live="assertive" aria-atomic="true">
                     <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl border ${settings.toast.type === 'success' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
                         <span className={`material-symbols-outlined text-[20px] ${settings.toast.type === 'success' ? 'text-emerald-600' : 'text-red-600'}`} style={{ fontVariationSettings: "'FILL' 1" }}>
                             {settings.toast.type === 'success' ? 'check_circle' : 'error'}
@@ -52,7 +52,7 @@ export default function SystemSettingsPage() {
                     <button
                         onClick={settings.handleManualHealthCheck}
                         disabled={settings.healthLoading}
-                        className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-60"
+                        className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-60"
                     >
                         <span className={`material-symbols-outlined text-[17px] ${settings.healthLoading ? 'animate-spin' : ''}`}>
                             {settings.healthLoading ? 'progress_activity' : 'refresh'}
@@ -74,7 +74,7 @@ export default function SystemSettingsPage() {
 
             <div className="space-y-5">
                 <div className="rounded-2xl border border-slate-200/70 bg-white p-2 shadow-sm">
-                    <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-7">
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
                         {settings.visiblePanels.map(panel => {
                             const meta = PANEL_META[panel];
                             const active = settings.activePanel === panel;
@@ -84,14 +84,14 @@ export default function SystemSettingsPage() {
                                     type="button"
                                     aria-pressed={active}
                                     onClick={() => settings.setActivePanel(panel)}
-                                    className={`flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 ${
+                                    className={`flex min-h-14 items-start gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-bold leading-snug transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 ${
                                         active
                                             ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'
                                             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                                     }`}
                                 >
-                                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{meta.icon}</span>
-                                    <span className="truncate">{meta.title}</span>
+                                    <span className="material-symbols-outlined mt-0.5 text-[18px]" aria-hidden="true">{meta.icon}</span>
+                                    <span className="min-w-0 whitespace-normal break-words">{meta.title}</span>
                                 </button>
                             );
                         })}

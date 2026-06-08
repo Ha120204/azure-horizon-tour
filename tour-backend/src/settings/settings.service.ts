@@ -220,12 +220,23 @@ export class SettingsService implements OnModuleInit {
     const settings = await this.prisma.systemSetting.findMany({
       orderBy: [{ group: 'asc' }, { id: 'asc' }],
     });
+    const updatedByIds = [...new Set(settings.flatMap(setting => setting.updatedBy ? [setting.updatedBy] : []))];
+    const updaters = updatedByIds.length > 0
+      ? await this.prisma.user.findMany({
+          where: { id: { in: updatedByIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const updaterNames = new Map(updaters.map(user => [user.id, user.fullName]));
 
     // Group theo key "group"
     const grouped: Record<string, any[]> = {};
     for (const s of settings) {
       if (!grouped[s.group]) grouped[s.group] = [];
-      grouped[s.group].push(s);
+      grouped[s.group].push({
+        ...s,
+        updatedByName: s.updatedBy ? updaterNames.get(s.updatedBy) ?? null : null,
+      });
     }
     return grouped;
   }

@@ -2,3 +2,5 @@ docs/
 .agents/
 .continue/
 skills-lock.json
+/CLAUDE.md
+/README.md

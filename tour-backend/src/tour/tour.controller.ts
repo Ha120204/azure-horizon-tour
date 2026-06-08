@@ -27,7 +27,7 @@ import { TourPermissionService } from './tour-permission.service';
 import { CreateTourDto } from './dto/create-tour.dto';
 import { UpdateTourDto } from './dto/update-tour.dto';
 import { FilterTourDto } from './dto/filter-tour.dto';
-import { CloudinaryService } from '../common/cloudinary/cloudinary.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 

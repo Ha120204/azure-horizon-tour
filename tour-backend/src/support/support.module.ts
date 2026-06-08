@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { SupportController, SupportCustomerController } from './support.controller';
 import { SupportService } from './support.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, MailModule],
   controllers: [SupportController, SupportCustomerController],
   providers: [SupportService],
   exports: [SupportService], // export để ContactModule inject vào

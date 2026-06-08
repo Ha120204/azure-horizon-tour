@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { toastEmitter, type ToastEvent } from '@/lib/toastEmitter';
+import { toastEmitter, type ToastEvent } from '@/lib/http/toastEmitter';
 import FeedbackToast from './FeedbackToast';
 
 interface ActiveToast extends ToastEvent {

@@ -575,7 +575,7 @@ export function TourLocationSection({
                 }
                 aria-expanded={isDurationListOpen}
                 aria-controls="duration-options"
-                onClick={() => setIsDurationListOpen((open) => !open)}
+                onClick={() => setIsDurationListOpen(!isDurationListOpen)}
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setIsDurationListOpen(false);
                   if (e.key === "ArrowDown") {

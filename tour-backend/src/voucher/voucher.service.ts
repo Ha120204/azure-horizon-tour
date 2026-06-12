@@ -92,14 +92,31 @@ export class VoucherService {
   /** Voucher service note. */
   async getAllVouchers() {
     const now = new Date();
-    return this.prisma.voucher.findMany({
+    const vouchers = await this.prisma.voucher.findMany({
       where: {
         isActive: true,
         startsAt: { lte: now },
         expiresAt: { gt: now },
       },
+      select: {
+        id: true,
+        code: true,
+        label: true,
+        description: true,
+        discountType: true,
+        discountValue: true,
+        minOrderValue: true,
+        expiresAt: true,
+        usedCount: true,
+        maxUses: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
+
+    return vouchers.map(({ usedCount, maxUses, ...rest }) => ({
+      ...rest,
+      isDepleted: usedCount >= maxUses,
+    }));
   }
 
   /** Lưu voucher vào ví user */
@@ -286,6 +303,59 @@ export class VoucherService {
       discountAmount: Math.round(discountAmount * 100) / 100,
       finalPrice: Math.round((totalPrice - discountAmount) * 100) / 100,
     };
+  }
+
+  /**
+   * Gọi BÊN TRONG $transaction khi tạo booking.
+   * Atomic increment usedCount — throw ConflictException nếu đã hết lượt.
+   * Thay thế việc claim voucher tại thời điểm payment confirmed (tránh race condition).
+   */
+  async claimVoucherInTx(
+    tx: Omit<Prisma.TransactionClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+    code: string,
+    userId: number,
+  ): Promise<void> {
+    const normalizedCode = code.trim().toUpperCase();
+    const voucher = await tx.voucher.findUnique({ where: { code: normalizedCode } });
+    if (!voucher) return;
+
+    const result = await tx.voucher.updateMany({
+      where: { id: voucher.id, usedCount: { lt: voucher.maxUses } },
+      data: { usedCount: { increment: 1 } },
+    });
+
+    if (result.count === 0) {
+      throw new ConflictException('Voucher vừa hết lượt sử dụng. Vui lòng thử mã khác.');
+    }
+
+    await tx.userVoucher.updateMany({
+      where: { userId, voucherId: voucher.id, isUsed: false },
+      data: { isUsed: true },
+    });
+  }
+
+  /**
+   * Gọi BÊN TRONG $transaction khi hủy/hết hạn booking có voucher.
+   * Hoàn lại lượt sử dụng và reset trạng thái ví để voucher có thể dùng lại.
+   */
+  async releaseVoucherInTx(
+    tx: Omit<Prisma.TransactionClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+    code: string,
+    userId: number,
+  ): Promise<void> {
+    const normalizedCode = code.trim().toUpperCase();
+    const voucher = await tx.voucher.findUnique({ where: { code: normalizedCode } });
+    if (!voucher) return;
+
+    await tx.voucher.updateMany({
+      where: { id: voucher.id, usedCount: { gt: 0 } },
+      data: { usedCount: { decrement: 1 } },
+    });
+
+    await tx.userVoucher.updateMany({
+      where: { userId, voucherId: voucher.id, isUsed: true },
+      data: { isUsed: false },
+    });
   }
 
   /**

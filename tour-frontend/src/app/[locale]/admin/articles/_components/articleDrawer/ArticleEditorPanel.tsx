@@ -1,7 +1,9 @@
 'use client';
 
-import { useRef } from 'react';
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import { API_BASE_URL } from '@/lib/http/constants';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { QUILL_MODULES, QUILL_FORMATS, type ArticleForm } from './types';
 
 import 'react-quill-new/dist/quill.snow.css';
@@ -25,6 +27,41 @@ type Props = {
 };
 
 export function ArticleEditorPanel({ form, errors, titleRef, isStaff, handleTitleChange, setField }: Props) {
+    const [contentLang, setContentLang] = useState<'vi' | 'en'>('vi');
+    const [isTranslating, setIsTranslating] = useState(false);
+    const [translateError, setTranslateError] = useState('');
+
+    const handleAiTranslate = async () => {
+        const hasContent = form.content && form.content !== '<p><br></p>';
+        if (!form.title.trim() && !form.excerpt.trim() && !hasContent) {
+            setTranslateError('Hãy nhập nội dung tiếng Việt trước khi dịch');
+            return;
+        }
+        setIsTranslating(true);
+        setTranslateError('');
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/ai/translate/article`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: form.title, excerpt: form.excerpt, content: form.content }),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                const msg = json?.message;
+                throw new Error(Array.isArray(msg) ? msg.join(', ') : String(msg ?? 'Dịch tự động thất bại'));
+            }
+            const data = json?.data ?? json;
+            if (data.titleEn) setField('titleEn', data.titleEn);
+            if (data.excerptEn) setField('excerptEn', data.excerptEn);
+            if (data.contentEn) setField('contentEn', data.contentEn);
+            setContentLang('en');
+        } catch (err) {
+            setTranslateError(err instanceof Error ? err.message : 'Dịch tự động thất bại');
+        } finally {
+            setIsTranslating(false);
+        }
+    };
+
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
@@ -53,6 +90,20 @@ export function ArticleEditorPanel({ form, errors, titleRef, isStaff, handleTitl
                 </div>
 
                 <div>
+                    <label htmlFor="am-title-en" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1.5">
+                        Tiêu đề (English) <span className="text-on-surface-variant/40 normal-case">(tùy chọn — trống sẽ dùng bản tiếng Việt)</span>
+                    </label>
+                    <input
+                        id="am-title-en"
+                        type="text"
+                        value={form.titleEn}
+                        onChange={e => setField('titleEn', e.target.value)}
+                        placeholder="English title…"
+                        className="w-full bg-transparent border-0 border-b-2 border-outline-variant/30 text-lg font-semibold text-on-surface placeholder:text-on-surface-variant/55 outline-none focus:border-primary transition-colors pb-2"
+                    />
+                </div>
+
+                <div>
                     <label htmlFor="am-excerpt" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1.5">
                         Tóm tắt <span className="text-on-surface-variant/40 normal-case">({isStaff ? 'khi gửi duyệt' : 'khi xuất bản'})</span>
                         <span className="normal-case font-normal ml-1 text-on-surface-variant/50">(hiển thị dưới card bài)</span>
@@ -73,11 +124,60 @@ export function ArticleEditorPanel({ form, errors, titleRef, isStaff, handleTitl
                     </div>
                     {errors.excerpt && <p className="text-xs text-error mt-1">{errors.excerpt}</p>}
                 </div>
+
+                <div>
+                    <label htmlFor="am-excerpt-en" className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block mb-1.5">
+                        Tóm tắt (English) <span className="text-on-surface-variant/40 normal-case">(tùy chọn)</span>
+                    </label>
+                    <textarea
+                        id="am-excerpt-en"
+                        value={form.excerptEn}
+                        onChange={e => setField('excerptEn', e.target.value)}
+                        rows={2}
+                        maxLength={300}
+                        placeholder="English summary…"
+                        className="w-full bg-surface border border-outline-variant/25 rounded-xl px-4 py-2.5 text-sm text-on-surface outline-none focus-visible:ring-2 focus-visible:ring-primary resize-none placeholder:text-on-surface-variant/55 transition-colors"
+                    />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={handleAiTranslate}
+                        disabled={isTranslating}
+                        className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        <span className={`material-symbols-outlined text-[18px] ${isTranslating ? 'animate-spin' : ''}`}>
+                            {isTranslating ? 'progress_activity' : 'translate'}
+                        </span>
+                        {isTranslating ? 'Đang dịch…' : 'AI dịch sang tiếng Anh'}
+                    </button>
+                    <span className="text-[11px] text-on-surface-variant/60">Tự điền 3 ô tiếng Anh từ nội dung tiếng Việt</span>
+                    {translateError && <p className="w-full text-xs text-error">{translateError}</p>}
+                </div>
             </div>
 
             <div className="flex items-center gap-3 px-7 mb-0 shrink-0">
                 <div className="flex-1 h-px bg-outline-variant/10" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">Nội dung bài viết</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
+                    Nội dung bài viết {contentLang === 'en' && <span className="text-on-surface-variant/40 normal-case">(English — tùy chọn)</span>}
+                </span>
+                <div className="inline-flex rounded-full bg-surface-container p-0.5">
+                    <button
+                        type="button"
+                        onClick={() => setContentLang('vi')}
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-colors ${contentLang === 'vi' ? 'bg-primary text-white' : 'text-on-surface-variant'}`}
+                    >
+                        VI
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setContentLang('en')}
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-colors ${contentLang === 'en' ? 'bg-primary text-white' : 'text-on-surface-variant'}`}
+                    >
+                        EN
+                    </button>
+                </div>
                 <div className="flex-1 h-px bg-outline-variant/10" />
             </div>
             {errors.content && (
@@ -122,12 +222,13 @@ export function ArticleEditorPanel({ form, errors, titleRef, isStaff, handleTitl
                 `}</style>
                 <div className="am-quill-wrap h-full">
                     <ReactQuill
+                        key={contentLang}
                         theme="snow"
-                        value={form.content}
-                        onChange={val => setField('content', val)}
+                        value={contentLang === 'en' ? form.contentEn : form.content}
+                        onChange={val => setField(contentLang === 'en' ? 'contentEn' : 'content', val)}
                         modules={QUILL_MODULES}
                         formats={QUILL_FORMATS}
-                        placeholder="Bắt đầu viết nội dung bài viết ở đây…"
+                        placeholder={contentLang === 'en' ? 'Write the English content here…' : 'Bắt đầu viết nội dung bài viết ở đây…'}
                         style={{ height: '100%' }}
                     />
                 </div>

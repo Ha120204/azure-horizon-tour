@@ -11,7 +11,8 @@ import { EMPTY_TOUR_STATS } from '../_lib/constants';
 import { exportToursCsv } from '../_lib/exportCsv';
 import { getTourReviewMissingItems } from '../_lib/helpers';
 import { buildTourKpis } from '../_lib/kpis';
-import type { Destination, Meta, ModalMode, ToastState, Tour, TourStats, TourTab, TourReviewAction } from '../_lib/types';
+import type { Destination, Meta, ModalMode, Tour, TourStats, TourTab, TourReviewAction } from '../_lib/types';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 
 export function useTourManagement() {
     const searchParams = useSearchParams();
@@ -40,7 +41,6 @@ export function useTourManagement() {
     const [isDetailLoading, setIsDetailLoading] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Tour | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [toast, setToast] = useState<ToastState | null>(null);
 
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -59,8 +59,8 @@ export function useTourManagement() {
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
     const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3500);
+        if (type === 'error') toastEmitter.error(message);
+        else toastEmitter.success(message);
     }, []);
 
     const fetchTours = useCallback(async () => {
@@ -624,7 +624,6 @@ export function useTourManagement() {
         isDetailLoading,
         deleteTarget,
         isDeleting,
-        toast,
         selectedIds,
         isBulkDeleting,
         isBulkSubmitting,

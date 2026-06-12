@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isValidPhoneNumber, type CountryCode } from 'libphonenumber-js';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/http/constants';
+import { apiClient } from '@/lib/http/fetchWithAuth';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
-import { type AuthProfile, fetchAuthProfile } from '@/lib/auth/authSession';
+import { fetchAuthProfile } from '@/lib/auth/authSession';
+import { useListboxNav } from './useListboxNav';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -29,42 +30,12 @@ export const MAX_FILE_SIZE = 5 * 1024 * 1024;
 export const BOOKING_REF_REQUIRED_SUBJECTS = new Set(['payment', 'cancellation', 'complaint']);
 
 export const SUBJECT_OPTIONS = [
-    {
-        value: 'booking',
-        labelKey: 'booking',
-        icon: 'confirmation_number',
-        description: { vi: 'Tư vấn tour, lịch khởi hành và chỗ còn trống.', en: 'Tour advice, departure dates, and availability.' },
-    },
-    {
-        value: 'payment',
-        labelKey: 'payment',
-        icon: 'payments',
-        description: { vi: 'Xử lý thanh toán, hoàn tiền hoặc hóa đơn.', en: 'Payment, refund, or receipt support.' },
-    },
-    {
-        value: 'cancellation',
-        labelKey: 'cancellation',
-        icon: 'event_busy',
-        description: { vi: 'Đổi lịch, hủy tour hoặc kiểm tra điều kiện.', en: 'Reschedule, cancel, or check conditions.' },
-    },
-    {
-        value: 'complaint',
-        labelKey: 'complaint',
-        icon: 'support_agent',
-        description: { vi: 'Báo sự cố dịch vụ trong hoặc sau chuyến đi.', en: 'Report a service issue during or after travel.' },
-    },
-    {
-        value: 'partnership',
-        labelKey: 'partnership',
-        icon: 'handshake',
-        description: { vi: 'Đề xuất hợp tác, đại lý hoặc nhà cung cấp.', en: 'Partnership, agency, or supplier inquiries.' },
-    },
-    {
-        value: 'general',
-        labelKey: 'general',
-        icon: 'help_outline',
-        description: { vi: 'Câu hỏi khác chưa thuộc các nhóm trên.', en: 'Other questions that do not fit the list.' },
-    },
+    { value: 'booking',      labelKey: 'booking',      icon: 'confirmation_number' },
+    { value: 'payment',      labelKey: 'payment',      icon: 'payments' },
+    { value: 'cancellation', labelKey: 'cancellation', icon: 'event_busy' },
+    { value: 'complaint',    labelKey: 'complaint',    icon: 'support_agent' },
+    { value: 'partnership',  labelKey: 'partnership',  icon: 'handshake' },
+    { value: 'general',      labelKey: 'general',      icon: 'help_outline' },
 ] as const;
 
 export const CONTEXT_FIELD_KEYS: SupportContextField[] = [
@@ -83,7 +54,6 @@ export type ContactInfoItem = {
     body: string;
     note?: string;
     href?: string;
-    action?: string;
 };
 
 type ContactSubmitResponse = {
@@ -139,60 +109,18 @@ export function useContactForm() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
     const [submittedTicketId, setSubmittedTicketId] = useState<number>(0);
     const [submittedAccessCode, setSubmittedAccessCode] = useState('');
-    const [isPhoneDropdownOpen, setIsPhoneDropdownOpen] = useState(false);
-    const [activePhoneIndex, setActivePhoneIndex] = useState(5);
-    const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
-    const [activeSubjectIndex, setActiveSubjectIndex] = useState(0);
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
-    const phoneListboxId = useId();
-    const subjectListboxId = useId();
-    const phoneDropdownRef = useRef<HTMLDivElement>(null);
-    const phoneButtonRef = useRef<HTMLButtonElement>(null);
-    const phoneOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-    const subjectDropdownRef = useRef<HTMLDivElement>(null);
-    const subjectButtonRef = useRef<HTMLButtonElement>(null);
-    const subjectOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const formPanelRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchAuthProfile()
-            .then((profile) => {
-                setAuthProfile(profile);
-                setIsLoggedIn(Boolean(profile));
-            })
-            .catch(() => {
-                setAuthProfile(null);
-                setIsLoggedIn(false);
-            });
+            .then((profile) => setIsLoggedIn(Boolean(profile)))
+            .catch(() => setIsLoggedIn(false));
     }, []);
-
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (phoneDropdownRef.current && !phoneDropdownRef.current.contains(event.target as Node)) {
-                setIsPhoneDropdownOpen(false);
-            }
-            if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(event.target as Node)) {
-                setIsSubjectDropdownOpen(false);
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    useEffect(() => {
-        if (!isSubjectDropdownOpen) return;
-        subjectOptionRefs.current[activeSubjectIndex]?.focus();
-    }, [activeSubjectIndex, isSubjectDropdownOpen]);
-
-    useEffect(() => {
-        if (!isPhoneDropdownOpen) return;
-        phoneOptionRefs.current[activePhoneIndex]?.focus();
-    }, [activePhoneIndex, isPhoneDropdownOpen]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -209,51 +137,49 @@ export function useContactForm() {
     // ── Derived ───────────────────────────────────────────────────────────
 
     const selectedCountry = COUNTRY_CODES.find(c => c.code === formData.phonePrefix) ?? COUNTRY_CODES[5];
-    const selectedCountryIndex = Math.max(0, COUNTRY_CODES.findIndex(c => c.code === formData.phonePrefix));
     const selectedSubject = SUBJECT_OPTIONS.find(o => o.value === formData.subject) ?? SUBJECT_OPTIONS[0];
-    const selectedSubjectIndex = Math.max(0, SUBJECT_OPTIONS.findIndex(o => o.value === formData.subject));
     const isBookingRefRequired = BOOKING_REF_REQUIRED_SUBJECTS.has(formData.subject);
     const supportPhoneHref = `tel:${publicSettings.company_phone.replace(/\s+/g, '')}`;
     const supportEmailHref = `mailto:${publicSettings.company_email}`;
     const heroTitle = t('contact.howCanWeAssist');
-    const bookingRefLabel = language === 'vi' ? 'Mã đặt chỗ' : 'Booking reference';
+    const bookingRefLabel = t('contact.bookingRefLabel');
     const today = new Date();
     const todayYMD = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const bookingRefHelp = isBookingRefRequired
-        ? language === 'vi' ? 'Bắt buộc để nhân viên tra cứu đúng đơn đặt tour của bạn.' : 'Required so support staff can look up the correct booking.'
-        : language === 'vi' ? 'Không bắt buộc với câu hỏi tư vấn chung.' : 'Optional for general planning questions.';
+        ? t('contact.refRequiredHelp')
+        : t('contact.refOptionalHelp');
     const contextLabels: Record<SupportContextField, string> = {
-        tourInterest:           language === 'vi' ? 'Tour/điểm đến quan tâm'    : 'Tour/destination of interest',
-        preferredTravelDate:    language === 'vi' ? 'Ngày đi dự kiến'           : 'Preferred travel date',
-        guestCount:             language === 'vi' ? 'Số khách'                  : 'Guests',
-        preferredContactMethod: language === 'vi' ? 'Kênh liên hệ ưu tiên'     : 'Preferred contact channel',
-        paymentMethod:          language === 'vi' ? 'Phương thức thanh toán'    : 'Payment method',
-        requestedChangeDate:    language === 'vi' ? 'Ngày muốn đổi sang'        : 'Requested new date',
-        cancellationReason:     language === 'vi' ? 'Lý do đổi/hủy'            : 'Reason for change/cancellation',
-        issueOccurredAt:        language === 'vi' ? 'Thời điểm xảy ra sự cố'   : 'Issue time',
-        companyName:            language === 'vi' ? 'Tên công ty/đơn vị'        : 'Company/organization',
-        partnerType:            language === 'vi' ? 'Vai trò hợp tác'           : 'Partnership type',
-        website:                language === 'vi' ? 'Website/kênh tham khảo'   : 'Website/reference channel',
+        tourInterest:           t('contact.contextLabels.tourInterest'),
+        preferredTravelDate:    t('contact.contextLabels.preferredTravelDate'),
+        guestCount:             t('contact.contextLabels.guestCount'),
+        preferredContactMethod: t('contact.contextLabels.preferredContactMethod'),
+        paymentMethod:          t('contact.contextLabels.paymentMethod'),
+        requestedChangeDate:    t('contact.contextLabels.requestedChangeDate'),
+        cancellationReason:     t('contact.contextLabels.cancellationReason'),
+        issueOccurredAt:        t('contact.contextLabels.issueOccurredAt'),
+        companyName:            t('contact.contextLabels.companyName'),
+        partnerType:            t('contact.contextLabels.partnerType'),
+        website:                t('contact.contextLabels.website'),
     };
     const contactMethodOptions: SupportSelectOption[] = [
-        { value: '',      label: language === 'vi' ? 'Chọn kênh liên hệ' : 'Select contact channel' },
-        { value: 'zalo',  label: 'Zalo' },
-        { value: 'phone', label: language === 'vi' ? 'Điện thoại' : 'Phone' },
-        { value: 'email', label: 'Email' },
+        { value: '',      label: t('contact.select.contactChannel') },
+        { value: 'zalo',  label: t('contact.contactMethods.zalo') },
+        { value: 'phone', label: t('contact.contactMethods.phone') },
+        { value: 'email', label: t('contact.contactMethods.email') },
     ];
     const paymentMethodOptions: SupportSelectOption[] = [
-        { value: '',              label: language === 'vi' ? 'Chọn phương thức'         : 'Select method' },
-        { value: 'bank_transfer', label: language === 'vi' ? 'Chuyển khoản'             : 'Bank transfer' },
-        { value: 'card',          label: language === 'vi' ? 'Thẻ ngân hàng'            : 'Card' },
-        { value: 'wallet',        label: language === 'vi' ? 'Ví điện tử'               : 'E-wallet' },
-        { value: 'cash',          label: language === 'vi' ? 'Thanh toán trực tiếp'     : 'Pay in person' },
+        { value: '',              label: t('contact.select.paymentMethod') },
+        { value: 'bank_transfer', label: t('contact.paymentMethods.bank_transfer') },
+        { value: 'card',          label: t('contact.paymentMethods.card') },
+        { value: 'wallet',        label: t('contact.paymentMethods.wallet') },
+        { value: 'cash',          label: t('contact.paymentMethods.cash') },
     ];
     const partnerTypeOptions: SupportSelectOption[] = [
-        { value: '',          label: language === 'vi' ? 'Chọn vai trò'                  : 'Select role' },
-        { value: 'agency',    label: language === 'vi' ? 'Đại lý'                        : 'Agency' },
-        { value: 'supplier',  label: language === 'vi' ? 'Nhà cung cấp'                  : 'Supplier' },
-        { value: 'corporate', label: language === 'vi' ? 'Khách đoàn/doanh nghiệp'       : 'Corporate group' },
-        { value: 'other',     label: language === 'vi' ? 'Đối tác khác'                  : 'Other partner' },
+        { value: '',          label: t('contact.select.partnerRole') },
+        { value: 'agency',    label: t('contact.partnerTypes.agency') },
+        { value: 'supplier',  label: t('contact.partnerTypes.supplier') },
+        { value: 'corporate', label: t('contact.partnerTypes.corporate') },
+        { value: 'other',     label: t('contact.partnerTypes.other') },
     ];
 
     // ── Style helpers ─────────────────────────────────────────────────────
@@ -297,9 +223,7 @@ export function useContactForm() {
         else if (!isValidPhoneNumber(formData.phone, selectedCountry.iso.toUpperCase() as CountryCode)) newErrors.phone = t('contact.errors.invalidPhone');
 
         if (isBookingRefRequired && !formData.reference.trim()) {
-            newErrors.reference = language === 'vi'
-                ? 'Vui lòng nhập mã đặt chỗ cho loại yêu cầu này'
-                : 'Please enter your booking reference for this request type';
+            newErrors.reference = t('contact.errors.refRequiredForType');
         }
 
         if (formData.subject === 'booking') {
@@ -307,14 +231,12 @@ export function useContactForm() {
             if (!contextFields.preferredTravelDate.trim()) {
                 newErrors.preferredTravelDate = required;
             } else if (contextFields.preferredTravelDate < todayYMD) {
-                newErrors.preferredTravelDate = language === 'vi'
-                    ? 'Ngày đi dự kiến không thể là ngày đã qua'
-                    : 'Preferred travel date cannot be in the past';
+                newErrors.preferredTravelDate = t('contact.errors.travelDatePast');
             }
             if (!contextFields.guestCount.trim()) {
                 newErrors.guestCount = required;
             } else if (!Number.isInteger(Number(contextFields.guestCount)) || Number(contextFields.guestCount) < 1) {
-                newErrors.guestCount = language === 'vi' ? 'Vui lòng nhập số khách hợp lệ' : 'Please enter a valid guest count';
+                newErrors.guestCount = t('contact.errors.invalidGuestCount');
             }
             if (!contextFields.preferredContactMethod.trim()) newErrors.preferredContactMethod = required;
         }
@@ -323,9 +245,7 @@ export function useContactForm() {
 
         if (formData.subject === 'cancellation') {
             if (contextFields.requestedChangeDate && contextFields.requestedChangeDate < todayYMD) {
-                newErrors.requestedChangeDate = language === 'vi'
-                    ? 'Ngày muốn đổi không thể là ngày đã qua'
-                    : 'Requested new date cannot be in the past';
+                newErrors.requestedChangeDate = t('contact.errors.changeDatePast');
             }
             if (!contextFields.cancellationReason.trim()) newErrors.cancellationReason = required;
         }
@@ -337,7 +257,7 @@ export function useContactForm() {
             if (!contextFields.partnerType.trim()) newErrors.partnerType = required;
             if (contextFields.website.trim()) {
                 try { new URL(contextFields.website.trim()); } catch {
-                    newErrors.website = language === 'vi' ? 'Vui lòng nhập URL hợp lệ' : 'Please enter a valid URL';
+                    newErrors.website = t('contact.errors.invalidUrl');
                 }
             }
         }
@@ -382,20 +302,17 @@ export function useContactForm() {
             Object.entries(formData).forEach(([key, value]) => body.append(key, value));
             Object.entries(contextFields).forEach(([key, value]) => { if (value.trim()) body.append(key, value.trim()); });
             if (selectedFile) body.append('attachment', selectedFile);
-            const userId = authProfile?.id ?? (authProfile as unknown as Record<string, unknown>)?.userId;
-            if (userId) body.append('userId', String(userId));
-            const response = await fetch(`${API_BASE_URL}/contact/send`, { method: 'POST', body });
-            if (!response.ok) throw new Error('Server error');
-            const data = (await response.json()) as ContactSubmitResponse;
-            setSubmittedTicketId(data.ticketId ?? 0);
-            setSubmittedAccessCode(data.accessCode ?? '');
+            // apiClient gửi kèm cookie (userId lấy từ JWT phía server) và tự bóc envelope { data }
+            const result = await apiClient<ContactSubmitResponse>('/contact/send', { method: 'POST', body }, { silent: true });
+            if (!result.ok) {
+                setErrors({ submit: result.error || t('contact.errors.submitFailed') });
+                return;
+            }
+            setSubmittedTicketId(result.data.ticketId ?? 0);
+            setSubmittedAccessCode(result.data.accessCode ?? '');
             setIsSubmitted(true);
         } catch {
-            setErrors({
-                submit: language === 'vi'
-                    ? 'Gửi thất bại. Vui lòng thử lại.'
-                    : 'Unable to send your request. Please try again.',
-            });
+            setErrors({ submit: t('contact.errors.submitFailed') });
         } finally {
             setIsSubmitting(false);
         }
@@ -417,101 +334,29 @@ export function useContactForm() {
         }, 0);
     };
 
-    // ── Phone dropdown ────────────────────────────────────────────────────
+    // ── Dropdown điều hướng (mã quốc gia & chủ đề) ───────────────────────────
 
-    const openPhoneDropdown = (index = selectedCountryIndex) => {
-        setActivePhoneIndex(index);
-        setIsPhoneDropdownOpen(true);
-    };
+    const phoneNav = useListboxNav({
+        options: COUNTRY_CODES,
+        selectedValue: formData.phonePrefix,
+        getOptionValue: country => country.code,
+        onChange: nextPrefix => setFormData(current => ({ ...current, phonePrefix: nextPrefix })),
+    });
 
-    const closePhoneDropdown = () => {
-        setIsPhoneDropdownOpen(false);
-        phoneButtonRef.current?.focus();
-    };
-
-    const movePhoneFocus = (nextIndex: number) => {
-        setActivePhoneIndex((nextIndex + COUNTRY_CODES.length) % COUNTRY_CODES.length);
-    };
-
-    const handlePhonePrefixChange = (nextPrefix: string) => {
-        const nextIndex = COUNTRY_CODES.findIndex(c => c.code === nextPrefix);
-        setFormData(current => ({ ...current, phonePrefix: nextPrefix }));
-        setIsPhoneDropdownOpen(false);
-        setActivePhoneIndex(Math.max(0, nextIndex));
-        phoneButtonRef.current?.focus();
-    };
-
-    const handlePhoneButtonClick = () => {
-        if (isPhoneDropdownOpen) { setIsPhoneDropdownOpen(false); return; }
-        openPhoneDropdown(selectedCountryIndex);
-    };
-
-    const handlePhoneButtonKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-        if (event.key === 'Escape') { setIsPhoneDropdownOpen(false); return; }
-        if (event.key === 'ArrowDown') { event.preventDefault(); openPhoneDropdown(Math.min(selectedCountryIndex + 1, COUNTRY_CODES.length - 1)); return; }
-        if (event.key === 'ArrowUp')   { event.preventDefault(); openPhoneDropdown(Math.max(selectedCountryIndex - 1, 0)); return; }
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPhoneDropdown(selectedCountryIndex); }
-    };
-
-    const handlePhoneOptionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, countryCode: string) => {
-        if (event.key === 'Escape')    { event.preventDefault(); closePhoneDropdown(); return; }
-        if (event.key === 'ArrowDown') { event.preventDefault(); movePhoneFocus(activePhoneIndex + 1); return; }
-        if (event.key === 'ArrowUp')   { event.preventDefault(); movePhoneFocus(activePhoneIndex - 1); return; }
-        if (event.key === 'Home')      { event.preventDefault(); movePhoneFocus(0); return; }
-        if (event.key === 'End')       { event.preventDefault(); movePhoneFocus(COUNTRY_CODES.length - 1); return; }
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handlePhonePrefixChange(countryCode); }
-    };
-
-    // ── Subject dropdown ──────────────────────────────────────────────────
-
-    const openSubjectDropdown = (index = selectedSubjectIndex) => {
-        setActiveSubjectIndex(index);
-        setIsSubjectDropdownOpen(true);
-    };
-
-    const closeSubjectDropdown = () => {
-        setIsSubjectDropdownOpen(false);
-        subjectButtonRef.current?.focus();
-    };
-
-    const moveSubjectFocus = (nextIndex: number) => {
-        setActiveSubjectIndex((nextIndex + SUBJECT_OPTIONS.length) % SUBJECT_OPTIONS.length);
-    };
-
-    const handleSubjectChange = (nextSubject: string) => {
-        const nextIndex = SUBJECT_OPTIONS.findIndex(o => o.value === nextSubject);
-        setFormData(current => ({ ...current, subject: nextSubject }));
-        setIsSubjectDropdownOpen(false);
-        setActiveSubjectIndex(Math.max(0, nextIndex));
-        subjectButtonRef.current?.focus();
-        setErrors(current => {
-            const next = { ...current };
-            if (!BOOKING_REF_REQUIRED_SUBJECTS.has(nextSubject)) delete next.reference;
-            CONTEXT_FIELD_KEYS.forEach(field => { delete next[field]; });
-            return next;
-        });
-    };
-
-    const handleSubjectButtonClick = () => {
-        if (isSubjectDropdownOpen) { setIsSubjectDropdownOpen(false); return; }
-        openSubjectDropdown(selectedSubjectIndex);
-    };
-
-    const handleSubjectButtonKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-        if (event.key === 'Escape') { setIsSubjectDropdownOpen(false); return; }
-        if (event.key === 'ArrowDown') { event.preventDefault(); openSubjectDropdown(Math.min(selectedSubjectIndex + 1, SUBJECT_OPTIONS.length - 1)); return; }
-        if (event.key === 'ArrowUp')   { event.preventDefault(); openSubjectDropdown(Math.max(selectedSubjectIndex - 1, 0)); return; }
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSubjectDropdown(selectedSubjectIndex); }
-    };
-
-    const handleSubjectOptionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, optionValue: string) => {
-        if (event.key === 'Escape')    { event.preventDefault(); closeSubjectDropdown(); return; }
-        if (event.key === 'ArrowDown') { event.preventDefault(); moveSubjectFocus(activeSubjectIndex + 1); return; }
-        if (event.key === 'ArrowUp')   { event.preventDefault(); moveSubjectFocus(activeSubjectIndex - 1); return; }
-        if (event.key === 'Home')      { event.preventDefault(); moveSubjectFocus(0); return; }
-        if (event.key === 'End')       { event.preventDefault(); moveSubjectFocus(SUBJECT_OPTIONS.length - 1); return; }
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleSubjectChange(optionValue); }
-    };
+    const subjectNav = useListboxNav({
+        options: SUBJECT_OPTIONS,
+        selectedValue: formData.subject,
+        getOptionValue: option => option.value,
+        onChange: nextSubject => {
+            setFormData(current => ({ ...current, subject: nextSubject }));
+            setErrors(current => {
+                const next = { ...current };
+                if (!BOOKING_REF_REQUIRED_SUBJECTS.has(nextSubject)) delete next.reference;
+                CONTEXT_FIELD_KEYS.forEach(field => { delete next[field]; });
+                return next;
+            });
+        },
+    });
 
     return {
         // i18n
@@ -529,24 +374,22 @@ export function useContactForm() {
         isLoggedIn,
         submittedTicketId,
         submittedAccessCode,
-        isPhoneDropdownOpen,
-        setIsPhoneDropdownOpen,
-        activePhoneIndex,
-        setActivePhoneIndex,
-        isSubjectDropdownOpen,
-        setIsSubjectDropdownOpen,
-        activeSubjectIndex,
-        setActiveSubjectIndex,
+        isPhoneDropdownOpen: phoneNav.isOpen,
+        activePhoneIndex: phoneNav.activeIndex,
+        setActivePhoneIndex: phoneNav.setActiveIndex,
+        isSubjectDropdownOpen: subjectNav.isOpen,
+        activeSubjectIndex: subjectNav.activeIndex,
+        setActiveSubjectIndex: subjectNav.setActiveIndex,
         publicSettings,
         // refs & ids
-        phoneListboxId,
-        subjectListboxId,
-        phoneDropdownRef,
-        phoneButtonRef,
-        phoneOptionRefs,
-        subjectDropdownRef,
-        subjectButtonRef,
-        subjectOptionRefs,
+        phoneListboxId: phoneNav.listboxId,
+        subjectListboxId: subjectNav.listboxId,
+        phoneDropdownRef: phoneNav.dropdownRef,
+        phoneButtonRef: phoneNav.buttonRef,
+        phoneOptionRefs: phoneNav.optionRefs,
+        subjectDropdownRef: subjectNav.dropdownRef,
+        subjectButtonRef: subjectNav.buttonRef,
+        subjectOptionRefs: subjectNav.optionRefs,
         formPanelRef,
         fileInputRef,
         // derived
@@ -573,13 +416,13 @@ export function useContactForm() {
         removeFile,
         handleSubmit,
         resetForm,
-        handlePhoneButtonClick,
-        handlePhoneButtonKeyDown,
-        handlePhoneOptionKeyDown,
-        handlePhonePrefixChange,
-        handleSubjectButtonClick,
-        handleSubjectButtonKeyDown,
-        handleSubjectOptionKeyDown,
-        handleSubjectChange,
+        handlePhoneButtonClick: phoneNav.handleButtonClick,
+        handlePhoneButtonKeyDown: phoneNav.handleButtonKeyDown,
+        handlePhoneOptionKeyDown: phoneNav.handleOptionKeyDown,
+        handlePhonePrefixChange: phoneNav.commit,
+        handleSubjectButtonClick: subjectNav.handleButtonClick,
+        handleSubjectButtonKeyDown: subjectNav.handleButtonKeyDown,
+        handleSubjectOptionKeyDown: subjectNav.handleOptionKeyDown,
+        handleSubjectChange: subjectNav.commit,
     };
 }

@@ -116,5 +116,7 @@ export function useTourFormPrefill({
     setItinerary(
       initialData.itinerary?.length ? mapItineraryToForm(initialData.itinerary) : [],
     );
+    // Effect prefill: chỉ chạy lại khi nguồn dữ liệu đổi; các setState là stable, cố ý không đưa vào deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, initialData, initialDestinations]);
 }

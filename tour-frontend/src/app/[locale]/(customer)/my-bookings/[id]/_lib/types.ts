@@ -67,6 +67,7 @@ export type BookingDetail = {
     paymentStatus: string;
     paymentMethod?: string | null;
     createdAt: string;
+    holdExpiresAt?: string | null;
     departureDate?: string | null;
     meetingTime?: string | null;
     pickupLocation?: string | null;

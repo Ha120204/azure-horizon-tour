@@ -5,7 +5,65 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ArticleStatus, Prisma } from '@prisma/client';
+import sanitizeHtml from 'sanitize-html';
 import { PrismaService } from '../prisma/prisma.service';
+
+// Whitelist khớp với bộ format của trình soạn thảo Quill ở admin (QUILL_FORMATS):
+// header(h1-3), bold/italic/underline/strike, blockquote, list, link, image, align.
+function sanitizeArticleContent(html?: string): string {
+  if (!html) return html ?? '';
+  return sanitizeHtml(html, {
+    allowedTags: [
+      'p', 'br', 'h1', 'h2', 'h3', 'strong', 'em', 'u', 's',
+      'blockquote', 'ol', 'ul', 'li', 'a', 'img',
+    ],
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt'],
+      // Quill lưu căn lề bằng class ql-align-* trên block element
+      p: ['class'], h1: ['class'], h2: ['class'], h3: ['class'],
+      blockquote: ['class'], li: ['data-list', 'class'],
+    },
+    allowedClasses: {
+      '*': ['ql-align-center', 'ql-align-right', 'ql-align-justify'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+    allowedSchemesByTag: { img: ['http', 'https', 'data'] },
+    transformTags: {
+      a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer nofollow' }),
+    },
+  });
+}
+
+function normalizeLocale(locale?: string): 'vi' | 'en' {
+  return locale === 'en' ? 'en' : 'vi';
+}
+
+function hasText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+// Trả bản tiếng Anh khi locale='en' (fallback về tiếng Việt nếu field En trống).
+// Luôn loại bỏ các field *En khỏi response trả về client.
+function localizeArticle<
+  T extends {
+    title?: string;
+    titleEn?: string | null;
+    excerpt?: string;
+    excerptEn?: string | null;
+    content?: string;
+    contentEn?: string | null;
+  },
+>(article: T, locale: 'vi' | 'en') {
+  const { titleEn, excerptEn, contentEn, ...rest } = article;
+  if (locale !== 'en') return rest;
+  return {
+    ...rest,
+    ...(hasText(titleEn) && { title: titleEn }),
+    ...(hasText(excerptEn) && { excerpt: excerptEn }),
+    ...(hasText(contentEn) && { content: contentEn }),
+  };
+}
 
 function generateSlug(title: string): string {
   return title
@@ -22,11 +80,14 @@ function generateSlug(title: string): string {
 type ArticleDraftInput = {
   slug?: string;
   title?: string;
+  titleEn?: string | null;
   category?: string;
   excerpt?: string;
+  excerptEn?: string | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
   content?: string;
+  contentEn?: string | null;
   imageUrl?: string;
   author?: string;
   readTime?: number;
@@ -77,35 +138,78 @@ export class ArticleService {
 
   // ─── Public API (trang user — chỉ PUBLISHED) ────────────────────────────────
 
-  async findAll(category?: string) {
-    const where: Prisma.ArticleWhereInput = { status: ArticleStatus.PUBLISHED, deletedAt: null };
+  async findAll(category?: string, page = 1, limit = 6, localeInput?: string) {
+    const locale = normalizeLocale(localeInput);
+    // Bài nổi bật hiển thị riêng ở hero (findFeatured) → loại khỏi lưới để phân trang đều
+    const where: Prisma.ArticleWhereInput = {
+      status: ArticleStatus.PUBLISHED,
+      deletedAt: null,
+      isFeatured: false,
+    };
     if (category && category !== 'ALL') {
       where.category = category;
     }
-    return this.prisma.article.findMany({
-      where,
-      orderBy: { publishedAt: 'desc' },
-      select: {
-        id: true, slug: true, category: true, title: true,
-        excerpt: true, seoTitle: true, seoDescription: true, imageUrl: true, author: true,
-        readTime: true, isFeatured: true, publishedAt: true,
+
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [articles, totalItems] = await Promise.all([
+      this.prisma.article.findMany({
+        where,
+        orderBy: { publishedAt: 'desc' },
+        skip,
+        take: safeLimit,
+        select: {
+          id: true, slug: true, category: true, title: true, titleEn: true,
+          excerpt: true, excerptEn: true, seoTitle: true, seoDescription: true,
+          imageUrl: true, author: true, readTime: true, isFeatured: true, publishedAt: true,
+        },
+      }),
+      this.prisma.article.count({ where }),
+    ]);
+
+    return {
+      data: articles.map((article) => localizeArticle(article, locale)),
+      meta: {
+        totalItems,
+        totalPages: Math.max(1, Math.ceil(totalItems / safeLimit)),
+        currentPage: safePage,
+        itemsPerPage: safeLimit,
       },
-    });
+    };
   }
 
-  async findFeatured() {
-    return this.prisma.article.findFirst({
+  async findFeatured(localeInput?: string) {
+    const locale = normalizeLocale(localeInput);
+    const article = await this.prisma.article.findFirst({
       where: {
         isFeatured: true,
         status: ArticleStatus.PUBLISHED,
         deletedAt: null,
       },
       orderBy: { publishedAt: 'desc' },
+      select: {
+        id: true, slug: true, category: true, title: true, titleEn: true,
+        excerpt: true, excerptEn: true, seoTitle: true, seoDescription: true,
+        imageUrl: true, author: true, readTime: true, isFeatured: true, publishedAt: true,
+      },
     });
+    return article ? localizeArticle(article, locale) : null;
   }
 
-  async findBySlug(slug: string) {
-    const article = await this.prisma.article.findUnique({ where: { slug } });
+  async findBySlug(slug: string, localeInput?: string) {
+    const locale = normalizeLocale(localeInput);
+    const article = await this.prisma.article.findUnique({
+      where: { slug },
+      select: {
+        id: true, slug: true, category: true, title: true, titleEn: true,
+        excerpt: true, excerptEn: true, content: true, contentEn: true,
+        seoTitle: true, seoDescription: true,
+        imageUrl: true, author: true, readTime: true, isFeatured: true,
+        publishedAt: true, status: true, deletedAt: true,
+      },
+    });
     if (
       !article ||
       article.status !== ArticleStatus.PUBLISHED ||
@@ -113,7 +217,7 @@ export class ArticleService {
     ) {
       return null;
     }
-    return article;
+    return localizeArticle(article, locale);
   }
 
   // ─── Admin API ─────────────────────────────────────────────────────────────
@@ -332,11 +436,14 @@ export class ArticleService {
       data: {
         slug,
         title,
+        titleEn: dto.titleEn?.trim() || null,
         category: (dto.category || 'GUIDES').toUpperCase(),
         excerpt: dto.excerpt?.trim() ?? '',
+        excerptEn: dto.excerptEn?.trim() || null,
         seoTitle: dto.seoTitle?.trim() || null,
         seoDescription: dto.seoDescription?.trim() || null,
-        content: dto.content ?? '',
+        content: sanitizeArticleContent(dto.content),
+        contentEn: hasText(dto.contentEn) ? sanitizeArticleContent(dto.contentEn) : null,
         imageUrl: dto.imageUrl?.trim() ?? '',
         author: dto.author?.trim() ?? '',
         readTime: dto.readTime ?? 1,
@@ -436,12 +543,17 @@ export class ArticleService {
     if (dto.category !== undefined) {
       updateData.category = dto.category ? dto.category.toUpperCase() : dto.category;
     }
+    if (dto.titleEn !== undefined) updateData.titleEn = String(dto.titleEn ?? '').trim() || null;
     if (dto.excerpt !== undefined) updateData.excerpt = dto.excerpt.trim();
+    if (dto.excerptEn !== undefined) updateData.excerptEn = String(dto.excerptEn ?? '').trim() || null;
     if (dto.seoTitle !== undefined) updateData.seoTitle = String(dto.seoTitle ?? '').trim() || null;
     if (dto.seoDescription !== undefined) {
       updateData.seoDescription = String(dto.seoDescription ?? '').trim() || null;
     }
-    if (dto.content !== undefined) updateData.content = dto.content;
+    if (dto.content !== undefined) updateData.content = sanitizeArticleContent(dto.content);
+    if (dto.contentEn !== undefined) {
+      updateData.contentEn = hasText(dto.contentEn) ? sanitizeArticleContent(dto.contentEn) : null;
+    }
     if (dto.imageUrl !== undefined) updateData.imageUrl = dto.imageUrl.trim();
     if (dto.author !== undefined) updateData.author = dto.author.trim();
     if (dto.readTime !== undefined) updateData.readTime = dto.readTime || 1;

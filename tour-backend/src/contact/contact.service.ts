@@ -133,6 +133,8 @@ export class ContactService {
 
   async sendContactEmail(
     dto: SendContactDto,
+    userId?: number,
+    file?: Express.Multer.File,
   ): Promise<{ message: string; ticketId: number; accessCode?: string }> {
     const reference = dto.reference?.trim();
     if (SUBJECTS_REQUIRING_REFERENCE.has(dto.subject) && !reference) {
@@ -225,13 +227,16 @@ export class ContactService {
       </div>
     `;
 
-    // Gửi đến admin
+    // Gửi đến admin — đính kèm file thật của khách (nếu có)
     await this.mailService.sendMail({
       from: `"${companyName} Contact" <${mailSender}>`,
       to: adminEmail ?? supportEmail,
       replyTo: dto.email,
       subject: `[Contact] ${subjectLabel} — ${dto.name}`,
       html,
+      attachments: file
+        ? [{ filename: file.originalname, content: file.buffer }]
+        : undefined,
     });
 
     this.logger.log('Contact email sent successfully.');
@@ -263,7 +268,7 @@ export class ContactService {
         subject: subjectLabel,
         message: ticketMessage,
         category: CATEGORY_MAP[dto.subject] ?? 'general',
-        userId: dto.userId ? Number(dto.userId) : undefined,
+        userId,
       });
       ticketId = ticket.id;
       accessCode = ticket.accessCode ?? undefined;

@@ -16,16 +16,30 @@ import HomeClient, { type TourSummary } from './_components/HomeClient';
 
 // ─── SEO Metadata ─────────────────────────────────────────────────────────────
 
-export const metadata: Metadata = {
-  title: 'Azure Horizon — Premium Tour Booking',
-  description:
-    'Khám phá các tour du lịch cao cấp trong và ngoài nước. Đặt tour dễ dàng, trải nghiệm đẳng cấp cùng Azure Horizon.',
-  openGraph: {
-    title: 'Azure Horizon — Premium Tour Booking',
-    description: 'Khám phá các tour du lịch cao cấp trong và ngoài nước.',
-    type: 'website',
-  },
-};
+export async function generateMetadata({ params }: HomePageProps): Promise<Metadata> {
+  const { locale } = await params;
+  const isVi = locale === 'vi';
+
+  const title = isVi
+    ? 'Azure Horizon — Đặt Tour Du Lịch Cao Cấp'
+    : 'Azure Horizon — Premium Tour Booking';
+  const description = isVi
+    ? 'Khám phá các tour du lịch cao cấp trong và ngoài nước. Đặt tour dễ dàng, trải nghiệm đẳng cấp cùng Azure Horizon.'
+    : 'Discover premium domestic and international tours. Easy booking and a world-class experience with Azure Horizon.';
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+    },
+    alternates: {
+      canonical: `/${locale}`,
+    },
+  };
+}
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
 
@@ -38,7 +52,12 @@ export const revalidate = 300;
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 
-async function fetchFeaturedTours(locale: string): Promise<TourSummary[]> {
+interface FeaturedToursResult {
+  tours: TourSummary[];
+  hasError: boolean;
+}
+
+async function fetchFeaturedTours(locale: string): Promise<FeaturedToursResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/tour?locale=${locale}&limit=6`, {
       // next.revalidate kế thừa từ `export const revalidate` ở module level,
@@ -48,16 +67,17 @@ async function fetchFeaturedTours(locale: string): Promise<TourSummary[]> {
 
     if (!res.ok) {
       console.error(`[Homepage] fetchFeaturedTours failed: ${res.status}`);
-      return [];
+      return { tours: [], hasError: true };
     }
 
     const payload = await res.json();
     // Backend trả về { data: TourSummary[], meta: {...} } qua TransformInterceptor
-    return Array.isArray(payload?.data) ? (payload.data as TourSummary[]) : [];
+    const tours = Array.isArray(payload?.data) ? (payload.data as TourSummary[]) : [];
+    return { tours, hasError: false };
   } catch (error) {
-    // Không crash trang khi backend down — trả về mảng rỗng
+    // Không crash trang khi backend down — phân biệt lỗi với danh sách rỗng
     console.error('[Homepage] fetchFeaturedTours error:', error);
-    return [];
+    return { tours: [], hasError: true };
   }
 }
 
@@ -71,7 +91,7 @@ export default async function HomePage({ params }: HomePageProps) {
   const { locale } = await params;
 
   // Fetch tours song song nếu sau này có nhiều data source
-  const initialTours = await fetchFeaturedTours(locale);
+  const { tours, hasError } = await fetchFeaturedTours(locale);
 
-  return <HomeClient initialTours={initialTours} />;
+  return <HomeClient initialTours={tours} loadError={hasError} />;
 }

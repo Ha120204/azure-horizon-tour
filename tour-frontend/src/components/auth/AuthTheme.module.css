@@ -519,6 +519,31 @@
   color: white;
 }
 
+.otpDigit {
+  width: 48px;
+  height: 56px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  border: 1px solid var(--auth-input-border);
+  border-radius: var(--auth-radius-sm);
+  background: var(--auth-input-surface);
+  color: var(--auth-ink);
+  box-shadow: var(--auth-input-shadow);
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.otpDigit:focus {
+  border-color: var(--auth-primary);
+  box-shadow: var(--auth-focus-ring), var(--auth-input-shadow);
+  transform: translateY(-2px);
+}
+
+.otpDigitError {
+  border-color: var(--auth-danger);
+}
+
 @keyframes authFadeUp {
   from {
     opacity: 0;
@@ -640,6 +665,7 @@
     transform: none;
   }
 
+  .otpDigit:focus,
   .fieldControl:focus-within,
   .primaryButton:not(:disabled):hover,
   .primaryButton:active,

@@ -1,4 +1,5 @@
 import type { TourFormData, SaleCategory } from "./types";
+import { TOUR_TYPE_OPTIONS } from "@/lib/tour/tourTypes";
 
 export const getTodayDateString = (): string => {
   const date = new Date();
@@ -65,14 +66,13 @@ export const toUiDepartureCategory = (
 };
 
 // ── UI Option Lists ───────────────────────────────────────────────────────
-export const TOUR_TYPES = [
-  { value: "Tour Gia Đình", icon: "family_restroom", label: "Tour Gia Đình" },
-  { value: "Tour Cao Cấp", icon: "diamond", label: "Tour Cao Cấp" },
-  { value: "Nghỉ Dưỡng", icon: "beach_access", label: "Nghỉ Dưỡng" },
-  { value: "Khám Phá", icon: "hiking", label: "Khám Phá" },
-  { value: "Văn Hóa & Lịch Sử", icon: "museum", label: "Văn Hóa & Lịch Sử" },
-  { value: "Tour Ghép Đoàn", icon: "groups", label: "Tour Ghép Đoàn" },
-];
+// Label admin = chính value (tiếng Việt); value/icon lấy từ nguồn chung để
+// không lệch với filter khách hàng.
+export const TOUR_TYPES = TOUR_TYPE_OPTIONS.map((option) => ({
+  value: option.value,
+  icon: option.icon,
+  label: option.value,
+}));
 
 export const DURATION_PRESETS = [
   "1 Ngày",

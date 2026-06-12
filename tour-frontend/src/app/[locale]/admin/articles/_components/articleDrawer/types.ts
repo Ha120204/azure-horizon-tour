@@ -3,11 +3,14 @@ export interface Article {
     id: number;
     slug: string;
     title: string;
+    titleEn?: string | null;
     category: string;
     excerpt: string;
+    excerptEn?: string | null;
     seoTitle?: string | null;
     seoDescription?: string | null;
     content?: string;
+    contentEn?: string | null;
     imageUrl: string;
     author: string;
     readTime: number;
@@ -31,11 +34,14 @@ export interface ArticleDrawerProps {
 export type ArticleForm = {
     slug: string;
     title: string;
+    titleEn: string;
     category: string;
     excerpt: string;
+    excerptEn: string;
     seoTitle: string;
     seoDescription: string;
     content: string;
+    contentEn: string;
     imageUrl: string;
     author: string;
     readTime: number;
@@ -48,11 +54,14 @@ export type SaveAction = 'draft' | 'submit' | 'publish';
 export const EMPTY_FORM: ArticleForm = {
     slug: '',
     title: '',
+    titleEn: '',
     category: 'GUIDES',
     excerpt: '',
+    excerptEn: '',
     seoTitle: '',
     seoDescription: '',
     content: '',
+    contentEn: '',
     imageUrl: '',
     author: '',
     readTime: 1,
@@ -102,11 +111,14 @@ export const getErrorMessage = (error: unknown, fallback: string) =>
 export const articleToForm = (article?: Partial<Article> | null): ArticleForm => ({
     slug:       article?.slug       ?? '',
     title:      article?.title      ?? '',
+    titleEn:    article?.titleEn     ?? '',
     category:   article?.category   ?? 'GUIDES',
     excerpt:    article?.excerpt    ?? '',
+    excerptEn:  article?.excerptEn   ?? '',
     seoTitle:   article?.seoTitle   ?? '',
     seoDescription: article?.seoDescription ?? '',
     content:    article?.content    ?? '',
+    contentEn:  article?.contentEn   ?? '',
     imageUrl:   article?.imageUrl   ?? '',
     author:     article?.author     ?? '',
     readTime:   article?.readTime   ?? 1,

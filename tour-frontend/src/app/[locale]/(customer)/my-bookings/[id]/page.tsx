@@ -19,7 +19,7 @@ import {
     getBookingPresentationKey,
     type CustomerBookingStatus,
     type CustomerPaymentStatus,
-} from '../_lib/bookingStatus';
+} from '@/lib/booking/bookingStatus';
 
 function BookingNotFound() {
     return (

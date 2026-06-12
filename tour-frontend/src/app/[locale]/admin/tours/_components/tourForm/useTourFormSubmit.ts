@@ -3,6 +3,7 @@
 import { API_BASE_URL } from "@/lib/http/constants";
 import { fetchWithAuth } from "@/lib/http/fetchWithAuth";
 import type {
+  InitialTourData,
   TourFormData,
   TourPackage,
   TourDeparture,
@@ -30,13 +31,13 @@ type TourFormSubmitConfig = {
   durationMode: "preset" | "custom";
   customDuration: string;
   mode: "create" | "edit";
-  initialData?: Record<string, unknown> & { id?: number; status?: string };
+  initialData?: InitialTourData;
   isStaff: boolean;
   isAdminLike: boolean;
   setSaveAction: (action: "draft" | "submit" | null) => void;
   setGlobalError: (msg: string) => void;
   validateForReview: () => boolean;
-  onSuccess: (message: string, data: unknown, action: "draft" | "submit") => void;
+  onSuccess: (message: string, data?: InitialTourData, action?: "draft" | "submit") => void;
   onClose: () => void;
 };
 

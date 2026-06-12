@@ -3,11 +3,10 @@ import type { VoucherDetail, UserVoucherEntry } from './types';
 import { formatDateTime, getInitials } from './utils';
 
 export default function VoucherUsersCard({
-  data,
   savedCount,
   userVouchers,
 }: {
-  data: VoucherDetail;
+  data?: VoucherDetail;
   savedCount: number;
   userVouchers: UserVoucherEntry[];
 }) {

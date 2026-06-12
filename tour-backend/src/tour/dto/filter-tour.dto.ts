@@ -1,4 +1,9 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, Matches, ValidateIf } from 'class-validator';
+
+// Số không âm, cho phép thập phân (dùng cho giá, rating)
+const NON_NEGATIVE_NUMBER = /^\d+(\.\d+)?$/;
+// Số nguyên dương (page/limit) — loại 0, số âm và số thập phân
+const POSITIVE_INTEGER = /^[1-9]\d*$/;
 
 export class FilterTourDto {
   @IsOptional()
@@ -10,11 +15,14 @@ export class FilterTourDto {
   travelScope?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(NON_NEGATIVE_NUMBER, { message: 'minPrice phải là số không âm' })
   minPrice?: string;
 
   @IsOptional()
-  @IsString()
+  @ValidateIf((o: FilterTourDto) => o.maxPrice !== 'unlimited')
+  @Matches(NON_NEGATIVE_NUMBER, {
+    message: 'maxPrice phải là số không âm hoặc "unlimited"',
+  })
   maxPrice?: string;
 
   @IsOptional()
@@ -26,7 +34,7 @@ export class FilterTourDto {
   ratings?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(NON_NEGATIVE_NUMBER, { message: 'minRating không hợp lệ' })
   minRating?: string; // threshold: lọc tour có averageRating >= giá trị này (vd: 4.5, 4.0, 3.0)
 
   @IsOptional()
@@ -38,11 +46,11 @@ export class FilterTourDto {
   sortBy?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(POSITIVE_INTEGER, { message: 'page phải là số nguyên dương' })
   page?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(POSITIVE_INTEGER, { message: 'limit phải là số nguyên dương' })
   limit?: string;
 
   @IsOptional()

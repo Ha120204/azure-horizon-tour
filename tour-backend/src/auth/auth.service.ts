@@ -1,15 +1,11 @@
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException, HttpException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
-
-type PasswordResetTokenPayload = {
-  sub: number | string;
-  email?: string;
-};
 
 type RefreshTokenPayload = {
   sub: number | string;
@@ -122,61 +118,75 @@ export class AuthService {
     return { user: result, access_token, refresh_token };
   }
 
-  async forgotPassword(email: string) {
-    // 1. Kiểm tra xem email này có tồn tại trong database (bảng User) không
+  async forgotPassword(email: string, locale: 'vi' | 'en' = 'vi') {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new NotFoundException('User not found');
 
-    // 2. Tạo ra một Token đặc biệt (dùng JWT hoặc mã random)
-    const resetToken = this.jwtService.sign(
-      { sub: user.id, email: user.email },
-      { expiresIn: '15m' },
-    );
+    if (!user || user.deletedAt) {
+      throw new NotFoundException('ACCOUNT_NOT_FOUND');
+    }
 
-    // 3. Gửi email chứa token đó
-    let emailSent = false;
+    const otp = crypto.randomInt(100000, 1000000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: otpHash,
+        passwordResetExpiry: expiry,
+      },
+    });
+
     try {
-      await this.mailService.sendPasswordResetEmail(email, resetToken);
-      emailSent = true;
+      await this.mailService.sendPasswordResetEmail(email, otp, user.fullName, locale);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown mail error';
       console.warn('Password reset email could not be sent:', message);
     }
 
-    return {
-      message: emailSent
-        ? 'Password reset link sent to email'
-        : 'Email could not be sent. Please try again later.',
-    };
+    return { message: 'OTP sent.' };
   }
 
-  async resetPassword(token: string, newPassword: string) {
-    // 1. Verify the JWT token
-    let payload: PasswordResetTokenPayload;
-    try {
-      payload = this.jwtService.verify<PasswordResetTokenPayload>(token);
-    } catch {
-      throw new UnauthorizedException('Invalid or expired reset token. Please request a new password reset link.');
-    }
-    const userId = Number(payload.sub);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      throw new UnauthorizedException('Invalid reset token payload. Please request a new password reset link.');
+  async verifyOtp(email: string, otp: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordResetToken || !user.passwordResetExpiry) {
+      throw new BadRequestException('Invalid or expired OTP. Please request a new one.');
     }
 
-    // 2. Find the user by ID from the token payload
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (new Date() > user.passwordResetExpiry) {
+      throw new BadRequestException('OTP has expired. Please request a new one.');
     }
 
-    // 3. Hash the new password
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    if (otpHash !== user.passwordResetToken) {
+      throw new BadRequestException('Invalid OTP. Please check and try again.');
+    }
+
+    return { message: 'OTP verified successfully.' };
+  }
+
+  async resetPassword(email: string, otp: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordResetToken || !user.passwordResetExpiry) {
+      throw new BadRequestException('Invalid or expired OTP. Please request a new one.');
+    }
+
+    if (new Date() > user.passwordResetExpiry) {
+      throw new BadRequestException('OTP has expired. Please request a new one.');
+    }
+
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    if (otpHash !== user.passwordResetToken) {
+      throw new BadRequestException('Invalid OTP. Please check and try again.');
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // 4. Update the password in the database
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
         password: hashedPassword,
+        passwordResetToken: null,
+        passwordResetExpiry: null,
         authTokenVersion: { increment: 1 },
         authRevokedAt: new Date(),
       },
@@ -233,78 +243,106 @@ export class AuthService {
 
   // Thêm hàm Cập nhật Profile
   async updateProfile(userId: number, updateData: UpdateProfileDto) {
-    // 1. Tìm user trong Database
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
-    if (!user) {
-      throw new NotFoundException('User not found!');
+      if (!user) {
+        throw new NotFoundException('User not found!');
+      }
+
+      // Validate số giấy tờ tuỳ thân theo loại (đồng bộ với frontend)
+      if (updateData.identityNo) {
+        const type = updateData.identityType ?? user.identityType ?? 'CCCD';
+        const isValid =
+          type === 'PASSPORT'
+            ? /^[A-Za-z0-9]{6,15}$/.test(updateData.identityNo)
+            : /^\d{12}$/.test(updateData.identityNo);
+        if (!isValid) {
+          throw new BadRequestException(
+            type === 'PASSPORT'
+              ? 'Số hộ chiếu không hợp lệ (6-15 ký tự chữ và số)'
+              : 'Số CCCD phải gồm đúng 12 chữ số',
+          );
+        }
+      }
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(updateData.fullName && { fullName: updateData.fullName }),
+          ...(updateData.phone !== undefined && { phone: updateData.phone }),
+          ...(updateData.dob !== undefined && { dob: updateData.dob }),
+          ...(updateData.gender !== undefined && { gender: updateData.gender }),
+          ...(updateData.identityType !== undefined && { identityType: updateData.identityType }),
+          ...(updateData.identityNo !== undefined && { identityNo: updateData.identityNo }),
+        },
+      });
+
+      const { password, ...safeUserInfo } = updatedUser;
+      return safeUserInfo;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể cập nhật thông tin cá nhân');
     }
-
-    // 2. Cập nhật thông tin bằng Prisma
-    const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(updateData.fullName && { fullName: updateData.fullName }),
-        ...(updateData.phone !== undefined && { phone: updateData.phone }),
-        ...(updateData.dob !== undefined && { dob: updateData.dob }),
-        ...(updateData.gender !== undefined && { gender: updateData.gender }),
-        ...(updateData.identityType !== undefined && { identityType: updateData.identityType }),
-        ...(updateData.identityNo !== undefined && { identityNo: updateData.identityNo }),
-      },
-    });
-
-    // 3. Trả về thông tin mới (nhớ bỏ password)
-    const { password, ...safeUserInfo } = updatedUser;
-    return safeUserInfo;
   }
 
   // Thêm hàm Cập nhật Avatar
   async updateAvatar(userId: number, avatarUrl: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
-    if (!user) {
-      throw new NotFoundException('User not found!');
+      if (!user) {
+        throw new NotFoundException('User not found!');
+      }
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: { avatarUrl },
+      });
+
+      const { password, ...safeUserInfo } = updatedUser;
+      return safeUserInfo;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể cập nhật ảnh đại diện');
     }
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: { avatarUrl },
-    });
-
-    const { password, ...safeUserInfo } = updatedUser;
-    return safeUserInfo;
   }
 
   // Thêm hàm Đổi mật khẩu
   async changePassword(userId: number, currentPass: string, newPass: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found!');
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found!');
+      }
+
+      // Tài khoản Google không có password
+      if (!user.password) {
+        throw new UnauthorizedException(
+          'Tài khoản này được tạo qua Google. Vui lòng dùng tính năng "Đặt mật khẩu" để thiết lập mật khẩu.',
+        );
+      }
+
+      const isMatch = await bcrypt.compare(currentPass, user.password);
+      if (!isMatch) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      const hashedPassword = await bcrypt.hash(newPass, 10);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          password: hashedPassword,
+          authTokenVersion: { increment: 1 },
+          authRevokedAt: new Date(),
+        },
+      });
+
+      return { message: 'Password updated successfully' };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể đổi mật khẩu');
     }
-
-    // Tài khoản Google không có password
-    if (!user.password) {
-      throw new UnauthorizedException(
-        'Tài khoản này được tạo qua Google. Vui lòng dùng tính năng "Đặt mật khẩu" để thiết lập mật khẩu.',
-      );
-    }
-
-    const isMatch = await bcrypt.compare(currentPass, user.password);
-    if (!isMatch) {
-      throw new UnauthorizedException('Current password is incorrect');
-    }
-
-    const hashedPassword = await bcrypt.hash(newPass, 10);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        password: hashedPassword,
-        authTokenVersion: { increment: 1 },
-        authRevokedAt: new Date(),
-      },
-    });
-
-    return { message: 'Password updated successfully' };
   }
 
   // =========================================================
@@ -312,26 +350,31 @@ export class AuthService {
   // (authProvider 'google' → 'both')
   // =========================================================
   async setPassword(userId: number, newPass: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found!');
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      if (!user) throw new NotFoundException('User not found!');
 
-    // Chỉ cho phép user chưa có password (pure Google user)
-    if (user.password) {
-      throw new UnauthorizedException(
-        'Tài khoản đã có mật khẩu. Vui lòng dùng tính năng "Đổi mật khẩu".',
-      );
+      // Chỉ cho phép user chưa có password (pure Google user)
+      if (user.password) {
+        throw new UnauthorizedException(
+          'Tài khoản đã có mật khẩu. Vui lòng dùng tính năng "Đổi mật khẩu".',
+        );
+      }
+
+      const hashedPassword = await bcrypt.hash(newPass, 10);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          password: hashedPassword,
+          authProvider: 'both', // Giờ có cả Google lẫn email/password
+        },
+      });
+
+      return { message: 'Password set successfully' };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể thiết lập mật khẩu');
     }
-
-    const hashedPassword = await bcrypt.hash(newPass, 10);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        password: hashedPassword,
-        authProvider: 'both', // Giờ có cả Google lẫn email/password
-      },
-    });
-
-    return { message: 'Password set successfully' };
   }
 
   // =========================================================

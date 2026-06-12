@@ -70,17 +70,17 @@ export default function ConciergeTrigger({
                 id="ai-concierge-trigger"
                 onClick={() => setIsOpen(true)}
                 aria-label="Mở trợ lý AI"
-                className="group flex items-center gap-3 rounded-full border border-white/25 bg-primary px-4 py-3 text-white shadow-[0_16px_40px_rgba(0,63,135,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-[0_18px_48px_rgba(0,63,135,0.34)] sm:px-5"
+                className="group flex items-center gap-2 rounded-full border border-white/25 bg-primary px-3 py-2 text-white shadow-[0_16px_40px_rgba(0,63,135,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-[0_18px_48px_rgba(0,63,135,0.34)]"
             >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/14 ring-1 ring-white/20">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/14 ring-1 ring-white/20">
                     <span
-                        className="material-symbols-outlined text-[19px]"
+                        className="material-symbols-outlined text-[15px]"
                         style={{ fontVariationSettings: "'FILL' 1" }}
                     >
                         auto_awesome
                     </span>
                 </span>
-                <span className="hidden pr-1 font-headline text-sm font-bold sm:block">{t('conciergeApp.btn')}</span>
+                <span className="pr-1 font-headline text-xs font-bold">{t('conciergeApp.btn')}</span>
             </button>
         </div>
     );

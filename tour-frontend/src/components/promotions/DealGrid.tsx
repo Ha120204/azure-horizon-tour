@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 type DealCategory = 'all' | 'flash' | 'early' | 'lastminute';
+type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
 
 interface DealCard {
     id: number;
@@ -13,7 +14,6 @@ interface DealCard {
     name: string;
     image: string;
     badge: string;
-    badgeColor?: string;      // legacy – kept for compat, no longer used
     rating: number;
     duration: string;
     newPrice: number;
@@ -23,20 +23,55 @@ interface DealCard {
     maxSeats: number | null;
     availableSeats: number;
     flashSaleEndsAt: string | null; // ISO — real countdown deadline
-    urgencyText?: string;           // legacy
-    urgencyColor?: string;          // legacy
     category: DealCategory;
     destination?: string;
 }
 
+type LoadStatus = 'loading' | 'error' | 'ready';
+
 interface DealGridProps {
-    deals: DealCard[];
     filteredDeals: DealCard[];
     activeTab: DealCategory;
     setActiveTab: (tab: DealCategory) => void;
     tabOptions: { key: DealCategory; label: string }[];
-    t: (key: string) => string;
+    status: LoadStatus;
+    onRetry: () => void;
+    t: TranslationFn;
     formatPrice: (price: number) => string;
+}
+
+// ── Skeleton + error placeholders ────────────────────────────────────────────
+function DealGridSkeleton() {
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                <div key={i} className="bg-surface-container-lowest rounded-2xl overflow-hidden border border-transparent">
+                    <div className="h-56 bg-surface-container-high animate-pulse" />
+                    <div className="p-5 space-y-3">
+                        <div className="h-4 w-3/4 rounded bg-surface-container-high animate-pulse" />
+                        <div className="h-5 w-1/2 rounded bg-surface-container-high animate-pulse" />
+                        <div className="h-1.5 w-full rounded-full bg-surface-container-high animate-pulse mt-4" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function LoadErrorState({ t, onRetry }: { t: (key: string) => string; onRetry: () => void }) {
+    return (
+        <div className="text-center py-20 bg-surface-container-lowest rounded-2xl">
+            <span className="material-symbols-outlined text-4xl text-error mb-2">cloud_off</span>
+            <p className="font-bold text-on-surface mb-4">{t('loadError')}</p>
+            <button
+                onClick={onRetry}
+                className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-primary text-on-primary text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95"
+            >
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                {t('retry')}
+            </button>
+        </div>
+    );
 }
 
 const PAGE_SIZE = 6;
@@ -68,7 +103,7 @@ function useCountdown(endsAt: string | null) {
 }
 
 // ── Countdown display widget ─────────────────────────────────────────────────
-function CardCountdown({ endsAt, category }: { endsAt: string | null; category: DealCategory }) {
+function CardCountdown({ endsAt, category, t }: { endsAt: string | null; category: DealCategory; t: TranslationFn }) {
     const left = useCountdown(endsAt);
 
     if (!endsAt || !left) return null;
@@ -88,10 +123,10 @@ function CardCountdown({ endsAt, category }: { endsAt: string | null; category: 
                 {isUrgent ? 'alarm' : 'schedule'}
             </span>
             <span>
-                {left.days > 0 && `${left.days}n `}
+                {left.days > 0 && `${left.days}${t('dayShort')} `}
                 {pad(left.hours)}:{pad(left.minutes)}:{pad(left.seconds)}
             </span>
-            <span className="opacity-70 font-normal">còn lại</span>
+            <span className="opacity-70 font-normal">{t('timeLeftSuffix')}</span>
         </div>
     );
 }
@@ -115,9 +150,11 @@ function getBarColor(category: DealCategory, pct: number) {
 }
 
 // ── Single deal card ─────────────────────────────────────────────────────────
-function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (n: number) => string; t: (k: string) => string }) {
+function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (n: number) => string; t: TranslationFn }) {
     const left = useCountdown(deal.flashSaleEndsAt);
     const isExpired = deal.flashSaleEndsAt && !left;
+    const isSoldOut = deal.availableSeats === 0;
+    const isDisabled = isExpired || isSoldOut;
 
     const discountPct = deal.discountPct
         ?? (deal.oldPrice > 0 ? Math.round(((deal.oldPrice - deal.newPrice) / deal.oldPrice) * 100) : 0);
@@ -127,33 +164,36 @@ function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (
 
     // Urgency text logic
     let urgencyText = '';
-    if (deal.availableSeats <= 3) {
-        urgencyText = `Chỉ còn ${deal.availableSeats} chỗ!`;
+    if (isSoldOut) {
+        urgencyText = t('soldOut');
+    } else if (deal.availableSeats <= 3) {
+        urgencyText = t('seatsLeftUrgent', { seats: deal.availableSeats });
     } else if (deal.flashSaleEndsAt && left && left.total < 6 * 3_600_000) {
-        urgencyText = 'Sắp kết thúc!';
+        urgencyText = t('endingSoon');
     } else if (deal.category === 'flash') {
-        urgencyText = 'Flash Sale';
+        urgencyText = t('urgencyFlash');
     } else if (deal.category === 'lastminute') {
-        urgencyText = 'Sắp hết!';
+        urgencyText = t('urgencyLastMinute');
     } else {
-        urgencyText = 'Ưu đãi có hạn';
+        urgencyText = t('urgencyDefault');
     }
 
     return (
         <Link
             href={`/tour/${deal.tourId}?departureId=${deal.departureId}`}
             className={`group block bg-surface-container-lowest rounded-2xl overflow-hidden transition-all duration-500 border flex flex-col cursor-pointer
-                ${isExpired
+                ${isDisabled
                     ? 'opacity-60 grayscale border-outline-variant/10 pointer-events-none'
                     : 'hover:shadow-[0_32px_64px_-12px_rgba(25,28,33,0.12)] hover:border-outline-variant/20 border-transparent'
                 }`}
+            aria-disabled={isDisabled || undefined}
         >
             {/* Image */}
             <div className="relative h-56 overflow-hidden shrink-0">
                 <Image
                     alt={deal.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    src={deal.image || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800'}
+                    src={deal.image}
                     fill
                     sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
                 />
@@ -171,11 +211,11 @@ function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (
                     </div>
                 )}
 
-                {/* Expired overlay */}
-                {isExpired && (
+                {/* Expired / sold-out overlay */}
+                {isDisabled && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                         <span className="bg-white/90 text-on-surface font-bold text-sm px-4 py-2 rounded-full">
-                            Ưu đãi đã kết thúc
+                            {isExpired ? t('offerEnded') : t('soldOut')}
                         </span>
                     </div>
                 )}
@@ -213,7 +253,7 @@ function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (
                 </div>
 
                 {/* ── Per-card countdown ── */}
-                <CardCountdown endsAt={deal.flashSaleEndsAt} category={deal.category} />
+                <CardCountdown endsAt={deal.flashSaleEndsAt} category={deal.category} t={t} />
 
                 {/* ── Booked progress bar ── */}
                 <div className="mt-auto pt-3">
@@ -234,8 +274,8 @@ function DealCardItem({ deal, formatPrice, t }: { deal: DealCard; formatPrice: (
                                 />
                             </div>
                             {deal.availableSeats > 0 && (
-                                <p className="text-[10px] text-on-surface-variant mt-1 text-right">
-                                    Còn <strong className={deal.availableSeats <= 3 ? 'text-error' : 'text-on-surface'}>{deal.availableSeats}</strong> ghế
+                                <p className={`text-[10px] mt-1 text-right font-semibold ${deal.availableSeats <= 3 ? 'text-error' : 'text-on-surface-variant'}`}>
+                                    {t('seatsRemaining', { seats: deal.availableSeats })}
                                 </p>
                             )}
                         </>
@@ -254,6 +294,8 @@ export default function DealGrid({
     activeTab,
     setActiveTab,
     tabOptions,
+    status,
+    onRetry,
     t,
     formatPrice,
 }: DealGridProps) {
@@ -295,7 +337,11 @@ export default function DealGrid({
 
             {/* ═══════ Tour Grid ═══════ */}
             <section className="max-w-screen-2xl mx-auto px-8 pb-16">
-                {filteredDeals.length === 0 ? (
+                {status === 'loading' ? (
+                    <DealGridSkeleton />
+                ) : status === 'error' ? (
+                    <LoadErrorState t={t} onRetry={onRetry} />
+                ) : filteredDeals.length === 0 ? (
                     <div className="text-center py-20 bg-surface-container-lowest rounded-2xl">
                         <span className="material-symbols-outlined text-4xl text-outline mb-2">search_off</span>
                         <p className="font-bold text-on-surface">{t('noOffersFound')}</p>
@@ -305,14 +351,14 @@ export default function DealGrid({
                         {/* Result count */}
                         <div className="flex items-center justify-between mb-8">
                             <p className="text-sm text-on-surface-variant font-medium">
-                                Hiển thị{' '}
-                                <span className="font-bold text-on-surface">
-                                    {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredDeals.length)}
-                                </span>
-                                {' '}/ <span className="font-bold text-primary">{filteredDeals.length}</span> ưu đãi
+                                {t('showingDeals', {
+                                    from: (page - 1) * PAGE_SIZE + 1,
+                                    to: Math.min(page * PAGE_SIZE, filteredDeals.length),
+                                    total: filteredDeals.length,
+                                })}
                             </p>
                             {totalPages > 1 && (
-                                <p className="text-xs text-outline">Trang {page} / {totalPages}</p>
+                                <p className="text-xs text-outline">{t('pageOf', { page, total: totalPages })}</p>
                             )}
                         </div>
 
@@ -330,7 +376,7 @@ export default function DealGrid({
                                     onClick={() => setPageForActiveTab(p => Math.max(1, p - 1))}
                                     disabled={page === 1}
                                     className="w-10 h-10 rounded-full border border-outline-variant/20 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:border-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                                    aria-label="Trang trước"
+                                    aria-label={t('prevPage')}
                                 >
                                     <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                                 </button>
@@ -351,7 +397,7 @@ export default function DealGrid({
                                                     ? 'bg-primary text-on-primary shadow-md scale-105'
                                                     : 'border border-outline-variant/20 text-on-surface hover:bg-surface-container hover:border-primary/30'
                                             }`}
-                                            aria-label={`Trang ${p}`}
+                                            aria-label={t('goToPage', { page: p })}
                                             aria-current={isActive ? 'page' : undefined}
                                         >
                                             {p}
@@ -363,7 +409,7 @@ export default function DealGrid({
                                     onClick={() => setPageForActiveTab(p => Math.min(totalPages, p + 1))}
                                     disabled={page === totalPages}
                                     className="w-10 h-10 rounded-full border border-outline-variant/20 flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:border-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                                    aria-label="Trang sau"
+                                    aria-label={t('nextPage')}
                                 >
                                     <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                                 </button>

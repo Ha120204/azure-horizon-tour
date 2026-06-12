@@ -15,7 +15,8 @@
     "exploreAll": "Explore All Destinations",
     "perPerson": "Per Person",
     "viewDetails": "View Details",
-    "loading": "Loading tours...",
+    "empty": "There are no tours to display yet. Please check back later.",
+    "error": "Couldn't load tours. Please try again later.",
     "days": "DAYS"
   },
   "philosophy": {
@@ -34,7 +35,7 @@
     "secondaryCta": "Find Your Journey"
   },
   "conciergeApp": {
-    "btn": "Azure AI Concierge",
+    "btn": "Azure AI",
     "title1": "Our Concierge.",
     "title2": "Your Rare Experience.",
     "desc": "Speak with our experts or use our AI for immediate, personalized itinerary assistance.",
@@ -50,6 +51,22 @@
     "aiResponse": "Kyoto is exquisite in the spring. I have curated a selection of private villas and exclusive garden access for you. Here is a proposed itinerary:",
     "aiCardTitle": "Proposed Itinerary: 4 Days in Kyoto",
     "viewItinerary": "View Full Itinerary",
-    "tourDesc": "Private Zen garden tours, Kaiseki dining with a local historian, and exclusive tea ceremonies."
+    "tourDesc": "Private Zen garden tours, Kaiseki dining with a local historian, and exclusive tea ceremonies.",
+    "history": "History",
+    "historyTooltip": "View conversation history",
+    "historyLoginRequired": "Sign in to view history",
+    "newChat": "New",
+    "newChatTooltip": "Start a new conversation",
+    "loadingHistory": "Loading history...",
+    "viewTourDetail": "View tour details →",
+    "historyTitle": "Conversation history",
+    "historySubtitle": "Pick up an old conversation.",
+    "closeHistory": "Close history",
+    "noHistory": "No conversations yet. Press New and send your first message to start saving history.",
+    "messageCount": "{count} messages",
+    "delete": "Delete",
+    "sendMessage": "Send message",
+    "rateLimitError": "You are sending messages too quickly. Please wait a moment and try again.",
+    "connectionError": "Unable to connect to the AI assistant. Please try again later."
   }
 }

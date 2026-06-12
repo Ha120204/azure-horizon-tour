@@ -27,8 +27,8 @@ import type {
   Subscriber,
   SubscriberStats,
   SubscriberStatus,
-  ToastState,
 } from '../_lib/types';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 
 const CAMPAIGN_TYPES: CampaignType[] = ['PROMOTION', 'TRAVEL_STORY', 'NEWSLETTER'];
 
@@ -70,7 +70,6 @@ export function useMarketingManagement() {
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Subscriber | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [toast, setToast] = useState<ToastState | null>(null);
 
   const [localCampaignDrafts, setLocalCampaignDrafts] = useState<CampaignDraft[]>([]);
   const [backendCampaigns, setBackendCampaigns] = useState<CampaignDraft[]>([]);
@@ -92,8 +91,8 @@ export function useMarketingManagement() {
   const [isCancellingCampaign, setIsCancellingCampaign] = useState(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    window.setTimeout(() => setToast(null), 3500);
+    if (type === 'error') toastEmitter.error(message);
+    else toastEmitter.success(message);
   }, []);
 
   useEffect(() => {
@@ -511,7 +510,6 @@ export function useMarketingManagement() {
     loadingId,
     deleteTarget,
     isDeleting,
-    toast,
     campaignDrafts,
     composerOpen,
     editingCampaignId,

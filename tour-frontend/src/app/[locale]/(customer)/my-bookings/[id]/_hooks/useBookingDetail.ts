@@ -26,19 +26,20 @@ export const FALLBACK_BANK_OPTIONS: BankOption[] = [
     { shortName: 'Khác', name: 'Ngân hàng khác' },
 ];
 
-export function useCountdown(createdAt: string | undefined) {
+export function useCountdown(expiresAt: string | undefined) {
     const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
     useEffect(() => {
-        if (!createdAt) return;
-        const expiresAt = new Date(createdAt).getTime() + EXPIRY_MINUTES * 60 * 1000;
+        if (!expiresAt) return;
+        const expiryTime = new Date(expiresAt).getTime();
+        if (Number.isNaN(expiryTime)) return;
         const tick = () => {
-            const diff = Math.floor((expiresAt - Date.now()) / 1000);
+            const diff = Math.floor((expiryTime - Date.now()) / 1000);
             setSecondsLeft(diff > 0 ? diff : 0);
         };
         tick();
         const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [createdAt]);
+    }, [expiresAt]);
     return secondsLeft;
 }
 
@@ -217,10 +218,12 @@ export function useBookingDetail() {
         }
     }, [booking, formatNumber, fetchBooking]);
 
-    const secondsLeft = useCountdown(
+    const paymentHoldExpiresAt =
         booking?.paymentStatus === 'UNPAID' && booking?.status === 'PENDING' && booking?.paymentMethod === 'PAYOS'
-            ? booking?.createdAt : undefined
-    );
+            ? booking.holdExpiresAt ??
+              new Date(new Date(booking.createdAt).getTime() + EXPIRY_MINUTES * 60 * 1000).toISOString()
+            : undefined;
+    const secondsLeft = useCountdown(paymentHoldExpiresAt);
     const isExpired = secondsLeft !== null && secondsLeft <= 0;
     const isPaid = booking?.paymentStatus === 'PAID' && booking?.status === 'CONFIRMED';
     const isPending = booking?.paymentStatus === 'UNPAID' && booking?.status === 'PENDING';

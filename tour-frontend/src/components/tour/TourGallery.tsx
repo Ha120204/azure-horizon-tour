@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import type { Tour } from '@/types';
 
@@ -11,7 +11,7 @@ type GalleryTour = Pick<Tour, 'name' | 'tourCode' | 'imageUrl'> & {
 
 interface TourGalleryProps {
     tour: GalleryTour;
-    t: (key: string) => string;
+    t: (key: string, params?: Record<string, string | number>) => string;
     /** Tour ID — used for the shared element view transition name matching TourCard */
     tourId: string | number;
 }
@@ -60,6 +60,18 @@ export default function TourGallery({ tour, t, tourId }: TourGalleryProps) {
     }
 
     const imgCount = allImages.length;
+
+    // Lightbox: điều hướng bằng bàn phím (Esc đóng, ← → chuyển ảnh)
+    useEffect(() => {
+        if (lightboxIndex === null) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setLightboxIndex(null);
+            else if (e.key === 'ArrowLeft') setLightboxIndex((i) => (i !== null && i > 0 ? i - 1 : i));
+            else if (e.key === 'ArrowRight') setLightboxIndex((i) => (i !== null && i < imgCount - 1 ? i + 1 : i));
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [lightboxIndex, imgCount]);
 
     const renderTourCode = () => (
         <div className="absolute top-4 left-4 z-10">
@@ -179,7 +191,7 @@ export default function TourGallery({ tour, t, tourId }: TourGalleryProps) {
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                             {isLast && (
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
-                                    <span className="text-white font-bold text-lg">+{extraCount} ảnh</span>
+                                    <span className="text-white font-bold text-lg">{t('tour_detail.morePhotos', { count: extraCount })}</span>
                                 </div>
                             )}
                             {i === 2 && !isLast && renderViewAllBtn()}
@@ -204,7 +216,7 @@ export default function TourGallery({ tour, t, tourId }: TourGalleryProps) {
                             className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 px-3 py-1.5 rounded-lg"
                         >
                             <span className="material-symbols-outlined text-[14px]">photo_library</span>
-                            Xem tất cả {allImages.length} ảnh
+                            {t('tour_detail.viewAllPhotosCount', { count: allImages.length })}
                         </button>
                     </div>
                 )}

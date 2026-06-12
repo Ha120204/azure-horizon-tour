@@ -40,16 +40,21 @@ export class ArticleController {
 
   // ─── Public endpoints ─────────────────────────────────────────────────────
 
-  /** GET /article — Bài viết đã PUBLISHED (trang khách) */
+  /** GET /article — Bài viết đã PUBLISHED (trang khách), phân trang */
   @Get()
-  async findAll(@Query('category') category?: string) {
-    return this.articleService.findAll(category);
+  async findAll(
+    @Query('category') category?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('locale') locale?: string,
+  ) {
+    return this.articleService.findAll(category, Number(page) || 1, Number(limit) || 6, locale);
   }
 
   /** GET /article/featured — Bài nổi bật */
   @Get('featured')
-  async findFeatured() {
-    return this.articleService.findFeatured();
+  async findFeatured(@Query('locale') locale?: string) {
+    return this.articleService.findFeatured(locale);
   }
 
   // ─── Static routes phải TRƯỚC :slug ─────────────────────────────────────
@@ -153,9 +158,10 @@ export class ArticleController {
   async adminCreate(
     @Req() req: AuthenticatedRequest,
     @Body() dto: {
-      slug?: string; title?: string; category?: string; excerpt?: string;
+      slug?: string; title?: string; titleEn?: string; category?: string;
+      excerpt?: string; excerptEn?: string;
       seoTitle?: string; seoDescription?: string;
-      content?: string; imageUrl?: string; author?: string;
+      content?: string; contentEn?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
       saveMode?: 'draft' | 'publish';
     },
@@ -197,9 +203,10 @@ export class ArticleController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req: AuthenticatedRequest,
     @Body() dto: {
-      slug?: string; title?: string; category?: string; excerpt?: string;
+      slug?: string; title?: string; titleEn?: string; category?: string;
+      excerpt?: string; excerptEn?: string;
       seoTitle?: string; seoDescription?: string;
-      content?: string; imageUrl?: string; author?: string;
+      content?: string; contentEn?: string; imageUrl?: string; author?: string;
       readTime?: number; isFeatured?: boolean;
       saveMode?: 'draft' | 'publish';
     },
@@ -251,7 +258,7 @@ export class ArticleController {
   // ─── Public :slug route phải CUỐI ────────────────────────────────────────
   /** GET /article/:slug — Chi tiết bài viết public (chỉ PUBLISHED) */
   @Get(':slug')
-  async findBySlug(@Param('slug') slug: string) {
-    return this.articleService.findBySlug(slug);
+  async findBySlug(@Param('slug') slug: string, @Query('locale') locale?: string) {
+    return this.articleService.findBySlug(slug, locale);
   }
 }

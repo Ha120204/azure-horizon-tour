@@ -69,8 +69,10 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime? // [PHASE 1] Soft Delete
-  authTokenVersion Int       @default(0)
-  authRevokedAt    DateTime?
+  authTokenVersion   Int       @default(0)
+  authRevokedAt      DateTime?
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
 
   // -- Google OAuth --
   googleId     String? @unique // Google subject ID (sub)
@@ -145,7 +147,7 @@ model Tour {
   departurePoint   String? // Điểm khởi hành mặc định (VD: "TP. Hồ Chí Minh")
   departurePointEn String?
   // ── Workflow fields ──────────────────────────────────────────────
-  status           TourStatus    @default(PUBLISHED) // Trạng thái duyệt
+  status           TourStatus    @default(DRAFT) // Trạng thái duyệt
   publishedAt      DateTime? // Thời điểm xuất bản
   reviewNote       String?       @db.Text // Lý do từ chối (Admin ghi)
   createdById      Int? // Staff/Admin tạo
@@ -715,10 +717,13 @@ model Article {
   slug           String    @unique // URL thân thiện
   category       String // "GUIDES", "INSPIRATION", "CULTURE", "GASTRONOMY"
   title          String
+  titleEn        String? // Tiêu đề bản tiếng Anh (fallback về title nếu trống)
   excerpt        String    @db.Text // Tóm tắt ngắn hiển thị trên card
+  excerptEn      String?   @db.Text // Tóm tắt bản tiếng Anh
   seoTitle       String?
   seoDescription String?   @db.Text
   content        String    @db.Text // Nội dung đầy đủ (HTML)
+  contentEn      String?   @db.Text // Nội dung bản tiếng Anh (HTML)
   imageUrl       String
   author         String
   readTime       Int       @default(5) // Thời gian đọc (phút)
@@ -729,7 +734,7 @@ model Article {
   deletedAt      DateTime? // Soft Delete (thùng rác)
 
   // ── Workflow fields ──────────────────────────────────────────────
-  status       ArticleStatus @default(PUBLISHED) // Trạng thái duyệt
+  status       ArticleStatus @default(DRAFT) // Trạng thái duyệt
   reviewNote   String?       @db.Text // Lý do từ chối (Admin ghi)
   createdById  Int? // Staff/Admin tạo
   reviewedById Int? // Admin duyệt/từ chối

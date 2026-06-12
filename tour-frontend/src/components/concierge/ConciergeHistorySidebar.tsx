@@ -19,20 +19,20 @@ export default function ConciergeHistorySidebar({
     handleDeleteSession,
     setIsHistoryOpen,
 }: ConciergeHistorySidebarProps) {
-    const { formatDate } = useLocale();
+    const { formatDate, t } = useLocale();
 
     return (
         <aside className="absolute inset-x-3 bottom-[104px] top-[132px] z-30 rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex h-full flex-col">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                     <div>
-                        <h3 className="text-sm font-bold text-slate-900">Lịch sử trò chuyện</h3>
-                        <p className="text-xs text-slate-500">Chọn lại một cuộc trò chuyện cũ.</p>
+                        <h3 className="text-sm font-bold text-slate-900">{t('conciergeApp.historyTitle')}</h3>
+                        <p className="text-xs text-slate-500">{t('conciergeApp.historySubtitle')}</p>
                     </div>
                     <button
                         type="button"
                         onClick={() => setIsHistoryOpen(false)}
-                        aria-label="Đóng lịch sử"
+                        aria-label={t('conciergeApp.closeHistory')}
                         className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                     >
                         <span className="material-symbols-outlined text-[18px]">close</span>
@@ -42,11 +42,11 @@ export default function ConciergeHistorySidebar({
                 <div className="flex-1 overflow-y-auto p-3">
                     {isLoadingSessions ? (
                         <div className="px-3 py-6 text-center text-xs text-slate-400">
-                            Đang tải lịch sử...
+                            {t('conciergeApp.loadingHistory')}
                         </div>
                     ) : sessions.length === 0 ? (
                         <div className="px-3 py-6 text-center text-xs leading-5 text-slate-500">
-                            Chưa có cuộc trò chuyện nào. Bấm Mới và gửi câu hỏi đầu tiên để bắt đầu lưu lịch sử.
+                            {t('conciergeApp.noHistory')}
                         </div>
                     ) : (
                         <div className="space-y-2">
@@ -81,7 +81,7 @@ export default function ConciergeHistorySidebar({
                                                 {session.preview || 'Chưa có nội dung xem trước.'}
                                             </p>
                                             <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                                                {session.messageCount} tin nhắn
+                                                {t('conciergeApp.messageCount', { count: session.messageCount })}
                                             </p>
                                         </button>
                                         <button
@@ -90,7 +90,7 @@ export default function ConciergeHistorySidebar({
                                             className="mt-2 hidden items-center gap-1 text-xs font-semibold text-slate-400 transition-colors hover:text-red-600 group-hover:inline-flex"
                                         >
                                             <span className="material-symbols-outlined text-[14px]">delete</span>
-                                            Xóa
+                                            {t('conciergeApp.delete')}
                                         </button>
                                     </div>
                                 );

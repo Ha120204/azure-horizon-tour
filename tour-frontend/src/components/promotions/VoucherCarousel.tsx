@@ -13,10 +13,15 @@ interface Voucher {
     discountValue: number;
     minOrderValue: number;
     expiresAt: string;
+    isDepleted?: boolean;
 }
+
+type LoadStatus = 'loading' | 'error' | 'ready';
 
 interface VoucherCarouselProps {
     vouchers: Voucher[];
+    status: LoadStatus;
+    onRetry: () => void;
     copiedCode: string | null;
     savedIds: Set<number>;
     savingId: number | null;
@@ -50,6 +55,7 @@ function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, o
     const isCopied = copiedCode === v.code;
     const isSaved = savedIds.has(v.id);
     const isSaving = savingId === v.id;
+    const isDepleted = !!v.isDepleted && !isSaved;
 
     const discountDisplay = v.discountType === 'PERCENTAGE'
         ? `${v.discountValue}% ${t('off')}`
@@ -60,12 +66,13 @@ function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, o
     return (
         <div
             id={`voucher-${v.code}`}
-            className={`group relative flex rounded-2xl overflow-hidden shadow-md transition-[box-shadow,transform] duration-300 hover:-translate-y-1 hover:shadow-xl ${s.accent} ${s.text} ${isHighlighted ? 'ring-4 ring-secondary-fixed/80 ring-offset-4 ring-offset-surface shadow-2xl scale-[1.01]' : ''}`}
+            className={`group relative flex rounded-2xl overflow-hidden shadow-md transition-[box-shadow,transform] duration-300 hover:-translate-y-1 hover:shadow-xl ${s.accent} ${s.text} ${isHighlighted ? 'animate-voucher-highlight scale-[1.02] z-10' : ''}`}
             style={{ minHeight: compact ? '140px' : '164px' }}
         >
             {isHighlighted && (
-                <div className="absolute right-3 top-3 z-20 rounded-full bg-white/95 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-primary shadow-lg">
-                    {language === 'vi' ? 'Mã được chia sẻ' : 'Shared code'}
+                <div className="absolute right-3 top-3 z-30 flex items-center gap-1 rounded-full bg-amber-400 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-900 shadow-lg ring-2 ring-white/70">
+                    <span className="material-symbols-outlined text-[13px]">link</span>
+                    {t('sharedCode')}
                 </div>
             )}
             {/* ══ Left: Discount Info ══ */}
@@ -113,22 +120,49 @@ function TicketCard({ v: originalVoucher, idx, copiedCode, savedIds, savingId, o
                 </button>
                 <button
                     onClick={() => onSave(v.id)}
-                    disabled={isSaved || isSaving}
-                    className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 ${isSaved ? 'bg-emerald-400/25 text-emerald-100 cursor-default' : s.btnSecondary} ${isSaving ? 'opacity-50 cursor-wait' : ''}`}
+                    disabled={isSaved || isSaving || isDepleted}
+                    className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 ${isSaved ? 'bg-emerald-400/25 text-emerald-100 cursor-default' : s.btnSecondary} ${isSaving ? 'opacity-50 cursor-wait' : ''} ${isDepleted ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                     <span className="material-symbols-outlined text-[14px]">
-                        {isSaved ? 'check_circle' : isSaving ? 'progress_activity' : 'wallet'}
+                        {isSaved ? 'check_circle' : isSaving ? 'progress_activity' : isDepleted ? 'block' : 'wallet'}
                     </span>
-                    {isSaved ? t('savedToWallet') : isSaving ? t('saving') : t('saveToWallet')}
+                    {isSaved ? t('savedToWallet') : isSaving ? t('saving') : isDepleted ? t('voucherDepleted') : t('saveToWallet')}
                 </button>
             </div>
         </div>
     );
 }
 
+// ── Skeleton + error placeholders ──
+function VoucherSkeleton() {
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-2xl bg-surface-container-high animate-pulse" style={{ minHeight: '164px' }} />
+            ))}
+        </div>
+    );
+}
+
+function VoucherErrorState({ t, onRetry }: { t: (key: string, params?: Record<string, string | number>) => string; onRetry: () => void }) {
+    return (
+        <div className="text-center py-16 bg-surface-container-lowest rounded-2xl">
+            <span className="material-symbols-outlined text-4xl text-error mb-2">cloud_off</span>
+            <p className="font-bold text-on-surface mb-4">{t('loadError')}</p>
+            <button
+                onClick={onRetry}
+                className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-primary text-on-primary text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95"
+            >
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                {t('retry')}
+            </button>
+        </div>
+    );
+}
+
 // ── Main Component ──
 export default function VoucherCarousel({
-    vouchers, copiedCode, savedIds, savingId, onCopy, onSave, isModalOpen, setIsModalOpen, highlightedCode, t, formatPrice, language,
+    vouchers, status, onRetry, copiedCode, savedIds, savingId, onCopy, onSave, isModalOpen, setIsModalOpen, highlightedCode, t, formatPrice, language,
 }: VoucherCarouselProps) {
     const INITIAL_COUNT = 4;
     const MODAL_PAGE_SIZE = 6;
@@ -171,44 +205,59 @@ export default function VoucherCarousel({
                         </div>
                         <p className="text-on-surface-variant text-sm md:text-base ml-[52px]">{t('memberVouchersDesc')}</p>
                     </div>
-                    <div className="hidden md:flex items-center gap-2 bg-primary/5 px-4 py-2 rounded-full">
-                        <span className="material-symbols-outlined text-primary text-sm">redeem</span>
-                        <span className="text-sm font-bold text-primary">{vouchers.length} {language === 'vi' ? 'mã giảm giá' : 'vouchers'}</span>
-                    </div>
-                </div>
-
-                {/* ── Voucher Grid (2 columns desktop, 1 mobile) ── */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    {displayedVouchers.map((v, idx) => (
-                        <div
-                            key={v.id}
-                            className="animate-fade-slide-up"
-                            style={{ animationDelay: `${idx * 60}ms`, animationFillMode: 'both' }}
-                        >
-                            <TicketCard
-                                v={v} idx={idx} copiedCode={copiedCode} savedIds={savedIds}
-                                savingId={savingId} onCopy={onCopy} onSave={onSave}
-                                t={t} formatPrice={formatPrice} language={language}
-                                isHighlighted={normalizedHighlightedCode === v.code.toUpperCase()}
-                            />
+                    {status === 'ready' && vouchers.length > 0 && (
+                        <div className="hidden md:flex items-center gap-2 bg-primary/5 px-4 py-2 rounded-full">
+                            <span className="material-symbols-outlined text-primary text-sm">redeem</span>
+                            <span className="text-sm font-bold text-primary">{vouchers.length} {t('voucherCountLabel')}</span>
                         </div>
-                    ))}
+                    )}
                 </div>
 
-                {/* ── View All Button ── */}
-                {hasMore && (
-                    <div className="mt-10 flex justify-center">
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            className="group flex items-center gap-2.5 px-8 py-3.5 rounded-full border-2 border-primary/20 text-primary text-sm font-bold hover:bg-primary hover:text-white hover:border-primary transition-all duration-300 active:scale-95"
-                        >
-                            <span className="material-symbols-outlined text-lg">grid_view</span>
-                            {language === 'vi' ? `Xem tất cả ${vouchers.length} voucher` : `View All ${vouchers.length} Vouchers`}
-                            <span className="material-symbols-outlined text-sm transition-transform duration-300 group-hover:translate-x-1">
-                                arrow_forward
-                            </span>
-                        </button>
+                {status === 'loading' ? (
+                    <VoucherSkeleton />
+                ) : status === 'error' ? (
+                    <VoucherErrorState t={t} onRetry={onRetry} />
+                ) : vouchers.length === 0 ? (
+                    <div className="text-center py-16 bg-surface-container-lowest rounded-2xl">
+                        <span className="material-symbols-outlined text-4xl text-outline mb-2">confirmation_number</span>
+                        <p className="font-bold text-on-surface">{t('noVouchers')}</p>
                     </div>
+                ) : (
+                    <>
+                        {/* ── Voucher Grid (2 columns desktop, 1 mobile) ── */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            {displayedVouchers.map((v, idx) => (
+                                <div
+                                    key={v.id}
+                                    className="animate-fade-slide-up"
+                                    style={{ animationDelay: `${idx * 60}ms`, animationFillMode: 'both' }}
+                                >
+                                    <TicketCard
+                                        v={v} idx={idx} copiedCode={copiedCode} savedIds={savedIds}
+                                        savingId={savingId} onCopy={onCopy} onSave={onSave}
+                                        t={t} formatPrice={formatPrice} language={language}
+                                        isHighlighted={normalizedHighlightedCode === v.code.toUpperCase()}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* ── View All Button ── */}
+                        {hasMore && (
+                            <div className="mt-10 flex justify-center">
+                                <button
+                                    onClick={() => setIsModalOpen(true)}
+                                    className="group flex items-center gap-2.5 px-8 py-3.5 rounded-full border-2 border-primary/20 text-primary text-sm font-bold hover:bg-primary hover:text-white hover:border-primary transition-all duration-300 active:scale-95"
+                                >
+                                    <span className="material-symbols-outlined text-lg">grid_view</span>
+                                    {t('viewAllVouchers', { count: vouchers.length })}
+                                    <span className="material-symbols-outlined text-sm transition-transform duration-300 group-hover:translate-x-1">
+                                        arrow_forward
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+                    </>
                 )}
             </section>
 
@@ -230,10 +279,11 @@ export default function VoucherCarousel({
                                     {t('allVouchersTitle')}
                                 </h2>
                                 <p className="text-xs text-on-surface-variant mt-1">
-                                    {language === 'vi'
-                                        ? `Hiển thị ${(activeModalPage - 1) * MODAL_PAGE_SIZE + 1}–${Math.min(activeModalPage * MODAL_PAGE_SIZE, vouchers.length)} / ${vouchers.length} voucher`
-                                        : `Showing ${(activeModalPage - 1) * MODAL_PAGE_SIZE + 1}–${Math.min(activeModalPage * MODAL_PAGE_SIZE, vouchers.length)} of ${vouchers.length} vouchers`
-                                    }
+                                    {t('showingVouchers', {
+                                        from: (activeModalPage - 1) * MODAL_PAGE_SIZE + 1,
+                                        to: Math.min(activeModalPage * MODAL_PAGE_SIZE, vouchers.length),
+                                        total: vouchers.length,
+                                    })}
                                 </p>
                             </div>
                             <button

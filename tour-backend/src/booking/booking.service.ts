@@ -10,7 +10,6 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, type TourDeparture } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { UpdateBookingDto } from './dto/update-booking.dto';
 import { PaymentService } from '../payment/payment.service';
 import { VoucherService } from '../voucher/voucher.service';
 import { MailService } from '../mail/mail.service';
@@ -286,6 +285,8 @@ export class BookingService {
         discountAmount = voucherResult.discountAmount;
         totalPrice = voucherResult.finalPrice;
         voucherCode = dto.voucherCode.trim().toUpperCase();
+        // Atomic claim ngay trong transaction — ngăn 2 request đồng thời dùng cùng voucher
+        await this.voucherService.claimVoucherInTx(tx, voucherCode, finalUserId);
       }
 
       // ── Validate DOB vs passenger type (security: chống payload forge) ──────
@@ -457,9 +458,13 @@ export class BookingService {
       const txnRef =
         paymentInfo.transactions?.[0]?.reference || `PAYOS-${orderCode}`;
 
+      // updateMany với điều kiện status — atomic idempotency guard.
+      // Nếu webhook và return URL đến đồng thời, chỉ một request thắng (count=1),
+      // request kia nhận count=0 và bỏ qua toàn bộ side-effects.
+      let processed = false;
       await this.prisma.$transaction(async (tx) => {
-        await tx.booking.update({
-          where: { id: bookingId },
+        const result = await tx.booking.updateMany({
+          where: { id: bookingId, status: { notIn: ['CONFIRMED', 'CANCELLED'] } },
           data: {
             paymentStatus: 'PAID',
             status: 'CONFIRMED',
@@ -468,8 +473,17 @@ export class BookingService {
           },
         });
 
-        await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
+        if (result.count === 0) return; // Đã được xử lý bởi request song song
+        processed = true;
+
+        // Voucher đã được claimed lúc tạo booking (create()).
+        // Với assisted booking, claim tại thời điểm này (không đi qua create()).
+        if (booking.isAssistedBooking) {
+          await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
+        }
       });
+
+      if (!processed) return paymentInfo;
 
       // Cleaned comment
       await this.prisma.paymentTransaction.create({
@@ -545,6 +559,8 @@ export class BookingService {
         booking.tourId,
         calcSeatCount(booking.passengers, booking.numberOfPeople),
         booking.departureId,
+        booking.voucherCode,
+        booking.userId,
       );
 
       // Cleaned comment
@@ -592,35 +608,31 @@ export class BookingService {
     tourId: number,
     numberOfPeople: number,
     departureId?: number | null,
+    voucherCode?: string | null,
+    userId?: number,
   ) {
-    const updates: Prisma.PrismaPromise<unknown>[] = [
-      this.prisma.booking.update({
-        where: { id: bookingId },
-        data: {
-          paymentStatus: 'FAILED',
-          status: 'CANCELLED',
-        },
-      }),
-      this.prisma.tour.update({
+    await this.prisma.$transaction(async (tx) => {
+      // updateMany với điều kiện status — ngăn double-cancel khi cron + webhook đến cùng lúc
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, status: { notIn: ['CONFIRMED', 'CANCELLED'] } },
+        data: { paymentStatus: 'FAILED', status: 'CANCELLED' },
+      });
+      if (result.count === 0) return; // Đã xử lý rồi, bỏ qua để tránh double-restore
+
+      await tx.tour.update({
         where: { id: tourId },
-        data: {
-          availableSeats: { increment: numberOfPeople },
-        },
-      }),
-    ];
-
-    if (departureId) {
-      updates.push(
-        this.prisma.tourDeparture.update({
+        data: { availableSeats: { increment: numberOfPeople } },
+      });
+      if (departureId) {
+        await tx.tourDeparture.updateMany({
           where: { id: departureId },
-          data: {
-            availableSeats: { increment: numberOfPeople },
-          },
-        }),
-      );
-    }
-
-    await this.prisma.$transaction(updates);
+          data: { availableSeats: { increment: numberOfPeople } },
+        });
+      }
+      if (voucherCode && userId) {
+        await this.voucherService.releaseVoucherInTx(tx, voucherCode, userId);
+      }
+    });
   }
 
   private async notifyBookingCreated(
@@ -711,6 +723,8 @@ export class BookingService {
           booking.tourId,
           seatsToRestore,
           booking.departureId,
+          booking.voucherCode,
+          booking.userId,
         );
         processedCount += 1;
         this.logger.log(
@@ -769,7 +783,38 @@ export class BookingService {
         },
       });
 
-      await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
+      // Voucher đã claimed lúc tạo booking. Assisted booking thì claim tại đây.
+      if (booking.isAssistedBooking) {
+        await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
+      }
+
+      // Cập nhật PENDING transaction hiện có → SUCCESS, hoặc tạo mới nếu chưa có
+      const now = new Date();
+      const txnUpdate = await tx.paymentTransaction.updateMany({
+        where: { bookingId, status: 'PENDING' },
+        data: {
+          status: 'SUCCESS',
+          confirmedSource: 'ADMIN_OVERRIDE',
+          confirmedById: adminId ?? null,
+          confirmedAt: now,
+          confirmedNote: 'Xác nhận thủ công bởi admin',
+        },
+      });
+      if (txnUpdate.count === 0) {
+        await tx.paymentTransaction.create({
+          data: {
+            bookingId,
+            gateway: 'MANUAL',
+            amount: Math.round(Number(booking.totalPrice)),
+            status: 'SUCCESS',
+            confirmedSource: 'ADMIN_OVERRIDE',
+            confirmedById: adminId ?? null,
+            confirmedAt: now,
+            confirmedNote: 'Xác nhận thủ công bởi admin',
+          },
+        });
+      }
+
       return confirmed;
     });
 
@@ -1139,17 +1184,4 @@ export class BookingService {
     };
   }
 
-  findAll() {
-    return `This action returns all booking`;
-  }
-  findOne(id: number) {
-    return `This action returns a #${id} booking`;
-  }
-  update(id: number, updateBookingDto: UpdateBookingDto) {
-    void updateBookingDto;
-    return `This action updates a #${id} booking`;
-  }
-  remove(id: number) {
-    return `This action removes a #${id} booking`;
-  }
 }

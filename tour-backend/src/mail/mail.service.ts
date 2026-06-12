@@ -124,48 +124,73 @@ export class MailService {
     return info;
   }
 
-  async sendPasswordResetEmail(to: string, token: string) {
-    const resetLink = `http://localhost:3001/reset-password?token=${token}`;
+  async sendPasswordResetEmail(to: string, otp: string, fullName: string, locale: 'vi' | 'en' = 'vi') {
+    const isVi = locale === 'vi';
 
-    const mailOptions = {
-      from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
-      to,
-      subject: 'Reset Your Password - Azure Horizon',
-      html: `
-        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; border-radius: 16px; overflow: hidden;">
-          <div style="background: linear-gradient(135deg, #003f87, #0066cc); padding: 40px 30px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">Azure Horizon</h1>
-            <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 14px;">Your Premium Travel Experience</p>
-          </div>
-          <div style="padding: 40px 30px;">
-            <h2 style="color: #1a1a2e; margin: 0 0 16px; font-size: 22px;">Password Reset Request</h2>
-            <p style="color: #64748b; line-height: 1.6; margin: 0 0 8px;">Hello,</p>
-            <p style="color: #64748b; line-height: 1.6; margin: 0 0 24px;">
-              We received a request to reset your password for your Azure Horizon account.
-              Click the button below to set a new password:
-            </p>
-            <div style="text-align: center; margin: 32px 0;">
-              <a href="${resetLink}" 
-                 style="background: linear-gradient(135deg, #003f87, #0066cc); color: white; padding: 14px 40px; 
-                        text-decoration: none; border-radius: 50px; font-weight: 600; font-size: 16px; 
-                        display: inline-block; box-shadow: 0 4px 15px rgba(0,63,135,0.3);">
-                Reset Password
-              </a>
+    const subject = isVi
+      ? 'Mã xác nhận đặt lại mật khẩu - Azure Horizon'
+      : 'Your Password Reset Code - Azure Horizon';
+
+    const greeting = isVi ? `Xin chào <strong>${fullName}</strong>,` : `Hello <strong>${fullName}</strong>,`;
+
+    const bodyText = isVi
+      ? 'Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản <strong>Azure Horizon</strong> của bạn.<br/>Vui lòng sử dụng mã xác nhận bên dưới để hoàn tất quá trình:'
+      : 'We received a request to reset the password for your <strong>Azure Horizon</strong> account.<br/>Please use the verification code below to complete the process:';
+
+    const codeLabel = isVi ? 'MÃ XÁC NHẬN' : 'VERIFICATION CODE';
+
+    const expiryText = isVi
+      ? 'Mã có hiệu lực trong <strong>10 phút</strong> kể từ khi nhận email này.'
+      : 'This code is valid for <strong>10 minutes</strong> from when you received this email.';
+
+    const warningTitle = isVi ? '⚠ Lưu ý bảo mật' : '⚠ Security Notice';
+    const warningText = isVi
+      ? 'Không chia sẻ mã này với bất kỳ ai. Azure Horizon sẽ không bao giờ hỏi mã OTP của bạn.<br/>Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này — tài khoản của bạn vẫn an toàn.'
+      : 'Never share this code with anyone. Azure Horizon will never ask for your OTP.<br/>If you didn\'t request a password reset, you can safely ignore this email — your account is secure.';
+
+    const html = `
+      <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:560px;margin:0 auto;background:#f8fafc;">
+        <div style="background:linear-gradient(135deg,#003f87,#0066cc);padding:32px 30px;text-align:center;border-radius:16px 16px 0 0;">
+          <h1 style="color:white;margin:0;font-size:24px;font-weight:700;letter-spacing:-0.3px;">Azure Horizon</h1>
+          <p style="color:rgba(255,255,255,0.75);margin:6px 0 0;font-size:13px;">Your Premium Travel Experience</p>
+        </div>
+
+        <div style="background:white;padding:36px 32px;">
+          <p style="color:#1e293b;font-size:15px;line-height:1.6;margin:0 0 8px;">${greeting}</p>
+          <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 28px;">${bodyText}</p>
+
+          <div style="background:#f0f6ff;border:1.5px solid #c7deff;border-radius:14px;padding:24px 20px;text-align:center;margin-bottom:24px;">
+            <p style="color:#6b7280;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 14px;">${codeLabel}</p>
+            <div style="text-align:center;">
+              ${otp.split('').map(d =>
+                `<span style="display:inline-block;width:46px;height:56px;line-height:56px;text-align:center;font-size:30px;font-weight:800;color:#003f87;background:white;border:2px solid #c7deff;border-radius:10px;margin:0 4px;">${d}</span>`
+              ).join('')}
             </div>
-            <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 24px 0 0;">
-              This link will expire in <strong>15 minutes</strong>.<br/>
-              If you didn't request this, you can safely ignore this email.
-            </p>
           </div>
-          <div style="background: #f1f5f9; padding: 20px 30px; text-align: center; border-top: 1px solid #e2e8f0;">
-            <p style="color: #94a3b8; font-size: 12px; margin: 0;">© 2026 Azure Horizon. All rights reserved.</p>
+
+          <p style="color:#64748b;font-size:13px;text-align:center;margin:0 0 24px;">
+            🕐 ${expiryText}
+          </p>
+
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px 18px;">
+            <p style="color:#92400e;font-size:13px;font-weight:700;margin:0 0 6px;">${warningTitle}</p>
+            <p style="color:#a16207;font-size:13px;line-height:1.6;margin:0;">${warningText}</p>
           </div>
         </div>
-      `,
-    };
+
+        <div style="background:#f1f5f9;padding:16px 30px;text-align:center;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;">
+          <p style="color:#94a3b8;font-size:12px;margin:0;">© 2026 Azure Horizon. All rights reserved.</p>
+        </div>
+      </div>
+    `;
 
     try {
-      const info: unknown = await this.transporter.sendMail(mailOptions);
+      const info: unknown = await this.transporter.sendMail({
+        from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
+        to,
+        subject,
+        html,
+      });
       console.log('Password reset email sent successfully.');
       return info;
     } catch (error) {
@@ -175,7 +200,8 @@ export class MailService {
   }
 
   async sendWelcomeEmail(to: string, fullName: string, password?: string) {
-    const loginLink = `http://localhost:3001/login`;
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
+    const loginLink = `${frontendUrl}/vi/login`;
     
     const mailOptions = {
       from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
@@ -317,7 +343,7 @@ export class MailService {
 
             <!-- Button Xem Chi Tiết -->
             <div style="text-align: center; margin: 24px 0 0;">
-              <a href="http://localhost:3001/success?bookingId=${data.bookingCode}"
+              <a href="${(this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001')}/vi/my-bookings"
                  style="background: linear-gradient(135deg, #003f87, #0066cc); color: white; padding: 12px 36px;
                         text-decoration: none; border-radius: 50px; font-weight: 600; font-size: 14px;
                         display: inline-block; box-shadow: 0 4px 15px rgba(0,63,135,0.3);">

@@ -118,6 +118,15 @@ export const getReviewReadiness = ({
       error: "Vui lòng thêm ít nhất 1 chuyến khởi hành có ngày hợp lệ và số ghế lớn hơn 0",
       hint: "Chuyến hợp lệ cần ngày không ở quá khứ và số ghế còn lớn hơn 0.",
     },
+    {
+      label: "Ít nhất 1 gói dịch vụ",
+      done: packages.some((pkg) => Boolean(pkg.name.trim()) && pkg.price !== ""),
+      target: "tour-section-packages",
+      fieldId: "tour-section-packages",
+      field: undefined as keyof TourFormData | undefined,
+      error: "Vui lòng thêm ít nhất 1 gói dịch vụ có tên và giá",
+      hint: "Mỗi tour cần tối thiểu 1 gói để khách có thể đặt.",
+    },
   ];
 
   const recommended = [
@@ -132,12 +141,6 @@ export const getReviewReadiness = ({
       done: galleryImageCount >= 6,
       target: "tour-section-gallery",
       hint: `Hiện có ${galleryImageCount}/6 ảnh khuyến nghị.`,
-    },
-    {
-      label: "Gói tour",
-      done: packages.some((pkg) => Boolean(pkg.name.trim()) && pkg.price !== ""),
-      target: "tour-section-packages",
-      hint: "Nên thêm nếu tour có gói tiêu chuẩn, cao cấp hoặc luxury.",
     },
     {
       label: "Điểm nổi bật",

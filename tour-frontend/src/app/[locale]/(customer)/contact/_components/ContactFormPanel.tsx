@@ -83,7 +83,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                             <span className="material-symbols-outlined text-4xl">check_circle</span>
                         </div>
                         <h2 className="font-headline text-2xl font-bold text-on-surface">
-                            {language === 'vi' ? 'Yêu cầu đã được gửi' : 'Your request has been sent'}
+                            {t('contact.successTitle')}
                         </h2>
                         <p className="mt-3 text-sm leading-6 text-on-surface-variant">
                             {t('contact.successMessage')}
@@ -92,13 +92,13 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                         {submittedTicketId > 0 && (
                             <div className="my-7 rounded-2xl border border-primary/20 bg-primary/5 p-5">
                                 <p className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant">
-                                    {language === 'vi' ? 'Mã yêu cầu hỗ trợ' : 'Support ticket ID'}
+                                    {t('contact.ticketIdLabel')}
                                 </p>
                                 <p className="mt-2 font-mono text-4xl font-bold text-primary">#{submittedTicketId}</p>
                                 {!isLoggedIn && submittedAccessCode && (
                                     <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
                                         <p className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-amber-700">
-                                            {language === 'vi' ? 'Mã truy cập' : 'Access code'}
+                                            {t('contact.accessCodeLabel')}
                                         </p>
                                         <p className="mt-2 break-all font-mono text-sm font-bold text-amber-800">
                                             {submittedAccessCode}
@@ -115,7 +115,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                     className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-colors hover:bg-primary-container"
                                 >
                                     <span className="material-symbols-outlined text-sm">person</span>
-                                    {language === 'vi' ? 'Xem yêu cầu trong hồ sơ' : 'View requests in profile'}
+                                    {t('contact.viewInProfile')}
                                 </Link>
                             )}
                             {!isLoggedIn && submittedTicketId > 0 && submittedAccessCode && (
@@ -124,7 +124,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                     className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-colors hover:bg-primary-container"
                                 >
                                     <span className="material-symbols-outlined text-sm">support_agent</span>
-                                    {language === 'vi' ? 'Theo dõi yêu cầu' : 'Track request'}
+                                    {t('contact.trackRequest')}
                                 </Link>
                             )}
                             <button
@@ -153,7 +153,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                     onChange={event => setFormData({ ...formData, name: event.target.value })}
                                     placeholder={t('contact.namePlaceholder')}
                                 />
-                                {errors.name && <p id="contact-name-error" className="text-xs font-medium text-error">{errors.name}</p>}
+                                {errors.name && <p id="contact-name-error" role="alert" className="text-xs font-medium text-error">{errors.name}</p>}
                             </div>
 
                             <div className="space-y-2">
@@ -170,7 +170,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                     onChange={event => setFormData({ ...formData, email: event.target.value })}
                                     placeholder="a.thorne@example.com"
                                 />
-                                {errors.email && <p id="contact-email-error" className="text-xs font-medium text-error">{errors.email}</p>}
+                                {errors.email && <p id="contact-email-error" role="alert" className="text-xs font-medium text-error">{errors.email}</p>}
                             </div>
                         </div>
 
@@ -191,7 +191,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                             aria-haspopup="listbox"
                                             aria-expanded={isPhoneDropdownOpen}
                                             aria-controls={isPhoneDropdownOpen ? phoneListboxId : undefined}
-                                            aria-label={language === 'vi' ? 'Chọn mã quốc gia' : 'Select country code'}
+                                            aria-label={t('contact.selectCountryCode')}
                                             onClick={handlePhoneButtonClick}
                                             onKeyDown={handlePhoneButtonKeyDown}
                                             className="flex h-full items-center gap-2 rounded-l-xl border-r border-outline-variant/20 px-3 py-3 text-sm font-semibold text-on-surface outline-none transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/20"
@@ -211,7 +211,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                             <div
                                                 id={phoneListboxId}
                                                 role="listbox"
-                                                aria-label={language === 'vi' ? 'Mã quốc gia' : 'Country code'}
+                                                aria-label={t('contact.countryCode')}
                                                 aria-activedescendant={`${phoneListboxId}-${COUNTRY_CODES[activePhoneIndex]?.code.replace('+', '') ?? selectedCountry.code.replace('+', '')}`}
                                                 className="absolute left-0 top-full z-30 mt-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-outline-variant/30 bg-white py-1 shadow-xl"
                                             >
@@ -267,7 +267,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                         placeholder="912 345 678"
                                     />
                                 </div>
-                                {errors.phone && <p id="contact-phone-error" className="text-xs font-medium text-error">{errors.phone}</p>}
+                                {errors.phone && <p id="contact-phone-error" role="alert" className="text-xs font-medium text-error">{errors.phone}</p>}
                             </div>
 
                             <div className="space-y-2">
@@ -277,7 +277,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                         <span className="text-error">*</span>
                                     ) : (
                                         <span className="text-outline">
-                                            {language === 'vi' ? '(Không bắt buộc)' : '(Optional)'}
+                                            {t('contact.phoneOptional')}
                                         </span>
                                     )}
                                 </label>
@@ -291,7 +291,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                     placeholder="AH-98234-X"
                                 />
                                 {errors.reference ? (
-                                    <p id="contact-ref-error" className="text-xs font-medium text-error">{errors.reference}</p>
+                                    <p id="contact-ref-error" role="alert" className="text-xs font-medium text-error">{errors.reference}</p>
                                 ) : (
                                     <p id="contact-ref-help" className="text-xs text-outline">{bookingRefHelp}</p>
                                 )}
@@ -376,7 +376,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                                 {t(`contact.subjectOptions.${option.labelKey}`)}
                                                             </span>
                                                             <span className={`mt-0.5 block text-xs font-medium leading-5 ${selected ? 'text-primary/75' : 'text-on-surface-variant'}`}>
-                                                                {language === 'vi' ? option.description.vi : option.description.en}
+                                                                {t(`contact.subjectDescriptions.${option.value}`)}
                                                             </span>
                                                         </span>
                                                         {selected && (
@@ -398,7 +398,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                 <div className="mb-4 flex items-center gap-2">
                                     <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">fact_check</span>
                                     <h2 className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
-                                        {language === 'vi' ? 'Thông tin bổ sung' : 'Additional Details'}
+                                        {t('contact.additionalDetails')}
                                     </h2>
                                 </div>
 
@@ -417,9 +417,9 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 className={inputClass('tourInterest')}
                                                 value={contextFields.tourInterest}
                                                 onChange={event => setContextField('tourInterest', event.target.value)}
-                                                placeholder={language === 'vi' ? 'VD: Đà Nẵng, Nhật Bản, tour gia đình...' : 'E.g. Da Nang, Japan, family tour...'}
+                                                placeholder={t('contact.placeholders.tourInterest')}
                                             />
-                                            {errors.tourInterest && <p id="contact-tour-interest-error" className="text-xs font-medium text-error">{errors.tourInterest}</p>}
+                                            {errors.tourInterest && <p id="contact-tour-interest-error" role="alert" className="text-xs font-medium text-error">{errors.tourInterest}</p>}
                                         </div>
                                         <div className="space-y-2">
                                             <label htmlFor="contact-travel-date" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
@@ -431,13 +431,13 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 onChange={value => setContextField('preferredTravelDate', value)}
                                                 minDate={todayYMD}
                                                 language={language}
-                                                placeholder={language === 'vi' ? 'dd/mm/yyyy' : 'mm/dd/yyyy'}
+                                                placeholder={t('contact.placeholders.date')}
                                                 variant="field"
                                                 dropdownPlacement="bottom"
                                                 triggerClassName={datePickerTriggerClass('preferredTravelDate')}
                                                 dropdownClassName="w-[min(21rem,calc(100vw-3rem))]"
                                             />
-                                            {errors.preferredTravelDate && <p id="contact-travel-date-error" className="text-xs font-medium text-error">{errors.preferredTravelDate}</p>}
+                                            {errors.preferredTravelDate && <p id="contact-travel-date-error" role="alert" className="text-xs font-medium text-error">{errors.preferredTravelDate}</p>}
                                         </div>
                                         <div className="space-y-2">
                                             <label htmlFor="contact-guest-count" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
@@ -454,9 +454,9 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 className={inputClass('guestCount')}
                                                 value={contextFields.guestCount}
                                                 onChange={event => setContextField('guestCount', event.target.value)}
-                                                placeholder={language === 'vi' ? 'VD: 4' : 'E.g. 4'}
+                                                placeholder={t('contact.placeholders.guestCount')}
                                             />
-                                            {errors.guestCount && <p id="contact-guest-count-error" className="text-xs font-medium text-error">{errors.guestCount}</p>}
+                                            {errors.guestCount && <p id="contact-guest-count-error" role="alert" className="text-xs font-medium text-error">{errors.guestCount}</p>}
                                         </div>
                                         <div className="space-y-2 md:col-span-2">
                                             <label htmlFor="contact-preferred-method" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
@@ -471,7 +471,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 ariaDescribedBy={errors.preferredContactMethod ? 'contact-preferred-method-error' : undefined}
                                                 onChange={value => setContextField('preferredContactMethod', value)}
                                             />
-                                            {errors.preferredContactMethod && <p id="contact-preferred-method-error" className="text-xs font-medium text-error">{errors.preferredContactMethod}</p>}
+                                            {errors.preferredContactMethod && <p id="contact-preferred-method-error" role="alert" className="text-xs font-medium text-error">{errors.preferredContactMethod}</p>}
                                         </div>
                                     </div>
                                 )}
@@ -490,7 +490,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                             ariaDescribedBy={errors.paymentMethod ? 'contact-payment-method-error' : undefined}
                                             onChange={value => setContextField('paymentMethod', value)}
                                         />
-                                        {errors.paymentMethod && <p id="contact-payment-method-error" className="text-xs font-medium text-error">{errors.paymentMethod}</p>}
+                                        {errors.paymentMethod && <p id="contact-payment-method-error" role="alert" className="text-xs font-medium text-error">{errors.paymentMethod}</p>}
                                     </div>
                                 )}
 
@@ -506,13 +506,13 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 onChange={value => setContextField('requestedChangeDate', value)}
                                                 minDate={todayYMD}
                                                 language={language}
-                                                placeholder={language === 'vi' ? 'dd/mm/yyyy' : 'mm/dd/yyyy'}
+                                                placeholder={t('contact.placeholders.date')}
                                                 variant="field"
                                                 dropdownPlacement="bottom"
                                                 triggerClassName={datePickerTriggerClass('requestedChangeDate')}
                                                 dropdownClassName="w-[min(21rem,calc(100vw-3rem))]"
                                             />
-                                            {errors.requestedChangeDate && <p id="contact-change-date-error" className="text-xs font-medium text-error">{errors.requestedChangeDate}</p>}
+                                            {errors.requestedChangeDate && <p id="contact-change-date-error" role="alert" className="text-xs font-medium text-error">{errors.requestedChangeDate}</p>}
                                         </div>
                                         <div className="space-y-2">
                                             <label htmlFor="contact-cancel-reason" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
@@ -527,9 +527,9 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 className={inputClass('cancellationReason')}
                                                 value={contextFields.cancellationReason}
                                                 onChange={event => setContextField('cancellationReason', event.target.value)}
-                                                placeholder={language === 'vi' ? 'VD: đổi lịch cá nhân' : 'E.g. personal schedule change'}
+                                                placeholder={t('contact.placeholders.cancellationReason')}
                                             />
-                                            {errors.cancellationReason && <p id="contact-cancel-reason-error" className="text-xs font-medium text-error">{errors.cancellationReason}</p>}
+                                            {errors.cancellationReason && <p id="contact-cancel-reason-error" role="alert" className="text-xs font-medium text-error">{errors.cancellationReason}</p>}
                                         </div>
                                     </div>
                                 )}
@@ -549,7 +549,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                             value={contextFields.issueOccurredAt}
                                             onChange={event => setContextField('issueOccurredAt', event.target.value)}
                                         />
-                                        {errors.issueOccurredAt && <p id="contact-issue-time-error" className="text-xs font-medium text-error">{errors.issueOccurredAt}</p>}
+                                        {errors.issueOccurredAt && <p id="contact-issue-time-error" role="alert" className="text-xs font-medium text-error">{errors.issueOccurredAt}</p>}
                                     </div>
                                 )}
 
@@ -568,9 +568,9 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 className={inputClass('companyName')}
                                                 value={contextFields.companyName}
                                                 onChange={event => setContextField('companyName', event.target.value)}
-                                                placeholder={language === 'vi' ? 'Tên đơn vị của bạn' : 'Your organization'}
+                                                placeholder={t('contact.placeholders.companyName')}
                                             />
-                                            {errors.companyName && <p id="contact-company-name-error" className="text-xs font-medium text-error">{errors.companyName}</p>}
+                                            {errors.companyName && <p id="contact-company-name-error" role="alert" className="text-xs font-medium text-error">{errors.companyName}</p>}
                                         </div>
                                         <div className="space-y-2">
                                             <label htmlFor="contact-partner-type" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
@@ -585,7 +585,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 ariaDescribedBy={errors.partnerType ? 'contact-partner-type-error' : undefined}
                                                 onChange={value => setContextField('partnerType', value)}
                                             />
-                                            {errors.partnerType && <p id="contact-partner-type-error" className="text-xs font-medium text-error">{errors.partnerType}</p>}
+                                            {errors.partnerType && <p id="contact-partner-type-error" role="alert" className="text-xs font-medium text-error">{errors.partnerType}</p>}
                                         </div>
                                         <div className="space-y-2 md:col-span-2">
                                             <label htmlFor="contact-website" className="font-label text-[0.6875rem] font-bold uppercase tracking-widest text-primary">
@@ -603,7 +603,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                                 onChange={event => setContextField('website', event.target.value)}
                                                 placeholder="https://example.com"
                                             />
-                                            {errors.website && <p id="contact-website-error" className="text-xs font-medium text-error">{errors.website}</p>}
+                                            {errors.website && <p id="contact-website-error" role="alert" className="text-xs font-medium text-error">{errors.website}</p>}
                                         </div>
                                     </div>
                                 )}
@@ -623,7 +623,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                 onChange={event => setFormData({ ...formData, message: event.target.value })}
                                 placeholder={t('contact.messagePlaceholder')}
                             />
-                            {errors.message && <p id="contact-message-error" className="text-xs font-medium text-error">{errors.message}</p>}
+                            {errors.message && <p id="contact-message-error" role="alert" className="text-xs font-medium text-error">{errors.message}</p>}
                         </div>
 
                         <div className="space-y-3">
@@ -672,10 +672,10 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                                 </label>
                             )}
 
-                            {fileError && <p className="text-xs font-medium text-error">{fileError}</p>}
+                            {fileError && <p role="alert" className="text-xs font-medium text-error">{fileError}</p>}
                         </div>
 
-                        {errors.submit && <p className="text-center text-sm font-medium text-error">{errors.submit}</p>}
+                        {errors.submit && <p role="alert" className="text-center text-sm font-medium text-error">{errors.submit}</p>}
 
                         <button
                             type="submit"

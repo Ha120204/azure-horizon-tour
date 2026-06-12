@@ -3,61 +3,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { api } from '@/lib/http/fetchWithAuth';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/http/constants';
-import { BookingCard, type BookingHistoryItem } from './_components/BookingCard';
+import { BookingCard, type BookingHistoryItem } from '@/components/booking/BookingCard';
 import {
     BookingEmptyState,
     BookingErrorState,
     BookingListSkeleton,
-} from './_components/BookingListStates';
-
-type BookingHistoryResponse = {
-    data?: BookingHistoryItem[];
-};
-
-type BookingFilter = 'ALL' | 'UPCOMING' | 'UNPAID' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
-
-const isCancelledBooking = (booking: BookingHistoryItem) =>
-    booking.status === 'CANCELLED' || booking.status === 'CANCEL_REQUESTED';
-
-const getDepartureDayTime = (booking: BookingHistoryItem) => {
-    const value = booking.departureDate ?? booking.tour?.startDate;
-    if (!value) return Number.NaN;
-
-    const departureDay = new Date(value);
-    if (Number.isNaN(departureDay.getTime())) return Number.NaN;
-    departureDay.setHours(0, 0, 0, 0);
-    return departureDay.getTime();
-};
-
-const isCompletedBooking = (booking: BookingHistoryItem, todayTime: number) => {
-    const departureTime = getDepartureDayTime(booking);
-    return booking.status === 'CONFIRMED'
-        && Number.isFinite(departureTime)
-        && departureTime < todayTime;
-};
-
-const isUpcomingBooking = (booking: BookingHistoryItem, todayTime: number) => {
-    const departureTime = getDepartureDayTime(booking);
-    return !isCancelledBooking(booking)
-        && Number.isFinite(departureTime)
-        && departureTime >= todayTime;
-};
-
-const isAwaitingPaymentBooking = (booking: BookingHistoryItem) =>
-    booking.status === 'PENDING' && booking.paymentStatus !== 'PAID';
-
-const getBookingPriority = (booking: BookingHistoryItem, todayTime: number) => {
-    if (isAwaitingPaymentBooking(booking)) return 0;
-    if (booking.status === 'CONFIRMED' && isUpcomingBooking(booking, todayTime)) return 1;
-    if (isUpcomingBooking(booking, todayTime)) return 2;
-    if (isCompletedBooking(booking, todayTime)) return 3;
-    if (booking.status === 'CANCEL_REQUESTED') return 4;
-    if (booking.status === 'CANCELLED') return 5;
-    return 6;
-};
+} from '@/components/booking/BookingListStates';
+import {
+    type BookingFilter,
+    getBookingPriority,
+    getDepartureDayTime,
+    isAwaitingPaymentBooking,
+    isCancelledBooking,
+    isCompletedBooking,
+    isUpcomingBooking,
+} from './_lib/bookingFilters';
 
 export default function MyBookingsPage() {
     const [bookings, setBookings] = useState<BookingHistoryItem[]>([]);
@@ -72,11 +34,10 @@ export default function MyBookingsPage() {
         setHasLoadError(false);
 
         try {
-            const res = await fetchWithAuth(`${API_BASE_URL}/booking/history/my-bookings`);
-            const result = (await res.json()) as BookingHistoryResponse;
-
-            if (!res.ok || !Array.isArray(result.data)) {
-                throw new Error('Invalid booking history response');
+            const result = await api.get<BookingHistoryItem[]>('/booking/history/my-bookings');
+            if (!result.ok || !Array.isArray(result.data)) {
+                setHasLoadError(true);
+                return;
             }
             setBookings(result.data);
         } catch (error) {

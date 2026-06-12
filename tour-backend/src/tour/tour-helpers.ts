@@ -68,6 +68,7 @@ type PublishableTourFields = {
     availableSeats?: number | null;
     isActive?: boolean | null;
   }>;
+  packages?: Array<{ isActive?: boolean | null }>;
 };
 
 const DRAFT_DESTINATION_NAME = 'Chưa xác định';
@@ -75,7 +76,7 @@ const hasText = (value?: string | null) => Boolean(value?.trim());
 
 export const requirePublishableTour = (
   tour: PublishableTourFields,
-  options: { requireDepartures?: boolean } = {},
+  options: { requireDepartures?: boolean; requirePackages?: boolean } = {},
 ) => {
   const errors: string[] = [];
   if (!hasText(tour.name)) errors.push('Tên tour');
@@ -100,6 +101,13 @@ export const requirePublishableTour = (
         Number(d.availableSeats ?? 0) > 0,
     );
     if (validDepartures.length === 0) errors.push('Ít nhất 1 chuyến khởi hành');
+  }
+
+  if (options.requirePackages) {
+    const activePackages = (tour.packages ?? []).filter(
+      (p) => p.isActive !== false,
+    );
+    if (activePackages.length === 0) errors.push('Ít nhất 1 gói dịch vụ');
   }
 
   if (errors.length > 0) {

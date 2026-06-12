@@ -1,39 +1,79 @@
 "use client";
-import { useState } from "react";
-import { API_BASE_URL } from "@/lib/http/constants";
+import { useState, useEffect, useRef } from "react";
+import { useTranslations, useLocale } from "next-intl";
+import Link from "next/link";
+import { api } from "@/lib/http/fetchWithAuth";
+import AuthForgotShell from "@/components/auth/AuthForgotShell";
+import authStyles from "@/components/auth/AuthTheme.module.css";
+import {
+    AuthErrorMessage,
+    AuthPasswordField,
+    AuthSubmitButton,
+    AuthTextField,
+} from "@/components/auth/AuthFormControls";
 
-function getErrorMessage(error: unknown, fallback: string) {
-    return error instanceof Error ? error.message : fallback;
-}
+type Step = "email" | "otp" | "newPassword" | "success";
+
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
 export default function ForgotPasswordPage() {
+    const t = useTranslations("auth");
+    const locale = useLocale() as "vi" | "en";
+
+    const [step, setStep] = useState<Step>("email");
     const [email, setEmail] = useState("");
+    const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
+    const otpRefs = useRef<(HTMLInputElement | null)[]>(Array(6).fill(null));
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isSuccess, setIsSuccess] = useState(false);
     const [error, setError] = useState("");
+    const [countdown, setCountdown] = useState(0);
     const [resendToast, setResendToast] = useState<"success" | "error" | null>(null);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    useEffect(() => {
+        if (countdown <= 0) return;
+        const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [countdown]);
+
+    useEffect(() => {
+        if (!resendToast) return;
+        const timer = setTimeout(() => setResendToast(null), 4000);
+        return () => clearTimeout(timer);
+    }, [resendToast]);
+
+    const sendOtp = async (targetEmail: string) => {
+        const result = await api.post<{ message: string }>(
+            "/auth/forgot-password",
+            { email: targetEmail, locale },
+            { silent: true },
+        );
+        return result;
+    };
+
+    const handleSendOtp = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsLoading(true);
         setError("");
-
+        if (!email.trim()) {
+            setError(t("emailRequired"));
+            return;
+        }
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+        if (!emailPattern.test(email)) {
+            setError(t("emailInvalid"));
+            return;
+        }
+        setIsLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => null);
-                throw new Error(data?.message || "Failed to send email");
-            }
-
-            // Nếu gửi thành công, bật màn hình Success
-            setIsSuccess(true);
-        } catch (err) {
-            setError(getErrorMessage(err, "An error occurred. Please try again later."));
+            const result = await sendOtp(email);
+            if (!result.ok) { setError(t("accountNotFound")); return; }
+            setStep("otp");
+            setCountdown(60);
+        } catch {
+            setError(t("forgotGenericError"));
         } finally {
             setIsLoading(false);
         }
@@ -43,199 +83,337 @@ export default function ForgotPasswordPage() {
         setIsLoading(true);
         setResendToast(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => null);
-                throw new Error(data?.message || "Failed to send email");
-            }
-            // Hiện toast thành công trên giao diện
-            setResendToast("success");
+            const result = await sendOtp(email);
+            setResendToast(result.ok ? "success" : "error");
+            if (result.ok) setCountdown(60);
         } catch {
-            // Hiện toast lỗi trên giao diện
             setResendToast("error");
         } finally {
             setIsLoading(false);
-            // Tự tắt toast sau 4 giây
-            setTimeout(() => setResendToast(null), 4000);
         }
     };
 
-    // Quay lại form nhập email để chỉnh sửa
-    const handleBackToForm = () => {
-        setIsSuccess(false);
-        setResendToast(null);
+    const handleOtpChange = (index: number, value: string) => {
+        if (!/^\d*$/.test(value)) return;
+        const next = [...otpDigits];
+        next[index] = value.slice(-1);
+        setOtpDigits(next);
+        if (value && index < 5) otpRefs.current[index + 1]?.focus();
     };
 
+    const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+        if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+            otpRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const handleOtpPaste = (e: React.ClipboardEvent) => {
+        const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+        if (pasted.length === 6) {
+            setOtpDigits(pasted.split(""));
+            otpRefs.current[5]?.focus();
+        }
+        e.preventDefault();
+    };
+
+    const handleVerifyOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError("");
+        if (otpDigits.join("").length < 6) {
+            setError(t("otpInvalidError"));
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const result = await api.post<{ message: string }>(
+                "/auth/verify-otp",
+                { email, otp: otpDigits.join("") },
+                { silent: true },
+            );
+            if (!result.ok) {
+                const isExpired = (result.error ?? "").toLowerCase().includes("expired");
+                setError(isExpired ? t("otpExpiredError") : t("otpInvalidError"));
+                return;
+            }
+            setStep("newPassword");
+        } catch {
+            setError(t("forgotGenericError"));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleResetPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError("");
+        if (!PASSWORD_REGEX.test(newPassword)) {
+            setError(t("passwordWeakError"));
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setError(t("passwordMismatch"));
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const result = await api.post<{ message: string }>(
+                "/auth/reset-password",
+                { email, otp: otpDigits.join(""), newPassword },
+                { silent: true },
+            );
+            if (!result.ok) {
+                const isExpired = (result.error ?? "").toLowerCase().includes("expired");
+                setError(isExpired ? t("otpExpiredError") : t("otpInvalidError"));
+                // OTP hết hạn hoặc sai → quay về bước OTP
+                setStep("otp");
+                setOtpDigits(["", "", "", "", "", ""]);
+                return;
+            }
+            setStep("success");
+        } catch {
+            setError(t("forgotGenericError"));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const passwordRequirements = [
+        { label: t("pwdReqLength"), met: newPassword.length >= 8 },
+        { label: t("pwdReqUppercase"), met: /[A-Z]/.test(newPassword) },
+        { label: t("pwdReqLowercase"), met: /[a-z]/.test(newPassword) },
+        { label: t("pwdReqNumber"), met: /\d/.test(newPassword) },
+        { label: t("pwdReqSpecial"), met: /[@$!%*?&]/.test(newPassword) },
+    ];
+
     return (
-        <main className="min-h-screen flex items-center justify-center px-6 py-12 relative overflow-hidden bg-surface font-body text-on-surface">
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                @keyframes slideInUp {
-                    from { opacity: 0; transform: translateY(16px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes toastSlideIn {
-                    from { opacity: 0; transform: translateY(-8px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes pulseRing {
-                    0% { transform: scale(0.9); opacity: 0.6; }
-                    50% { transform: scale(1.15); opacity: 0; }
-                    100% { transform: scale(0.9); opacity: 0; }
-                }
-                .animate-slide-in-up { animation: slideInUp 0.5s ease-out both; }
-                .animate-toast { animation: toastSlideIn 0.35s ease-out both; }
-                .animate-pulse-ring { animation: pulseRing 2s ease-in-out infinite; }
-            `}} />
+        <AuthForgotShell activeStep={step}>
+            <div className={`${authStyles.formPanel} px-6 py-8 sm:px-10 sm:py-10`}>
 
-            {/* Background Elements */}
-            <div className="absolute top-0 right-0 w-full h-full -z-10 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-primary-fixed opacity-20 rounded-full blur-[120px]"></div>
-                <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-secondary-fixed opacity-15 rounded-full blur-[100px]"></div>
-            </div>
-
-            <div className="w-full max-w-[480px]">
-                <div className="flex justify-center mb-10">
-                    <h1 className="font-headline text-2xl font-bold tracking-tight text-primary">Azure Horizon</h1>
-                </div>
-
-                <div className="bg-surface-container-lowest rounded-[2rem] p-8 md:p-12 editorial-shadow border border-outline-variant/10">
-
-                    {/* Form State */}
-                    {!isSuccess ? (
+                    {/* ── BƯỚC 1: Nhập email ── */}
+                    {step === "email" && (
                         <>
                             <header className="text-center mb-10">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-surface-container-low text-primary mb-6">
-                                    <span className="material-symbols-outlined text-4xl">lock_reset</span>
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--auth-panel-wash)] text-[var(--auth-primary)] mb-6">
+                                    <span className="material-symbols-outlined text-4xl" aria-hidden="true">lock_reset</span>
                                 </div>
-                                <h2 className="font-headline text-3xl font-extrabold tracking-tight mb-3">Forgot Password</h2>
-                                <p className="text-on-surface-variant leading-relaxed px-4">
-                                    Enter your email address and we&apos;ll send you a link to reset your password.
-                                </p>
+                                <h1 className="font-headline text-[2rem] font-extrabold tracking-tight text-[var(--auth-ink)] mb-3">{t("forgotTitle")}</h1>
+                                <p className="text-[var(--auth-muted)] leading-relaxed px-4">{t("forgotSubtitle")}</p>
                             </header>
 
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                <div className="space-y-2">
-                                    <label htmlFor="email" className="font-label text-[0.6875rem] font-semibold tracking-widest text-on-surface-variant px-1 uppercase">
-                                        Email Address
-                                    </label>
-                                    <div className="relative flex items-center group">
-                                        <span className="material-symbols-outlined absolute left-4 text-on-surface-variant group-focus-within:text-primary transition-colors">mail</span>
-                                        <input
-                                            id="email"
-                                            type="email"
-                                            required
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            placeholder="name@luxury-travel.com"
-                                            className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-0 rounded-xl focus:ring-1 focus:ring-primary focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-outline/60"
-                                        />
-                                    </div>
-                                </div>
+                            <form onSubmit={handleSendOtp} className="space-y-5" noValidate>
+                                {error && <AuthErrorMessage icon>{error}</AuthErrorMessage>}
 
-                                {error && <p className="text-red-500 text-sm px-1">{error}</p>}
+                                <AuthTextField
+                                    id="forgot-email"
+                                    label={t("emailAddressLbl")}
+                                    icon="mail"
+                                    type="email"
+                                    autoComplete="email"
+                                    spellCheck={false}
+                                    placeholder={t("forgotEmailPlaceholder")}
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    disabled={isLoading}
+                                />
 
-                                <div className="pt-2">
-                                    <button
-                                        type="submit"
-                                        disabled={isLoading}
-                                        className="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-semibold rounded-full hover:shadow-lg active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-70"
-                                    >
-                                        {isLoading ? "Sending..." : "Send Reset Link"}
-                                    </button>
+                                <AuthSubmitButton
+                                    isLoading={isLoading}
+                                    loadingLabel={t("sendingLabel")}
+                                    idleLabel={t("sendResetLink")}
+                                />
+
+                                <div className="text-center pt-1">
+                                    <Link href="/login" className={`${authStyles.linkText} text-sm inline-flex items-center gap-1 group`}>
+                                        <span className="material-symbols-outlined text-base transition-transform duration-200 group-hover:-translate-x-1" aria-hidden="true">arrow_back</span>
+                                        {t("backToLogin")}
+                                    </Link>
                                 </div>
                             </form>
                         </>
-                    ) : (
-                        /* =====================================================
-                           SUCCESS STATE - Thiết kế Premium cho Azure Horizon
-                           ===================================================== */
-                        <div className="animate-slide-in-up">
-                            {/* Toast thông báo Resend - hiện ngay trên giao diện */}
+                    )}
+
+                    {/* ── BƯỚC 2: Nhập OTP ── */}
+                    {step === "otp" && (
+                        <>
+                            <header className="text-center mb-8">
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--auth-panel-wash)] text-[var(--auth-primary)] mb-6">
+                                    <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">mark_email_read</span>
+                                </div>
+                                <h1 className="font-headline text-[2rem] font-extrabold tracking-tight text-[var(--auth-ink)] mb-3">{t("otpTitle")}</h1>
+                                <p className="text-[var(--auth-muted)] leading-relaxed text-sm">{t("otpSubtitle")}</p>
+                                <div className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-[var(--auth-panel-wash)] rounded-full border border-[var(--auth-input-border)]">
+                                    <span className="material-symbols-outlined text-[var(--auth-primary)] text-sm" aria-hidden="true">mail</span>
+                                    <span className="font-mono text-sm font-semibold text-[var(--auth-primary)] tracking-tight">{email}</span>
+                                </div>
+                            </header>
+
                             {resendToast && (
-                                <div className={`animate-toast mb-6 flex items-center gap-3 p-4 rounded-xl border ${resendToast === "success"
-                                    ? "bg-emerald-50 border-emerald-200/60 text-emerald-800"
-                                    : "bg-red-50 border-red-200/60 text-red-800"
-                                    }`}>
-                                    <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                <div role="alert" aria-live="polite"
+                                    className={`mb-6 flex items-center gap-3 p-4 rounded-xl border ${resendToast === "success" ? "bg-emerald-50 border-emerald-200/60 text-emerald-800" : "bg-red-50 border-red-200/60 text-red-800"}`}>
+                                    <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">
                                         {resendToast === "success" ? "check_circle" : "error"}
                                     </span>
                                     <p className="text-sm font-medium">
-                                        {resendToast === "success"
-                                            ? "A new reset link has been sent!"
-                                            : "Failed to resend. Please try again."}
+                                        {resendToast === "success" ? t("resendSuccess") : t("resendError")}
                                     </p>
                                 </div>
                             )}
 
-                            {/* Icon với hiệu ứng pulse ring */}
-                            <div className="text-center mb-8">
-                                <div className="relative inline-flex items-center justify-center">
-                                    <div className="absolute w-20 h-20 rounded-2xl bg-emerald-200/40 animate-pulse-ring"></div>
-                                    <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center shadow-sm border border-emerald-200/30">
-                                        <span className="material-symbols-outlined text-emerald-600 text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                                            mark_email_read
-                                        </span>
+                            <form onSubmit={handleVerifyOtp} className="space-y-5">
+                                <div className="space-y-3">
+                                    <label className={`${authStyles.fieldLabel} block text-center`}>
+                                        {t("otpLabel")}
+                                    </label>
+                                    <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
+                                        {otpDigits.map((digit, i) => (
+                                            <input
+                                                key={i}
+                                                ref={(el) => { otpRefs.current[i] = el; }}
+                                                type="text"
+                                                inputMode="numeric"
+                                                maxLength={1}
+                                                value={digit}
+                                                onChange={(e) => handleOtpChange(i, e.target.value)}
+                                                onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                                                className={authStyles.otpDigit}
+                                                aria-label={`Digit ${i + 1}`}
+                                            />
+                                        ))}
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Tiêu đề và mô tả */}
-                            <div className="text-center mb-8">
-                                <h3 className="font-headline text-2xl font-extrabold tracking-tight text-on-surface mb-3">
-                                    Check your inbox
-                                </h3>
-                                <p className="text-on-surface-variant leading-relaxed text-sm">
-                                    We&apos;ve sent a password reset link to
-                                </p>
-                                <div className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-surface-container-low rounded-full border border-outline-variant/15">
-                                    <span className="material-symbols-outlined text-primary text-sm">mail</span>
-                                    <span className="font-mono text-sm font-semibold text-primary tracking-tight">{email}</span>
+                                {error && <AuthErrorMessage icon>{error}</AuthErrorMessage>}
+
+                                <p className="text-xs text-[var(--auth-muted)] text-center leading-relaxed">{t("otpInfo")}</p>
+
+                                <AuthSubmitButton
+                                    isLoading={isLoading}
+                                    loadingLabel={t("otpVerifyingLabel")}
+                                    idleLabel={t("otpVerifyBtn")}
+                                />
+
+                                <div className="flex items-center justify-between pt-1">
+                                    <button type="button"
+                                        onClick={() => { setStep("email"); setError(""); setOtpDigits(["", "", "", "", "", ""]); }}
+                                        className={`${authStyles.linkText} text-sm inline-flex items-center gap-1 group`}>
+                                        <span className="material-symbols-outlined text-base transition-transform duration-200 group-hover:-translate-x-1" aria-hidden="true">arrow_back</span>
+                                        {t("backToEmail")}
+                                    </button>
+                                    <button type="button" onClick={handleResend} disabled={isLoading || countdown > 0}
+                                        className={`${authStyles.linkText} text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed`}>
+                                        {isLoading
+                                            ? t("sendingLabel")
+                                            : countdown > 0
+                                                ? t("resendCooldown", { seconds: countdown })
+                                                : t("resendLink")}
+                                    </button>
                                 </div>
-                            </div>
+                            </form>
+                        </>
+                    )}
 
-                            {/* Hướng dẫn nhỏ */}
-                            <div className="bg-surface-container-low/50 rounded-xl p-4 mb-8 border border-outline-variant/10">
-                                <div className="flex items-start gap-3">
-                                    <span className="material-symbols-outlined text-on-surface-variant text-lg mt-0.5">info</span>
-                                    <p className="text-xs text-on-surface-variant leading-relaxed">
-                                        The link will expire in <span className="font-bold text-on-surface">15 minutes</span>. If you don&apos;t see the email, check your spam folder.
-                                    </p>
+                    {/* ── BƯỚC 3: Đặt mật khẩu mới ── */}
+                    {step === "newPassword" && (
+                        <>
+                            <header className="text-center mb-8">
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--auth-panel-wash)] text-[var(--auth-primary)] mb-6">
+                                    <span className="material-symbols-outlined text-4xl" aria-hidden="true">key</span>
                                 </div>
-                            </div>
+                                <h1 className="font-headline text-[2rem] font-extrabold tracking-tight text-[var(--auth-ink)] mb-3">{t("newPasswordTitle")}</h1>
+                                <p className="text-[var(--auth-muted)] leading-relaxed text-sm">{t("newPasswordSubtitle")}</p>
+                            </header>
 
-                            {/* Nút hành động */}
-                            <div className="space-y-3">
-                                {/* Nút Resend chính */}
-                                <button
-                                    onClick={handleResend}
+                            <form onSubmit={handleResetPassword} className="space-y-5">
+                                {error && <AuthErrorMessage icon>{error}</AuthErrorMessage>}
+
+                                <AuthPasswordField
+                                    id="new-password"
+                                    label={t("newPasswordLbl")}
+                                    required
+                                    autoComplete="new-password"
+                                    placeholder={t("newPasswordPlace")}
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
                                     disabled={isLoading}
-                                    className={`w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-semibold rounded-full hover:shadow-lg active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-                                >
-                                    <span className="material-symbols-outlined text-lg">
-                                        {isLoading ? "hourglass_empty" : "refresh"}
-                                    </span>
-                                    {isLoading ? "Sending..." : "Resend Link"}
-                                </button>
+                                    isVisible={showPassword}
+                                    onToggleVisible={() => setShowPassword((v) => !v)}
+                                    showLabel={t("showPassword")}
+                                    hideLabel={t("hidePassword")}
+                                    helperText={
+                                        newPassword.length > 0 ? (
+                                            <div className={`${authStyles.inlineReveal} rounded-[var(--auth-radius-sm)] border border-[var(--auth-input-border)] bg-[var(--auth-surface)] p-3`}>
+                                                <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-[var(--auth-muted)]">
+                                                    <span className="material-symbols-outlined text-[15px]" aria-hidden="true">info</span>
+                                                    {t("passwordRequirementsTitle")}
+                                                </p>
+                                                <ul className="grid gap-1 text-xs font-medium text-[var(--auth-muted)] sm:grid-cols-2">
+                                                    {passwordRequirements.map((item) => (
+                                                        <li key={item.label} className={item.met ? "flex items-center gap-1.5 text-[var(--auth-success)]" : "flex items-center gap-1.5"}>
+                                                            <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
+                                                                {item.met ? "check_circle" : "radio_button_unchecked"}
+                                                            </span>
+                                                            {item.label}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null
+                                    }
+                                />
 
-                                {/* Nút Quay lại */}
-                                <button
-                                    onClick={handleBackToForm}
-                                    className="w-full py-3.5 text-on-surface-variant font-semibold rounded-full hover:bg-surface-container-low transition-all duration-300 flex items-center justify-center gap-2 group"
-                                >
-                                    <span className="material-symbols-outlined text-lg transition-transform group-hover:-translate-x-1">arrow_back</span>
-                                    Use a different email
-                                </button>
+                                <AuthPasswordField
+                                    id="confirm-password"
+                                    label={t("confirmPasswordLbl")}
+                                    icon="lock_reset"
+                                    required
+                                    autoComplete="new-password"
+                                    placeholder={t("confirmPasswordPlace")}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    disabled={isLoading}
+                                    isVisible={showConfirmPassword}
+                                    onToggleVisible={() => setShowConfirmPassword((v) => !v)}
+                                    showLabel={t("showPasswordConfirm")}
+                                    hideLabel={t("hidePasswordConfirm")}
+                                    error={confirmPassword.length > 0 && confirmPassword !== newPassword}
+                                    helperText={
+                                        confirmPassword && confirmPassword !== newPassword ? (
+                                            <p className={`${authStyles.inlineReveal} flex items-center gap-1 text-xs font-semibold text-[var(--auth-danger)]`}>
+                                                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">error</span>
+                                                {t("passwordsNotMatch")}
+                                            </p>
+                                        ) : null
+                                    }
+                                />
+
+                                <AuthSubmitButton
+                                    isLoading={isLoading}
+                                    loadingLabel={t("updatingPasswordLabel")}
+                                    idleLabel={t("updatePasswordBtn")}
+                                />
+                            </form>
+                        </>
+                    )}
+
+                    {/* ── THÀNH CÔNG ── */}
+                    {step === "success" && (
+                        <div className="text-center">
+                            <div className="relative inline-flex items-center justify-center mb-8">
+                                <div className="absolute w-20 h-20 rounded-2xl bg-emerald-200/40 animate-pulse-ring" />
+                                <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center shadow-sm border border-emerald-200/30">
+                                    <span className="material-symbols-outlined text-emerald-600 text-4xl" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">check_circle</span>
+                                </div>
                             </div>
+                            <h1 className="font-headline text-2xl font-extrabold tracking-tight mb-3">{t("passwordUpdatedTitle")}</h1>
+                            <p className="text-on-surface-variant leading-relaxed text-sm mb-8">{t("passwordUpdatedDesc")}</p>
+                            <Link href="/login"
+                                className="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-semibold rounded-full hover:shadow-lg active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2">
+                                {t("goToLogin")}
+                            </Link>
                         </div>
                     )}
-                </div>
+
             </div>
-        </main>
+        </AuthForgotShell>
     );
 }

@@ -39,6 +39,10 @@ export class TourWorkflowService {
             isActive: true,
           },
         },
+        packages: {
+          where: { isActive: true },
+          select: { id: true, isActive: true },
+        },
       },
     });
   }
@@ -59,7 +63,10 @@ export class TourWorkflowService {
       );
     }
 
-    requirePublishableTour(tour, { requireDepartures: true });
+    requirePublishableTour(tour, {
+      requireDepartures: true,
+      requirePackages: true,
+    });
 
     return this.prisma.tour.update({
       where: { id },
@@ -85,7 +92,10 @@ export class TourWorkflowService {
       throw new BadRequestException('Vui lòng nhập lý do từ chối');
     }
     if (action === 'approve') {
-      requirePublishableTour(tour, { requireDepartures: true });
+      requirePublishableTour(tour, {
+        requireDepartures: true,
+        requirePackages: true,
+      });
     }
 
     const newStatus =
@@ -109,7 +119,10 @@ export class TourWorkflowService {
     if (tour.status === TourStatus.COMPLETED)
       throw new BadRequestException('Tour đã kết thúc, không thể public lại');
 
-    requirePublishableTour(tour, { requireDepartures: true });
+    requirePublishableTour(tour, {
+      requireDepartures: true,
+      requirePackages: true,
+    });
 
     return this.prisma.tour.update({
       where: { id },

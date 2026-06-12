@@ -15,7 +15,8 @@
     "exploreAll": "Khám phá tất cả điểm đến",
     "perPerson": "Mỗi người",
     "viewDetails": "Xem chi tiết",
-    "loading": "Đang tải tour...",
+    "empty": "Hiện chưa có tour nào để hiển thị. Vui lòng quay lại sau.",
+    "error": "Không tải được danh sách tour. Vui lòng thử lại sau.",
     "days": "NGÀY"
   },
   "philosophy": {
@@ -34,7 +35,7 @@
     "secondaryCta": "Tìm Hành Trình Phù Hợp"
   },
   "conciergeApp": {
-    "btn": "Trợ lý ảo Azure AI",
+    "btn": "Azure AI",
     "title1": "Trợ Lý Của Chúng Tôi.",
     "title2": "Trải Nghiệm Riêng Của Bạn.",
     "desc": "Trao đổi với chuyên gia hoặc sử dụng AI để nhận hỗ trợ thiết kế lịch trình cá nhân hóa ngay lập tức.",
@@ -50,6 +51,22 @@
     "aiCardTitle": "Hành trình đề xuất: 4 ngày tại Kyoto",
     "viewItinerary": "Xem Toàn Bộ Lịch Trình",
     "tourDesc": "Tham quan khu vườn Zen tư nhân, dùng bữa tối Kaiseki với nhà sử học địa phương, và tham gia các buổi trà đạo độc quyền.",
-    "prompt4": "Tôi nên đi đâu tháng này?"
+    "prompt4": "Tôi nên đi đâu tháng này?",
+    "history": "Lịch sử",
+    "historyTooltip": "Xem lịch sử trò chuyện",
+    "historyLoginRequired": "Đăng nhập để xem lịch sử",
+    "newChat": "Mới",
+    "newChatTooltip": "Bắt đầu hội thoại mới",
+    "loadingHistory": "Đang tải lịch sử...",
+    "viewTourDetail": "Xem chi tiết tour →",
+    "historyTitle": "Lịch sử trò chuyện",
+    "historySubtitle": "Chọn lại một cuộc trò chuyện cũ.",
+    "closeHistory": "Đóng lịch sử",
+    "noHistory": "Chưa có cuộc trò chuyện nào. Bấm Mới và gửi câu hỏi đầu tiên để bắt đầu lưu lịch sử.",
+    "messageCount": "{count} tin nhắn",
+    "delete": "Xóa",
+    "sendMessage": "Gửi tin nhắn",
+    "rateLimitError": "Bạn đang gửi quá nhiều tin nhắn. Vui lòng đợi vài giây rồi thử lại.",
+    "connectionError": "Không thể kết nối đến trợ lý AI. Vui lòng thử lại sau."
   }
 }

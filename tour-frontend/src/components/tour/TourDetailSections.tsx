@@ -1,4 +1,10 @@
 'use client';
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { toastEmitter } from '@/lib/http/toastEmitter';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
+import type { Tour } from '@/types';
 import { FAQAccordion } from './FAQAccordion';
 
 type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
@@ -256,8 +262,32 @@ export function ImportantInfoSection({ tour, t }: { tour: ImportantInfoTour | nu
             value: tour?.accessibility || t('tour_detail.defaultAccessibility'),
         },
     ];
-    const hotlineValue = t('tour_detail.hotlineValue');
+    const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchPublicSettings(controller.signal)
+            .then(setPublicSettings)
+            .catch(error => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                    console.error('Error loading public settings:', error);
+                }
+            });
+        return () => controller.abort();
+    }, []);
+
+    // Số hotline lấy từ cấu hình admin (publicSettings), không hardcode
+    const hotlineValue = publicSettings.company_phone;
     const hotlineHref = `tel:${hotlineValue.replace(/[^\d+]/g, '')}`;
+
+    // Desktop không có app tel: → copy số + toast để vẫn có phản hồi rõ ràng
+    const handleCopyHotline = () => {
+        if (!navigator.clipboard) return;
+        navigator.clipboard
+            .writeText(hotlineValue)
+            .then(() => toastEmitter.success(t('tour_detail.hotlineCopied')))
+            .catch(() => {});
+    };
 
     return (
         <section className="pt-8 border-t border-outline-variant/20">
@@ -343,6 +373,7 @@ export function ImportantInfoSection({ tour, t }: { tour: ImportantInfoTour | nu
                         </div>
                         <a
                             href={hotlineHref}
+                            onClick={handleCopyHotline}
                             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm shadow-primary/20 transition-all hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                             aria-label={`${t('tour_detail.supportInfo')} ${hotlineValue}`}
                         >
@@ -351,6 +382,186 @@ export function ImportantInfoSection({ tour, t }: { tour: ImportantInfoTour | nu
                         </a>
                     </div>
                 </div>
+            </div>
+        </section>
+    );
+}
+
+// ── Cancellation Policy Section ───────────────────────────────────────────────
+const CANCEL_POLICY_ROWS = [
+    {
+        timeKey: 'cancelPolicyRow1Time',
+        refundKey: 'cancelPolicyRow1Refund',
+        noteKey: 'cancelPolicyRow1Note',
+        refundColor: 'text-emerald-600',
+        noteBg: 'bg-emerald-50 text-emerald-700',
+        barWidth: 'w-full',
+        barColor: 'bg-emerald-400',
+        icon: 'check_circle',
+        iconColor: 'text-emerald-500',
+    },
+    {
+        timeKey: 'cancelPolicyRow2Time',
+        refundKey: 'cancelPolicyRow2Refund',
+        noteKey: 'cancelPolicyRow2Note',
+        refundColor: 'text-teal-600',
+        noteBg: 'bg-teal-50 text-teal-700',
+        barWidth: 'w-4/5',
+        barColor: 'bg-teal-400',
+        icon: 'check_circle',
+        iconColor: 'text-teal-500',
+    },
+    {
+        timeKey: 'cancelPolicyRow3Time',
+        refundKey: 'cancelPolicyRow3Refund',
+        noteKey: 'cancelPolicyRow3Note',
+        refundColor: 'text-amber-600',
+        noteBg: 'bg-amber-50 text-amber-700',
+        barWidth: 'w-1/2',
+        barColor: 'bg-amber-400',
+        icon: 'warning',
+        iconColor: 'text-amber-500',
+    },
+    {
+        timeKey: 'cancelPolicyRow4Time',
+        refundKey: 'cancelPolicyRow4Refund',
+        noteKey: 'cancelPolicyRow4Note',
+        refundColor: 'text-red-500',
+        noteBg: 'bg-red-50 text-red-600',
+        barWidth: 'w-0',
+        barColor: 'bg-red-300',
+        icon: 'cancel',
+        iconColor: 'text-red-400',
+    },
+] as const;
+
+export function CancelPolicySection({ t }: { t: TranslationFn }) {
+    return (
+        <section className="pt-8 border-t border-outline-variant/20">
+            <h2 className="text-2xl font-bold font-headline mb-6">{t('tour_detail.cancelPolicyTitle')}</h2>
+
+            <div className="flex items-start gap-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-5 mb-6">
+                <div className="w-11 h-11 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200">
+                    <span className="material-symbols-outlined text-white text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                </div>
+                <div>
+                    <p className="font-bold text-emerald-800 text-base leading-snug">{t('tour_detail.cancelPolicyBadge')}</p>
+                    <p className="text-sm text-emerald-700/80 mt-0.5 leading-relaxed">{t('tour_detail.cancelPolicyBadgeSub')}</p>
+                </div>
+            </div>
+
+            <div className="rounded-2xl border border-outline-variant/20 overflow-hidden">
+                <div className="grid grid-cols-[1fr_auto_auto] bg-surface-container-low/60 px-5 py-3 gap-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-outline">{t('tour_detail.cancelPolicyTableHeader1')}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-outline text-right w-16">{t('tour_detail.cancelPolicyTableHeader2')}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-outline text-right w-28 hidden sm:block"></p>
+                </div>
+
+                {CANCEL_POLICY_ROWS.map((row, idx) => (
+                    <div
+                        key={row.timeKey}
+                        className={`grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_auto] items-center gap-x-4 gap-y-1 px-5 py-4 ${idx < 3 ? 'border-b border-outline-variant/10' : ''}`}
+                    >
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                                <span className={`material-symbols-outlined text-[16px] ${row.iconColor} shrink-0`} style={{ fontVariationSettings: "'FILL' 1" }}>{row.icon}</span>
+                                <p className="text-sm font-medium text-on-surface">{t(`tour_detail.${row.timeKey}`)}</p>
+                            </div>
+                            <div className="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+                                <div className={`h-full ${row.barWidth} ${row.barColor} rounded-full transition-all duration-500`} />
+                            </div>
+                        </div>
+                        <div className="text-right w-16">
+                            <p className={`text-xl font-extrabold leading-none ${row.refundColor}`}>{t(`tour_detail.${row.refundKey}`)}</p>
+                        </div>
+                        <div className="hidden sm:flex justify-end w-28">
+                            <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${row.noteBg}`}>
+                                {t(`tour_detail.${row.noteKey}`)}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="mt-5">
+                <p className="text-xs text-outline leading-relaxed">{t('tour_detail.cancelPolicyNote')}</p>
+            </div>
+        </section>
+    );
+}
+
+// ── Similar Tours Section ─────────────────────────────────────────────────────
+export function SimilarTours({
+    similarTours,
+    destinationName,
+    t,
+    formatPrice,
+}: {
+    similarTours: Tour[];
+    destinationName?: string;
+    t: TranslationFn;
+    formatPrice: (n: number) => string;
+}) {
+    if (similarTours.length === 0) return null;
+    return (
+        <section className="mt-20 pt-12 border-t border-outline-variant/20">
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h2 className="text-2xl font-bold font-headline">
+                        {destinationName
+                            ? t('tour_detail.similarToursAt', { dest: destinationName })
+                            : t('tour_detail.similarTours')}
+                    </h2>
+                    <p className="text-sm text-on-surface-variant mt-1">{t('tour_detail.similarToursDesc')}</p>
+                </div>
+                <Link
+                    href={destinationName
+                        ? `/destinations?dest=${encodeURIComponent(destinationName)}`
+                        : '/destinations'}
+                    className="text-sm font-semibold text-primary flex items-center gap-1 hover:underline shrink-0"
+                >
+                    {t('tour_detail.viewAll')}
+                    <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </Link>
+            </div>
+            <div className="flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory md:grid md:grid-cols-3 md:overflow-visible md:pb-0">
+                {similarTours.map((st) => {
+                    const stMin = st.departures?.length
+                        ? Math.min(...st.departures.map((d) => d.price ?? st.price))
+                        : st.price;
+                    return (
+                        <Link key={st.id} href={`/tour/${st.id}`} className="group min-w-[260px] snap-start flex-shrink-0 flex flex-col bg-white rounded-2xl overflow-hidden border border-outline-variant/10 shadow-sm hover:shadow-lg transition-all duration-300 md:min-w-0">
+                            <div className="relative h-48 overflow-hidden">
+                                <Image
+                                    src={st.imageUrl || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb'}
+                                    alt={st.name}
+                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                    fill
+                                    sizes="(min-width: 768px) 33vw, 100vw"
+                                />
+                                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-primary shadow-sm">
+                                    {st.duration}
+                                </div>
+                            </div>
+                            <div className="p-4 flex-1 flex flex-col">
+                                <p className="font-bold text-on-surface leading-snug line-clamp-2 group-hover:text-primary transition-colors">{st.name}</p>
+                                {(st.averageRating ?? 0) > 0 && (
+                                    <div className="flex items-center gap-1 mt-1.5">
+                                        <span className="material-symbols-outlined text-secondary-container text-[14px] fill-icon">star</span>
+                                        <span className="text-xs font-semibold text-on-surface">{(st.averageRating ?? 0).toFixed(1)}</span>
+                                        {(st._count?.reviews ?? 0) > 0 && (
+                                            <span className="text-xs text-outline">({st._count!.reviews})</span>
+                                        )}
+                                    </div>
+                                )}
+                                <p className="text-xs text-outline mt-auto pt-3 border-t border-outline-variant/10">
+                                    <span className="font-bold text-primary text-base">{formatPrice(stMin)}</span>
+                                    <span className="ml-1">{t('tour_detail.perPerson')}</span>
+                                </p>
+                            </div>
+                        </Link>
+                    );
+                })}
             </div>
         </section>
     );

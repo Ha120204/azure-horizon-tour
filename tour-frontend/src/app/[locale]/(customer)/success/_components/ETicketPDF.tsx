@@ -367,6 +367,8 @@ export function ETicketPDF({ ticketData, qrDataUrl, formattedPrice, formattedDat
                 {/* Left: tour image */}
                 <View style={s.imageCol}>
                     {ticketData.tour?.imageUrl ? (
+                        // react-pdf Image render ra PDF, alt không áp dụng
+                        // eslint-disable-next-line jsx-a11y/alt-text
                         <Image src={ticketData.tour.imageUrl} style={s.tourImage} />
                     ) : (
                         <View style={s.imageFallback} />
@@ -457,6 +459,8 @@ export function ETicketPDF({ ticketData, qrDataUrl, formattedPrice, formattedDat
                     ) : (
                         <>
                             <View style={s.qrWrapper}>
+                                {/* react-pdf Image render ra PDF, alt không áp dụng */}
+                                {/* eslint-disable-next-line jsx-a11y/alt-text */}
                                 <Image src={qrDataUrl} style={s.qrImage} />
                             </View>
                             <Text style={s.qrScanLabel}>{L.scanAtCheckIn}</Text>

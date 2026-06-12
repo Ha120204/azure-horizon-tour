@@ -85,6 +85,18 @@ export type TourTranslationResponse = {
   })[];
 };
 
+export type ArticleTranslationRequest = {
+  title?: string;
+  excerpt?: string;
+  content?: string;
+};
+
+export type ArticleTranslationResponse = {
+  titleEn?: string;
+  excerptEn?: string;
+  contentEn?: string;
+};
+
 // Tool definitions in OpenAI-compatible format for LLMGate.
 const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -101,9 +113,24 @@ const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
             description:
               'Tên điểm đến, địa danh, hoặc từ khóa (ví dụ: london, đà lạt, biển, châu âu).',
           },
+          minPrice: {
+            type: 'number',
+            description:
+              'Ngân sách tối thiểu của khách (tính bằng VND, ví dụ: 5000000 = 5 triệu).',
+          },
           maxPrice: {
             type: 'number',
-            description: 'Ngân sách tối đa của khách (tính bằng USD).',
+            description:
+              'Ngân sách tối đa của khách (tính bằng VND, ví dụ: 10000000 = 10 triệu).',
+          },
+          tourType: {
+            type: 'string',
+            description:
+              'Loại tour. Các giá trị hợp lệ: "Tour Gia Đình", "Tour Cao Cấp", "Nghỉ Dưỡng", "Khám Phá", "Văn Hóa & Lịch Sử", "Tour Ghép Đoàn".',
+          },
+          startMonth: {
+            type: 'number',
+            description: 'Tháng khởi hành (1–12). Ví dụ: 8 = tháng 8.',
           },
         },
       },
@@ -368,7 +395,7 @@ export class AiService {
   }
   // Tool: search tours in the database.
   private async executeSearchTours(args: any) {
-    const { destination, maxPrice } = args;
+    const { destination, minPrice, maxPrice, tourType, startMonth } = args;
     const whereClause: any = {
       availableSeats: { gt: 0 },
       status: 'PUBLISHED',
@@ -389,8 +416,25 @@ export class AiService {
       ];
     }
 
-    if (maxPrice) {
-      whereClause.price = { lte: maxPrice };
+    if (minPrice || maxPrice) {
+      whereClause.price = {
+        ...(minPrice ? { gte: Number(minPrice) } : {}),
+        ...(maxPrice ? { lte: Number(maxPrice) } : {}),
+      };
+    }
+
+    if (tourType) {
+      whereClause.tourType = { contains: String(tourType), mode: 'insensitive' };
+    }
+
+    if (startMonth) {
+      const month = Number(startMonth);
+      const now = new Date();
+      const year = now.getMonth() + 1 > month ? now.getFullYear() + 1 : now.getFullYear();
+      whereClause.startDate = {
+        gte: new Date(year, month - 1, 1),
+        lt: new Date(year, month, 1),
+      };
     }
 
     const tours = await this.prisma.tour.findMany({
@@ -509,7 +553,14 @@ export class AiService {
   }
   // System prompt.
   private buildSystemPrompt(): string {
+    const today = new Date().toLocaleDateString('vi-VN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
     return `Bạn là "Azure Horizon AI Concierge" - trợ lý tư vấn du lịch của nền tảng đặt tour Azure Horizon.
+Hôm nay là ${today}. Khi khách nhắc tới "tháng tới", "cuối năm", "hè này" hay bất kỳ mốc thời gian tương đối nào, hãy tính theo ngày này.
 
 PHONG CÁCH TƯ VẤN:
 - Trả lời như một nhân viên tư vấn du lịch có kinh nghiệm: tự nhiên, ấm áp, chủ động gợi mở, không máy móc.
@@ -521,6 +572,17 @@ NGUYÊN TẮC DỮ LIỆU:
 - Không bịa tên tour, giá, ngày khởi hành, số ghế, trạng thái booking hoặc chính sách.
 - Khi nói về tour/booking có trong hệ thống, phải dựa trên tool.
 - Bạn có thể tư vấn ý tưởng du lịch chung, cách chọn điểm đến, cách chia ngân sách, hoặc gợi ý cách tìm lại mà không khẳng định đó là tour có sẵn.
+
+NGÂN SÁCH:
+- Giá tour tính bằng VND. Khi khách nói "10 triệu" → maxPrice: 10000000. Khi nói "từ 5 đến 15 triệu" → minPrice: 5000000, maxPrice: 15000000.
+- Không tự quy đổi sang USD.
+
+LOẠI TOUR (tourType):
+- Các giá trị hợp lệ duy nhất: "Tour Gia Đình", "Tour Cao Cấp", "Nghỉ Dưỡng", "Khám Phá", "Văn Hóa & Lịch Sử", "Tour Ghép Đoàn".
+- Khi khách nói "tour biển" hoặc "nghỉ dưỡng" → tourType: "Nghỉ Dưỡng". Khi nói "tour gia đình" → tourType: "Tour Gia Đình". Khi nói "phượt/trekking/thiên nhiên" → tourType: "Khám Phá".
+
+THÁNG KHỞI HÀNH (startMonth):
+- Khi khách đề cập tháng cụ thể → truyền startMonth là số (1–12).
 
 KHI NÀO GỌI TOOL:
 - Khi khách hỏi tìm tour, điểm đến, tour biển, tour gia đình, tour theo ngân sách, hoặc gợi ý tour phù hợp: PHẢI gọi tool "search_tours" trước khi kết luận có tour cụ thể.
@@ -768,6 +830,73 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
     }
   }
 
+  async translateArticleDraft(
+    payload: ArticleTranslationRequest,
+  ): Promise<ArticleTranslationResponse> {
+    const input: ArticleTranslationRequest = {
+      title: this.truncateForTranslation(payload.title, 200),
+      excerpt: this.truncateForTranslation(payload.excerpt, 500),
+      content: this.truncateForTranslation(payload.content, 8000),
+    };
+    try {
+      return await this.runArticleTranslation(this.primaryModel, input);
+    } catch (error) {
+      this.logAiErrorContext('Article translation primary model', this.primaryModel, error);
+      try {
+        return await this.runArticleTranslation(this.fallbackModel, input);
+      } catch (fallbackError) {
+        this.logAiErrorContext(
+          'Article translation fallback model',
+          this.fallbackModel,
+          fallbackError,
+        );
+        throw new ServiceUnavailableException(
+          'Không thể tạo bản tiếng Anh tự động lúc này. Vui lòng thử lại sau.',
+        );
+      }
+    }
+  }
+
+  private async runArticleTranslation(
+    model: string,
+    input: ArticleTranslationRequest,
+  ): Promise<ArticleTranslationResponse> {
+    const response = await this.executeChatCompletion(model, {
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a senior travel-magazine translator. Translate Vietnamese blog article content into natural, fluent English for a travel journal. The "content" field is HTML — translate only the human-readable text and keep ALL HTML tags, attributes, and structure exactly intact (do not add, remove, or reorder tags). Preserve place names, numbers, and proper nouns unless they have a common English form. Return only valid JSON.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            instructions:
+              'Translate title, excerpt and content from Vietnamese to English. Omit any field that has no source text. Do not change the HTML markup in content.',
+            outputShape: {
+              titleEn: 'string',
+              excerptEn: 'string',
+              contentEn: 'string (same HTML markup, English text)',
+            },
+            input,
+          }),
+        },
+      ],
+      max_tokens: 4000,
+      temperature: 0.2,
+    });
+
+    const rawText = response.choices[0]?.message?.content || '';
+    const fencedMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate = fencedMatch?.[1] ?? rawText;
+    const firstBrace = candidate.indexOf('{');
+    const lastBrace = candidate.lastIndexOf('}');
+    if (firstBrace < 0 || lastBrace <= firstBrace) {
+      throw new Error('AI response did not contain a JSON object');
+    }
+    return JSON.parse(candidate.slice(firstBrace, lastBrace + 1)) as ArticleTranslationResponse;
+  }
+
   private getFunctionToolCall(
     toolCall: OpenAI.Chat.ChatCompletionMessageToolCall,
   ): { name?: string; arguments?: string } | null {
@@ -883,14 +1012,14 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
       };
     }
   }
-  // Main chat function using the OpenAI-compatible LLMGate flow.
-  async chat(
-    userMessage: string,
-    sessionId?: string,
-    userId?: number | null,
-  ): Promise<{ reply: string; tourCard?: any; sessionId?: string }> {
+  // Shared session setup used by both chat() and chatStream().
+  private async setupChatSession(
+    sessionId: string | undefined,
+    userId: number | null | undefined,
+  ): Promise<{ currentSessionId: string; dbHistory: { role: string; content: string }[] }> {
     let currentSessionId = sessionId;
     let dbHistory: { role: string; content: string }[] = [];
+
     if (currentSessionId) {
       const session = await this.prisma.chatSession.findUnique({
         where: { id: currentSessionId },
@@ -912,7 +1041,7 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
           }));
         }
       } else {
-        currentSessionId = undefined; // Session ID does not exist, create a new one.
+        currentSessionId = undefined;
       }
     }
 
@@ -922,25 +1051,94 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
       });
       currentSessionId = newSession.id;
     }
+
+    return { currentSessionId, dbHistory };
+  }
+
+  // Build the messages array sent to the LLM from DB history + new user message.
+  private buildChatMessages(
+    dbHistory: { role: string; content: string }[],
+    userMessage: string,
+  ): OpenAI.Chat.ChatCompletionMessageParam[] {
+    return [
+      { role: 'system', content: this.buildSystemPrompt() },
+      ...dbHistory
+        .filter((msg) => msg.content?.trim())
+        .slice(-20) // Giữ 20 messages gần nhất, tránh vượt context window và giảm chi phí.
+        .map((msg): OpenAI.Chat.ChatCompletionMessageParam => ({
+          role: msg.role === 'model' ? 'assistant' : 'user',
+          content: msg.role === 'model' ? this.stripTourCard(msg.content) : msg.content,
+        })),
+      { role: 'user', content: userMessage },
+    ];
+  }
+
+  private buildFollowUpSuggestions(toolsUsed: string[]): string[] {
+    if (toolsUsed.includes('search_tours')) {
+      return ['Xem thêm lựa chọn khác', 'Tìm tour gia đình', 'Lọc theo ngân sách'];
+    }
+    if (toolsUsed.includes('check_my_bookings')) {
+      return ['Liên hệ hỗ trợ', 'Tìm tour mới'];
+    }
+    if (toolsUsed.includes('get_tour_details')) {
+      return ['Xem tour tương tự', 'So sánh giá các gói'];
+    }
+    return ['Gợi ý tour theo sở thích', 'Điểm đến phổ biến nhất'];
+  }
+
+  // Run first LLM call + tool resolution. Returns resolved messages ready for a streaming
+  // final-answer call, or a directResponse string if no tools were invoked.
+  private async resolveToolCallsOnly(
+    model: string,
+    messages: OpenAI.Chat.ChatCompletionMessageParam[],
+    userId: number | null,
+  ): Promise<
+    | { needsStream: true; messagesForStream: OpenAI.Chat.ChatCompletionMessageParam[]; toolsUsed: string[] }
+    | { needsStream: false; directResponse: string; toolsUsed: string[] }
+  > {
+    const response = await this.executeChatCompletion(model, {
+      messages,
+      tools: TOUR_TOOLS,
+      tool_choice: 'auto',
+      max_tokens: 1024,
+    });
+
+    const choice = response.choices[0];
+    const toolCalls = choice?.message?.tool_calls || [];
+
+    if (choice?.finish_reason === 'tool_calls' && toolCalls.length > 0) {
+      const toolsUsed = toolCalls
+        .map((tc) => this.getFunctionToolCall(tc)?.name)
+        .filter((n): n is string => Boolean(n));
+      const updatedMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages, choice.message];
+      for (const toolCall of toolCalls) {
+        const fnResult = await this.executeTourTool(toolCall, userId);
+        updatedMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(fnResult),
+        });
+      }
+      return { needsStream: true, messagesForStream: updatedMessages, toolsUsed };
+    }
+
+    return { needsStream: false, directResponse: choice?.message?.content || '', toolsUsed: [] };
+  }
+
+  // Main chat function using the OpenAI-compatible LLMGate flow.
+  async chat(
+    userMessage: string,
+    sessionId?: string,
+    userId?: number | null,
+  ): Promise<{ reply: string; tourCard?: any; sessionId?: string }> {
+    const { currentSessionId, dbHistory } = await this.setupChatSession(sessionId, userId);
+
     await this.prisma.chatMessage.create({
       data: { sessionId: currentSessionId, role: 'user', content: userMessage },
     });
     await this.touchChatSession(currentSessionId);
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: this.buildSystemPrompt() },
-      ...dbHistory
-        .filter((msg) => msg.content?.trim())
-        .map(
-          (msg): OpenAI.Chat.ChatCompletionMessageParam => ({
-            role: msg.role === 'model' ? 'assistant' : 'user',
-            content:
-              msg.role === 'model'
-                ? this.stripTourCard(msg.content) // Strip TOUR_CARD from context.
-                : msg.content,
-          }),
-        ),
-      { role: 'user', content: userMessage },
-    ];
+
+    const messages = this.buildChatMessages(dbHistory, userMessage);
 
     try {
       const rawText = await this.runModelChat(
@@ -959,6 +1157,86 @@ Không dùng TOUR_CARD khi chỉ chat thường, khi chưa có dữ liệu tour,
       );
     }
   }
+  // Streaming chat — yields tokens as they arrive from the LLM.
+  async *chatStream(
+    userMessage: string,
+    sessionId?: string,
+    userId?: number | null,
+  ): AsyncGenerator<
+    | { searching: true }
+    | { token: string }
+    | { done: true; tourCard?: any; sessionId: string; followUps?: string[] }
+    | { error: string }
+  > {
+    const { currentSessionId, dbHistory } = await this.setupChatSession(sessionId, userId);
+
+    await this.prisma.chatMessage.create({
+      data: { sessionId: currentSessionId, role: 'user', content: userMessage },
+    });
+    await this.touchChatSession(currentSessionId);
+
+    const messages = this.buildChatMessages(dbHistory, userMessage);
+
+    yield { searching: true };
+
+    let resolveResult!: Awaited<ReturnType<typeof this.resolveToolCallsOnly>>;
+    try {
+      resolveResult = await this.resolveToolCallsOnly(this.primaryModel, messages, userId || null);
+    } catch (primaryError: any) {
+      this.logAiErrorContext('Stream tool-resolve primary', this.primaryModel, primaryError);
+      try {
+        resolveResult = await this.resolveToolCallsOnly(this.fallbackModel, messages, userId || null);
+      } catch (fallbackError: any) {
+        this.logAiErrorContext('Stream tool-resolve fallback', this.fallbackModel, fallbackError);
+        yield { error: this.buildUserFacingErrorMessage(fallbackError) };
+        return;
+      }
+    }
+
+    // No tool calls — emit direct response and finish (no second LLM call needed).
+    if (!resolveResult.needsStream) {
+      const result = await this.parseAndSaveResponse(resolveResult.directResponse, currentSessionId);
+      if (result.reply) yield { token: result.reply };
+      yield { done: true, tourCard: result.tourCard, sessionId: currentSessionId, followUps: this.buildFollowUpSuggestions([]) };
+      return;
+    }
+
+    // Tool calls resolved — stream the final synthesis.
+    // Track emitted characters to stop yielding once <<<TOUR_CARD>>> begins.
+    const modelForStream = this.primaryModel;
+    try {
+      const stream = await this.llmClient.chat.completions.create({
+        model: modelForStream,
+        messages: resolveResult.messagesForStream,
+        stream: true,
+        max_tokens: 1024,
+      });
+
+      let fullText = '';
+      let emittedChars = 0;
+
+      for await (const chunk of stream) {
+        const token = chunk.choices[0]?.delta?.content || '';
+        if (!token) continue;
+        fullText += token;
+
+        const cardStart = fullText.indexOf('<<<TOUR_CARD>>>');
+        const safeUpTo = cardStart === -1 ? fullText.length : cardStart;
+        if (safeUpTo > emittedChars) {
+          yield { token: fullText.slice(emittedChars, safeUpTo) };
+          emittedChars = safeUpTo;
+        }
+      }
+
+      const result = await this.parseAndSaveResponse(fullText, currentSessionId);
+      const followUps = this.buildFollowUpSuggestions(resolveResult.toolsUsed);
+      yield { done: true, tourCard: result.tourCard, sessionId: currentSessionId, followUps };
+    } catch (streamError: any) {
+      this.logAiErrorContext('Stream final-answer', modelForStream, streamError);
+      yield { error: this.buildUserFacingErrorMessage(streamError) };
+    }
+  }
+
   // Get chat history by sessionId.
   async getHistory(sessionId: string, userId?: number | null) {
     const session = await this.prisma.chatSession.findUnique({

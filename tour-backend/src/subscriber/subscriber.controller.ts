@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SubscriberService } from './subscriber.service';
+import { SubscribeDto } from './dto/subscribe.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
@@ -14,11 +15,8 @@ export class SubscriberController {
 
   // Public: POST /subscriber/subscribe — khách đăng ký email
   @Post('subscribe')
-  async subscribe(@Body() body: { email: string }) {
-    if (!body.email || !body.email.includes('@')) {
-      throw new BadRequestException('Email không hợp lệ');
-    }
-    return this.subscriberService.subscribe(body.email.trim().toLowerCase());
+  async subscribe(@Body() dto: SubscribeDto) {
+    return this.subscriberService.subscribe(dto.email);
   }
 
   // Admin/Super Admin: GET /subscriber — danh sách subscribers

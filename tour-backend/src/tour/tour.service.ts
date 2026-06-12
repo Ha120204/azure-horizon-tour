@@ -146,10 +146,22 @@ export class TourService {
 
     if (dest) {
       const normalizedDest = normalizeSearchText(dest);
+      // Quét accent-insensitive chỉ trong phạm vi tour người dùng được thấy
+      // (visibility đã dựng ở `where`) và đúng travelScope nếu có. Kết quả không
+      // đổi vì các id khớp sẽ được AND lại với `where`, nhưng giảm mạnh số dòng
+      // nạp vào RAM (với khách public: chỉ tour PUBLISHED thay vì toàn bảng).
+      const tourScanWhere: Prisma.TourWhereInput = {
+        ...where,
+        ...(travelScope ? { destination: { travelScope } } : {}),
+      };
+      const destinationScanWhere: Prisma.DestinationWhereInput = travelScope
+        ? { travelScope }
+        : {};
       const [matchingDestinations, matchingTours] =
         normalizedDest.length > 0
           ? await Promise.all([
               this.prisma.destination.findMany({
+                where: destinationScanWhere,
                 select: {
                   id: true,
                   name: true,
@@ -159,7 +171,7 @@ export class TourService {
                 },
               }),
               this.prisma.tour.findMany({
-                where: { deletedAt: null },
+                where: tourScanWhere,
                 select: {
                   id: true,
                   name: true,

@@ -6,7 +6,7 @@ import { useLocale } from '@/context/LocaleContext';
 import {
     BOOKING_PRESENTATIONS,
     type BookingPresentationKey,
-} from '../../_lib/bookingStatus';
+} from '@/lib/booking/bookingStatus';
 
 type Props = {
     bookingCode: string;

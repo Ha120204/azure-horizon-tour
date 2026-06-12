@@ -19,6 +19,8 @@ type AuthTextFieldProps = InputHTMLAttributes<HTMLInputElement> & {
     id: string;
     label: ReactNode;
     icon: string;
+    error?: boolean;
+    helperText?: ReactNode;
 };
 
 type AuthPasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
@@ -87,22 +89,23 @@ export function AuthGoogleButton({ id, label, isLoading, disabled, onClick }: Au
     );
 }
 
-export function AuthTextField({ id, label, icon, className = '', ...inputProps }: AuthTextFieldProps) {
+export function AuthTextField({ id, label, icon, error = false, helperText, className = '', ...inputProps }: AuthTextFieldProps) {
     return (
         <div className="space-y-2">
             <label htmlFor={id} className={authStyles.fieldLabel}>
                 {label}
             </label>
-            <div className={`${authStyles.fieldControl} relative`}>
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-[var(--auth-muted)]" aria-hidden="true">
+            <div className={`${authStyles.fieldControl} ${error ? authStyles.fieldControlError : ''} relative`}>
+                <span className={`material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] ${error ? 'text-[var(--auth-danger)]' : 'text-[var(--auth-muted)]'}`} aria-hidden="true">
                     {icon}
                 </span>
                 <input
                     id={id}
-                    className={`h-full min-h-[54px] w-full rounded-[inherit] bg-transparent pl-12 pr-4 text-[var(--auth-ink)] outline-none placeholder:text-[var(--auth-muted)]/70 disabled:cursor-wait disabled:opacity-70 ${className}`}
+                    className={`h-full min-h-[54px] w-full rounded-[inherit] bg-transparent pl-12 pr-4 ${error ? 'text-[var(--auth-danger)]' : 'text-[var(--auth-ink)]'} outline-none placeholder:text-[var(--auth-muted)]/70 disabled:cursor-wait disabled:opacity-70 ${className}`}
                     {...inputProps}
                 />
             </div>
+            {helperText}
         </div>
     );
 }
@@ -147,7 +150,7 @@ export function AuthPasswordField({
                     aria-label={isVisible ? hideLabel : showLabel}
                 >
                     <span className="material-symbols-outlined text-[21px]" aria-hidden="true">
-                        {isVisible ? 'visibility_off' : 'visibility'}
+                        {isVisible ? 'visibility' : 'visibility_off'}
                     </span>
                 </button>
             </div>

@@ -17,6 +17,27 @@ const removeAccents = (str: string) =>
         .replace(/đ/g, 'd')
         .replace(/Đ/g, 'D');
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Tô màu phần khớp query mà KHÔNG dùng innerHTML — text từ DB được render an toàn qua React.
+function HighlightMatch({ text, query, className }: { text: string; query: string; className: string }) {
+    const trimmed = query.trim();
+    if (!trimmed) return <>{text}</>;
+    const parts = text.split(new RegExp(`(${escapeRegExp(trimmed)})`, 'gi'));
+    const lower = trimmed.toLowerCase();
+    return (
+        <>
+            {parts.map((part, i) =>
+                part.toLowerCase() === lower ? (
+                    <span key={i} className={className}>{part}</span>
+                ) : (
+                    part
+                ),
+            )}
+        </>
+    );
+}
+
 // Kiểu dữ liệu từ API
 interface Destination {
     id: number;
@@ -33,11 +54,6 @@ interface TourResult {
     price: number;
 }
 
-interface PriceRange {
-    min: number;
-    max: number;
-}
-
 interface HeroSearchProps {
     travelScope?: TravelScope;
     onTravelScopeChange?: (scope: TravelScope) => void;
@@ -52,11 +68,14 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     const [internalTravelScope, setInternalTravelScope] = useState<TravelScope>('DOMESTIC');
     const travelScope = controlledTravelScope ?? internalTravelScope;
 
-    // Mặc định ngày đi = ngày mai
+    // Mặc định ngày đi = ngày mai (theo giờ địa phương, tránh lệch ngày do UTC)
     const getTomorrow = () => {
         const d = new Date();
         d.setDate(d.getDate() + 1);
-        return d.toISOString().split('T')[0];
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     };
     const [date, setDate] = useState(getTomorrow);
 
@@ -67,7 +86,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     const [departure, setDeparture] = useState('');
     const [isAllDepartureSelected, setIsAllDepartureSelected] = useState(false);
     const [isDepartureOpen, setIsDepartureOpen] = useState(false);
-    const [departurePoints, setDeparturePoints] = useState<{label:string}[]>([]);
+    const [departurePoints, setDeparturePoints] = useState<{label:string; searchText?: string}[]>([]);
     const departureRef = useRef<HTMLDivElement>(null);
     const departureInputRef = useRef<HTMLInputElement>(null);
 
@@ -79,27 +98,12 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     const [allDestinations, setAllDestinations] = useState<Destination[]>([]);
     const [searchDestinations, setSearchDestinations] = useState<Destination[]>([]);
     const [searchTours, setSearchTours] = useState<TourResult[]>([]);
-    const [, setPriceRange] = useState<PriceRange>({ min: 0, max: 1000 });
     const [isSearching, setIsSearching] = useState(false);
 
     const destRef = useRef<HTMLDivElement>(null);
     const destInputRef = useRef<HTMLInputElement>(null);
     const budgetRef = useRef<HTMLDivElement>(null);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
-
-    // ═══ Fetch price range once ═══
-    useEffect(() => {
-        const fetchPriceRange = async () => {
-            try {
-                const priceRes = await fetch(`${API_BASE_URL}/search/price-range`);
-                const priceJson = await priceRes.json();
-                setPriceRange(priceJson.data || priceJson);
-            } catch (error) {
-                console.error('Lỗi fetch dữ liệu search:', error);
-            }
-        };
-        fetchPriceRange();
-    }, []);
 
     // ═══ Fetch destinations by trip scope ═══
     useEffect(() => {
@@ -224,10 +228,15 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         setIsBudgetOpen(false);
     };
 
-    // ═══ Submit — BẮT BUỘC phải chọn điểm đến ═══
+    // ═══ BẮT BUỘC chọn cả điểm khởi hành lẫn điểm đến (hoặc "Tất cả") ═══
+    const canSearch =
+        (isAllDepartureSelected || !!departure.trim()) &&
+        (isAllDestinationsSelected || !!destination.trim());
+
+    // ═══ Submit — chỉ chạy khi canSearch, khớp với trạng thái disabled của nút ═══
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!isAllDestinationsSelected && !destination.trim()) return;
+        if (!canSearch) return;
         const params = new URLSearchParams();
         params.append('travelScope', travelScope);
         if (isAllDestinationsSelected) params.append('allDestinations', '1');
@@ -238,31 +247,23 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         router.push(`/destinations?${params.toString()}`);
     };
 
-    const canSearch =
-        (isAllDepartureSelected || !!departure.trim()) &&
-        (isAllDestinationsSelected || !!destination.trim());
-
     // ═══ Tính Budget Options từ price range thực ═══
     const generateBudgetOptions = () => {
         return [
             {
-                label: `${language === 'vi' ? 'Dưới' : 'Under'} ${formatPrice(5000000)}`,
-                shortLabel: language === 'vi' ? 'Dưới 5M đ' : 'Under 5M',
+                label: t('search.budgetUnder', { price: formatPrice(5000000) }),
                 value: '0-5000000'
             },
             {
                 label: `${formatPrice(5000000)} – ${formatPrice(10000000)}`,
-                shortLabel: '5M – 10M đ',
                 value: '5000000-10000000'
             },
             {
                 label: `${formatPrice(10000000)} – ${formatPrice(20000000)}`,
-                shortLabel: '10M – 20M đ',
                 value: '10000000-20000000'
             },
             {
-                label: `${language === 'vi' ? 'Trên' : 'Over'} ${formatPrice(20000000)}`,
-                shortLabel: language === 'vi' ? 'Trên 20M đ' : 'Over 20M',
+                label: t('search.budgetOver', { price: formatPrice(20000000) }),
                 value: '20000000-unlimited'
             },
         ];
@@ -287,14 +288,13 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
         ? filterValidDestinations(searchDestinations)
         : filterValidDestinations(allDestinations);
     const displayTours = hasSearchQuery ? searchTours : [];
-    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const scopeOptions: { value: TravelScope; label: string; icon: string }[] = [
         { value: 'DOMESTIC', label: t('search.domestic'), icon: 'home_pin' },
         { value: 'INTERNATIONAL', label: t('search.international'), icon: 'public' },
     ];
 
     return (
-        <div className="relative z-50 max-w-7xl mx-auto w-full">
+        <div className="relative z-50 w-full max-w-[1440px] mx-auto px-4">
             <div className="mb-3 flex justify-center">
                 <div className="relative grid grid-cols-2 rounded-full bg-white/15 p-1 border border-white/20 backdrop-blur-md shadow-lg shadow-slate-950/10">
                     <span
@@ -326,26 +326,26 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             </div>
         <form
             onSubmit={handleSearch}
-            className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:grid md:grid-cols-[250px_1px_1fr_1px_210px_1px_270px_auto] items-center p-3 border border-slate-100 w-full"
+            className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:grid md:grid-cols-[250px_1px_250px_1px_210px_1px_270px_auto] items-center p-3 border border-slate-100 w-full md:w-fit md:mx-auto"
         >
             {/* 0. Điểm khởi hành */}
             <div ref={departureRef} className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { departureInputRef.current?.focus(); setIsDepartureOpen(true); }}>
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 motion-reduce:transform-none">flight_takeoff</span>
                 <div className="flex flex-col min-w-0 flex-1">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">
-                        {language === 'vi' ? 'Khởi hành từ' : 'Departure'}
+                        {t('search.departureLabel')}
                     </label>
                     <div className="flex items-center gap-1">
                         {isAllDepartureSelected ? (
                             <>
                                 <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-sm font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap">
                                     <span className="material-symbols-outlined text-[14px] flex-shrink-0">travel_explore</span>
-                                    {language === 'vi' ? 'Tất cả điểm' : 'All cities'}
+                                    {t('search.allCities')}
                                 </span>
                                 <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); setDeparture(''); setIsAllDepartureSelected(false); setIsDepartureOpen(false); }}
-                                    aria-label={language === 'vi' ? 'Xóa bộ lọc khởi hành' : 'Clear departure filter'}
+                                    aria-label={t('search.clearDepartureFilter')}
                                     className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none"
                                 >
                                     <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
@@ -356,7 +356,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 <input
                                     ref={departureInputRef}
                                     type="text"
-                                    placeholder={language === 'vi' ? 'Chọn điểm khởi hành' : 'Select departure'}
+                                    placeholder={t('search.selectDeparture')}
                                     value={departure}
                                     onChange={(e) => { setDeparture(e.target.value); setIsDepartureOpen(true); }}
                                     onFocus={() => setIsDepartureOpen(true)}
@@ -367,7 +367,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); setDeparture(''); setIsAllDepartureSelected(false); setIsDepartureOpen(false); }}
-                                        aria-label={language === 'vi' ? 'Xóa điểm khởi hành' : 'Clear departure'}
+                                        aria-label={t('search.clearDeparture')}
                                         className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none"
                                     >
                                         <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
@@ -387,10 +387,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                             {/* Header */}
                             <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-2.5">
                                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                                    {language === 'vi' ? 'Khởi hành từ' : 'Departure'}
+                                    {t('search.departureLabel')}
                                 </p>
                                 <p className="text-xs font-medium text-slate-500">
-                                    {language === 'vi' ? 'Chọn thành phố xuất phát.' : 'Select a departure city.'}
+                                    {t('search.departureHint')}
                                 </p>
                             </div>
 
@@ -408,7 +408,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     </span>
                                     <span className="min-w-0 flex-1">
                                         <span className="block text-sm font-extrabold">
-                                            {language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities'}
+                                            {t('search.allDepartures')}
                                         </span>
                                     </span>
                                     {isAllDepartureSelected && !departure && (
@@ -418,13 +418,18 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
                                 {/* Danh sách thành phố */}
                                 {(() => {
-                                    const filtered = departurePoints.filter(pt =>
-                                        !departure || removeAccents(pt.label.toLowerCase()).includes(removeAccents(departure.toLowerCase()))
-                                    );
+                                    const normDeparture = removeAccents(departure.toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim();
+                                    const filtered = departurePoints.filter(pt => {
+                                        if (!departure) return true;
+                                        const labelNorm = removeAccents(pt.label.toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim();
+                                        if (labelNorm.includes(normDeparture)) return true;
+                                        if (pt.searchText) return pt.searchText.includes(normDeparture);
+                                        return false;
+                                    });
                                     return filtered.length > 0 ? (
                                         <div>
                                             <div className="px-3 pb-1 pt-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">
-                                                {language === 'vi' ? 'Thành phố khởi hành' : 'Departure cities'}
+                                                {t('search.departureCities')}
                                             </div>
                                             {filtered.map((pt, idx) => (
                                                 <button
@@ -439,7 +444,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                                         <span className="material-symbols-outlined text-slate-400 text-[16px]">location_city</span>
                                                     </span>
                                                     <span className="min-w-0 flex-1">
-                                                        <span className="block truncate text-sm font-bold" dangerouslySetInnerHTML={{ __html: departure ? pt.label.replace(new RegExp(escapeRegExp(departure), 'gi'), (m: string) => `<span class="text-primary">${m}</span>`) : pt.label }} />
+                                                        <span className="block truncate text-sm font-bold"><HighlightMatch text={pt.label} query={departure} className="text-primary" /></span>
                                                     </span>
                                                     {departure === pt.label && (
                                                         <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">check_circle</span>
@@ -450,7 +455,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     ) : departure && !isAllDepartureSelected ? (
                                         <div className="px-4 py-4 text-center">
                                             <span className="material-symbols-outlined text-2xl text-slate-300">search_off</span>
-                                            <p className="mt-1 text-sm font-bold text-slate-600">{language === 'vi' ? 'Không tìm thấy' : 'No city found'}</p>
+                                            <p className="mt-1 text-sm font-bold text-slate-600">{t('search.noCityFound')}</p>
                                         </div>
                                     ) : null;
                                 })()}
@@ -474,9 +479,9 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                             <>
                                 <span className="flex items-center gap-1.5 bg-primary/10 text-primary text-sm font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap">
                                     <span className="material-symbols-outlined text-[14px] flex-shrink-0">travel_explore</span>
-                                    {language === 'vi' ? 'Tất cả điểm' : 'All cities'}
+                                    {t('search.allCities')}
                                 </span>
-                                <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setIsAllDestinationsSelected(false); }} aria-label="Xóa điểm đến" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none">
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setIsAllDestinationsSelected(false); }} aria-label={t('search.clearDestination')} className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none">
                                     <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                                 </button>
                             </>
@@ -490,10 +495,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                     onChange={(e) => handleDestinationChange(e.target.value)}
                                     onFocus={() => setIsDestFocused(true)}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none placeholder:text-slate-300 text-center flex-1 min-w-0 max-w-[160px]"
+                                    className="bg-transparent border-none p-0 text-sm font-bold text-slate-800 focus:ring-0 outline-none placeholder:text-slate-300 text-center flex-1 min-w-0 w-full"
                                 />
                                 {destination && (
-                                    <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setSearchDestinations([]); setSearchTours([]); }} aria-label="Xóa điểm đến" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none">
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setDestination(''); setSearchDestinations([]); setSearchTours([]); }} aria-label={t('search.clearDestination')} className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none">
                                         <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
                                     </button>
                                 )}
@@ -524,7 +529,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                 {isSearching && (
                                     <div className="px-4 py-3 text-sm text-slate-400 flex items-center gap-2">
                                         <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                                        {language === 'vi' ? 'Đang tìm...' : 'Searching...'}
+                                        {t('search.searching')}
                                     </div>
                                 )}
 
@@ -562,7 +567,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                                                     <span className="material-symbols-outlined text-slate-500 text-[18px]">pin_drop</span>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <span className="text-sm font-medium text-slate-600 truncate block" dangerouslySetInnerHTML={{ __html: destination ? item.name.replace(new RegExp(escapeRegExp(destination), 'gi'), (m: string) => `<span class="text-primary font-bold">${m}</span>`) : item.name }} />
+                                                    <span className="text-sm font-medium text-slate-600 truncate block"><HighlightMatch text={item.name} query={destination} className="text-primary font-bold" /></span>
                                                     <span className="text-[11px] text-slate-400">{formatPrice(item.price)}</span>
                                                 </div>
                                             </button>
@@ -597,7 +602,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                         onChange={setDate}
                         language={language}
                         label={t('search.dates')}
-                        placeholder={language === 'vi' ? 'Chọn ngày đi' : 'Select date'}
+                        placeholder={t('search.selectDate')}
                         triggerId="date-picker-trigger"
                     />
                 </div>
@@ -619,7 +624,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                             <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); setBudget(''); setIsBudgetOpen(false); }}
-                                aria-label={language === 'vi' ? 'Xóa ngân sách' : 'Clear budget'}
+                                aria-label={t('search.clearBudget')}
                                 className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition-[color,transform,background-color] duration-200 hover:scale-110 hover:bg-slate-200 hover:text-slate-600 active:scale-95 motion-reduce:transform-none"
                             >
                                 <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
@@ -654,7 +659,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <button
                 type="submit"
                 disabled={!canSearch}
-                className={`group w-full md:w-auto mt-2 md:mt-0 inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 font-bold tracking-wide transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] whitespace-nowrap shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
+                className={`group w-full md:w-auto md:min-w-[170px] mt-2 md:mt-0 inline-flex items-center justify-center gap-2 rounded-full px-10 py-4 font-bold tracking-wide transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] whitespace-nowrap shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
                     ${canSearch
                         ? 'bg-primary text-white hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] shadow-primary/20 motion-reduce:transform-none'
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'

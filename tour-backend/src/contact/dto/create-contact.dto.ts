@@ -101,7 +101,4 @@ export class SendContactDto {
   @IsString()
   @MaxLength(200)
   website?: string;
-
-  @IsOptional()
-  userId?: number; // Liên kết ticket với tài khoản user (nếu đã đăng nhập)
 }

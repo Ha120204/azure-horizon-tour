@@ -9,6 +9,8 @@ export type Message = {
         price: string;
         image: string;
     };
+    followUps?: string[];
+    isError?: boolean;
 };
 
 export type PromptSuggestion = {

@@ -64,6 +64,15 @@ export class ReviewController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get('can-review')
+  async canReview(
+    @Param('tourId', ParseIntPipe) tourId: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.reviewService.canReview(getAuthUserId(req), tourId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Post()
   @UseInterceptors(FilesInterceptor('images', 5))
   async createReview(

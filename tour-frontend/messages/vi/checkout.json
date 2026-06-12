@@ -92,7 +92,8 @@
       "paymentInit": "Lỗi khởi tạo thanh toán",
       "tryAgain": "Vui lòng thử lại.",
       "serverFail": "Không thể kết nối đến máy chủ.",
-      "paymentCancelledHome": "Thanh toán không thành công. Đơn đặt tour của bạn đã được lưu ở trạng thái \"Chờ thanh toán\". Bạn có thể vào \"Lịch sử đặt tour\" để tiến hành thanh toán lại."
+      "paymentCancelledHome": "Thanh toán không thành công. Đơn đặt tour của bạn đã được lưu ở trạng thái \"Chờ thanh toán\". Bạn có thể vào \"Lịch sử đặt tour\" để tiến hành thanh toán lại.",
+      "passengerFormIncomplete": "Vui lòng hoàn thành hoặc hủy bỏ thông tin hành khách đang nhập dở."
     },
     "voucherTitle": "Mã giảm giá",
     "enterVoucher": "Nhập mã voucher",

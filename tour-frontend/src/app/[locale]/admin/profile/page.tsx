@@ -7,7 +7,7 @@ import { clearClientUserStorage } from '@/lib/auth/authSession';
 import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { PasswordFormSection, ProfileInfoFormSection } from './_components/ProfileForms';
 import { ProfileIdentityPanel } from './_components/ProfileIdentityPanel';
-import { Toast } from './_components/Toast';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import {
     formatDateToInputValue,
     getErrorMessage,
@@ -18,13 +18,11 @@ import type {
     PasswordForm,
     PasswordVisibilityState,
     ProfileInfoForm,
-    ToastState,
 } from './_lib/types';
 
 export default function AdminProfilePage() {
     const [profile, setProfile] = useState<AdminProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [toast, setToast] = useState<ToastState | null>(null);
 
     const [infoForm, setInfoForm] = useState<ProfileInfoForm>({ fullName: '', phone: '', dob: '', gender: '' });
     const [infoErrors, setInfoErrors] = useState<Record<string, string>>({});
@@ -41,9 +39,9 @@ export default function AdminProfilePage() {
     const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
     const [isSavingPw, setIsSavingPw] = useState(false);
 
-    const showToast = useCallback((message: string, type: ToastState['type'] = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 4000);
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        if (type === 'error') toastEmitter.error(message);
+        else toastEmitter.success(message);
     }, []);
 
     const fetchProfile = useCallback(async (options: { silent?: boolean } = {}) => {
@@ -287,7 +285,6 @@ export default function AdminProfilePage() {
                 </div>
             </div>
 
-            {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
         </main>
     );
 }

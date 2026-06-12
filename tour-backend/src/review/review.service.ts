@@ -30,6 +30,32 @@ export class ReviewService {
 
   // ─── Customer APIs ────────────────────────────────────────────────────────
 
+  async canReview(userId: number, tourId: number): Promise<{ eligible: boolean }> {
+    const confirmedBooking = await this.prisma.booking.findFirst({
+      where: { userId, tourId, status: 'CONFIRMED', paymentStatus: 'PAID' },
+      include: { tour: { select: { startDate: true, duration: true, status: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!confirmedBooking) return { eligible: false };
+
+    let tripStartDate = confirmedBooking.tour.startDate;
+    if (confirmedBooking.departureId) {
+      const departure = await this.prisma.tourDeparture.findUnique({
+        where: { id: confirmedBooking.departureId },
+        select: { departureDate: true },
+      });
+      tripStartDate = departure?.departureDate ?? tripStartDate;
+    }
+
+    const completedAt = this.getTripCompletedAt(tripStartDate, confirmedBooking.tour.duration);
+    const isCompleted =
+      new Date() >= completedAt || confirmedBooking.tour.status === TourStatus.COMPLETED;
+    if (!isCompleted) return { eligible: false };
+
+    const existingReview = await this.prisma.review.findFirst({ where: { userId, tourId } });
+    return { eligible: !existingReview };
+  }
+
   async createReview(userId: number, tourId: number, dto: CreateReviewDto) {
     const tour = await this.prisma.tour.findFirst({
       where: { id: tourId, deletedAt: null },

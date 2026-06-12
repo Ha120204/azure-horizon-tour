@@ -9,7 +9,7 @@ import {
   getPassengerMinDate,
   hasPassengerDetails,
 } from '@/lib/booking/passengerDetails';
-import { PASSENGER_PRICING, passengerTypeOrder } from '../_lib/config';
+import { PASSENGER_PRICING } from '../_lib/config';
 import {
   CONFIRMATION_CHANNEL_OPTIONS,
   DRAFT_FIELD_ORDER,
@@ -44,6 +44,8 @@ import {
   buildDraftActionDialogConfig,
   digitsOnly,
   getPackageDisplayName,
+  type CreateAssistedDraftEventDetail,
+  type GeneratedPassengerRow,
 } from '../_lib/assistedBookingUtils';
 export type {
   CreateAssistedDraftEventDetail,
@@ -107,6 +109,7 @@ export interface UseAssistedBookingWorkspaceReturn {
   completionActionText: string;
   completionButtonLabel: string;
   selectedTour: TourOption | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   selectedTourDepartures: ReturnType<typeof hasDetailedDeparture extends (d: unknown) => d is infer D ? never : never>[];
   selectedDeparture: TourOption['departures'] extends (infer D)[] | undefined ? D | undefined : never;
   selectedPackage: { id: number; name: string; price: number; isActive?: boolean } | undefined;
@@ -223,7 +226,7 @@ export function useAssistedBookingWorkspace({
   const selectedDeparture = selectedTourDepartures.find(d => String(d.id) === form.departureId);
   const selectedPackage = selectedTour?.packages?.find(p => String(p.id) === form.packageId);
 
-  const departureOptions = useMemo<DraftSelectOption[]>(() => [
+  const departureOptions: DraftSelectOption[] = [
     {
       value: '',
       label: 'Theo ngày mặc định của tour',
@@ -238,9 +241,9 @@ export function useAssistedBookingWorkspace({
       description: `${fmt(departure.price ?? selectedTour?.price ?? 0)} · Lịch #${index + 1}`,
       icon: 'calendar_month',
     })),
-  ], [selectedTour, selectedTourDepartures]);
+  ];
 
-  const packageOptions = useMemo<DraftSelectOption[]>(() => [
+  const packageOptions: DraftSelectOption[] = [
     {
       value: '',
       label: 'Không chọn gói phụ thu',
@@ -253,7 +256,7 @@ export function useAssistedBookingWorkspace({
       description: `Phụ thu +${fmt(pkg.price)}`,
       icon: 'package_2',
     })),
-  ], [selectedTour?.packages]);
+  ];
 
   const baseTourPrice = selectedDeparture?.price ?? selectedTour?.price ?? 0;
   const packageSurcharge = selectedPackage?.price ?? 0;
@@ -384,13 +387,6 @@ export function useAssistedBookingWorkspace({
   const submitErrorEntries = DRAFT_FIELD_ORDER
     .filter(key => Boolean(submitErrors[key]))
     .map(key => [key, submitErrors[key] as string] as const);
-
-  const draftActionDialogConfig = buildDraftActionDialogConfig(draftActionDialog?.action);
-
-  const pendingCount = drafts.filter(d => d.status === 'PENDING_APPROVAL').length;
-  const needsApprovalValidation = draftActionDialog?.action === 'submit' || draftActionDialog?.action === 'approve';
-  const approvalValidationIssues = needsApprovalValidation ? (draftActionDialog.validationIssues ?? []) : [];
-  const hasBlockingApprovalIssues = approvalValidationIssues.length > 0;
 
   useEffect(() => {
     if (!isTourPickerOpen) return;
@@ -567,6 +563,12 @@ export function useAssistedBookingWorkspace({
     onChanged,
     showToast,
   });
+
+  const draftActionDialogConfig = buildDraftActionDialogConfig(draftActionDialog?.action);
+  const pendingCount = drafts.filter(d => d.status === 'PENDING_APPROVAL').length;
+  const needsApprovalValidation = draftActionDialog?.action === 'submit' || draftActionDialog?.action === 'approve';
+  const approvalValidationIssues = needsApprovalValidation ? (draftActionDialog.validationIssues ?? []) : [];
+  const hasBlockingApprovalIssues = approvalValidationIssues.length > 0;
 
   const openCreateDraft = () => {
     resetDraftForm();

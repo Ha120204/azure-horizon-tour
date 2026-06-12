@@ -12,6 +12,11 @@ type ReviewModalProps = {
     onSuccess?: () => void;
 };
 
+// Khớp giới hạn backend: FilesInterceptor('images', 5)
+const MAX_REVIEW_IMAGES = 5;
+
+type ReviewImage = { file: File; preview: string };
+
 export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: ReviewModalProps) {
     const { t } = useLocale();
     const [rating, setRating] = useState(5);
@@ -19,13 +24,14 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
-    const [images, setImages] = useState<string[]>([]);
+    const [images, setImages] = useState<ReviewImage[]>([]);
     const titleId = 'review-modal-title';
     const errorId = 'review-modal-error';
     const commentId = 'review-modal-comment';
     const imageInputId = 'review-modal-images';
 
     const handleCloseModal = () => {
+        images.forEach(img => URL.revokeObjectURL(img.preview));
         setImages([]);
         setRating(5);
         setComment('');
@@ -45,24 +51,28 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const filesArray = Array.from(e.target.files);
-            const base64Promises = filesArray.map(file => {
-                return new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-            });
-            const base64Strings = await Promise.all(base64Promises);
-            setImages(prev => [...prev, ...base64Strings]);
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+        const filesArray = Array.from(e.target.files);
+        e.target.value = '';
+
+        if (images.length + filesArray.length > MAX_REVIEW_IMAGES) {
+            setErrorMsg(t('reviews.maxImages', { count: MAX_REVIEW_IMAGES }));
+            return;
         }
+        setErrorMsg('');
+        setImages(prev => [
+            ...prev,
+            ...filesArray.map(file => ({ file, preview: URL.createObjectURL(file) })),
+        ]);
     };
 
     const removeImage = (index: number) => {
-        setImages(prev => prev.filter((_, i) => i !== index));
+        setImages(prev => {
+            const removed = prev[index];
+            if (removed) URL.revokeObjectURL(removed.preview);
+            return prev.filter((_, i) => i !== index);
+        });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -71,14 +81,17 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
         setErrorMsg('');
 
         try {
+            // Gửi multipart để đi qua FilesInterceptor('images') + validator 5MB
+            // ở backend (ảnh upload lên Cloudinary, không lưu base64 vào DB).
+            // Không set Content-Type — browser tự thêm multipart boundary.
+            const formData = new FormData();
+            formData.append('rating', String(rating));
+            formData.append('content', comment);
+            images.forEach(img => formData.append('images', img.file));
+
             const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}/reviews`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    rating,
-                    content: comment,
-                    imageUrls: images
-                })
+                body: formData,
             });
 
             if (res.ok) {
@@ -187,8 +200,8 @@ export default function ReviewModal({ isOpen, onClose, tourId, onSuccess }: Revi
                                     {images.length > 0 && (
                                         <div className="flex gap-3 mt-4 overflow-x-auto pb-2 scrollbar-thin">
                                             {images.map((img, idx) => (
-                                                <div key={idx} className="relative w-16 h-16 rounded-md overflow-hidden shrink-0 border border-outline-variant/20 group">
-                                                    <Image src={img} alt={`Review image ${idx + 1}`} fill sizes="64px" className="object-cover" />
+                                                <div key={img.preview} className="relative w-16 h-16 rounded-md overflow-hidden shrink-0 border border-outline-variant/20 group">
+                                                    <Image src={img.preview} alt={`Review image ${idx + 1}`} fill sizes="64px" className="object-cover" unoptimized />
                                                     <button 
                                                         type="button" 
                                                         onClick={() => removeImage(idx)} 

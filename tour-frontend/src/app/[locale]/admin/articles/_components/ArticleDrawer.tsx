@@ -116,9 +116,11 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                         <span className="material-symbols-outlined text-[14px]">info</span>
                         {!canSaveArticle
                             ? 'Trạng thái này chỉ xem, không thể chỉnh sửa hoặc gửi duyệt.'
-                            : isStaff
-                                ? 'Lưu nháp không bắt buộc đủ thông tin. Chỉ "Lưu & gửi duyệt" mới kiểm tra đủ trường.'
-                                : 'Lưu nháp không public. Chỉ "Xuất bản ngay" mới kiểm tra đủ trường và hiển thị với khách.'}
+                            : isEdit && workflowStatus === 'PUBLISHED'
+                                ? 'Bài đang hiển thị với khách. Bấm "Cập nhật" sẽ lưu và áp dụng thay đổi ngay.'
+                                : isStaff
+                                    ? 'Lưu nháp không bắt buộc đủ thông tin. Chỉ "Lưu & gửi duyệt" mới kiểm tra đủ trường.'
+                                    : 'Lưu nháp không public. Chỉ "Xuất bản ngay" mới kiểm tra đủ trường và hiển thị với khách.'}
                     </div>
                     <div className="flex items-center gap-3">
                         <button
@@ -134,7 +136,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                             className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary">
                             Hủy
                         </button>
-                        {canSaveArticle && (isStaff || isAdmin) && (
+                        {canSaveArticle && (isStaff || isAdmin) && !(isEdit && workflowStatus === 'PUBLISHED') && (
                             <button
                                 type="button"
                                 onClick={() => handleSave('draft')}
@@ -156,7 +158,9 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                             >
                                 {(submitAction === 'submit' || submitAction === 'publish')
                                     ? <><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>Đang lưu…</>
-                                    : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{isStaff ? 'send' : 'publish'}</span>{isStaff ? 'Lưu & gửi duyệt' : 'Xuất bản ngay'}</>
+                                    : isEdit && workflowStatus === 'PUBLISHED'
+                                        ? <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>save</span>Cập nhật</>
+                                        : <><span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{isStaff ? 'send' : 'publish'}</span>{isStaff ? 'Lưu & gửi duyệt' : 'Xuất bản ngay'}</>
                                 }
                             </button>
                         )}

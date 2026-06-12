@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { TravelScope } from '@prisma/client';
+import { TravelScope, TourStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   localizeDestination,
@@ -25,6 +25,33 @@ export function normalizeSearchText(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+// Alias map: key = normalized abbreviation, value = thêm vào searchText để full-name search hoạt động
+const CITY_ALIASES: Record<string, string> = {
+  'hcm':       'ho chi minh tp ho chi minh sai gon saigon',
+  'tp hcm':    'ho chi minh tp ho chi minh',
+  'tp.hcm':    'ho chi minh tp ho chi minh',
+  'hn':        'ha noi hanoi',
+  'dn':        'da nang',
+  'ct':        'can tho',
+  'hp':        'hai phong',
+  'nt':        'nha trang khanh hoa',
+  'hue':       'thua thien hue',
+  'vt':        'vung tau ba ria',
+  'qn':        'quang ninh ha long',
+  'dl':        'da lat lam dong',
+};
+
+function expandCityAliases(text: string): string {
+  const norm = normalizeSearchText(text);
+  const extras: string[] = [];
+  for (const [abbr, expansion] of Object.entries(CITY_ALIASES)) {
+    // Khớp từ đơn (whole-word) để tránh false positive
+    const regex = new RegExp(`(?:^|\\s)${abbr}(?:\\s|$)`);
+    if (regex.test(norm)) extras.push(expansion);
+  }
+  return extras.length > 0 ? `${norm} ${extras.join(' ')}` : norm;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -86,7 +113,7 @@ export class SearchService {
   /** Lấy khoảng giá min/max của tour */
   async getPriceRange() {
     const result = await this.prisma.tour.aggregate({
-      where: { deletedAt: null },
+      where: { deletedAt: null, status: TourStatus.PUBLISHED },
       _min: { price: true },
       _max: { price: true },
     });
@@ -104,6 +131,7 @@ export class SearchService {
     const tours = await this.prisma.tour.findMany({
       where: {
         deletedAt: null,
+        status: TourStatus.PUBLISHED,
         ...(travelScope ? { destination: { travelScope } } : {}),
         OR: [
           { departurePoint: { not: null } },
@@ -144,6 +172,11 @@ export class SearchService {
       return true;
     });
 
+    const addSearchText = (p: { label: string; vi: string; en: string }) => ({
+      ...p,
+      searchText: expandCityAliases(`${p.vi} ${p.en}`),
+    });
+
     // Fallback: nếu DB chưa có data, trả về các thành phố lớn mặc định
     if (unique.length === 0) {
       const defaults =
@@ -163,10 +196,10 @@ export class SearchService {
               { label: locale === 'en' ? 'Hue' : 'Huế', vi: 'Huế', en: 'Hue' },
               { label: locale === 'en' ? 'Vung Tau' : 'Vũng Tàu', vi: 'Vũng Tàu', en: 'Vung Tau' },
             ];
-      return defaults;
+      return defaults.map(addSearchText);
     }
 
-    return unique;
+    return unique.map(addSearchText);
   }
 
   /** Live search destinations và tours, hỗ trợ tiếng Việt có/không dấu */
@@ -175,6 +208,21 @@ export class SearchService {
     if (normalizedQuery.length < 2) {
       return { destinations: [], tours: [] };
     }
+    // Yêu cầu khớp TẤT CẢ token người dùng gõ (vd "da nang" cần cả "da" lẫn "nang")
+    // để tránh false positive như "Đà Lạt", "Đài Loan", "Amsterdam".
+    const queryTokens = normalizedQuery.split(/\s+/).filter((p) => p.length >= 2);
+    // Hỗ trợ viết tắt: "hcm" → "ho chi minh"... — chỉ dùng làm fallback khi là viết tắt
+    const expandedQuery = expandCityAliases(normalizedQuery);
+    const isAlias = expandedQuery !== normalizedQuery;
+    const aliasTokens = isAlias
+      ? expandedQuery.split(/\s+/).filter((p) => p.length >= 3)
+      : [];
+    const matchesQuery = (fullText: string): boolean => {
+      if (queryTokens.length > 0 && queryTokens.every((p) => fullText.includes(p))) {
+        return true;
+      }
+      return isAlias && aliasTokens.some((p) => fullText.includes(p));
+    };
 
     const travelScope = parseTravelScope(travelScopeInput);
     const locale = normalizeLocale(localeInput);
@@ -211,20 +259,22 @@ export class SearchService {
     ]);
 
     const destinations = destinationCandidates
-      .filter((destination) =>
-        normalizeSearchText(
+      .filter((destination) => {
+        const fullText = normalizeSearchText(
           `${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''}`,
-        ).includes(normalizedQuery),
-      )
+        );
+        return matchesQuery(fullText);
+      })
       .slice(0, 5)
       .map((destination) => localizeDestination(destination, locale));
 
     const tours = tourCandidates
-      .filter((tour) =>
-        normalizeSearchText(
+      .filter((tour) => {
+        const fullText = normalizeSearchText(
           `${tour.name} ${tour.nameEn ?? ''} ${tour.destination?.name ?? ''} ${tour.destination?.nameEn ?? ''}`,
-        ).includes(normalizedQuery),
-      )
+        );
+        return matchesQuery(fullText);
+      })
       .slice(0, 4)
       .map(({ destination, ...tour }) => {
         void destination;

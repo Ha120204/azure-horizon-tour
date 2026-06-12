@@ -30,6 +30,12 @@ export default function PackageCard({
         'LUXURY': '✨',
     };
 
+    const BADGE_LABEL_KEY: Record<string, string> = {
+        'POPULAR': 'tour_detail.badgePopular',
+        'BEST VALUE': 'tour_detail.badgeBestValue',
+        'LUXURY': 'tour_detail.badgeLuxury',
+    };
+
     return (
         <button
             onClick={onSelect}
@@ -59,7 +65,7 @@ export default function PackageCard({
                     {pkg.price > 0 && <p className="text-[10px] text-on-surface-variant">{t('tour_detail.packagePerPerson')}</p>}
                     {pkg.badge && (
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${BADGE_STYLES[pkg.badge] ?? 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                            {BADGE_ICON[pkg.badge]} {pkg.badge}
+                            {BADGE_ICON[pkg.badge]} {BADGE_LABEL_KEY[pkg.badge] ? t(BADGE_LABEL_KEY[pkg.badge]) : pkg.badge}
                         </span>
                     )}
                 </div>

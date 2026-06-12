@@ -9,6 +9,7 @@ import { getPromptSuggestions } from './constants';
 interface ConciergeMessagesProps {
     messages: Message[];
     isTyping: boolean;
+    isSearching: boolean;
     cooldown: boolean;
     isLoadingHistory: boolean;
     hasAccessToken: boolean;
@@ -22,6 +23,7 @@ interface ConciergeMessagesProps {
 export default function ConciergeMessages({
     messages,
     isTyping,
+    isSearching,
     cooldown,
     isLoadingHistory,
     hasAccessToken,
@@ -34,7 +36,7 @@ export default function ConciergeMessages({
     return (
         <div className="hide-scrollbar flex-1 space-y-5 overflow-y-auto p-5 pb-32">
             {isLoadingHistory && (
-                <div className="text-center text-slate-400 text-sm py-4">Đang tải lịch sử...</div>
+                <div className="text-center text-slate-400 text-sm py-4">{t('conciergeApp.loadingHistory')}</div>
             )}
 
             {messages.map((msg, idx) => (
@@ -127,7 +129,7 @@ export default function ConciergeMessages({
                                                     onClick={() => setIsOpen(false)}
                                                     className="block w-full text-center bg-blue-800 hover:bg-blue-900 text-white py-3 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors"
                                                 >
-                                                    Xem chi tiết tour →
+                                                    {t('conciergeApp.viewTourDetail')}
                                                 </Link>
                                             ) : (
                                                 <button className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 py-3 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors">
@@ -136,6 +138,40 @@ export default function ConciergeMessages({
                                             )}
                                         </div>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Follow-up chips */}
+                            {msg.followUps && msg.followUps.length > 0 && (
+                                <div className="ml-11 flex flex-wrap gap-2">
+                                    {msg.followUps.map((suggestion) => (
+                                        <button
+                                            key={suggestion}
+                                            type="button"
+                                            onClick={() => handleSendMessage(suggestion)}
+                                            disabled={isTyping || cooldown}
+                                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            {suggestion}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Retry button khi lỗi */}
+                            {msg.isError && (
+                                <div className="ml-11">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+                                            if (lastUserMsg?.text) handleSendMessage(lastUserMsg.text);
+                                        }}
+                                        disabled={isTyping || cooldown}
+                                        className="text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 disabled:opacity-50"
+                                    >
+                                        Thử lại
+                                    </button>
                                 </div>
                             )}
                         </>
@@ -148,8 +184,26 @@ export default function ConciergeMessages({
                 </div>
             ))}
 
+            {/* Searching indicator */}
+            {isSearching && (
+                <div className="flex max-w-full gap-3">
+                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
+                        <span
+                            className="material-symbols-outlined text-white text-[16px]"
+                            style={{ fontVariationSettings: "'FILL' 1" }}
+                        >
+                            search_spark
+                        </span>
+                    </div>
+                    <div className="bg-white border border-slate-100 px-4 rounded-2xl rounded-tl-none w-fit flex items-center gap-2 h-[44px] shadow-sm">
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+                        <span className="text-xs font-semibold text-slate-500">Đang tìm kiếm tour phù hợp...</span>
+                    </div>
+                </div>
+            )}
+
             {/* Typing indicator */}
-            {isTyping && (
+            {isTyping && !isSearching && (
                 <div className="flex max-w-full gap-3">
                     <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
                         <span

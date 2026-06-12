@@ -363,24 +363,6 @@ function SuccessTicketContent() {
 
     return (
         <div className="bg-surface font-body text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed min-h-screen flex flex-col">
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                .ambient-glow { box-shadow: 0 8px 32px 0 rgba(25, 28, 33, 0.04); }
-                .ticket-cutout { position: relative; }
-                .ticket-cutout::before, .ticket-cutout::after {
-                    content: ''; position: absolute; left: -12px; width: 24px; height: 24px;
-                    background-color: #f9f9ff; border-radius: 50%; z-index: 10;
-                }
-                .ticket-cutout::before { top: 35%; }
-                .ticket-cutout::after { bottom: 25%; }
-                .ticket-right-cutout::before, .ticket-right-cutout::after {
-                    content: ''; position: absolute; right: -12px; width: 24px; height: 24px;
-                    background-color: #f9f9ff; border-radius: 50%; z-index: 10;
-                }
-                .ticket-right-cutout::before { top: 35%; }
-                .ticket-right-cutout::after { bottom: 25%; }
-            `}} />
-
             <Header />
 
             <main className="flex-grow pt-32 pb-20 px-4 md:px-6 overflow-hidden">

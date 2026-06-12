@@ -25,7 +25,6 @@ import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { UpdateBookingDto } from './dto/update-booking.dto';
 import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-draft.dto';
 import { ReviewAssistedBookingDraftDto } from './dto/review-assisted-booking-draft.dto';
 import {
@@ -614,11 +613,6 @@ export class BookingController {
     return this.bookingService.proxyImage(imageUrl, res);
   }
 
-  @Get()
-  findAll() {
-    return this.bookingService.findAll();
-  }
-
   /**
    * [ADMIN] Thống kê doanh thu theo nguồn thanh toán (confirmedSource)
    * GET /booking/admin/payment-stats
@@ -729,20 +723,14 @@ export class BookingController {
     );
   }
 
-  // NOTE: Generic PATCH/DELETE được bảo vệ bởi AdminOnlyGuard.
-  // Các thao tác cụ thể (confirm, approve-cancel...) đã có endpoint riêng ở trên.
   @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
-  @Patch(':id')
+  @Post('admin/:id/confirm-manual')
   @AuditLog('UPDATE', 'Booking')
-  update(@Param('id') id: string, @Body() updateBookingDto: UpdateBookingDto) {
-    return this.bookingService.update(+id, updateBookingDto);
-  }
-
-  @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
-  @Delete(':id')
-  @AuditLog('DELETE', 'Booking')
-  remove(@Param('id') id: string) {
-    return this.bookingService.remove(+id);
+  async confirmManual(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.bookingService.confirmManual(Number(id), getAuthUserId(req));
   }
 
   // ============== TRANSPORT ASSIGNMENT ==============

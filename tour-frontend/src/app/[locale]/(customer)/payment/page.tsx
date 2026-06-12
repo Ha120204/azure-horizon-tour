@@ -375,13 +375,6 @@ function PaymentSelectorContent() {
 
     return (
         <>
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                .ambient-shadow { box-shadow: 0 8px 32px rgba(25, 28, 33, 0.03); }
-                .option-active { border-color: #003f87; background: rgba(0, 63, 135, 0.02); }
-                `
-            }} />
-
             <main className="flex-grow pt-28 pb-20 px-4 md:px-8 max-w-screen-xl mx-auto w-full">
                 {/* 1. Step Indicator */}
                 <div className="flex items-center justify-center mb-8 gap-4 text-xs font-bold md:text-sm">

@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import React, { useMemo, useState } from 'react';
 import { Tour, TourPackage, TourDeparture, TourDepartureTransport } from '@/types';
 import DepartureCalendarModal from './DepartureCalendarModal';
 
@@ -15,11 +14,12 @@ const TRANSPORT_LABEL: Record<string, Record<string, string>> = {
 };
 const LOW_SEAT_THRESHOLD = 10;
 
-function formatShortTime(iso: string | null | undefined): string {
+function formatShortTime(iso: string | null | undefined, lang: 'en' | 'vi'): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const locale = lang === 'en' ? 'en-GB' : 'vi-VN';
+  return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function TransportSummaryCard({
@@ -57,7 +57,7 @@ function TransportSummaryCard({
             <span className="font-bold text-on-surface">{transport.arrivalAirport}</span>
             {transport.departureTime && (
               <span className="ml-auto text-primary font-semibold">
-                {formatShortTime(transport.departureTime)} → {formatShortTime(transport.arrivalTime)}
+                {formatShortTime(transport.departureTime, lang)} → {formatShortTime(transport.arrivalTime, lang)}
               </span>
             )}
           </div>
@@ -75,7 +75,7 @@ function TransportSummaryCard({
                 <span className="font-bold text-on-surface">{transport.returnArrivalAirport}</span>
                 {transport.returnDepartureTime && (
                   <span className="ml-auto text-primary font-semibold">
-                    {formatShortTime(transport.returnDepartureTime)} → {formatShortTime(transport.returnArrivalTime)}
+                    {formatShortTime(transport.returnDepartureTime, lang)} → {formatShortTime(transport.returnArrivalTime, lang)}
                   </span>
                 )}
               </div>
@@ -96,7 +96,7 @@ function TransportSummaryCard({
             <p className="flex items-center gap-1">
               <span className="material-symbols-outlined text-[12px]">location_on</span>
               {transport.boardingPoint}
-              {transport.boardingTime && <span className="ml-1 text-primary font-semibold">{formatShortTime(transport.boardingTime)}</span>}
+              {transport.boardingTime && <span className="ml-1 text-primary font-semibold">{formatShortTime(transport.boardingTime, lang)}</span>}
             </p>
           )}
         </div>
@@ -113,7 +113,8 @@ type TranslationFn = (key: string, params?: Record<string, string | number>) => 
 
 interface BookingSidebarProps {
     tour: Tour;
-    initialDepartureId?: number | null;
+    selectedDeparture: TourDeparture | null;
+    onSelectDeparture: (departure: TourDeparture) => void;
     selectedPackage: TourPackage | null;
     formatPrice: (n: number) => string;
     formatDate: (value: string | number | Date, options?: Intl.DateTimeFormatOptions) => string;
@@ -123,29 +124,19 @@ interface BookingSidebarProps {
 
 export default function BookingSidebarNew({
     tour,
-    initialDepartureId,
+    selectedDeparture,
+    onSelectDeparture,
     selectedPackage,
     formatPrice,
     formatDate,
     t,
     language,
 }: BookingSidebarProps) {
-    const router = useRouter();
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
     const departures: TourDeparture[] = useMemo(() => tour?.departures ?? [], [tour?.departures]);
     const hasDepartures = departures.length > 0;
-    const initialSelectedDeparture = useMemo(() => {
-        if (!initialDepartureId || !Number.isFinite(initialDepartureId)) return null;
-        return departures.find((departure) => departure.id === initialDepartureId) ?? null;
-    }, [departures, initialDepartureId]);
-    const [selectedDeparture, setSelectedDeparture] = useState<TourDeparture | null>(initialSelectedDeparture);
-
-    useEffect(() => {
-        setSelectedDeparture(initialSelectedDeparture);
-    }, [initialSelectedDeparture]);
+    const hasPackages = (tour?.packages?.length ?? 0) > 0;
 
     // Giá hiện tại: package.price là giá toàn phần (mô hình Hướng A / Klook).
     // Không cộng thêm departure.price nữa.
@@ -162,14 +153,6 @@ export default function BookingSidebarNew({
         if (selectedDeparture) params.set('departureId', String(selectedDeparture.id));
         if (selectedPackage) params.set('packageId', String(selectedPackage.id));
         return `/checkout?${params.toString()}`;
-    };
-
-    const handleSelectDeparture = (departure: TourDeparture) => {
-        setSelectedDeparture(departure);
-
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('departureId', String(departure.id));
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
     return (
@@ -277,7 +260,14 @@ export default function BookingSidebarNew({
                     )}
 
                     {/* ── Book CTA ── */}
-                    {(!hasDepartures || selectedDeparture) ? (
+                    {!hasPackages ? (
+                        <button
+                            disabled
+                            className="w-full py-4 bg-surface-container text-outline rounded-2xl font-bold text-sm cursor-not-allowed"
+                        >
+                            {t('tour_detail.notBookableYet')}
+                        </button>
+                    ) : (!hasDepartures || selectedDeparture) ? (
                         selectedPackage ? (
                             <a
                                 href={buildCheckoutUrl()}
@@ -326,7 +316,7 @@ export default function BookingSidebarNew({
                 onClose={() => setIsCalendarOpen(false)}
                 departures={departures}
                 selectedDeparture={selectedDeparture}
-                onSelectDeparture={handleSelectDeparture}
+                onSelectDeparture={onSelectDeparture}
                 t={t}
                 language={language}
             />

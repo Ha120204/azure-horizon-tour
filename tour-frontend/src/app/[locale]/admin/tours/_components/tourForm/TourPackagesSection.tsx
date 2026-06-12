@@ -25,7 +25,7 @@ interface TourPackagesSectionProps {
   selectPackageBadge: (idx: number, badge: string) => void;
   handleAddPackage: () => void;
   handleRemovePackage: (idx: number) => void;
-  createSharedPackagePreset: (type: "INCLUDE" | "EXCLUDE", label: string) => void;
+  createSharedPackagePreset: (type: "INCLUDE" | "EXCLUDE", label: string) => Promise<string>;
 }
 
 export function TourPackagesSection({
@@ -58,8 +58,8 @@ export function TourPackagesSection({
         <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
           Gói tour
         </h3>
-        <span className="text-[10px] font-bold text-on-surface-variant/60">
-          Khuyến nghị nếu tour có hạng nâng cấp
+        <span className="text-[10px] font-bold text-primary">
+          Cần ít nhất 1 gói dịch vụ
         </span>
       </div>
 

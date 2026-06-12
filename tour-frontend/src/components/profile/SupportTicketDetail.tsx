@@ -154,7 +154,9 @@ export default function SupportTicketDetail({
   };
 
   const handleRate = async (rating: number) => {
+    const previousRating = selectedRating;
     setSelectedRating(rating);
+    setError('');
     try {
       const body: CustomerTicketPayload = { rating };
       if (lookupAccessCode) body.accessCode = lookupAccessCode;
@@ -164,14 +166,21 @@ export default function SupportTicketDetail({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (res.ok) setHasRated(true);
+      if (res.ok) {
+        setHasRated(true);
+      } else {
+        setSelectedRating(previousRating);
+        setError(resolveMessage(await res.json()) ?? t('profile.supportConnectionError'));
+      }
     } catch {
-      // Rating failure is non-blocking; user can click again.
+      setSelectedRating(previousRating);
+      setError(t('profile.supportConnectionError'));
     }
   };
 
   const handleReopen = async () => {
     setIsReopening(true);
+    setError('');
     try {
       const body: CustomerTicketPayload = {};
       if (lookupAccessCode) body.accessCode = lookupAccessCode;
@@ -181,7 +190,13 @@ export default function SupportTicketDetail({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (res.ok) await refreshTicket();
+      if (res.ok) {
+        await refreshTicket();
+      } else {
+        setError(resolveMessage(await res.json()) ?? t('profile.supportConnectionError'));
+      }
+    } catch {
+      setError(t('profile.supportConnectionError'));
     } finally {
       setIsReopening(false);
     }
@@ -295,6 +310,8 @@ export default function SupportTicketDetail({
                 <span className="material-symbols-outlined text-sm">refresh</span>
                 {isReopening ? t('profile.supportReopening') : t('profile.supportReopen')}
               </button>
+
+              {error && <p className="mt-2 text-xs text-error">{error}</p>}
             </div>
           )}
 

@@ -1,12 +1,14 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, Matches } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   fullName?: string;
 
+  // Cho phép rỗng (xoá số) hoặc 8-15 chữ số.
   @IsOptional()
   @IsString()
+  @Matches(/^$|^\d{8,15}$/, { message: 'Số điện thoại chỉ được gồm 8-15 chữ số' })
   phone?: string;
 
   @IsOptional()

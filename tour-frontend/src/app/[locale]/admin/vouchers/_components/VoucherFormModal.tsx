@@ -13,7 +13,6 @@ import {
   normalizeReferenceSearch,
   parseIdList,
   parseCurrencyInput,
-  toLocalYMD,
   CUSTOMER_SEGMENT_OPTIONS,
 } from '@/app/[locale]/admin/vouchers/_hooks/useVoucherForm';
 import type { VoucherFormData, VoucherInitialData, ReferenceOption } from '@/app/[locale]/admin/vouchers/_hooks/useVoucherForm';

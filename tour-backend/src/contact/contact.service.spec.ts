@@ -55,8 +55,8 @@ describe('ContactService', () => {
     );
   });
 
-  const send = (overrides: Partial<SendContactDto>) =>
-    service.sendContactEmail({ ...baseDto, ...overrides });
+  const send = (overrides: Partial<SendContactDto>, userId?: number) =>
+    service.sendContactEmail({ ...baseDto, ...overrides }, userId);
 
   const lastTicketPayload = (): ContactTicketPayload => {
     const call = supportService.createFromContact.mock.calls.at(-1);
@@ -97,8 +97,7 @@ describe('ContactService', () => {
       reference: 'AH-98234-X',
       paymentMethod: 'bank_transfer',
       message: 'Toi da chuyen khoan nhung don hang chua cap nhat.',
-      userId: 42,
-    });
+    }, 42);
 
     const payload = lastTicketPayload();
     expect(payload).toEqual(expect.objectContaining({

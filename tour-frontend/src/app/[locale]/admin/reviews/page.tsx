@@ -12,7 +12,6 @@ import {
     ReviewPageHeader,
     ReviewQuickFilters,
 } from './_components/ReviewPageSections';
-import { Toast } from './_components/Toast';
 import { useReviewManagement } from './_hooks/useReviewManagement';
 
 export default function ReviewManagementPage() {
@@ -107,9 +106,6 @@ export default function ReviewManagementPage() {
                 />
             )}
 
-            {review.toast && (
-                <Toast msg={review.toast.msg} ok={review.toast.ok} onDone={() => review.setToast(null)} />
-            )}
         </main>
     );
 }

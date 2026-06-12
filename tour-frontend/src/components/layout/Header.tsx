@@ -67,6 +67,9 @@ export default function Header() {
     // Locale Switcher State
     const [isLocaleOpen, setIsLocaleOpen] = useState(false);
 
+    // Mobile hamburger menu (< lg)
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
     const searchInputRef = useRef<HTMLInputElement>(null);
     const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -201,6 +204,31 @@ export default function Header() {
         return () => clearTimeout(delayDebounceFn);
     }, [searchQuery, language]);
 
+    // Đóng menu mobile khi đổi route (vd: nút back trình duyệt)
+    useEffect(() => {
+        setIsMobileMenuOpen(false);
+    }, [pathname]);
+
+    // Khi menu mobile mở: Esc để đóng, khóa cuộn nền, tự đóng nếu kéo rộng ≥ lg
+    useEffect(() => {
+        if (!isMobileMenuOpen) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setIsMobileMenuOpen(false);
+        };
+        const onResize = () => {
+            if (window.innerWidth >= 1400) setIsMobileMenuOpen(false);
+        };
+        document.addEventListener('keydown', onKeyDown);
+        window.addEventListener('resize', onResize);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('resize', onResize);
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isMobileMenuOpen]);
+
     const handleQuickSearch = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (searchQuery.trim()) {
@@ -312,16 +340,16 @@ export default function Header() {
                         aria-label={`${publicSettings.company_name} home`}
                     >
                         <AzureHorizonBrandIcon solid={isSolidHeader} />
-                        <span className="hidden min-w-0 flex-col leading-none sm:flex">
+                        <span className="flex min-w-0 flex-col leading-none">
                             <span
-                                className={`font-headline text-[1.15rem] font-extrabold tracking-tight transition-colors duration-300 md:text-[1.25rem] ${
+                                className={`font-headline text-[1.15rem] font-extrabold tracking-tight truncate transition-colors duration-300 md:text-[1.25rem] ${
                                     isSolidHeader ? 'text-slate-950' : 'text-white drop-shadow-md'
                                 }`}
                             >
                                 {publicSettings.company_name}
                             </span>
                             <span
-                                className={`mt-1 text-[0.68rem] font-bold tracking-[0.14em] transition-colors duration-300 ${
+                                className={`mt-1 hidden whitespace-nowrap text-[0.68rem] font-bold tracking-[0.14em] transition-colors duration-300 lg:block ${
                                     isSolidHeader ? 'text-slate-500' : 'text-white/80 drop-shadow-sm'
                                 }`}
                             >
@@ -331,7 +359,7 @@ export default function Header() {
                     </Link>
 
                     {/* 2. MAIN NAVIGATION */}
-                    <div className="hidden md:flex items-center gap-1.5 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight" suppressHydrationWarning>
+                    <div className="hidden min-[1400px]:flex items-center gap-1.5 font-['Plus_Jakarta_Sans'] font-semibold tracking-tight" suppressHydrationWarning>
                         {navLinks.map(link => {
                             const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                             const solidStateClass = isActive
@@ -363,7 +391,7 @@ export default function Header() {
                         <div className="relative flex items-center" ref={searchContainerRef}>
                             <form
                                 onSubmit={handleQuickSearch}
-                                className={`flex items-center rounded-full w-40 sm:w-48 md:w-60 px-3 py-1.5 border transition-all duration-300 ${
+                                className={`flex items-center rounded-full w-40 sm:w-48 lg:w-60 px-3 py-1.5 border transition-all duration-300 ${
                                     (isScrolled || !isHomepage)
                                         ? 'bg-slate-100/90 border-slate-200/10 text-slate-800 focus-within:bg-white focus-within:border-primary/20 focus-within:ring-2 focus-within:ring-primary/10'
                                         : 'bg-white/10 hover:bg-white/15 border-white/20 text-white focus-within:bg-white/20 focus-within:border-white/30'
@@ -486,7 +514,7 @@ export default function Header() {
                         {/* 🌐 Locale Switcher Button */}
                         <button
                             onClick={() => setIsLocaleOpen(true)}
-                            className={`hidden md:flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-full border ${
+                            className={`hidden min-[1400px]:flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-full border ${
                                 (isScrolled || !isHomepage)
                                     ? 'text-slate-600 hover:text-blue-800 hover:bg-slate-50 border-transparent hover:border-slate-200'
                                     : 'text-white/90 hover:text-white border-white/20 hover:bg-white/10'
@@ -508,7 +536,8 @@ export default function Header() {
 
 
 
-                        {/* Auth Logic */}
+                        {/* Auth Logic — desktop; phiên bản mobile nằm trong panel hamburger */}
+                        <div className="hidden min-[1400px]:block">
                         {isLoggedIn ? (
                             <div className="flex items-center gap-2.5 relative group">
                                 {/* Username — adapts to scrolled state */}
@@ -623,9 +652,169 @@ export default function Header() {
                                 {t('nav.signIn')}
                             </Link>
                         )}
+                        </div>
+
+                        {/* Hamburger — mobile/tablet (< lg) */}
+                        <button
+                            type="button"
+                            onClick={() => setIsMobileMenuOpen((open) => !open)}
+                            aria-expanded={isMobileMenuOpen}
+                            aria-controls="mobile-menu-panel"
+                            aria-label={isMobileMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
+                            className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors min-[1400px]:hidden ${
+                                isSolidHeader
+                                    ? 'text-slate-700 hover:bg-slate-100'
+                                    : 'text-white hover:bg-white/15'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-2xl">
+                                {isMobileMenuOpen ? 'close' : 'menu'}
+                            </span>
+                        </button>
                     </div>
                 </div>
+
             </nav>
+
+            {/* Backdrop — bấm ngoài để đóng drawer */}
+            <div
+                className={`min-[1400px]:hidden fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-[2px] transition-opacity duration-300 ${
+                    isMobileMenuOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+                }`}
+                onClick={() => setIsMobileMenuOpen(false)}
+                aria-hidden="true"
+            />
+
+            {/* Mobile drawer — trượt từ phải (< 1400px) */}
+            <div
+                id="mobile-menu-panel"
+                role="dialog"
+                aria-modal="true"
+                className={`min-[1400px]:hidden fixed inset-y-0 right-0 z-[60] flex w-[86%] max-w-sm flex-col bg-white shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}
+            >
+                {/* Đầu drawer: thương hiệu + đóng */}
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                    <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="flex min-w-0 items-center gap-2.5">
+                        <AzureHorizonBrandIcon solid={true} />
+                        <span className="truncate font-headline text-lg font-extrabold tracking-tight text-slate-900">
+                            {publicSettings.company_name}
+                        </span>
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        aria-label={t('nav.closeMenu')}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100"
+                    >
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                {/* Nội dung cuộn */}
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                    <div className="flex flex-col gap-1">
+                        {navLinks.map((link) => {
+                            const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                            return (
+                                <Link
+                                    key={link.href}
+                                    href={link.href}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    aria-current={isActive ? 'page' : undefined}
+                                    className={`rounded-xl px-4 py-3 text-base font-semibold transition-colors ${
+                                        isActive ? 'bg-primary/10 text-primary' : 'text-slate-700 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    {t(link.key)}
+                                </Link>
+                            );
+                        })}
+                    </div>
+
+                    {isLoggedIn && (
+                        <div className="mt-2 flex flex-col gap-1 border-t border-slate-100 pt-3">
+                            <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('nav.account.personalSection')}</p>
+                            <button
+                                type="button"
+                                onClick={() => { setIsMobileMenuOpen(false); router.push('/profile'); }}
+                                className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">person</span>
+                                {t('nav.profile')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setIsMobileMenuOpen(false); router.push('/my-bookings'); }}
+                                className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">luggage</span>
+                                {t('nav.myBookings')}
+                            </button>
+                            {canAccessAdmin && defaultAdminPath && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setIsMobileMenuOpen(false); router.push(defaultAdminPath); }}
+                                    className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">{rolePresentation.badgeIcon}</span>
+                                    {t('nav.account.adminTitle')}
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="mt-2 border-t border-slate-100 pt-3">
+                        <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('nav.settingsSection')}</p>
+                        <button
+                            type="button"
+                            onClick={() => { setIsMobileMenuOpen(false); setIsLocaleOpen(true); }}
+                            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-base font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                        >
+                            <span className="material-symbols-outlined text-[20px] text-slate-500">language</span>
+                            {localeLabel}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Footer drawer: tài khoản */}
+                <div className="border-t border-slate-100 px-4 py-4">
+                    {isLoggedIn ? (
+                        <>
+                            <div className="flex items-center gap-3 px-1">
+                                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-bold text-white">
+                                    {userAvatar ? (
+                                        <Image className="h-full w-full object-cover" src={userAvatar} alt={userName} width={44} height={44} sizes="44px" />
+                                    ) : (
+                                        userName ? userName.charAt(0).toUpperCase() : '?'
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-bold text-slate-900">{userName}</p>
+                                    <p className="mt-0.5 truncate text-xs text-slate-500">{userEmail || t('nav.memberLabel')}</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }}
+                                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-red-500 transition-colors hover:bg-red-50"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">logout</span>
+                                {t('nav.signOut')}
+                            </button>
+                        </>
+                    ) : (
+                        <Link
+                            href="/login"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="block rounded-full bg-blue-800 px-6 py-3 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                        >
+                            {t('nav.signIn')}
+                        </Link>
+                    )}
+                </div>
+            </div>
 
             {/* Locale Switcher Modal */}
             <LocaleSwitcher isOpen={isLocaleOpen} onClose={() => setIsLocaleOpen(false)} />

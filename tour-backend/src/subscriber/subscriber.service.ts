@@ -48,7 +48,7 @@ export class SubscriberService {
     const existing = await this.prisma.subscriber.findUnique({ where: { email } });
     if (existing) {
       if (!existing.isActive) {
-        const reactivated = await this.prisma.subscriber.update({
+        await this.prisma.subscriber.update({
           where: { email },
           data: {
             isActive: true,
@@ -56,12 +56,12 @@ export class SubscriberService {
             unsubscribeReason: null,
           },
         });
-        return { success: true, message: 'reactivated', data: reactivated };
+        return { success: true, message: 'reactivated' };
       }
-      return { success: true, message: 'already_exists', data: existing };
+      return { success: true, message: 'already_exists' };
     }
-    const newSubscriber = await this.prisma.subscriber.create({ data: { email } });
-    return { success: true, message: 'created', data: newSubscriber };
+    await this.prisma.subscriber.create({ data: { email } });
+    return { success: true, message: 'created' };
   }
 
   // Admin/Super Admin: danh sách subscribers có phân trang

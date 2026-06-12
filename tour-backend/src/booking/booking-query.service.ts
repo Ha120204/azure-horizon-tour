@@ -705,7 +705,31 @@ export class BookingQueryService {
     return booking;
   }
 
+  private static readonly ALLOWED_IMAGE_HOSTS = new Set([
+    'images.unsplash.com',
+    'res.cloudinary.com',
+    'flagcdn.com',
+    'api.vietqr.io',
+    'i.pravatar.cc',
+    'lh3.googleusercontent.com',
+  ]);
+
   async proxyImage(imageUrl: string, res: Response) {
+    let parsed: URL;
+    try {
+      parsed = new URL(imageUrl);
+    } catch {
+      throw new BadRequestException('URL ảnh không hợp lệ');
+    }
+
+    if (parsed.protocol !== 'https:') {
+      throw new BadRequestException('Chỉ hỗ trợ URL https');
+    }
+
+    if (!BookingQueryService.ALLOWED_IMAGE_HOSTS.has(parsed.hostname)) {
+      throw new BadRequestException('Domain ảnh không được phép');
+    }
+
     try {
       const response = await firstValueFrom(
         this.httpService.get<ProxiedStream>(imageUrl, { responseType: 'stream' }),

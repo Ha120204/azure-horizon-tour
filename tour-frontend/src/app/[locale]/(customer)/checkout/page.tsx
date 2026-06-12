@@ -99,6 +99,14 @@ function isSaleDeparture(departure: CheckoutDeparture | null, regularPrice?: num
     return true;
 }
 
+function getIdentityError(identityType: string, identityNo: string, t: (key: string) => string): string | null {
+    if (identityType === 'CCCD' && !/^\d{12}$/.test(identityNo))
+        return t('checkout.citizenIdError');
+    if (identityType === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(identityNo))
+        return t('checkout.passportError');
+    return null;
+}
+
 function CheckoutContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -126,7 +134,7 @@ function CheckoutContent() {
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [paymentMethod] = useState<'PAYOS' | 'IN_STORE'>('PAYOS');
+    const [paymentMethod, setPaymentMethod] = useState<'PAYOS' | 'IN_STORE'>('PAYOS');
 
     // Toast Alert State
     const [errorMsg, setErrorMsg] = useState('');
@@ -152,15 +160,8 @@ function CheckoutContent() {
             return;
         }
 
-        // Validate identity document format
-        if (contactInfo.identityType === 'CCCD' && !/^\d{12}$/.test(contactInfo.identityNo)) {
-            showError('Số CCCD không hợp lệ (phải đủ 12 chữ số).');
-            return;
-        }
-        if (contactInfo.identityType === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(contactInfo.identityNo)) {
-            showError('Số hộ chiếu không hợp lệ (6–15 ký tự, chỉ gồm chữ và số).');
-            return;
-        }
+        const identityError = getIdentityError(contactInfo.identityType, contactInfo.identityNo, t);
+        if (identityError) { showError(identityError); return; }
 
         if (!contactInfo.email.includes('@')) {
             showError(t('checkout.errors.invalidEmail'));
@@ -173,7 +174,7 @@ function CheckoutContent() {
         }
 
         if (activeFormType) {
-            showError('Vui lòng hoàn thành hoặc hủy bỏ biểu mẫu thông tin hành khách đang nhập dở.');
+            showError(t('checkout.errors.passengerFormIncomplete'));
             return;
         }
 
@@ -571,15 +572,8 @@ function CheckoutContent() {
             return;
         }
 
-        // Validate identity document format
-        if (contactInfo.identityType === 'CCCD' && !/^\d{12}$/.test(contactInfo.identityNo)) {
-            showError('Số CCCD không hợp lệ (phải đủ 12 chữ số).');
-            return;
-        }
-        if (contactInfo.identityType === 'PASSPORT' && !/^[A-Za-z0-9]{6,15}$/.test(contactInfo.identityNo)) {
-            showError('Số hộ chiếu không hợp lệ (6–15 ký tự, chỉ gồm chữ và số).');
-            return;
-        }
+        const identityError = getIdentityError(contactInfo.identityType, contactInfo.identityNo, t);
+        if (identityError) { showError(identityError); return; }
 
         if (!contactInfo.email.includes('@')) {
             showError(t('checkout.errors.invalidEmail'));
@@ -713,6 +707,44 @@ function CheckoutContent() {
                         maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats ?? undefined}
                         departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
                     />
+
+                    <section className="rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
+                        <h2 className="text-lg font-bold text-on-surface mb-4">
+                            {t('checkout.paymentMethodTitle')}
+                        </h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setPaymentMethod('PAYOS')}
+                                className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
+                                    paymentMethod === 'PAYOS'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-outline-variant/30 hover:border-outline-variant'
+                                }`}
+                            >
+                                <span className={`mt-0.5 material-symbols-outlined text-xl ${paymentMethod === 'PAYOS' ? 'text-primary' : 'text-on-surface-variant'}`} aria-hidden="true">qr_code_2</span>
+                                <div>
+                                    <p className="font-semibold text-sm text-on-surface">{t('checkout.payosTitle')}</p>
+                                    <p className="text-xs text-on-surface-variant mt-0.5">{t('checkout.payosDesc')}</p>
+                                </div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPaymentMethod('IN_STORE')}
+                                className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
+                                    paymentMethod === 'IN_STORE'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-outline-variant/30 hover:border-outline-variant'
+                                }`}
+                            >
+                                <span className={`mt-0.5 material-symbols-outlined text-xl ${paymentMethod === 'IN_STORE' ? 'text-primary' : 'text-on-surface-variant'}`} aria-hidden="true">store</span>
+                                <div>
+                                    <p className="font-semibold text-sm text-on-surface">{t('checkout.inStoreTitle')}</p>
+                                    <p className="text-xs text-on-surface-variant mt-0.5">{t('checkout.inStoreDesc')}</p>
+                                </div>
+                            </button>
+                        </div>
+                    </section>
                 </div>
 
                 <OrderSummary
@@ -774,12 +806,6 @@ function CheckoutContent() {
 export default function CheckoutPage() {
     return (
         <div className="bg-surface font-body text-on-surface min-h-screen flex flex-col">
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                .ambient-shadow { box-shadow: 0 8px 32px rgba(25, 28, 33, 0.04); }
-                .primary-gradient { background: linear-gradient(135deg, #003f87 0%, #0056b3 100%); }
-                .ghost-border { border: 1px solid rgba(194, 198, 212, 0.15); }
-            `}} />
             <Header />
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-primary">{`Loading...`}</div>}>
                 <CheckoutContent />

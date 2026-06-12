@@ -4,7 +4,6 @@ import type { Dispatch, SetStateAction } from 'react';
 import { CampaignComposerDialog } from './CampaignComposerDialog';
 import { CancelCampaignDialog } from './CancelCampaignDialog';
 import { DeleteSubscriberDialog } from './DeleteSubscriberDialog';
-import { MarketingToast } from './MarketingToast';
 import { ScheduleCampaignDialog } from './ScheduleCampaignDialog';
 import type {
   CampaignDraft,
@@ -13,7 +12,6 @@ import type {
   Subscriber,
   SubscriberStats,
   SubscriberStatus,
-  ToastState,
 } from '../_lib/types';
 
 interface MarketingOverlaysProps {
@@ -54,7 +52,6 @@ interface MarketingOverlaysProps {
   isDeleting: boolean;
   onCancelDelete: () => void;
   onConfirmDelete: () => void;
-  toast: ToastState | null;
 }
 
 export function MarketingOverlays({
@@ -95,7 +92,6 @@ export function MarketingOverlays({
   isDeleting,
   onCancelDelete,
   onConfirmDelete,
-  toast,
 }: MarketingOverlaysProps) {
   return (
     <>
@@ -155,7 +151,6 @@ export function MarketingOverlays({
         />
       )}
 
-      <MarketingToast toast={toast} />
     </>
   );
 }

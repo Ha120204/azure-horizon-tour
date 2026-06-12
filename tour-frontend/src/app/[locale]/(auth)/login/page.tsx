@@ -72,8 +72,13 @@ export default function LoginPage() {
                     router.push('/');
                 }
             } else {
-                const errData = await res.json();
-                setError(errData.message || t('auth.invalidCred'));
+                if (res.status === 401) {
+                    setError(t('auth.invalidCred'));
+                } else if (res.status === 429) {
+                    setError(t('auth.tooManyLoginAttempts'));
+                } else {
+                    setError(t('auth.loginFailed'));
+                }
             }
         } catch {
             setError(t('auth.serverError'));
@@ -114,13 +119,13 @@ export default function LoginPage() {
 
                 {oauthError && (
                     <AuthErrorMessage className="mb-4">
-                        Đăng nhập Google thất bại. Vui lòng thử lại.
+                        {t('auth.googleLoginError')}
                     </AuthErrorMessage>
                 )}
 
                 <AuthGoogleButton
                     id="btn-google-login"
-                    label="Tiếp tục với Google"
+                    label={t('auth.googleContinueBtn')}
                     isLoading={isGoogleLoading}
                     disabled={isSubmitting}
                     onClick={handleGoogleLogin}
@@ -128,7 +133,7 @@ export default function LoginPage() {
 
                 <div className="my-6 flex items-center gap-3">
                     <hr className="flex-1 border-[var(--auth-input-border)]" />
-                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--auth-muted)]">hoặc</span>
+                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--auth-muted)]">{t('auth.orDivider')}</span>
                     <hr className="flex-1 border-[var(--auth-input-border)]" />
                 </div>
 
@@ -164,8 +169,8 @@ export default function LoginPage() {
                         disabled={isSubmitting}
                         isVisible={showPassword}
                         onToggleVisible={() => setShowPassword((visible) => !visible)}
-                        showLabel="Hiện mật khẩu"
-                        hideLabel="Ẩn mật khẩu"
+                        showLabel={t('auth.showPassword')}
+                        hideLabel={t('auth.hidePassword')}
                     />
 
                     <AuthSubmitButton

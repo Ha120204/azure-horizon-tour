@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/context/LocaleContext';
-import { API_BASE_URL } from '@/lib/http/constants';
+import { useSubscribe } from '@/hooks/useSubscribe';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
 
 export default function Footer() {
     const { t, language } = useLocale();
-    const [email, setEmail] = useState('');
-    const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'loading' | 'success' | 'exists' | 'error'>('idle');
+    const { email, setEmail, status: subscribeStatus, handleSubscribe } = useSubscribe();
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
 
     useEffect(() => {
@@ -32,37 +31,6 @@ export default function Footer() {
         ? publicSettings.company_address
         : '175 Tay Son Street, Kim Lien, Hanoi';
 
-    const handleSubscribe = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!email || !email.includes('@')) {
-            setSubscribeStatus('error');
-            setTimeout(() => setSubscribeStatus('idle'), 3000);
-            return;
-        }
-        setSubscribeStatus('loading');
-        try {
-            const res = await fetch(`${API_BASE_URL}/subscriber/subscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                if (data.message === 'already_exists') {
-                    setSubscribeStatus('exists');
-                } else {
-                    setSubscribeStatus('success');
-                    setEmail('');
-                }
-            } else {
-                setSubscribeStatus('error');
-            }
-        } catch {
-            setSubscribeStatus('error');
-        } finally {
-            setTimeout(() => setSubscribeStatus('idle'), 4000);
-        }
-    };
 
     return (
         <footer className="bg-slate-950 text-slate-300 pt-20 pb-12 px-8 mt-auto border-t-[4px] border-primary">
@@ -157,7 +125,7 @@ export default function Footer() {
                                 : 'Get exclusive travel deals and cultural insights straight to your inbox each weekend.'}
                         </p>
 
-                        <form onSubmit={handleSubscribe} className="relative flex flex-col gap-2">
+                        <form onSubmit={handleSubscribe} noValidate className="relative flex flex-col gap-2">
                             <div className="flex">
                                 <input
                                     className="bg-slate-900 border border-slate-800 rounded-l-xl px-4 py-3.5 w-full text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm transition-all disabled:opacity-50"

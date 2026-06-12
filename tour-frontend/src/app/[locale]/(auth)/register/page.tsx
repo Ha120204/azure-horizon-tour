@@ -27,6 +27,7 @@ export default function RegisterPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [emailError, setEmailError] = useState('');
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -39,22 +40,34 @@ export default function RegisterPage() {
         : '/login';
 
     const passwordRequirements = [
-        { label: 'Ít nhất 8 ký tự', met: password.length >= 8 },
-        { label: 'Có chữ in hoa', met: /[A-Z]/.test(password) },
-        { label: 'Có chữ thường', met: /[a-z]/.test(password) },
-        { label: 'Có chữ số', met: /\d/.test(password) },
-        { label: 'Có ký tự đặc biệt', met: /[@$!%*?&]/.test(password) },
+        { label: t('auth.pwdReqLength'), met: password.length >= 8 },
+        { label: t('auth.pwdReqUppercase'), met: /[A-Z]/.test(password) },
+        { label: t('auth.pwdReqLowercase'), met: /[a-z]/.test(password) },
+        { label: t('auth.pwdReqNumber'), met: /\d/.test(password) },
+        { label: t('auth.pwdReqSpecial'), met: /[@$!%*?&]/.test(password) },
     ];
     const showPasswordGuide = password.length > 0;
     const passwordsMismatch = confirmPassword.length > 0 && confirmPassword !== password;
+
+    const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    const validateEmail = (value: string) => {
+        if (value && !EMAIL_PATTERN.test(value)) {
+            setEmailError(t('auth.emailInvalid'));
+            return false;
+        }
+        setEmailError('');
+        return true;
+    };
 
     const handleRegister = async (e: FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
         setError('');
+        if (!validateEmail(email)) return;
 
         if (!STRONG_PASSWORD_PATTERN.test(password)) {
-            setError('Mật khẩu ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt');
+            setError(t('auth.passwordWeakError'));
             return;
         }
 
@@ -105,7 +118,7 @@ export default function RegisterPage() {
 
                 <AuthGoogleButton
                     id="btn-google-register"
-                    label="Đăng ký với Google"
+                    label={t('auth.googleRegisterBtn')}
                     isLoading={isGoogleLoading}
                     disabled={isSubmitting}
                     onClick={handleGoogleRegister}
@@ -113,11 +126,11 @@ export default function RegisterPage() {
 
                 <div className="my-6 flex items-center gap-3">
                     <hr className="flex-1 border-[var(--auth-input-border)]" />
-                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--auth-muted)]">hoặc điền form</span>
+                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--auth-muted)]">{t('auth.orFillForm')}</span>
                     <hr className="flex-1 border-[var(--auth-input-border)]" />
                 </div>
 
-                <form className="space-y-5" onSubmit={handleRegister}>
+                <form className="space-y-5" onSubmit={handleRegister} noValidate>
                     {error && <AuthErrorMessage icon>{error}</AuthErrorMessage>}
 
                     <AuthTextField
@@ -142,8 +155,16 @@ export default function RegisterPage() {
                         type="email"
                         autoComplete="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => { setEmail(e.target.value); if (emailError) validateEmail(e.target.value); }}
+                        onBlur={(e) => validateEmail(e.target.value)}
                         disabled={isSubmitting}
+                        error={!!emailError}
+                        helperText={emailError ? (
+                            <p className="flex items-center gap-1 text-xs font-semibold text-[var(--auth-danger)]">
+                                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">error</span>
+                                {emailError}
+                            </p>
+                        ) : null}
                     />
 
                     <AuthPasswordField
@@ -157,14 +178,14 @@ export default function RegisterPage() {
                         disabled={isSubmitting}
                         isVisible={showPassword}
                         onToggleVisible={() => setShowPassword((visible) => !visible)}
-                        showLabel="Hiện mật khẩu"
-                        hideLabel="Ẩn mật khẩu"
+                        showLabel={t('auth.showPassword')}
+                        hideLabel={t('auth.hidePassword')}
                         helperText={
                             showPasswordGuide ? (
                                 <div className={`${authStyles.inlineReveal} rounded-[var(--auth-radius-sm)] border border-[var(--auth-input-border)] bg-[var(--auth-surface)] p-3`}>
                                     <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-[var(--auth-muted)]">
                                         <span className="material-symbols-outlined text-[15px]" aria-hidden="true">info</span>
-                                        Yêu cầu mật khẩu
+                                        {t('auth.passwordRequirementsTitle')}
                                     </p>
                                     <ul className="grid gap-1 text-xs font-medium text-[var(--auth-muted)] sm:grid-cols-2">
                                         {passwordRequirements.map((item) => (
@@ -193,8 +214,8 @@ export default function RegisterPage() {
                         disabled={isSubmitting}
                         isVisible={showConfirmPassword}
                         onToggleVisible={() => setShowConfirmPassword((visible) => !visible)}
-                        showLabel="Hiện mật khẩu xác nhận"
-                        hideLabel="Ẩn mật khẩu xác nhận"
+                        showLabel={t('auth.showPasswordConfirm')}
+                        hideLabel={t('auth.hidePasswordConfirm')}
                         error={passwordsMismatch}
                         helperText={
                             passwordsMismatch ? (

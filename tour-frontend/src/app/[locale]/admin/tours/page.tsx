@@ -186,7 +186,6 @@ export default function AdminToursPage() {
                 isDeleting={tour.isDeleting}
                 onCancelDelete={() => tour.setDeleteTarget(null)}
                 onConfirmDelete={tour.confirmDelete}
-                toast={tour.toast}
             />
         </main>
     );

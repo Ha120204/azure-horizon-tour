@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, BadRequestException } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -84,19 +85,31 @@ describe('AuthService', () => {
     });
   });
 
-  it('rejects reset password tokens with invalid subject payload', async () => {
-    jwtService.verify.mockReturnValue({ sub: 'not-a-user-id' });
+  it('rejects reset password when the OTP does not match', async () => {
+    const otpHash = crypto.createHash('sha256').update('123456').digest('hex');
+    prisma.user.findUnique.mockResolvedValue({
+      id: 7,
+      passwordResetToken: otpHash,
+      passwordResetExpiry: new Date(Date.now() + 10 * 60 * 1000),
+    });
 
-    await expect(service.resetPassword('reset-token', 'new-password')).rejects.toThrow(UnauthorizedException);
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    await expect(
+      service.resetPassword('customer@example.com', 'wrong-otp', 'new-password'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it('increments authTokenVersion when resetting password', async () => {
-    jwtService.verify.mockReturnValue({ sub: 7, email: 'customer@example.com' });
-    prisma.user.findUnique.mockResolvedValue({ id: 7 });
+    const otp = '123456';
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    prisma.user.findUnique.mockResolvedValue({
+      id: 7,
+      passwordResetToken: otpHash,
+      passwordResetExpiry: new Date(Date.now() + 10 * 60 * 1000),
+    });
     prisma.user.update.mockResolvedValue({ id: 7 });
 
-    await expect(service.resetPassword('reset-token', 'new-password')).resolves.toEqual({
+    await expect(service.resetPassword('customer@example.com', otp, 'new-password')).resolves.toEqual({
       message: 'Password has been reset successfully',
     });
 
@@ -104,6 +117,8 @@ describe('AuthService', () => {
       where: { id: 7 },
       data: {
         password: expect.any(String),
+        passwordResetToken: null,
+        passwordResetExpiry: null,
         authTokenVersion: { increment: 1 },
         authRevokedAt: expect.any(Date),
       },

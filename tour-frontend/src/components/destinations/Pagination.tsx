@@ -9,6 +9,7 @@ interface PaginationProps {
     totalItems?: number;
     limit?: number;
     setLimit?: (limit: number) => void;
+    onNavigate?: () => void;
 }
 
 const DEFAULT_PAGE_SIZES = [12, 24, 48, 96];
@@ -32,7 +33,7 @@ function generatePageNumbers(current: number, total: number): number[] {
     return pages;
 }
 
-export default function Pagination({ page, totalPages, setPage, totalItems = 0, limit = 12, setLimit }: PaginationProps) {
+export default function Pagination({ page, totalPages, setPage, totalItems = 0, limit = 12, setLimit, onNavigate }: PaginationProps) {
     const [sizeOpen, setSizeOpen] = useState(false);
     const sizeRef = useRef<HTMLDivElement>(null);
 
@@ -47,6 +48,20 @@ export default function Pagination({ page, totalPages, setPage, totalItems = 0, 
     if (totalPages <= 1 && totalItems === 0) return null;
 
     const pageNums = generatePageNumbers(page, totalPages);
+
+    const scrollToTop = () => {
+        if (onNavigate) {
+            onNavigate();
+            return;
+        }
+        if (typeof window !== 'undefined') {
+            requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+        }
+    };
+    const goToPage = (p: number) => {
+        setPage(p);
+        scrollToTop();
+    };
 
     return (
         <div className="mt-16 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -74,6 +89,7 @@ export default function Pagination({ page, totalPages, setPage, totalItems = 0, 
                                             setLimit(size);
                                             setPage(1); // Reset page to 1 when limit changes
                                             setSizeOpen(false);
+                                            scrollToTop();
                                         }}
                                         className={`w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-surface-container transition-colors ${size === limit ? 'text-primary font-bold' : 'text-on-surface font-medium'}`}
                                     >
@@ -94,7 +110,7 @@ export default function Pagination({ page, totalPages, setPage, totalItems = 0, 
                 <div className="flex items-center gap-1.5">
                     <button
                         disabled={page <= 1}
-                        onClick={() => setPage(Math.max(1, page - 1))}
+                        onClick={() => goToPage(Math.max(1, page - 1))}
                         className="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container hover:border-primary/30 hover:text-primary transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         <span className="material-symbols-outlined text-sm">chevron_left</span>
@@ -105,7 +121,7 @@ export default function Pagination({ page, totalPages, setPage, totalItems = 0, 
                         return (
                             <button
                                 key={p}
-                                onClick={() => setPage(p)}
+                                onClick={() => goToPage(p)}
                                 className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold transition-all duration-300 ${isActive ? 'bg-primary text-white shadow-md scale-105' : 'border border-outline-variant/20 text-on-surface hover:bg-surface-container hover:border-primary/30'}`}
                             >
                                 {p}
@@ -115,7 +131,7 @@ export default function Pagination({ page, totalPages, setPage, totalItems = 0, 
 
                     <button
                         disabled={page >= totalPages}
-                        onClick={() => setPage(Math.min(totalPages, page + 1))}
+                        onClick={() => goToPage(Math.min(totalPages, page + 1))}
                         className="w-10 h-10 flex items-center justify-center rounded-lg border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container hover:border-primary/30 hover:text-primary transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         <span className="material-symbols-outlined text-sm">chevron_right</span>

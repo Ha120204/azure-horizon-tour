@@ -8,6 +8,10 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
 
 const ACCESS_TOKEN_COOKIE = 'accessToken';
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
@@ -73,16 +77,25 @@ export class AuthController {
     return { user: data.user };
   }
 
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('forgot-password')
-  async forgotPassword(@Body() body: { email: string }) {
-    return this.authService.forgotPassword(body.email);
+  async forgotPassword(@Body() body: { email: string; locale?: 'vi' | 'en' }) {
+    return this.authService.forgotPassword(body.email, body.locale ?? 'vi');
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('verify-otp')
+  async verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto.email, dto.otp);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('reset-password')
-  async resetPassword(@Body() body: { token: string; newPassword: string }) {
-    return this.authService.resetPassword(body.token, body.newPassword);
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.email, dto.otp, dto.newPassword);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
   async refresh(@Req() req: ExpressRequest, @Res({ passthrough: true }) res: Response) {
     const cookies = req.cookies as Partial<Record<string, string>> | undefined;
@@ -154,11 +167,12 @@ export class AuthController {
     };
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @UseGuards(AuthGuard('jwt'))
   @Post('change-password')
   async changePassword(
     @Request() req: AuthenticatedRequest,
-    @Body() body: { currentPassword: string; newPassword: string },
+    @Body() body: ChangePasswordDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     const userId = req.user.userId;
@@ -177,7 +191,7 @@ export class AuthController {
   @Post('set-password')
   async setPassword(
     @Request() req: AuthenticatedRequest,
-    @Body() body: { newPassword: string },
+    @Body() body: SetPasswordDto,
   ) {
     const userId = req.user.userId;
     return this.authService.setPassword(userId, body.newPassword);

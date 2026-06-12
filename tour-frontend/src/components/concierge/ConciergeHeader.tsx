@@ -46,22 +46,22 @@ export default function ConciergeHeader({
                         if (!isHistoryOpen) void loadSessions();
                     }}
                     disabled={!hasAccessToken}
-                    title={hasAccessToken ? 'Xem lịch sử trò chuyện' : 'Đăng nhập để xem lịch sử'}
-                    aria-label="Xem lịch sử trò chuyện"
+                    title={hasAccessToken ? t('conciergeApp.historyTooltip') : t('conciergeApp.historyLoginRequired')}
+                    aria-label={t('conciergeApp.historyTooltip')}
                     className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                     <span className="material-symbols-outlined text-[14px]">history</span>
-                    Lịch sử
+                    {t('conciergeApp.history')}
                 </button>
                 <button
                     type="button"
                     onClick={handleStartNewConversation}
-                    title="Bắt đầu hội thoại mới"
-                    aria-label="Bắt đầu hội thoại mới"
+                    title={t('conciergeApp.newChatTooltip')}
+                    aria-label={t('conciergeApp.newChatTooltip')}
                     className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 transition-all hover:bg-blue-100"
                 >
                     <span className="material-symbols-outlined text-[14px]">add</span>
-                    Mới
+                    {t('conciergeApp.newChat')}
                 </button>
             </div>
         </header>

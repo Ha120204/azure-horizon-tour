@@ -235,6 +235,7 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
     const handlePrimaryAction = () => {
         if (isStaff) { void handleSave('submit'); return; }
         if (!validateForPublish()) return;
+        if (isEdit && workflowStatus === 'PUBLISHED') { void handleSave('publish'); return; }
         setIsPublishConfirmOpen(true);
     };
 

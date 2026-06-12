@@ -71,12 +71,6 @@ export class TourQueryService {
         images: { orderBy: { sortOrder: 'asc' } },
         highlights: { orderBy: { sortOrder: 'asc' } },
         faqs: { orderBy: { sortOrder: 'asc' } },
-        reviews: {
-          where: { isHidden: false },
-          take: 5,
-          orderBy: { createdAt: 'desc' },
-          include: { user: { select: { fullName: true, avatarUrl: true } } },
-        },
         createdBy: { select: { id: true, fullName: true } },
         reviewedBy: { select: { id: true, fullName: true } },
       },

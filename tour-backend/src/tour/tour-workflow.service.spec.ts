@@ -42,6 +42,7 @@ describe('TourWorkflowService', () => {
         isActive: true,
       },
     ],
+    packages: [{ id: 1 }],
     ...overrides,
   });
 
@@ -86,6 +87,15 @@ describe('TourWorkflowService', () => {
     prisma.tour.findUnique.mockResolvedValue(
       publishableTour({ departures: [] }),
     );
+
+    await expect(service.submitForReview(1, 7)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.tour.update).not.toHaveBeenCalled();
+  });
+
+  it('requires at least one active package before submit for review', async () => {
+    prisma.tour.findUnique.mockResolvedValue(publishableTour({ packages: [] }));
 
     await expect(service.submitForReview(1, 7)).rejects.toBeInstanceOf(
       BadRequestException,

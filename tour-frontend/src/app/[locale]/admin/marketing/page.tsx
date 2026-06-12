@@ -88,7 +88,6 @@ export default function MarketingPage() {
         isDeleting={marketing.isDeleting}
         onCancelDelete={() => marketing.setDeleteTarget(null)}
         onConfirmDelete={marketing.confirmDelete}
-        toast={marketing.toast}
       />
     </main>
   );

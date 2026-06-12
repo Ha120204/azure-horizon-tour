@@ -128,4 +128,9 @@ export interface Tour {
   faqs?: TourFAQ[];
   departurePoint?: string;
   departurePointEn?: string | null;
+  averageRating?: number | null;
+  reviewCount?: number | null;
+  _count?: {
+    reviews?: number;
+  };
 }

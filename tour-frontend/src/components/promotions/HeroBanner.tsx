@@ -90,7 +90,7 @@ export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEnd
     return (
         <section
             className="relative w-full overflow-hidden"
-            style={{ height: '100vh', minHeight: '680px', backgroundColor: '#06152b' }}
+            style={{ height: '100dvh', minHeight: '680px', backgroundColor: '#06152b' }}
         >
             <style>{`
                 @keyframes fade-rise {
@@ -148,7 +148,7 @@ export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEnd
                     className="anim-fade-rise-d1 font-headline font-extrabold text-white tracking-tight mb-6"
                     style={{
                         fontSize: 'clamp(2.4rem, 7vw, 5.5rem)',
-                        lineHeight: 1.0,
+                        lineHeight: 1.3,
                         letterSpacing: '-1.5px',
                         maxWidth: '900px',
                     }}
@@ -178,7 +178,7 @@ export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEnd
                             {isFlashCountdown
                                 ? <span className="flex items-center justify-center gap-1.5">
                                     <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span>
-                                    Flash Sale kết thúc sau
+                                    {t('flashSaleEndsIn')}
                                   </span>
                                 : t('summerOffer')
                             }
@@ -217,7 +217,7 @@ export default function HeroBanner({ timeLeft, isMounted, t, nearestFlashSaleEnd
 
                 {/* Scroll cue */}
                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/40 anim-fade-rise-d3">
-                    <span className="text-[0.6rem] uppercase tracking-[0.2em]">Cuộn xuống</span>
+                    <span className="text-[0.6rem] uppercase tracking-[0.2em]">{t('scrollDown')}</span>
                     <div className="w-5 h-8 rounded-full border border-white/20 flex items-start justify-center pt-1.5">
                         <div className="w-1 h-2 rounded-full bg-white/50" style={{ animation: 'scrollDot 1.8s ease-in-out infinite' }}></div>
                     </div>

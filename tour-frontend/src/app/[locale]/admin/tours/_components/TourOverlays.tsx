@@ -12,8 +12,7 @@ import {
     PermanentDeleteDialog,
 } from './TourConfirmDialogs';
 import { SubmitTourReviewDialog } from './SubmitTourReviewDialog';
-import { TourToast } from './TourToast';
-import type { Destination, ModalMode, ToastState, Tour, TourReviewAction, TrashedTour } from '../_lib/types';
+import type { Destination, ModalMode, Tour, TourReviewAction, TrashedTour } from '../_lib/types';
 
 interface TourOverlaysProps {
     showBulkConfirm: boolean;
@@ -56,7 +55,6 @@ interface TourOverlaysProps {
     isDeleting: boolean;
     onCancelDelete: () => void;
     onConfirmDelete: () => void | Promise<void>;
-    toast: ToastState | null;
 }
 
 export function TourOverlays({
@@ -100,7 +98,6 @@ export function TourOverlays({
     isDeleting,
     onCancelDelete,
     onConfirmDelete,
-    toast,
 }: TourOverlaysProps) {
     return (
         <>
@@ -189,7 +186,6 @@ export function TourOverlays({
                 />
             )}
 
-            <TourToast toast={toast} />
         </>
     );
 }

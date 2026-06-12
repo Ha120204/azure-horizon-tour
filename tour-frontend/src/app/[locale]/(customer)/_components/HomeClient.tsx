@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import HeroSearch from '@/components/search/HeroSearch';
@@ -269,11 +269,12 @@ function HeroVideoBackground({ travelScope }: { travelScope: TravelScope }) {
 interface HomeClientProps {
   /** Tours đã được fetch server-side — không cần loading state */
   initialTours: TourSummary[];
+  /** True khi fetch tour thất bại (phân biệt với danh sách rỗng) */
+  loadError?: boolean;
 }
 
-export default function HomeClient({ initialTours }: HomeClientProps) {
+export default function HomeClient({ initialTours, loadError = false }: HomeClientProps) {
   const [travelScope, setTravelScope] = useState<TravelScope>('DOMESTIC');
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { t, formatPrice } = useLocale();
   const hasPaymentError = isPaymentErrorCode(searchParams.get('error'));
@@ -308,125 +309,6 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
 
   return (
     <div className="bg-background text-on-surface font-body antialiased min-h-screen flex flex-col">
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          @keyframes home-hero-rise {
-            from {
-              opacity: 0;
-              transform: translate3d(0, 26px, 0);
-            }
-            to {
-              opacity: 1;
-              transform: translate3d(0, 0, 0);
-            }
-          }
-
-          @keyframes home-hero-search-rise {
-            from {
-              opacity: 0;
-              transform: translate3d(0, 34px, 0) scale(0.985);
-            }
-            to {
-              opacity: 1;
-              transform: translate3d(0, 0, 0) scale(1);
-            }
-          }
-
-          @keyframes home-stat-rise {
-            from {
-              opacity: 0;
-              transform: translate3d(0, 18px, 0);
-            }
-            to {
-              opacity: 1;
-              transform: translate3d(0, 0, 0);
-            }
-          }
-
-          @keyframes home-philosophy-reveal {
-            from {
-              opacity: 0;
-              transform: translate3d(var(--philosophy-x, 0), var(--philosophy-y, 26px), 0) scale(var(--philosophy-scale, 0.985));
-            }
-            to {
-              opacity: 1;
-              transform: translate3d(0, 0, 0) scale(1);
-            }
-          }
-
-          .home-hero-enter {
-            animation: home-hero-rise 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
-          }
-
-          .home-hero-search-enter {
-            animation: home-hero-search-rise 0.78s cubic-bezier(0.16, 1, 0.3, 1) both;
-          }
-
-          .home-stat-enter {
-            animation: home-stat-rise 0.62s cubic-bezier(0.16, 1, 0.3, 1) both;
-          }
-
-          .home-philosophy-reveal {
-            opacity: 0;
-            transform: translate3d(var(--philosophy-x, 0), var(--philosophy-y, 26px), 0) scale(var(--philosophy-scale, 0.985));
-            will-change: transform, opacity;
-          }
-
-          .home-philosophy-reveal.is-visible {
-            animation: home-philosophy-reveal 0.74s cubic-bezier(0.16, 1, 0.3, 1) both;
-          }
-
-          .home-philosophy-reveal.is-visible.home-philosophy-hover-lift:hover {
-            transform: translate3d(0, -2px, 0) scale(1);
-          }
-
-          .home-philosophy-from-left {
-            --philosophy-x: -34px;
-            --philosophy-y: 18px;
-            --philosophy-scale: 0.98;
-          }
-
-          .home-philosophy-from-right {
-            --philosophy-x: 30px;
-            --philosophy-y: 22px;
-            --philosophy-scale: 0.985;
-          }
-
-          .home-philosophy-float {
-            --philosophy-y: 30px;
-            --philosophy-scale: 0.975;
-          }
-
-          .home-hero-d1 { animation-delay: 80ms; }
-          .home-hero-d2 { animation-delay: 180ms; }
-          .home-hero-d3 { animation-delay: 300ms; }
-          .home-hero-d4 { animation-delay: 440ms; }
-          .home-stat-d0 { animation-delay: 520ms; }
-          .home-stat-d1 { animation-delay: 600ms; }
-          .home-stat-d2 { animation-delay: 680ms; }
-          .home-stat-d3 { animation-delay: 760ms; }
-          .home-philosophy-d1 { animation-delay: 80ms; }
-          .home-philosophy-d2 { animation-delay: 180ms; }
-          .home-philosophy-d3 { animation-delay: 300ms; }
-          .home-philosophy-d4 { animation-delay: 420ms; }
-          .home-philosophy-d5 { animation-delay: 520ms; }
-          .home-philosophy-d6 { animation-delay: 620ms; }
-          .home-philosophy-d7 { animation-delay: 720ms; }
-
-          @media (prefers-reduced-motion: reduce) {
-            .home-hero-enter,
-            .home-hero-search-enter,
-            .home-stat-enter,
-            .home-philosophy-reveal {
-              animation: none !important;
-              opacity: 1 !important;
-              transform: none !important;
-              will-change: auto !important;
-            }
-          }
-        `
-      }} />
-
       <Header />
 
       {/* ── CINEMATIC VIDEO HERO ── */}
@@ -480,22 +362,22 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
               <h2 className="text-4xl font-headline font-bold text-on-surface mb-4">{t('featured.title')}</h2>
               <p className="text-on-surface-variant max-w-md">{t('featured.subtitle')}</p>
             </div>
-            <button
-              onClick={() => router.push('/destinations')}
+            <Link
+              href="/destinations"
               className="group hidden md:flex items-center gap-2 rounded-full px-3 py-2 text-primary font-headline font-semibold transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary/5 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none"
             >
               {t('featured.exploreAll')}
               <span className="material-symbols-outlined text-sm transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transform-none">arrow_forward</span>
-            </button>
+            </Link>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
             {initialTours.length > 0 ? (
               initialTours.slice(0, 6).map((tour) => (
-                <div
+                <Link
                   key={tour.id}
-                  className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-                  onClick={() => router.push(`/tour/${tour.id}`)}
+                  href={`/tour/${tour.id}`}
+                  className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
                 >
                   {/* Image */}
                   <div className="relative h-56 flex-shrink-0 overflow-hidden bg-slate-100">
@@ -556,11 +438,17 @@ export default function HomeClient({ initialTours }: HomeClientProps) {
                       </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))
+            ) : loadError ? (
+              <div className="col-span-full flex flex-col items-center gap-3 py-16 text-center text-on-surface-variant">
+                <span className="material-symbols-outlined text-5xl text-error/70" aria-hidden="true">cloud_off</span>
+                <p className="max-w-sm text-sm leading-relaxed">{t('featured.error')}</p>
+              </div>
             ) : (
-              <div className="col-span-full text-center py-10 text-on-surface-variant">
-                {t('featured.loading')}
+              <div className="col-span-full flex flex-col items-center gap-3 py-16 text-center text-on-surface-variant">
+                <span className="material-symbols-outlined text-5xl text-slate-300" aria-hidden="true">luggage</span>
+                <p className="max-w-sm text-sm leading-relaxed">{t('featured.empty')}</p>
               </div>
             )}
           </div>

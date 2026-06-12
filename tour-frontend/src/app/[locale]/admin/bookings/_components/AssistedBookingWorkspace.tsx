@@ -15,8 +15,6 @@ import {
   parsePassengerCount,
 } from '../_lib/helpers';
 import type {
-  AssistedDraft,
-  AssistedDraftAction,
   AssistedDraftForm,
   DraftSelectOption,
 } from '../_lib/types';
@@ -75,7 +73,7 @@ export function AssistedBookingWorkspace({
   showToast: (msg: string, ok?: boolean) => void;
 }) {
   const {
-    drafts, tours, isLoading,
+    drafts, isLoading,
     isDrawerOpen, setIsDrawerOpen,
     isWorkspaceOpen, setIsWorkspaceOpen,
     editingDraft, viewingDraft, setViewingDraft,
@@ -84,19 +82,19 @@ export function AssistedBookingWorkspace({
     isTourPickerOpen, setIsTourPickerOpen,
     tourQuery, setTourQuery, tourPickerRef,
     submitErrors, draftFormError,
-    useRepresentativeAsFirstPassenger, setUseRepresentativeAsFirstPassenger,
+    setUseRepresentativeAsFirstPassenger,
     editingPassengerIndex, setEditingPassengerIndex,
     draftActionDialog, setDraftActionDialog,
     draftDeleteDialog, form,
     isAdmin, isStaff, hasResolvedRole,
     completionActionText, completionButtonLabel,
-    selectedTour, selectedTourDepartures, selectedDeparture, selectedPackage,
+    selectedTour, selectedTourDepartures,
     departureOptions, packageOptions,
     baseTourPrice, packageSurcharge, estimatedUnitPrice,
-    adultCount, childCount, infantCount, totalPassengerCount, estimatedTotal,
-    effectivePassengerDrafts, generatedPassengerRows,
-    voucherStatus, hasRequiredDeparture,
-    passengerChecklistStatus, summaryChecklistItems, missingSummaryCount,
+    adultCount, totalPassengerCount, estimatedTotal,
+    generatedPassengerRows,
+    voucherStatus,
+    summaryChecklistItems, missingSummaryCount,
     filteredTours, submitErrorEntries, draftActionDialogConfig,
     pendingCount, needsApprovalValidation, approvalValidationIssues, hasBlockingApprovalIssues,
     fetchDrafts, updateForm, updatePassengerCount,
@@ -106,7 +104,6 @@ export function AssistedBookingWorkspace({
     createDraft, runDraftAction, closeDraftActionDialog,
     canDeleteDraft, openDeleteDraft, closeDeleteDraftDialog,
     submitDraftActionDialog, confirmDeleteDraft,
-    getPackageDisplayName,
   } = useAssistedBookingWorkspace({ onChanged, showToast });
 
   const draftListId = 'assisted-booking-drafts';

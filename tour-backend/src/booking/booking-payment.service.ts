@@ -137,12 +137,12 @@ export class BookingPaymentService {
         });
       }
 
-      // 3. Mark voucher đã dùng (nếu có)
+      // 3. Mark voucher đã dùng — chỉ với assisted booking (regular booking đã claim lúc create())
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
-        select: { userId: true, voucherCode: true },
+        select: { userId: true, voucherCode: true, isAssistedBooking: true },
       });
-      if (booking?.voucherCode) {
+      if (booking?.voucherCode && booking.isAssistedBooking) {
         await this.assistedDraftService.markVoucherAsUsed(
           tx as TransactionClient,
           booking.userId,

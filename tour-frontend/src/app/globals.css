@@ -392,3 +392,231 @@
     animation-delay:    0s !important;
   }
 }
+
+/* ── Icon fill utility ───────────────────────────────────────────── */
+.icon-fill { font-variation-settings: 'FILL' 1; }
+
+/* ── Shared shadow/glow utilities ───────────────────────────────── */
+.ambient-shadow { box-shadow: 0 8px 32px rgba(25, 28, 33, 0.04); }
+.ambient-glow   { box-shadow: 0 8px 32px 0 rgba(25, 28, 33, 0.04); }
+.fill-icon      { font-variation-settings: 'FILL' 1; }
+
+/* ── Checkout utilities ──────────────────────────────────────────── */
+.primary-gradient { background: linear-gradient(135deg, #003f87 0%, #0056b3 100%); }
+.ghost-border     { border: 1px solid rgba(194, 198, 212, 0.15); }
+
+/* ── Payment utilities ───────────────────────────────────────────── */
+.option-active { border-color: #003f87; background: rgba(0, 63, 135, 0.02); }
+
+/* ── Success / Ticket shape ─────────────────────────────────────── */
+.ticket-cutout { position: relative; }
+.ticket-cutout::before,
+.ticket-cutout::after {
+    content: ''; position: absolute; left: -12px;
+    width: 24px; height: 24px; background-color: #f9f9ff;
+    border-radius: 50%; z-index: 10;
+}
+.ticket-cutout::before { top: 35%; }
+.ticket-cutout::after  { bottom: 25%; }
+.ticket-right-cutout::before,
+.ticket-right-cutout::after {
+    content: ''; position: absolute; right: -12px;
+    width: 24px; height: 24px; background-color: #f9f9ff;
+    border-radius: 50%; z-index: 10;
+}
+.ticket-right-cutout::before { top: 35%; }
+.ticket-right-cutout::after  { bottom: 25%; }
+
+/* ── Promotions ──────────────────────────────────────────────────── */
+.vignette-overlay { background: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.7) 100%); }
+.ticket-shape {
+    -webkit-mask-image:
+        radial-gradient(circle at 0 50%, transparent 12px, black 13px),
+        radial-gradient(circle at 100% 50%, transparent 12px, black 13px);
+    -webkit-mask-composite: source-in;
+    mask-image:
+        radial-gradient(circle at 0 50%, transparent 12px, black 13px),
+        radial-gradient(circle at 100% 50%, transparent 12px, black 13px);
+    mask-composite: intersect;
+}
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-slide-up { animation: fadeSlideUp .35s ease-out; }
+
+/* ── Forgot password animations ──────────────────────────────────── */
+@keyframes slideInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes toastSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseRing {
+    0%   { transform: scale(0.9);  opacity: 0.6; }
+    50%  { transform: scale(1.15); opacity: 0; }
+    100% { transform: scale(0.9);  opacity: 0; }
+}
+.animate-slide-in-up { animation: slideInUp 0.5s ease-out both; }
+.animate-toast       { animation: toastSlideIn 0.35s ease-out both; }
+.animate-pulse-ring  { animation: pulseRing 2s ease-in-out infinite; }
+
+@keyframes voucherHighlightGlow {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.55), 0 0 22px 4px rgba(251, 191, 36, 0.30); }
+    50%      { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.90), 0 0 38px 10px rgba(251, 191, 36, 0.55); }
+}
+.animate-voucher-highlight { animation: voucherHighlightGlow 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+    .animate-voucher-highlight { animation: none; box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.85); }
+}
+
+/* ── About page animations ───────────────────────────────────────── */
+.about-hero-overlay {
+    background:
+        linear-gradient(90deg, rgba(0,22,52,0.92) 0%, rgba(0,42,90,0.72) 46%, rgba(0,42,90,0.16) 100%),
+        linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(0,22,52,0.58) 100%);
+}
+.about-map-grid {
+    background-image:
+        linear-gradient(rgba(0,63,135,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,63,135,0.07) 1px, transparent 1px);
+    background-size: 42px 42px;
+}
+.about-symbol { display: block; font-size: inherit; line-height: 1; }
+@keyframes about-hero-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.about-hero-enter       { animation: about-hero-up 0.7s cubic-bezier(0.16,1,0.3,1) both; }
+.about-hero-enter-d1    { animation-delay: 80ms; }
+.about-hero-enter-d2    { animation-delay: 180ms; }
+.about-hero-enter-d3    { animation-delay: 280ms; }
+.about-hero-enter-d4    { animation-delay: 380ms; }
+.about-stat-enter       { animation: about-hero-up 0.55s cubic-bezier(0.16,1,0.3,1) both; }
+.about-stat-d0          { animation-delay: 340ms; }
+.about-stat-d1          { animation-delay: 420ms; }
+.about-stat-d2          { animation-delay: 500ms; }
+@media (prefers-reduced-motion: reduce) {
+    .about-hero-enter, .about-stat-enter { animation: none !important; }
+}
+
+/* ── Contact page animations ─────────────────────────────────────── */
+@keyframes contact-hero-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.contact-hero-enter    { animation: contact-hero-up 0.7s cubic-bezier(0.16,1,0.3,1) both; }
+.contact-hero-enter-d1 { animation-delay: 80ms; }
+.contact-hero-enter-d2 { animation-delay: 180ms; }
+.contact-hero-enter-d3 { animation-delay: 280ms; }
+.contact-hero-enter-d4 { animation-delay: 380ms; }
+@media (prefers-reduced-motion: reduce) {
+    .contact-hero-enter { animation: none !important; }
+}
+
+/* ── Destinations animations ─────────────────────────────────────── */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
+@keyframes destination-rise {
+    from { opacity: 0; transform: translate3d(0, 24px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes destination-panel-rise {
+    from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.99); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes destination-mobile-filter {
+    from { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.985); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+.destination-hero-bg {
+    opacity: 0; transform: scale(1.035);
+    transition: opacity 900ms cubic-bezier(0.16,1,0.3,1), transform 900ms cubic-bezier(0.16,1,0.3,1);
+}
+.destination-hero-bg.is-active         { opacity: 1; transform: scale(1); }
+.destination-enter                     { animation: destination-rise 0.72s cubic-bezier(0.16,1,0.3,1) both; }
+.destination-panel-enter               { animation: destination-panel-rise 0.62s cubic-bezier(0.16,1,0.3,1) both; }
+.destination-card-enter                { animation: destination-panel-rise 0.58s cubic-bezier(0.16,1,0.3,1) both; }
+.destination-filter-enter {
+    animation: destination-mobile-filter 0.34s cubic-bezier(0.16,1,0.3,1) both;
+    transform-origin: top center;
+}
+.destination-d1 { animation-delay: 80ms; }
+.destination-d2 { animation-delay: 180ms; }
+.destination-d3 { animation-delay: 300ms; }
+.destination-d4 { animation-delay: 420ms; }
+@media (prefers-reduced-motion: reduce) {
+    .destination-hero-bg,
+    .destination-enter,
+    .destination-panel-enter,
+    .destination-card-enter,
+    .destination-filter-enter {
+        animation: none !important; opacity: 1 !important;
+        transform: none !important; transition: none !important;
+    }
+}
+
+/* ── Home page animations ────────────────────────────────────────── */
+@keyframes home-hero-rise {
+    from { opacity: 0; transform: translate3d(0, 26px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes home-hero-search-rise {
+    from { opacity: 0; transform: translate3d(0, 34px, 0) scale(0.985); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes home-stat-rise {
+    from { opacity: 0; transform: translate3d(0, 18px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes home-philosophy-reveal {
+    from {
+        opacity: 0;
+        transform: translate3d(var(--philosophy-x, 0), var(--philosophy-y, 26px), 0) scale(var(--philosophy-scale, 0.985));
+    }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+.home-hero-enter        { animation: home-hero-rise 0.72s cubic-bezier(0.16,1,0.3,1) both; }
+.home-hero-search-enter { animation: home-hero-search-rise 0.78s cubic-bezier(0.16,1,0.3,1) both; }
+.home-stat-enter        { animation: home-stat-rise 0.62s cubic-bezier(0.16,1,0.3,1) both; }
+.home-philosophy-reveal {
+    opacity: 0;
+    transform: translate3d(var(--philosophy-x, 0), var(--philosophy-y, 26px), 0) scale(var(--philosophy-scale, 0.985));
+    will-change: transform, opacity;
+}
+.home-philosophy-reveal.is-visible {
+    animation: home-philosophy-reveal 0.74s cubic-bezier(0.16,1,0.3,1) both;
+}
+.home-philosophy-reveal.is-visible.home-philosophy-hover-lift:hover {
+    transform: translate3d(0, -2px, 0) scale(1);
+}
+.home-philosophy-from-left  { --philosophy-x: -34px; --philosophy-y: 18px;  --philosophy-scale: 0.98; }
+.home-philosophy-from-right { --philosophy-x: 30px;  --philosophy-y: 22px;  --philosophy-scale: 0.985; }
+.home-philosophy-float      {                         --philosophy-y: 30px;  --philosophy-scale: 0.975; }
+.home-hero-d1      { animation-delay: 80ms; }
+.home-hero-d2      { animation-delay: 180ms; }
+.home-hero-d3      { animation-delay: 300ms; }
+.home-hero-d4      { animation-delay: 440ms; }
+.home-stat-d0      { animation-delay: 520ms; }
+.home-stat-d1      { animation-delay: 600ms; }
+.home-stat-d2      { animation-delay: 680ms; }
+.home-stat-d3      { animation-delay: 760ms; }
+.home-philosophy-d1 { animation-delay: 80ms; }
+.home-philosophy-d2 { animation-delay: 180ms; }
+.home-philosophy-d3 { animation-delay: 300ms; }
+.home-philosophy-d4 { animation-delay: 420ms; }
+.home-philosophy-d5 { animation-delay: 520ms; }
+.home-philosophy-d6 { animation-delay: 620ms; }
+.home-philosophy-d7 { animation-delay: 720ms; }
+@media (prefers-reduced-motion: reduce) {
+    .home-hero-enter,
+    .home-hero-search-enter,
+    .home-stat-enter,
+    .home-philosophy-reveal {
+        animation: none !important; opacity: 1 !important;
+        transform: none !important; will-change: auto !important;
+    }
+}

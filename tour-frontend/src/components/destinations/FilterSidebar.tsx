@@ -4,6 +4,7 @@ import { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { getDestinationDisplay, getDestinationDisplayName } from '@/lib/tour/formatDestination';
+import { TOUR_TYPE_OPTIONS } from '@/lib/tour/tourTypes';
 import DatePickerDropdown from '@/components/search/DatePickerDropdown';
 
 type TravelScope = '' | 'DOMESTIC' | 'INTERNATIONAL';
@@ -35,7 +36,7 @@ interface FilterSidebarProps {
     onClearAll: () => void;
     onApplyFilters: () => void;
     activeFilterCount: number;
-    priceRange: { min: number; max: number };
+    hasPendingChanges: boolean;
     allDestinations: DestinationOption[];
     // Departure filter
     departure: string;
@@ -51,6 +52,7 @@ const normalizeSearchText = (value: string) =>
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/[đĐ]/g, 'd')
         .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
         .trim();
 
 export default function FilterSidebar({
@@ -63,6 +65,7 @@ export default function FilterSidebar({
     selectedTypes, toggleType,
     onClearAll, onApplyFilters,
     activeFilterCount,
+    hasPendingChanges,
     allDestinations,
     departure, setDeparture,
     t, formatPrice, language,
@@ -71,7 +74,7 @@ export default function FilterSidebar({
     const [isSidebarDestFocused, setIsSidebarDestFocused] = useState(false);
     const sidebarDebounceRef = useRef<NodeJS.Timeout | null>(null);
     const sidebarDestRef = useRef<HTMLDivElement>(null);
-    const [departurePoints, setDeparturePoints] = useState<{ label: string }[]>([]);
+    const [departurePoints, setDeparturePoints] = useState<{ label: string; searchText?: string }[]>([]);
     const [isDepartureOpen, setIsDepartureOpen] = useState(false);
     const departureRef = useRef<HTMLDivElement>(null);
     const departureInputRef = useRef<HTMLInputElement>(null);
@@ -129,21 +132,24 @@ export default function FilterSidebar({
     const filteredDeparturePoints = useMemo(() => {
         const query = normalizeSearchText(departure);
         if (!query) return departurePoints;
-        return departurePoints.filter((pt) => normalizeSearchText(pt.label).includes(query));
+        return departurePoints.filter((pt) => {
+            const labelNorm = normalizeSearchText(pt.label);
+            if (labelNorm.includes(query)) return true;
+            if (pt.searchText) return pt.searchText.includes(query);
+            return false;
+        });
     }, [departure, departurePoints]);
 
-    const tourTypes = [
-        { value: 'Tour Gia Đình',    icon: 'family_restroom', label: t('filter.tourType_family'),    desc: t('filter.tourType_familyDesc') },
-        { value: 'Tour Cao Cấp',     icon: 'diamond',         label: t('filter.tourType_premium'),   desc: t('filter.tourType_premiumDesc') },
-        { value: 'Nghỉ Dưỡng',       icon: 'beach_access',    label: t('filter.tourType_resort'),    desc: t('filter.tourType_resortDesc') },
-        { value: 'Khám Phá',         icon: 'hiking',          label: t('filter.tourType_adventure'), desc: t('filter.tourType_adventureDesc') },
-        { value: 'Văn Hóa & Lịch Sử', icon: 'museum',         label: t('filter.tourType_culture'),   desc: t('filter.tourType_cultureDesc') },
-        { value: 'Tour Ghép Đoàn',   icon: 'groups',          label: t('filter.tourType_group'),     desc: t('filter.tourType_groupDesc') },
-    ];
+    const tourTypes = TOUR_TYPE_OPTIONS.map((option) => ({
+        value: option.value,
+        icon: option.icon,
+        label: t(option.labelKey),
+        desc: t(option.descKey),
+    }));
     const tripScopeOptions: { value: TravelScope; icon: string; label: string; desc: string }[] = [
-        { value: '', icon: 'travel_explore', label: t('filter.allTrips'), desc: language === 'vi' ? 'Hiển thị toàn bộ hành trình' : 'Show every available journey' },
-        { value: 'DOMESTIC', icon: 'home_pin', label: t('search.domestic'), desc: language === 'vi' ? 'Tour khởi hành và trải nghiệm tại Việt Nam' : 'Journeys within Vietnam' },
-        { value: 'INTERNATIONAL', icon: 'public', label: t('search.international'), desc: language === 'vi' ? 'Hành trình ra nước ngoài' : 'Journeys outside Vietnam' },
+        { value: '', icon: 'travel_explore', label: t('filter.allTrips'), desc: t('filter.tripScope_allDesc') },
+        { value: 'DOMESTIC', icon: 'home_pin', label: t('search.domestic'), desc: t('filter.tripScope_domesticDesc') },
+        { value: 'INTERNATIONAL', icon: 'public', label: t('search.international'), desc: t('filter.tripScope_internationalDesc') },
     ];
 
     return (
@@ -219,7 +225,7 @@ export default function FilterSidebar({
             <div className="px-6 py-6 border-b border-outline-variant/10">
                 <h3 className="font-bold text-[11px] text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-sm text-primary">flight_takeoff</span>
-                    {language === 'vi' ? 'Điểm khởi hành' : 'Departure City'}
+                    {t('filter.departureCity')}
                 </h3>
                 <div ref={departureRef} className="relative">
                     <div
@@ -240,7 +246,7 @@ export default function FilterSidebar({
                                     setIsDepartureOpen(true);
                                 }}
                                 onFocus={() => setIsDepartureOpen(true)}
-                                placeholder={language === 'vi' ? 'Bạn đi từ đâu?' : 'Where from?'}
+                                placeholder={t('filter.departurePlaceholder')}
                                 className="min-w-0 flex-1 bg-transparent p-0 text-sm font-semibold text-on-surface outline-none placeholder:text-outline-variant"
                             />
                         </div>
@@ -255,7 +261,7 @@ export default function FilterSidebar({
                                         setIsDepartureOpen(true);
                                         departureInputRef.current?.focus();
                                     }}
-                                    aria-label={language === 'vi' ? 'Xóa điểm khởi hành' : 'Clear departure city'}
+                                    aria-label={t('filter.departureClear')}
                                 >
                                     <span className="material-symbols-outlined text-[13px]">close</span>
                                 </button>
@@ -268,7 +274,7 @@ export default function FilterSidebar({
                                     setIsDepartureOpen((open) => !open);
                                 }}
                                 className="w-5 h-5 flex items-center justify-center rounded-full text-outline hover:bg-outline-variant/15 transition-colors"
-                                aria-label={isDepartureOpen ? (language === 'vi' ? 'Đóng danh sách' : 'Close list') : (language === 'vi' ? 'Mở danh sách' : 'Open list')}
+                                aria-label={isDepartureOpen ? t('filter.departureCloseList') : t('filter.departureOpenList')}
                             >
                                 <span className="material-symbols-outlined text-[18px]">
                                     {isDepartureOpen ? 'expand_less' : 'expand_more'}
@@ -286,7 +292,7 @@ export default function FilterSidebar({
                                 className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-slate-600 hover:bg-slate-50 transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[16px]">travel_explore</span>
-                                <span className="text-sm font-bold">{language === 'vi' ? 'Tất cả điểm khởi hành' : 'All departure cities'}</span>
+                                <span className="text-sm font-bold">{t('filter.allDepartureCities')}</span>
                             </button>
                             <div className="mx-3 my-1 border-t border-slate-100" />
                             {filteredDeparturePoints.map((pt, idx) => (
@@ -306,8 +312,8 @@ export default function FilterSidebar({
                             {filteredDeparturePoints.length === 0 && departure.trim() && (
                                 <div className="px-4 py-4 text-center">
                                     <span className="material-symbols-outlined text-2xl text-slate-300">search_off</span>
-                                    <p className="mt-1 text-xs font-semibold text-slate-500">{language === 'vi' ? 'Không có gợi ý phù hợp' : 'No matching suggestions'}</p>
-                                    <p className="mt-0.5 text-[11px] text-slate-400">{language === 'vi' ? 'Bạn vẫn có thể áp dụng từ khóa đã nhập' : 'You can still apply the typed keyword'}</p>
+                                    <p className="mt-1 text-xs font-semibold text-slate-500">{t('filter.noSuggestions')}</p>
+                                    <p className="mt-0.5 text-[11px] text-slate-400">{t('filter.applyTypedKeyword')}</p>
                                 </div>
                             )}
                         </div>
@@ -409,7 +415,7 @@ export default function FilterSidebar({
             <div className="px-6 py-6 border-b border-outline-variant/10">
                 <h3 className="font-bold text-[11px] text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-sm text-primary">calendar_today</span>
-                    {language === 'vi' ? 'Ngày khởi hành' : 'Departure Date'}
+                    {t('filter.departureDate')}
                 </h3>
                 <DatePickerDropdown
                     value={date}
@@ -434,10 +440,10 @@ export default function FilterSidebar({
                 <div className="space-y-2">
                     {(() => {
                         const options = [
-                            { label: `${language === 'vi' ? 'Dưới' : 'Under'} ${formatPrice(5000000)}`, value: '0-5000000' },
+                            { label: `${t('filter.priceUnder')} ${formatPrice(5000000)}`, value: '0-5000000' },
                             { label: `${formatPrice(5000000)} – ${formatPrice(10000000)}`, value: '5000000-10000000' },
                             { label: `${formatPrice(10000000)} – ${formatPrice(20000000)}`, value: '10000000-20000000' },
-                            { label: `${language === 'vi' ? 'Trên' : 'Over'} ${formatPrice(20000000)}`, value: '20000000-unlimited' },
+                            { label: `${t('filter.priceOver')} ${formatPrice(20000000)}`, value: '20000000-unlimited' },
                         ];
                         return options.map((option) => {
                             const isActive = sidebarBudget === option.value;
@@ -471,13 +477,13 @@ export default function FilterSidebar({
             <div className="px-6 py-6 border-b border-outline-variant/10">
                 <h3 className="font-bold text-[11px] text-on-surface uppercase tracking-widest mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined text-sm text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                    {language === 'vi' ? 'Đánh giá' : 'Rating'}
+                    {t('filter.ratingTitle')}
                 </h3>
                 <div className="space-y-2">
                     {([
-                        { threshold: 4.5, filledStars: 5, label: language === 'vi' ? 'Xuất sắc' : 'Excellent', sublabel: '4.5+' },
-                        { threshold: 4.0, filledStars: 4, label: language === 'vi' ? 'Rất tốt'  : 'Very Good', sublabel: '4.0+' },
-                        { threshold: 3.0, filledStars: 3, label: language === 'vi' ? 'Tốt'      : 'Good',      sublabel: '3.0+' },
+                        { threshold: 4.5, filledStars: 5, label: t('filter.ratingExcellent'), sublabel: '4.5+' },
+                        { threshold: 4.0, filledStars: 4, label: t('filter.ratingVeryGood'), sublabel: '4.0+' },
+                        { threshold: 3.0, filledStars: 3, label: t('filter.ratingGood'),      sublabel: '3.0+' },
                     ] as { threshold: number; filledStars: number; label: string; sublabel: string }[]).map((opt) => {
                         const isActive = selectedRating === opt.threshold;
                         return (
@@ -571,6 +577,12 @@ export default function FilterSidebar({
 
             {/* Apply Button */}
             <div className="px-6 py-5">
+                {hasPendingChanges && (
+                    <p className="mb-3 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-amber-600">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        {t('filter.pendingChanges')}
+                    </p>
+                )}
                 <button
                     onClick={onApplyFilters}
                     className="group w-full py-3.5 bg-gradient-to-br from-primary to-primary-container text-white font-headline font-semibold rounded-xl shadow-md shadow-primary/15 transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest"

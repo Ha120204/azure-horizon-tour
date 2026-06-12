@@ -5,8 +5,10 @@ interface ConciergeInputProps {
     inputValue: string;
     setInputValue: (v: string) => void;
     isTyping: boolean;
+    isStreaming: boolean;
     cooldown: boolean;
     handleSendMessage: (text?: string) => void;
+    handleStopGeneration: () => void;
     t: (key: string) => string;
 }
 
@@ -15,8 +17,10 @@ export default function ConciergeInput({
     inputValue,
     setInputValue,
     isTyping,
+    isStreaming,
     cooldown,
     handleSendMessage,
+    handleStopGeneration,
     t,
 }: ConciergeInputProps) {
     return (
@@ -40,20 +44,36 @@ export default function ConciergeInput({
                         maxLength={1000}
                         disabled={isTyping}
                     />
-                    <button
-                        type="submit"
-                        id="ai-chat-send"
-                        disabled={!inputValue.trim() || isTyping || cooldown}
-                        aria-label="Gửi tin nhắn"
-                        className="w-10 h-10 bg-blue-800 text-white rounded-full shadow-md flex items-center justify-center hover:bg-blue-900 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
-                    >
-                        <span
-                            className="material-symbols-outlined text-[18px]"
-                            style={{ fontVariationSettings: "'FILL' 1" }}
+                    {isStreaming ? (
+                        <button
+                            type="button"
+                            onClick={handleStopGeneration}
+                            aria-label="Dừng"
+                            className="w-10 h-10 bg-red-500 text-white rounded-full shadow-md flex items-center justify-center hover:bg-red-600 transition-colors"
                         >
-                            arrow_upward
-                        </span>
-                    </button>
+                            <span
+                                className="material-symbols-outlined text-[18px]"
+                                style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                                stop
+                            </span>
+                        </button>
+                    ) : (
+                        <button
+                            type="submit"
+                            id="ai-chat-send"
+                            disabled={!inputValue.trim() || isTyping || cooldown}
+                            aria-label={t('conciergeApp.sendMessage')}
+                            className="w-10 h-10 bg-blue-800 text-white rounded-full shadow-md flex items-center justify-center hover:bg-blue-900 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                        >
+                            <span
+                                className="material-symbols-outlined text-[18px]"
+                                style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                                arrow_upward
+                            </span>
+                        </button>
+                    )}
                 </form>
                 <p className="mt-3 text-center text-[9px] uppercase tracking-widest text-slate-400 font-bold">
                     {t('conciergeApp.disclaimer')}

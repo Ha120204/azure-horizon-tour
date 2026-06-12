@@ -11,8 +11,9 @@ export default function ConciergeWidget() {
     const pathname = usePathname();
     const ctx = useConcierge();
 
-    // Ẩn widget trên trang Admin
-    if (pathname?.includes('/admin')) return null;
+    // Ẩn widget trên trang Admin và auth
+    const hiddenPaths = ['/admin', '/login', '/register', '/forgot-password', '/reset-password'];
+    if (hiddenPaths.some(p => pathname?.includes(p))) return null;
 
     return (
         <>
@@ -78,6 +79,7 @@ export default function ConciergeWidget() {
                     <ConciergeMessages
                         messages={ctx.messages}
                         isTyping={ctx.isTyping}
+                        isSearching={ctx.isSearching}
                         cooldown={ctx.cooldown}
                         isLoadingHistory={ctx.isLoadingHistory}
                         hasAccessToken={ctx.hasAccessToken}
@@ -93,8 +95,10 @@ export default function ConciergeWidget() {
                         inputValue={ctx.inputValue}
                         setInputValue={ctx.setInputValue}
                         isTyping={ctx.isTyping}
+                        isStreaming={ctx.isStreaming}
                         cooldown={ctx.cooldown}
                         handleSendMessage={ctx.handleSendMessage}
+                        handleStopGeneration={ctx.handleStopGeneration}
                         t={ctx.t}
                     />
                 </section>

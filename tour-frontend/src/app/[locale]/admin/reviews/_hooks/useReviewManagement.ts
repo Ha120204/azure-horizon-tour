@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import { useParams } from 'next/navigation';
 import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { useAdminRealtime } from '@/hooks/admin/useAdminRealtime';
@@ -36,7 +37,6 @@ export function useReviewManagement() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [replyTarget, setReplyTarget] = useState<Review | null>(null);
     const [lightbox, setLightbox] = useState<{ images: string[]; idx: number } | null>(null);
-    const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -52,7 +52,8 @@ export function useReviewManagement() {
     }, [search]);
 
     const showToast = useCallback((msg: string, ok = true) => {
-        setToast({ msg, ok });
+        if (ok) toastEmitter.success(msg);
+        else toastEmitter.error(msg);
     }, []);
 
     const fetchStats = useCallback(async () => {
@@ -414,7 +415,6 @@ export function useReviewManagement() {
         isDeleting,
         replyTarget,
         lightbox,
-        toast,
         isAllSelected,
         hasFilter,
         selectedRatings,
@@ -424,7 +424,6 @@ export function useReviewManagement() {
         setDeleteTarget,
         setReplyTarget,
         setLightbox,
-        setToast,
         refreshReviewData,
         toggleSelect,
         toggleSelectAll,

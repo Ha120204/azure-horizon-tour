@@ -8,7 +8,7 @@ interface TourPageHeaderProps {
     onCreate: () => void;
 }
 
-export function TourPageHeader({ isStaff, onExportCSV, onCreate }: TourPageHeaderProps) {
+export function TourPageHeader({ onExportCSV, onCreate }: TourPageHeaderProps) {
     return (
         <div className="flex justify-between items-start mb-8 gap-4 flex-wrap">
             <div>

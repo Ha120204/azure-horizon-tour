@@ -1,6 +1,9 @@
+'use client';
 import type { StaticImageData } from 'next/image';
 import type { ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import styles from './AuthTheme.module.css';
+import AuthLocaleSwitcher from './AuthLocaleSwitcher';
 
 export type AuthMetric = {
     value: string;
@@ -25,18 +28,16 @@ type AuthSplitShellProps = {
 };
 
 const DEFAULT_BRAND_MARK = (
-    <span className="material-symbols-outlined text-[34px] leading-none" aria-hidden="true">
-        travel_explore
+    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#12bff0] shadow-[0_8px_20px_rgba(18,191,240,0.30)]" aria-hidden="true">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="7.25" stroke="#FFFFFF" strokeWidth="2" />
+            <path d="M14.9 8.6L12.9 13L8.6 15L10.6 10.6L14.9 8.6Z" fill="#FFFFFF" />
+            <circle cx="12" cy="12" r="1.15" fill="#12BFF0" />
+        </svg>
     </span>
 );
 
 const DESTINATIONS = ['🗼 Paris', '🌸 Kyoto', '🌊 Santorini', '🏔️ Alps'];
-
-const STATS = [
-    { value: '50K+', label: 'Khách hàng' },
-    { value: '200+', label: 'Điểm đến' },
-    { value: '4.9★', label: 'Đánh giá' },
-];
 
 export default function AuthSplitShell(props: AuthSplitShellProps) {
     const {
@@ -44,6 +45,12 @@ export default function AuthSplitShell(props: AuthSplitShellProps) {
         brandMark = DEFAULT_BRAND_MARK,
         children,
     } = props;
+    const t = useTranslations('auth');
+    const STATS = [
+        { value: '50K+', label: t('loginStatCustomers') },
+        { value: '200+', label: t('loginStatDestinations') },
+        { value: '4.9★', label: t('loginStatRating') },
+    ];
 
     return (
         <main className={`${styles.authTheme} min-h-screen bg-[var(--auth-surface)] text-[var(--auth-ink)] font-body lg:grid lg:grid-cols-2`}>
@@ -56,23 +63,23 @@ export default function AuthSplitShell(props: AuthSplitShellProps) {
                     {/* Brand */}
                     <div className={`${styles.brandEnter} flex items-center gap-3 text-[1.55rem] font-extrabold tracking-tight`}>
                         {brandMark}
-                        <span className="font-headline">{brandName}</span>
+                        <span className="font-headline -translate-y-0.5">{brandName}</span>
                     </div>
 
                     {/* Hero content */}
                     <div className="relative mx-auto flex w-full max-w-[600px] flex-col">
                         <div className={`${styles.copyEnter} ${styles.trustPill}`}>
                             <span className={styles.trustDot} aria-hidden="true" />
-                            50,000+ khách hàng đã tin tưởng
+                            {t('loginPanelTrustBadge')}
                         </div>
 
                         <h2 className={`${styles.copyEnter} mt-5 font-headline text-[2.75rem] font-extrabold leading-[1.1] tracking-tight`}>
-                            Mỗi hành trình<br />
-                            <span className={styles.gradientText}>là một câu chuyện mới</span>
+                            {t('loginPanelHeadline')}<br />
+                            <span className={styles.gradientText}>{t('loginPanelHeadlineSub')}</span>
                         </h2>
 
                         <p className={`${styles.copyEnter} mt-4 text-[0.92rem] font-medium leading-relaxed text-[var(--auth-panel-muted)]`}>
-                            Khám phá hơn 200+ điểm đến tuyệt vời cùng hàng nghìn du khách đã tin tưởng Azure Horizon.
+                            {t('loginPanelDesc')}
                         </p>
 
                         {/* Destination chips */}
@@ -133,7 +140,7 @@ export default function AuthSplitShell(props: AuthSplitShellProps) {
                             <div className={styles.infoCard}>
                                 <p className="text-[0.9rem] tracking-wide text-amber-400">★★★★★</p>
                                 <p className="mt-2 text-sm font-extrabold">4.9 / 5.0</p>
-                                <p className="mt-0.5 text-xs font-semibold text-[var(--auth-panel-muted)]">2,847 đánh giá</p>
+                                <p className="mt-0.5 text-xs font-semibold text-[var(--auth-panel-muted)]">{t('loginPanelReviews')}</p>
                             </div>
                             <div className={`${styles.infoCard} flex flex-1 items-center gap-3`}>
                                 <div className={styles.guideIcon}>
@@ -162,7 +169,10 @@ export default function AuthSplitShell(props: AuthSplitShellProps) {
                 </div>
             </section>
 
-            <section className="flex min-h-screen items-center justify-center px-6 py-10 sm:px-10 lg:px-16">
+            <section className="relative flex min-h-screen items-center justify-center px-6 py-10 sm:px-10 lg:px-16">
+                <div className="absolute top-4 right-4 z-10">
+                    <AuthLocaleSwitcher />
+                </div>
                 <div className="w-full max-w-[560px]">
                     <div className={`${styles.panelEnter} mb-9 flex items-center justify-center gap-2 text-[var(--auth-primary)] lg:hidden`}>
                         {brandMark}

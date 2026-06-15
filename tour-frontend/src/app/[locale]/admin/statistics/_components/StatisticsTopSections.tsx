@@ -1,6 +1,6 @@
 'use client';
 
-import { formatShortVND, formatVND } from '../_lib/helpers';
+import { formatVND } from '../_lib/helpers';
 import type { TopCustomer, TopTour, TopVoucher, VoucherOverview } from '../_lib/types';
 import { EmptyState } from './EmptyState';
 import { SectionCard } from './SectionCard';
@@ -25,7 +25,7 @@ export function StatisticsTopSections({
     return (
         <>
             <div className="mb-5">
-                <SectionCard title="Top 5 tour bán chạy nhất" subtitle="Xếp hạng theo booking đã xác nhận trong kỳ đã chọn" icon="explore">
+                <SectionCard title="Top 5 tour bán chạy nhất" subtitle="Xếp hạng theo booking đã thanh toán trong kỳ đã chọn" icon="explore">
                     {loading ? (
                         <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
                     ) : topTours.length === 0 ? (
@@ -55,7 +55,7 @@ export function StatisticsTopSections({
                                                 </div>
                                                 <div className="text-right flex-shrink-0 ml-4">
                                                     <p className="font-bold text-slate-700 text-sm">{tour.totalBookings} <span className="text-slate-400 font-normal text-xs">đặt</span></p>
-                                                    <p className="text-emerald-600 text-xs font-semibold">{formatShortVND(tour.totalRevenue)}</p>
+                                                    <p className="text-emerald-600 text-xs font-semibold">{formatVND(tour.totalRevenue)}</p>
                                                 </div>
                                             </div>
                                             <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
@@ -91,7 +91,7 @@ export function StatisticsTopSections({
                                             <p className="text-slate-400 text-xs truncate">{customer.email}</p>
                                         </div>
                                         <div className="text-right flex-shrink-0">
-                                            <p className="text-emerald-600 font-bold text-sm">{formatShortVND(customer.totalSpent)}</p>
+                                            <p className="text-emerald-600 font-bold text-sm">{formatVND(customer.totalSpent)}</p>
                                             <p className="text-slate-400 text-xs">{customer.totalBookings} đặt</p>
                                         </div>
                                     </div>

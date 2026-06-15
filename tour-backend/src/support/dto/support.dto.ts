@@ -1,6 +1,6 @@
 import {
   IsIn, IsNotEmpty, IsOptional, IsString, MaxLength,
-  IsInt, Min, Max, IsBoolean,
+  IsInt, Min, Max, IsBoolean, IsEmail,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -55,6 +55,17 @@ export class CustomerReplyDto {
   @IsOptional()
   @IsString()
   senderName?: string;
+}
+
+/** Tra cứu ticket bằng email + accessCode (dành cho khách vãng lai mất link) */
+export class LookupByEmailDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  accessCode: string;
 }
 
 /** Đánh giá sau khi RESOLVED */

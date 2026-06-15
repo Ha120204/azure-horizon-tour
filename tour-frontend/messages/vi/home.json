@@ -67,6 +67,16 @@
     "delete": "Xóa",
     "sendMessage": "Gửi tin nhắn",
     "rateLimitError": "Bạn đang gửi quá nhiều tin nhắn. Vui lòng đợi vài giây rồi thử lại.",
-    "connectionError": "Không thể kết nối đến trợ lý AI. Vui lòng thử lại sau."
+    "connectionError": "Không thể kết nối đến trợ lý AI. Vui lòng thử lại sau.",
+    "searching": "Đang tìm kiếm tour phù hợp...",
+    "retry": "Thử lại",
+    "noPreview": "Chưa có nội dung xem trước.",
+    "closeChat": "Đóng",
+    "stopGeneration": "Dừng",
+    "contact": "Liên hệ",
+    "openAssistant": "Mở trợ lý AI",
+    "openContacts": "Mở kênh liên hệ nhanh",
+    "collapseContacts": "Thu gọn kênh liên hệ",
+    "dialogLabel": "Trợ lý AI Azure Horizon"
   }
 }

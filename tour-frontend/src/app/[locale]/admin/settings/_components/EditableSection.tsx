@@ -1,20 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { SETTING_META } from '../_lib/config';
 import { buildDraft, formatSettingDate, validateSettingDraftValue } from '../_lib/helpers';
-import type { Setting } from '../_lib/types';
+import type { Setting, SettingMeta } from '../_lib/types';
 import { ReadOnlyBadge } from './ReadOnlyBadge';
 
 type ConfirmMode = 'save-risky' | 'reset' | null;
 
+const FALLBACK_META: SettingMeta = { type: 'text', impact: 'Cấu hình vận hành hệ thống.' };
+
 export function EditableSection({
     title, subtitle, icon, iconBg, iconColor,
-    settings, editable, onSave,
+    settings, editable, onSave, settingMeta,
 }: {
     title: string; subtitle: string; icon: string; iconBg: string; iconColor: string;
     settings: Setting[]; editable: boolean;
     onSave: (updates: Record<string, string>) => Promise<boolean>;
+    settingMeta: Record<string, SettingMeta>;
 }) {
     const [draft, setDraft] = useState<Record<string, string>>(() => buildDraft(settings));
     const [saving, setSaving] = useState(false);
@@ -29,15 +31,12 @@ export function EditableSection({
             label: s.label,
             before: s.value,
             after: draft[s.key] ?? '',
-            risky: Boolean(SETTING_META[s.key]?.risky),
+            risky: Boolean(settingMeta[s.key]?.risky),
         })), [draft, settings]);
     const riskyChanges = changes.filter(change => change.risky);
     const isDirty = changes.length > 0;
     const validationErrors = useMemo(() => Object.fromEntries(settings.map(setting => {
-        const meta = SETTING_META[setting.key] ?? {
-            type: (setting.value === 'true' || setting.value === 'false') ? 'boolean' : 'text',
-            impact: 'Cấu hình vận hành hệ thống.',
-        };
+        const meta = settingMeta[setting.key] ?? FALLBACK_META;
         return [setting.key, validateSettingDraftValue(setting, draft, meta)];
     })), [draft, settings]);
     const firstInvalidKey = settings.find(setting => validationErrors[setting.key])?.key;
@@ -127,7 +126,7 @@ export function EditableSection({
 
             <div className="px-6 py-2">
                 {settings.map(s => {
-                    const meta = SETTING_META[s.key] ?? { type: (s.value === 'true' || s.value === 'false') ? 'boolean' : 'text', impact: 'Cấu hình vận hành hệ thống.' };
+                    const meta = settingMeta[s.key] ?? FALLBACK_META;
                     const isBool = meta.type === 'boolean';
                     const fieldId = `setting-${s.key}`;
                     const error = touched[s.key] ? validationErrors[s.key] : '';

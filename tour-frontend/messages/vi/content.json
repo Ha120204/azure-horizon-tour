@@ -177,6 +177,22 @@
       "supplier": "Nhà cung cấp",
       "corporate": "Khách đoàn/doanh nghiệp",
       "other": "Đối tác khác"
+    },
+    "lookupTitle": "Tra cứu yêu cầu hỗ trợ",
+    "lookupDesc": "Đã gửi yêu cầu nhưng không còn link trong email? Nhập email và mã truy cập để tìm lại.",
+    "lookupEmail": "Email đã dùng khi gửi yêu cầu",
+    "lookupAccessCode": "Mã truy cập",
+    "lookupAccessCodeHint": "Từ email xác nhận, dạng xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "lookupSubmit": "Tra cứu",
+    "lookupSearching": "Đang tìm kiếm...",
+    "lookupNotFound": "Không tìm thấy yêu cầu. Kiểm tra lại email và mã truy cập.",
+    "lookupViewDetail": "Xem chi tiết yêu cầu",
+    "lookupCreatedAt": "Ngày gửi",
+    "lookupStatusLabel": "Trạng thái",
+    "lookupStatus": {
+      "NEW": "Mới",
+      "IN_PROGRESS": "Đang xử lý",
+      "RESOLVED": "Đã giải quyết"
     }
   },
   "journal": {

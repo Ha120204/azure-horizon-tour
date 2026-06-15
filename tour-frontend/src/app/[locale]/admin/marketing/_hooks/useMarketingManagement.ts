@@ -4,11 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
-import {
-  CAMPAIGN_DRAFTS_KEY,
-  EMPTY_CAMPAIGN_FORM,
-  EMPTY_STATS,
-} from '../_lib/config';
+import { EMPTY_CAMPAIGN_FORM, EMPTY_STATS } from '../_lib/config';
 import { exportSubscribersCsv } from '../_lib/exportCsv';
 import {
   buildLocalScheduleValue,
@@ -57,6 +53,17 @@ const toCampaignDraft = (campaign: BackendMarketingCampaign): CampaignDraft => (
   status: campaign.status,
 });
 
+// Payload đối tượng nhận gửi xuống backend theo loại audience đã chọn
+const buildAudiencePayload = (form: CampaignForm, status: SubscriberStatus, search: string) => {
+  if (form.audience === 'CURRENT_FILTER') {
+    return { audienceFilter: { status, search } };
+  }
+  if (form.audience === 'MANUAL_SELECTION') {
+    return { recipientIds: form.selectedSubscriberIds };
+  }
+  return {};
+};
+
 export function useMarketingManagement() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [stats, setStats] = useState<SubscriberStats>(EMPTY_STATS);
@@ -71,12 +78,12 @@ export function useMarketingManagement() {
   const [deleteTarget, setDeleteTarget] = useState<Subscriber | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [localCampaignDrafts, setLocalCampaignDrafts] = useState<CampaignDraft[]>([]);
   const [backendCampaigns, setBackendCampaigns] = useState<CampaignDraft[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [campaignForm, setCampaignForm] = useState<CampaignForm>(EMPTY_CAMPAIGN_FORM);
   const [campaignErrors, setCampaignErrors] = useState<CampaignErrors>({});
+  const [isSavingCampaign, setIsSavingCampaign] = useState(false);
   const [filteredActiveEstimate, setFilteredActiveEstimate] = useState(0);
   const [testEmail, setTestEmail] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -102,22 +109,6 @@ export function useMarketingManagement() {
     }, 350);
     return () => window.clearTimeout(timer);
   }, [search]);
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(CAMPAIGN_DRAFTS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const drafts = Array.isArray(parsed)
-          ? (parsed as CampaignDraft[]).filter(campaign => campaign.status === 'DRAFT')
-          : [];
-        setLocalCampaignDrafts(drafts);
-        window.localStorage.setItem(CAMPAIGN_DRAFTS_KEY, JSON.stringify(drafts));
-      }
-    } catch {
-      setLocalCampaignDrafts([]);
-    }
-  }, []);
 
   const fetchCampaigns = useCallback(async () => {
     const res = await fetchWithAuth(`${API_BASE_URL}/subscriber/campaigns`);
@@ -176,7 +167,7 @@ export function useMarketingManagement() {
 
   useAdminAutoRefresh({
     intervalMs: 90 * 1000,
-    pause: Boolean(composerOpen || deleteTarget || scheduleTarget || cancelCampaignTarget || isDeleting || isSendingTest || isScheduling || isCancellingCampaign || loadingId),
+    pause: Boolean(composerOpen || deleteTarget || scheduleTarget || cancelCampaignTarget || isDeleting || isSendingTest || isScheduling || isCancellingCampaign || isSavingCampaign || loadingId),
     onRefresh: fetchSubscribers,
   });
 
@@ -231,16 +222,10 @@ export function useMarketingManagement() {
   }, [campaignForm.audience, campaignForm.selectedSubscriberIds.length, currentFilterRecipientEstimate, stats.active]);
 
   const campaignDrafts = useMemo(
-    () => [...localCampaignDrafts, ...backendCampaigns]
+    () => [...backendCampaigns]
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
-    [backendCampaigns, localCampaignDrafts],
+    [backendCampaigns],
   );
-
-  const persistCampaignDrafts = useCallback((next: CampaignDraft[]) => {
-    const drafts = next.filter(campaign => campaign.status === 'DRAFT');
-    setLocalCampaignDrafts(drafts);
-    window.localStorage.setItem(CAMPAIGN_DRAFTS_KEY, JSON.stringify(drafts));
-  }, []);
 
   const openCreateCampaign = useCallback(() => {
     setEditingCampaignId(null);
@@ -266,7 +251,8 @@ export function useMarketingManagement() {
     setComposerOpen(true);
   }, []);
 
-  const saveCampaignDraft = useCallback(() => {
+  const saveCampaignDraft = useCallback(async () => {
+    if (isSavingCampaign) return;
     const nextErrors: CampaignErrors = {};
     if (!campaignForm.name.trim()) nextErrors.name = 'Nhập tên chiến dịch để dễ quản lý bản nháp.';
     if (!campaignForm.subject.trim()) nextErrors.subject = 'Nhập tiêu đề email hiển thị trong hộp thư khách hàng.';
@@ -277,41 +263,43 @@ export function useMarketingManagement() {
     setCampaignErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    const now = new Date().toISOString();
-    const nextDraft: CampaignDraft = {
-      id: editingCampaignId ?? `campaign_${Date.now()}`,
-      name: campaignForm.name.trim(),
+    const payload = {
+      campaignName: campaignForm.name.trim(),
       type: campaignForm.type,
       subject: campaignForm.subject.trim(),
       previewText: campaignForm.previewText.trim(),
       body: campaignForm.body.trim(),
       audience: campaignForm.audience,
-      audienceFilter: campaignForm.audience === 'CURRENT_FILTER'
-        ? { status, search: debouncedSearch }
-        : campaignForm.audience === 'MANUAL_SELECTION'
-          ? { recipientIds: campaignForm.selectedSubscriberIds }
-          : undefined,
-      selectedSubscriberIds: campaignForm.audience === 'MANUAL_SELECTION'
-        ? campaignForm.selectedSubscriberIds
-        : undefined,
-      selectedSubscriberEmails: campaignForm.audience === 'MANUAL_SELECTION'
-        ? campaignForm.selectedSubscriberEmails
-        : undefined,
-      recipientEstimate,
-      createdAt: localCampaignDrafts.find(draft => draft.id === editingCampaignId)?.createdAt ?? now,
-      updatedAt: now,
-      status: 'DRAFT',
+      ...buildAudiencePayload(campaignForm, status, debouncedSearch),
     };
-    const nextDrafts = editingCampaignId
-      ? localCampaignDrafts.map(draft => draft.id === editingCampaignId ? nextDraft : draft)
-      : [nextDraft, ...localCampaignDrafts];
-    persistCampaignDrafts(nextDrafts);
-    setComposerOpen(false);
-    setEditingCampaignId(null);
-    setCampaignForm(EMPTY_CAMPAIGN_FORM);
-    setCampaignErrors({});
-    showToast('Đã lưu bản nháp chiến dịch');
-  }, [campaignForm, debouncedSearch, editingCampaignId, localCampaignDrafts, persistCampaignDrafts, recipientEstimate, showToast, status]);
+
+    setIsSavingCampaign(true);
+    try {
+      const res = editingCampaignId
+        ? await fetchWithAuth(`${API_BASE_URL}/subscriber/campaigns/${encodeURIComponent(editingCampaignId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        : await fetchWithAuth(`${API_BASE_URL}/subscriber/campaigns`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || 'Lưu bản nháp thất bại');
+      await fetchCampaigns();
+      setComposerOpen(false);
+      setEditingCampaignId(null);
+      setCampaignForm(EMPTY_CAMPAIGN_FORM);
+      setCampaignErrors({});
+      showToast('Đã lưu bản nháp chiến dịch');
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, 'Lưu bản nháp thất bại'), 'error');
+    } finally {
+      setIsSavingCampaign(false);
+    }
+  }, [campaignForm, debouncedSearch, editingCampaignId, fetchCampaigns, isSavingCampaign, showToast, status]);
 
   const sendTestCampaign = useCallback(async () => {
     const nextErrors: CampaignErrors = {};
@@ -346,10 +334,21 @@ export function useMarketingManagement() {
     }
   }, [campaignForm, showToast, testEmail]);
 
-  const deleteCampaignDraft = useCallback((id: string) => {
-    persistCampaignDrafts(localCampaignDrafts.filter(draft => draft.id !== id));
-    showToast('Đã xóa bản nháp chiến dịch');
-  }, [localCampaignDrafts, persistCampaignDrafts, showToast]);
+  const deleteCampaignDraft = useCallback(async (id: string) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/subscriber/campaigns/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.message || 'Xóa bản nháp thất bại');
+      }
+      await fetchCampaigns();
+      showToast('Đã xóa bản nháp chiến dịch');
+    } catch (error: unknown) {
+      showToast(getErrorMessage(error, 'Xóa bản nháp thất bại'), 'error');
+    }
+  }, [fetchCampaigns, showToast]);
 
   const openScheduleCampaign = useCallback((draft: CampaignDraft) => {
     const defaultDate = new Date(Date.now() + 10 * 60 * 1000);
@@ -385,29 +384,14 @@ export function useMarketingManagement() {
 
     setIsScheduling(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/subscriber/campaign/schedule`, {
-        method: 'POST',
+      const res = await fetchWithAuth(`${API_BASE_URL}/subscriber/campaigns/${encodeURIComponent(scheduleTarget.id)}/schedule`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          campaignName: scheduleTarget.name,
-          type: scheduleTarget.type,
-          subject: scheduleTarget.subject,
-          previewText: scheduleTarget.previewText,
-          body: scheduleTarget.body,
-          audience: scheduleTarget.audience,
-          audienceFilter: scheduleTarget.audienceFilter,
-          recipientIds: scheduleTarget.selectedSubscriberIds ?? scheduleTarget.audienceFilter?.recipientIds,
-          scheduledAt: scheduledAt.toISOString(),
-        }),
+        body: JSON.stringify({ scheduledAt: scheduledAt.toISOString() }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.message || 'Lên lịch gửi thất bại');
-      const scheduledCampaign = (json?.data ?? json) as BackendMarketingCampaign;
-      persistCampaignDrafts(localCampaignDrafts.filter(draft => draft.id !== scheduleTarget.id));
-      setBackendCampaigns(current => [
-        toCampaignDraft(scheduledCampaign),
-        ...current.filter(campaign => campaign.id !== scheduledCampaign.id),
-      ]);
+      await fetchCampaigns();
       setScheduleTarget(null);
       showToast('Đã lên lịch gửi chiến dịch');
     } catch (error: unknown) {
@@ -415,7 +399,7 @@ export function useMarketingManagement() {
     } finally {
       setIsScheduling(false);
     }
-  }, [localCampaignDrafts, persistCampaignDrafts, scheduleDate, scheduleHour, scheduleMinute, scheduleTarget, showToast]);
+  }, [fetchCampaigns, scheduleDate, scheduleHour, scheduleMinute, scheduleTarget, showToast]);
 
   const cancelScheduledCampaign = useCallback(async () => {
     if (!cancelCampaignTarget) return;
@@ -426,10 +410,7 @@ export function useMarketingManagement() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.message || 'Hủy lịch gửi thất bại');
-      const cancelledCampaign = (json?.data ?? json) as BackendMarketingCampaign;
-      setBackendCampaigns(current => current.map(campaign =>
-        campaign.id === cancelledCampaign.id ? toCampaignDraft(cancelledCampaign) : campaign,
-      ));
+      await fetchCampaigns();
       setCancelCampaignTarget(null);
       showToast('Đã hủy lịch gửi chiến dịch');
     } catch (error: unknown) {
@@ -437,7 +418,7 @@ export function useMarketingManagement() {
     } finally {
       setIsCancellingCampaign(false);
     }
-  }, [cancelCampaignTarget, showToast]);
+  }, [cancelCampaignTarget, fetchCampaigns, showToast]);
 
   const toggleStatusFilter = useCallback((next: SubscriberStatus) => {
     setStatus(current => current === next && next !== 'all' ? 'all' : next);

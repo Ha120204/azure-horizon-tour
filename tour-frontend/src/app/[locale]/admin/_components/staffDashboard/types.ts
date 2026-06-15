@@ -19,7 +19,7 @@ export interface QuickStats {
     supportOverdue?: number;
 }
 
-export interface MyTour {
+export interface RecentTour {
     id: number;
     name: string;
     status: 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'REJECTED';
@@ -28,7 +28,7 @@ export interface MyTour {
     imageUrl?: string;
 }
 
-export interface MyTicket {
+export interface RecentTicket {
     id: number;
     subject: string;
     customerName: string;

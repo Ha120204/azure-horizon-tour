@@ -4,9 +4,8 @@ import { useState } from 'react';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { CONFIRMED_SOURCE_LABEL } from '../_lib/config';
-import { fmtDateTime, getErrorMessage } from '../_lib/helpers';
-import type { Booking } from '../_lib/types';
-import { getVisibleTransactions } from './BookingDetailView';
+import { canRemindPayment, fmtDateTime, getErrorMessage, getVisibleTransactions } from '../_lib/helpers';
+import type { Booking, BookingConfirmSource } from '../_lib/types';
 import { BookingEditForm } from './BookingEditForm';
 
 // ─── Booking Action Bar ───────────────────────────────────────────────────────
@@ -15,6 +14,8 @@ import { BookingEditForm } from './BookingEditForm';
 
 export function BookingActionBar({
   booking,
+  isAdmin,
+  canWrite,
   showInStoreForm,
   showReconcileForm,
   onShowInStoreForm,
@@ -27,13 +28,15 @@ export function BookingActionBar({
   onClose,
 }: {
   booking: Booking;
+  isAdmin: boolean;
+  canWrite: boolean;
   showInStoreForm: boolean;
   showReconcileForm: boolean;
   onShowInStoreForm: () => void;
   onHideInStoreForm: () => void;
   onShowReconcileForm: () => void;
   onHideReconcileForm: () => void;
-  onConfirmSuccess: (updated: Booking) => void | Promise<void>;
+  onConfirmSuccess: (updated: Booking, source?: BookingConfirmSource) => void | Promise<void>;
   onCopyPaymentRequest?: (booking: Booking) => void | Promise<void>;
   onResendPaymentRequest?: (booking: Booking, forceEmail?: boolean) => void | Promise<void>;
   onClose: () => void;
@@ -43,7 +46,7 @@ export function BookingActionBar({
   const latestPaymentRequest = booking.paymentMethod === 'PAYOS' && booking.paymentStatus !== 'PAID'
     ? booking.notifications?.[0]
     : undefined;
-  const canResendPaymentRequest = isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS';
+  const canResendPaymentRequest = canRemindPayment(booking);
   const hasPaymentRequestContent = Boolean(latestPaymentRequest?.content);
   const currentGateway = booking.paymentMethod === 'IN_STORE' ? 'MANUAL' : 'PAYOS';
   const hasSuccessfulCurrentGateway = (booking.transactions ?? []).some(
@@ -162,7 +165,7 @@ export function BookingActionBar({
             Copy thanh toán
           </button>
         )}
-        {canResendPaymentRequest && (
+        {canResendPaymentRequest && canWrite && (
           <>
             <button
               type="button"
@@ -192,7 +195,7 @@ export function BookingActionBar({
             Xem lịch sử thanh toán
           </button>
         )}
-        {(booking.status === 'CANCELLED' || booking.paymentStatus === 'FAILED') && (
+        {(booking.status === 'CANCELLED' || booking.paymentStatus === 'FAILED') && canWrite && (
           <button
             type="button"
             onClick={handleCreateAgain}
@@ -221,10 +224,11 @@ export function BookingActionBar({
           </div>
           <button onClick={onClose} className="px-5 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
         </div>
-      ) : isPending && isUnpaidOrProcessing ? (
-        /* ── CASE: PENDING + chờ thanh toán ── */
+      ) : isPending && isUnpaidOrProcessing && canWrite ? (
+        /* ── CASE: PENDING + chờ thanh toán (chỉ người có quyền ghi) ── */
         <BookingEditForm
           booking={booking}
+          isAdmin={isAdmin}
           showInStoreForm={showInStoreForm}
           showReconcileForm={showReconcileForm}
           onShowInStoreForm={() => { setActionError(''); onShowInStoreForm(); }}

@@ -1,38 +1,23 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
-import { randomUUID } from 'crypto';
+import type { CreateCampaignDto } from './dto/create-campaign.dto';
+import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 
 type SubscriberStatusFilter = 'active' | 'inactive' | 'all';
-type CampaignAudience = 'ALL_ACTIVE' | 'CURRENT_FILTER' | 'MANUAL_SELECTION';
-type MarketingCampaignStatus = 'SCHEDULED' | 'SENDING' | 'SENT' | 'FAILED' | 'CANCELLED';
 
-export interface StoredMarketingCampaign {
-  id: string;
-  campaignName: string;
-  type?: string;
-  subject: string;
-  previewText?: string;
-  body: string;
-  audience: CampaignAudience;
-  audienceFilter?: { status?: SubscriberStatusFilter; search?: string; recipientIds?: number[] };
-  recipientIds?: number[];
-  scheduledAt: string;
-  status: MarketingCampaignStatus;
-  recipientEstimate: number;
-  processedCount: number;
-  sentCount: number;
-  failedCount: number;
-  lastProcessedRecipientId?: number;
-  createdAt: string;
-  updatedAt: string;
-  sentAt?: string;
-  cancelledAt?: string;
-  errorMessage?: string;
-}
-
-const CAMPAIGN_STORE_KEY = 'marketing_campaign_queue';
 const CAMPAIGN_BATCH_SIZE = 100;
+// Khóa phân tán: chiến dịch bị giữ quá TTL coi như worker chết → cho phép giành lại
+const CAMPAIGN_LOCK_TTL_MS = 5 * 60_000;
+const ACTIVE_CAMPAIGN_STATUSES = ['SCHEDULED', 'SENDING'];
+
+// Nội dung dùng để tính đối tượng nhận (audience) — không phụ thuộc Prisma type
+interface CampaignAudienceData {
+  audience: string;
+  audienceFilter?: { status?: SubscriberStatusFilter; search?: string } | null;
+  recipientIds?: number[];
+}
 
 @Injectable()
 export class SubscriberService {
@@ -106,7 +91,7 @@ export class SubscriberService {
     return { total, active, inactive: total - active, thisMonth };
   }
 
-  // Admin: xóa subscriber
+  // Admin: bật/tắt nhận tin
   async setActive(id: number, isActive: boolean) {
     return this.prisma.subscriber.update({
       where: { id },
@@ -164,41 +149,18 @@ export class SubscriberService {
     return { success: true, message: 'test_sent', data: { to: data.to } };
   }
 
-  private async getCampaignStore(): Promise<StoredMarketingCampaign[]> {
-    const setting = await this.prisma.systemSetting.findUnique({ where: { key: CAMPAIGN_STORE_KEY } });
-    if (!setting?.value) return [];
-    try {
-      const parsed: unknown = JSON.parse(setting.value);
-      return Array.isArray(parsed) ? parsed as StoredMarketingCampaign[] : [];
-    } catch {
-      return [];
-    }
+  // ── Đối tượng nhận ──────────────────────────────────────────────────────
+  private normalizeRecipientIds(ids?: number[]) {
+    return Array.from(new Set(
+      (ids ?? [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0),
+    ));
   }
 
-  private async saveCampaignStore(campaigns: StoredMarketingCampaign[]) {
-    await this.prisma.systemSetting.upsert({
-      where: { key: CAMPAIGN_STORE_KEY },
-      create: {
-        key: CAMPAIGN_STORE_KEY,
-        value: JSON.stringify(campaigns),
-        label: 'Hàng đợi chiến dịch tiếp thị',
-        description: 'Lịch gửi bản tin và chiến dịch khuyến mãi',
-        group: 'marketing',
-      },
-      update: { value: JSON.stringify(campaigns) },
-    });
-  }
-
-  private getManualRecipientIds(campaign: Pick<StoredMarketingCampaign, 'audienceFilter' | 'recipientIds'>) {
-    const ids = campaign.recipientIds ?? campaign.audienceFilter?.recipientIds ?? [];
-    return ids
-      .map((id) => Number(id))
-      .filter((id) => Number.isInteger(id) && id > 0);
-  }
-
-  private getAudienceWhere(campaign: Pick<StoredMarketingCampaign, 'audience' | 'audienceFilter' | 'recipientIds'>) {
+  private getAudienceWhere(campaign: CampaignAudienceData): Prisma.SubscriberWhereInput {
     if (campaign.audience === 'MANUAL_SELECTION') {
-      const ids = this.getManualRecipientIds(campaign);
+      const ids = this.normalizeRecipientIds(campaign.recipientIds);
       return {
         isActive: true,
         id: { in: ids.length > 0 ? ids : [-1] },
@@ -213,151 +175,285 @@ export class SubscriberService {
     };
   }
 
+  private async computeRecipientEstimate(campaign: CampaignAudienceData) {
+    if (campaign.audience === 'CURRENT_FILTER' && campaign.audienceFilter?.status === 'inactive') {
+      return 0;
+    }
+    return this.prisma.subscriber.count({ where: this.getAudienceWhere(campaign) });
+  }
+
+  // Chuẩn hóa audience/recipientIds/audienceFilter để ghi xuống DB
+  private buildAudiencePayload(dto: { audience: string; audienceFilter?: { status?: SubscriberStatusFilter; search?: string }; recipientIds?: number[] }) {
+    const recipientIds = dto.audience === 'MANUAL_SELECTION'
+      ? this.normalizeRecipientIds(dto.recipientIds)
+      : [];
+    const audienceFilter: Prisma.InputJsonValue | typeof Prisma.JsonNull =
+      dto.audience === 'CURRENT_FILTER' && dto.audienceFilter
+        ? { status: dto.audienceFilter.status ?? 'all', search: dto.audienceFilter.search?.trim() ?? '' }
+        : Prisma.JsonNull;
+    return { recipientIds, audienceFilter };
+  }
+
+  // ── Bản nháp & chiến dịch ───────────────────────────────────────────────
   async getCampaigns() {
-    const campaigns = await this.getCampaignStore();
-    return campaigns.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return this.prisma.marketingCampaign.findMany({
+      orderBy: { updatedAt: 'desc' },
+    });
   }
 
-  async cancelCampaign(id: string) {
-    const campaigns = await this.getCampaignStore();
-    const campaign = campaigns.find(item => item.id === id);
-    if (!campaign) throw new NotFoundException('Không tìm thấy chiến dịch');
-    if (campaign.status !== 'SCHEDULED') {
-      throw new ConflictException('Chỉ có thể hủy chiến dịch chưa bắt đầu gửi');
+  async createDraft(dto: CreateCampaignDto, createdBy?: number) {
+    const { recipientIds, audienceFilter } = this.buildAudiencePayload(dto);
+    const recipientEstimate = await this.computeRecipientEstimate({
+      audience: dto.audience,
+      audienceFilter: dto.audienceFilter,
+      recipientIds,
+    });
+
+    return this.prisma.marketingCampaign.create({
+      data: {
+        campaignName: dto.campaignName,
+        type: dto.type,
+        subject: dto.subject,
+        previewText: dto.previewText,
+        body: dto.body,
+        audience: dto.audience,
+        audienceFilter,
+        recipientIds,
+        status: 'DRAFT',
+        recipientEstimate,
+        createdBy,
+      },
+    });
+  }
+
+  async updateDraft(id: string, dto: UpdateCampaignDto) {
+    const existing = await this.prisma.marketingCampaign.findUnique({ where: { id } });
+    if (!existing || existing.status !== 'DRAFT') {
+      throw new NotFoundException('Không tìm thấy bản nháp chiến dịch');
     }
 
-    const cancelledAt = new Date().toISOString();
-    campaign.status = 'CANCELLED';
-    campaign.cancelledAt = cancelledAt;
-    campaign.updatedAt = cancelledAt;
-    await this.saveCampaignStore(campaigns);
-    return campaign;
+    const audience = dto.audience ?? existing.audience;
+    const dtoFilter = (dto.audienceFilter ?? (existing.audienceFilter as { status?: SubscriberStatusFilter; search?: string } | null)) ?? undefined;
+    const dtoRecipientIds = dto.recipientIds ?? existing.recipientIds;
+    const { recipientIds, audienceFilter } = this.buildAudiencePayload({
+      audience,
+      audienceFilter: dtoFilter,
+      recipientIds: dtoRecipientIds,
+    });
+    const recipientEstimate = await this.computeRecipientEstimate({
+      audience,
+      audienceFilter: dtoFilter,
+      recipientIds,
+    });
+
+    return this.prisma.marketingCampaign.update({
+      where: { id },
+      data: {
+        campaignName: dto.campaignName ?? existing.campaignName,
+        type: dto.type ?? existing.type,
+        subject: dto.subject ?? existing.subject,
+        previewText: dto.previewText ?? existing.previewText,
+        body: dto.body ?? existing.body,
+        audience,
+        audienceFilter,
+        recipientIds,
+        recipientEstimate,
+      },
+    });
   }
 
-  async scheduleCampaign(data: {
-    campaignName: string;
-    type?: string;
-    subject: string;
-    previewText?: string;
-    body: string;
-    audience: CampaignAudience;
-    audienceFilter?: { status?: SubscriberStatusFilter; search?: string; recipientIds?: number[] };
-    recipientIds?: number[];
-    scheduledAt: string;
-  }) {
-    const scheduledDate = new Date(data.scheduledAt);
+  async deleteDraft(id: string) {
+    const deleted = await this.prisma.marketingCampaign.deleteMany({
+      where: { id, status: 'DRAFT' },
+    });
+    if (deleted.count === 0) throw new NotFoundException('Không tìm thấy bản nháp chiến dịch');
+    return { success: true, message: 'draft_deleted' };
+  }
+
+  async scheduleCampaign(id: string, scheduledAt: string) {
+    const scheduledDate = new Date(scheduledAt);
     if (Number.isNaN(scheduledDate.getTime())) {
-      throw new Error('Thời gian gửi không hợp lệ');
+      throw new BadRequestException('Thời gian gửi không hợp lệ');
+    }
+    if (scheduledDate.getTime() < Date.now() + 30_000) {
+      throw new BadRequestException('Thời gian gửi phải sau hiện tại ít nhất 30 giây');
     }
 
-    const now = new Date().toISOString();
-    const manualRecipientIds = this.getManualRecipientIds(data);
-    if (data.audience === 'MANUAL_SELECTION' && manualRecipientIds.length === 0) {
+    const campaign = await this.prisma.marketingCampaign.findUnique({ where: { id } });
+    if (!campaign) throw new NotFoundException('Không tìm thấy bản nháp chiến dịch');
+    if (campaign.status !== 'DRAFT') {
+      throw new ConflictException('Chỉ có thể lên lịch chiến dịch ở dạng bản nháp');
+    }
+    if (campaign.audience === 'MANUAL_SELECTION' && this.normalizeRecipientIds(campaign.recipientIds).length === 0) {
       throw new BadRequestException('Vui lòng chọn ít nhất một người đăng ký để gửi');
     }
 
-    const recipientEstimate = data.audience === 'CURRENT_FILTER' && data.audienceFilter?.status === 'inactive'
-      ? 0
-      : await this.prisma.subscriber.count({ where: this.getAudienceWhere(data) });
+    const recipientEstimate = await this.computeRecipientEstimate({
+      audience: campaign.audience,
+      audienceFilter: campaign.audienceFilter as { status?: SubscriberStatusFilter; search?: string } | null,
+      recipientIds: campaign.recipientIds,
+    });
 
-    const campaign: StoredMarketingCampaign = {
-      id: randomUUID(),
-      campaignName: data.campaignName,
-      type: data.type,
-      subject: data.subject,
-      previewText: data.previewText,
-      body: data.body,
-      audience: data.audience,
-      audienceFilter: data.audience === 'MANUAL_SELECTION'
-        ? { ...data.audienceFilter, recipientIds: manualRecipientIds }
-        : data.audienceFilter,
-      recipientIds: data.audience === 'MANUAL_SELECTION' ? manualRecipientIds : undefined,
-      scheduledAt: scheduledDate.toISOString(),
-      status: 'SCHEDULED',
-      recipientEstimate,
-      processedCount: 0,
-      sentCount: 0,
-      failedCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    const campaigns = await this.getCampaignStore();
-    campaigns.unshift(campaign);
-    await this.saveCampaignStore(campaigns);
-    return campaign;
+    const updated = await this.prisma.marketingCampaign.updateMany({
+      where: { id, status: 'DRAFT' },
+      data: {
+        status: 'SCHEDULED',
+        scheduledAt: scheduledDate,
+        recipientEstimate,
+        processedCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+        lastProcessedRecipientId: null,
+        lockedAt: null,
+        sentAt: null,
+        cancelledAt: null,
+        errorMessage: null,
+      },
+    });
+    if (updated.count === 0) {
+      throw new ConflictException('Chỉ có thể lên lịch chiến dịch ở dạng bản nháp');
+    }
+    return this.prisma.marketingCampaign.findUnique({ where: { id } });
   }
 
+  async cancelCampaign(id: string) {
+    const cancelled = await this.prisma.marketingCampaign.updateMany({
+      where: { id, status: 'SCHEDULED' },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    });
+    if (cancelled.count === 0) {
+      const existing = await this.prisma.marketingCampaign.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!existing) throw new NotFoundException('Không tìm thấy chiến dịch');
+      throw new ConflictException('Chỉ có thể hủy chiến dịch chưa bắt đầu gửi');
+    }
+    return this.prisma.marketingCampaign.findUnique({ where: { id } });
+  }
+
+  // ── Cron: gửi các chiến dịch đến hạn ────────────────────────────────────
   async processDueCampaigns() {
     if (this.isProcessingCampaigns) return;
     this.isProcessingCampaigns = true;
 
     try {
-      const campaigns = await this.getCampaignStore();
-      const now = Date.now();
+      const candidates = await this.prisma.marketingCampaign.findMany({
+        where: {
+          status: { in: ACTIVE_CAMPAIGN_STATUSES },
+          scheduledAt: { lte: new Date() },
+        },
+        orderBy: { scheduledAt: 'asc' },
+        select: { id: true },
+      });
 
-      for (const campaign of campaigns) {
-        if (!['SCHEDULED', 'SENDING'].includes(campaign.status)) continue;
-        if (new Date(campaign.scheduledAt).getTime() > now) continue;
-
-        campaign.status = 'SENDING';
-        campaign.processedCount ??= campaign.sentCount + campaign.failedCount;
-        campaign.updatedAt = new Date().toISOString();
-        await this.saveCampaignStore(campaigns);
+      for (const { id } of candidates) {
+        const claimNow = new Date();
+        // Giành khóa: chỉ một worker xử lý một chiến dịch tại một thời điểm
+        const claim = await this.prisma.marketingCampaign.updateMany({
+          where: {
+            id,
+            status: { in: ACTIVE_CAMPAIGN_STATUSES },
+            scheduledAt: { lte: claimNow },
+            OR: [
+              { lockedAt: null },
+              { lockedAt: { lt: new Date(claimNow.getTime() - CAMPAIGN_LOCK_TTL_MS) } },
+            ],
+          },
+          data: { status: 'SENDING', lockedAt: claimNow },
+        });
+        if (claim.count === 0) continue;
 
         try {
-          const recipientPage = campaign.audience === 'CURRENT_FILTER' && campaign.audienceFilter?.status === 'inactive'
-            ? []
-            : await this.prisma.subscriber.findMany({
-                where: {
-                  AND: [
-                    this.getAudienceWhere(campaign),
-                    { id: { gt: campaign.lastProcessedRecipientId ?? 0 } },
-                  ],
-                },
-                select: { id: true, email: true, unsubscribeToken: true },
-                orderBy: { id: 'asc' },
-                take: CAMPAIGN_BATCH_SIZE + 1,
-              });
-          const recipients: Array<{ id: number; email: string; unsubscribeToken: string }> =
-            recipientPage.slice(0, CAMPAIGN_BATCH_SIZE);
-          const hasMoreRecipients = recipientPage.length > CAMPAIGN_BATCH_SIZE;
-
-          for (const recipient of recipients) {
-            try {
-              await this.mailService.sendMarketingCampaignEmail({
-                to: recipient.email,
-                campaignName: campaign.campaignName,
-                subject: campaign.subject,
-                previewText: campaign.previewText,
-                body: campaign.body,
-                unsubscribeToken: recipient.unsubscribeToken,
-              });
-              campaign.sentCount += 1;
-            } catch {
-              campaign.failedCount += 1;
-            }
-            campaign.processedCount += 1;
-            campaign.lastProcessedRecipientId = recipient.id;
-          }
-
-          const completedAt = new Date().toISOString();
-          campaign.updatedAt = completedAt;
-          if (!hasMoreRecipients) {
-            campaign.status = campaign.failedCount > 0 && campaign.sentCount === 0 ? 'FAILED' : 'SENT';
-            campaign.sentAt = completedAt;
-          }
-          await this.saveCampaignStore(campaigns);
+          await this.processCampaignBatch(id);
         } catch (error) {
-          campaign.status = 'FAILED';
-          campaign.errorMessage = error instanceof Error ? error.message : 'Lỗi gửi chiến dịch không xác định';
-          campaign.updatedAt = new Date().toISOString();
-          await this.saveCampaignStore(campaigns);
+          await this.prisma.marketingCampaign.update({
+            where: { id },
+            data: {
+              status: 'FAILED',
+              errorMessage: error instanceof Error ? error.message : 'Lỗi gửi chiến dịch không xác định',
+              lockedAt: null,
+            },
+          });
         }
       }
     } finally {
       this.isProcessingCampaigns = false;
     }
+  }
+
+  private async processCampaignBatch(id: string) {
+    const campaign = await this.prisma.marketingCampaign.findUnique({ where: { id } });
+    if (!campaign) return;
+
+    const audienceFilter = campaign.audienceFilter as { status?: SubscriberStatusFilter; search?: string } | null;
+    const isInactiveFilter = campaign.audience === 'CURRENT_FILTER' && audienceFilter?.status === 'inactive';
+
+    const recipientPage = isInactiveFilter
+      ? []
+      : await this.prisma.subscriber.findMany({
+          where: {
+            AND: [
+              this.getAudienceWhere({
+                audience: campaign.audience,
+                audienceFilter,
+                recipientIds: campaign.recipientIds,
+              }),
+              { id: { gt: campaign.lastProcessedRecipientId ?? 0 } },
+            ],
+          },
+          select: { id: true, email: true, unsubscribeToken: true },
+          orderBy: { id: 'asc' },
+          take: CAMPAIGN_BATCH_SIZE + 1,
+        });
+
+    const recipients = recipientPage.slice(0, CAMPAIGN_BATCH_SIZE);
+    const hasMoreRecipients = recipientPage.length > CAMPAIGN_BATCH_SIZE;
+
+    let sentCount = campaign.sentCount;
+    let failedCount = campaign.failedCount;
+    let processedCount = campaign.processedCount;
+    let lastProcessedRecipientId = campaign.lastProcessedRecipientId;
+
+    for (const recipient of recipients) {
+      try {
+        await this.mailService.sendMarketingCampaignEmail({
+          to: recipient.email,
+          campaignName: campaign.campaignName,
+          subject: campaign.subject,
+          previewText: campaign.previewText ?? undefined,
+          body: campaign.body,
+          unsubscribeToken: recipient.unsubscribeToken,
+        });
+        sentCount += 1;
+      } catch {
+        failedCount += 1;
+      }
+      processedCount += 1;
+      lastProcessedRecipientId = recipient.id;
+    }
+
+    if (hasMoreRecipients) {
+      // Còn người nhận: nhả khóa để tick sau xử lý batch tiếp theo
+      await this.prisma.marketingCampaign.update({
+        where: { id },
+        data: { sentCount, failedCount, processedCount, lastProcessedRecipientId, lockedAt: null },
+      });
+      return;
+    }
+
+    await this.prisma.marketingCampaign.update({
+      where: { id },
+      data: {
+        status: failedCount > 0 && sentCount === 0 ? 'FAILED' : 'SENT',
+        sentCount,
+        failedCount,
+        processedCount,
+        lastProcessedRecipientId,
+        sentAt: new Date(),
+        lockedAt: null,
+      },
+    });
   }
 
   async remove(id: number) {

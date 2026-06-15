@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { CustomerTableRow } from './CustomerTableRow';
 import type { CustomerSortKey, Meta, SortDirection, User } from '../_lib/types';
@@ -92,6 +93,13 @@ export function CustomerTable({
 }: CustomerTableProps) {
     const getSortableColumn = (key: CustomerSortKey) => sortableColumns.find(column => column.key === key)!;
 
+    const headerCheckboxRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (headerCheckboxRef.current) {
+            headerCheckboxRef.current.indeterminate = someCurrentPageSelected && !allCurrentPageSelected;
+        }
+    }, [someCurrentPageSelected, allCurrentPageSelected]);
+
     return (
         <div id="users-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
@@ -100,6 +108,7 @@ export function CustomerTable({
                         <tr className="border-b border-outline-variant/15 bg-surface-container/40">
                             <th scope="col" className="w-12 px-5 py-3.5">
                                 <input
+                                    ref={headerCheckboxRef}
                                     type="checkbox"
                                     checked={allCurrentPageSelected}
                                     aria-label={allCurrentPageSelected ? 'Bỏ chọn tất cả khách hàng trên trang này' : 'Chọn tất cả khách hàng trên trang này'}

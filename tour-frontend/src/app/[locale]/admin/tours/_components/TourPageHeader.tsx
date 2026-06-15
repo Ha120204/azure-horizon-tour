@@ -3,12 +3,12 @@
 import type React from 'react';
 
 interface TourPageHeaderProps {
-    isStaff: boolean;
+    canCreate: boolean;
     onExportCSV: () => void;
     onCreate: () => void;
 }
 
-export function TourPageHeader({ onExportCSV, onCreate }: TourPageHeaderProps) {
+export function TourPageHeader({ canCreate, onExportCSV, onCreate }: TourPageHeaderProps) {
     return (
         <div className="flex justify-between items-start mb-8 gap-4 flex-wrap">
             <div>
@@ -26,14 +26,16 @@ export function TourPageHeader({ onExportCSV, onCreate }: TourPageHeaderProps) {
                     <span className="material-symbols-outlined text-[17px]" aria-hidden="true">download</span>
                     Xuất CSV
                 </button>
-                <button
-                    onClick={onCreate}
-                    aria-label="Tạo tour mới"
-                    className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-90 transition-opacity active:scale-[0.98] flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none"
-                >
-                    <span className="material-symbols-outlined text-sm" aria-hidden="true">add_circle</span>
-                    Tạo Tour Mới
-                </button>
+                {canCreate && (
+                    <button
+                        onClick={onCreate}
+                        aria-label="Tạo tour mới"
+                        className="bg-gradient-to-br from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl font-semibold text-sm shadow-sm hover:shadow-md hover:opacity-90 transition-opacity active:scale-[0.98] flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-primary outline-none"
+                    >
+                        <span className="material-symbols-outlined text-sm" aria-hidden="true">add_circle</span>
+                        Tạo Tour Mới
+                    </button>
+                )}
             </div>
         </div>
     );

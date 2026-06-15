@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { formatDateTime, formatShortVND, formatVND, getStatusMeta, toneStyles } from '../_lib/helpers';
 import type { OverviewData, Tone } from '../_lib/types';
@@ -135,14 +136,24 @@ export function SuperErrorState({ message, onRetry }: { message: string; onRetry
     );
 }
 
+type RiskWorkflowStatus = 'OPEN' | 'REVIEWED' | 'RESOLVED';
+
+const WORKFLOW_META: Record<RiskWorkflowStatus, { label: string; badge: string; next: RiskWorkflowStatus | null; actionLabel: string }> = {
+    OPEN:     { label: 'Chưa xử lý',   badge: 'border-red-100 bg-red-50 text-red-600',       next: 'REVIEWED', actionLabel: 'Đánh dấu đã xem' },
+    REVIEWED: { label: 'Đã xem xét',   badge: 'border-blue-100 bg-blue-50 text-blue-700',    next: 'RESOLVED', actionLabel: 'Đóng rủi ro' },
+    RESOLVED: { label: 'Đã đóng',      badge: 'border-emerald-100 bg-emerald-50 text-emerald-700', next: null, actionLabel: '' },
+};
+
 interface SuperOverviewContentProps {
     data: OverviewData;
     isExporting: boolean;
     onRefresh: () => void;
     onExportAudit: () => void;
+    onUpdateRisk: (key: string, status: 'REVIEWED' | 'RESOLVED') => Promise<void>;
 }
 
-export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAudit }: SuperOverviewContentProps) {
+export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAudit, onUpdateRisk }: SuperOverviewContentProps) {
+    const [updatingKey, setUpdatingKey] = useState<string | null>(null);
     const statusMeta = getStatusMeta(data.status);
     const statusTone = toneStyles[statusMeta.tone];
     const alerts = [
@@ -199,9 +210,9 @@ export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAud
                     <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Ca trực hiện tại</p>
-                                <h2 className="mt-3 font-headline text-xl font-bold text-slate-800">10:00 - 12:00</h2>
-                                <p className="mt-1 text-sm text-slate-500">Cập nhật {formatDateTime(data.generatedAt)}</p>
+                                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Cập nhật lần cuối</p>
+                                <h2 className="mt-3 font-headline text-xl font-bold text-slate-800">{formatDateTime(data.generatedAt)}</h2>
+                                <p className="mt-1 text-sm text-slate-500">Dữ liệu thời gian thực từ hệ thống</p>
                             </div>
                             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                                 <span className="material-symbols-outlined text-[22px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
@@ -276,14 +287,39 @@ export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAud
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <SeverityBadge severity={item.severity} />
                                                     <span className="text-xs font-semibold text-slate-400">{item.due}</span>
+                                                    {item.workflow && (
+                                                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${WORKFLOW_META[item.workflow.status as RiskWorkflowStatus].badge}`}>
+                                                            {WORKFLOW_META[item.workflow.status as RiskWorkflowStatus].label}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <h3 className="mt-2 text-sm font-bold text-slate-800">{item.title}</h3>
                                                 <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">{item.detail}</p>
                                                 <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Owner · {item.owner}</p>
                                             </div>
-                                            <Link href={item.href} className="flex h-9 shrink-0 items-center justify-center rounded-xl px-3 text-xs font-bold text-blue-600 transition-all hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                                                Review
-                                            </Link>
+                                            <div className="flex shrink-0 flex-col items-end gap-2">
+                                                {item.workflow && WORKFLOW_META[item.workflow.status as RiskWorkflowStatus].next && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            const next = WORKFLOW_META[item.workflow.status as RiskWorkflowStatus].next as 'REVIEWED' | 'RESOLVED';
+                                                            setUpdatingKey(item.key);
+                                                            await onUpdateRisk(item.key, next);
+                                                            setUpdatingKey(null);
+                                                        }}
+                                                        disabled={updatingKey === item.key}
+                                                        className="flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white transition-all hover:bg-blue-700 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                                    >
+                                                        {updatingKey === item.key
+                                                            ? <span className="material-symbols-outlined text-[15px] animate-spin">progress_activity</span>
+                                                            : <span className="material-symbols-outlined text-[15px]">check</span>
+                                                        }
+                                                        {WORKFLOW_META[item.workflow.status as RiskWorkflowStatus].actionLabel}
+                                                    </button>
+                                                )}
+                                                <Link href={item.href} className="flex h-9 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-500 transition-all hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                                                    Xem log
+                                                </Link>
+                                            </div>
                                         </article>
                                     );
                                 })}
@@ -352,6 +388,8 @@ export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAud
                         </div>
                     )}
                 </SectionCard>
+
+
             </div>
         </main>
     );

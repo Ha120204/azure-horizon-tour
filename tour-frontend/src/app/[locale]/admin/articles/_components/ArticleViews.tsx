@@ -50,6 +50,7 @@ export function ArticleListView({
   isLoading,
   hasFilter,
   isAdmin,
+  canWrite,
   userId,
   isSubmitting,
   meta,
@@ -76,12 +77,15 @@ export function ArticleListView({
   onPageChange,
   onPageSizeChange,
 }: ArticleListViewProps) {
+  // SUPER_ADMIN xem read-only: ẩn ô chọn để không kích hoạt bulk
+  const isReadOnly = isAdmin && !canWrite;
   return (
     <div id="articles-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
       <ArticleSelectionBar
         selectedArticles={selectedArticles}
         selectedCount={selectedCount}
         isAdmin={isAdmin}
+        canWrite={canWrite}
         userId={userId}
         isLoading={isBulkActionLoading}
         onClear={onClearSelection}
@@ -92,13 +96,15 @@ export function ArticleListView({
           <thead>
             <tr className="border-b border-outline-variant/15 bg-surface-container/40">
               <th className="py-3.5 pl-5 pr-2 w-10">
-                <IndeterminateCheckbox
-                  checked={allCurrentPageSelected}
-                  indeterminate={!allCurrentPageSelected && someCurrentPageSelected}
-                  disabled={articles.length === 0 || isLoading}
-                  onChange={onToggleCurrentPage}
-                  ariaLabel={allCurrentPageSelected ? 'Bỏ chọn tất cả bài viết đang hiển thị' : 'Chọn tất cả bài viết đang hiển thị'}
-                />
+                {!isReadOnly && (
+                  <IndeterminateCheckbox
+                    checked={allCurrentPageSelected}
+                    indeterminate={!allCurrentPageSelected && someCurrentPageSelected}
+                    disabled={articles.length === 0 || isLoading}
+                    onChange={onToggleCurrentPage}
+                    ariaLabel={allCurrentPageSelected ? 'Bỏ chọn tất cả bài viết đang hiển thị' : 'Chọn tất cả bài viết đang hiển thị'}
+                  />
+                )}
               </th>
               {articleTableColumns.map(column => (
                 <SortableHeaderCell
@@ -143,6 +149,7 @@ export function ArticleListView({
                   article={article}
                   isSelected={selectedArticleIds.has(article.id)}
                   isAdmin={isAdmin}
+                  canWrite={canWrite}
                   userId={userId}
                   isSubmitting={isSubmitting}
                   onToggleSelected={onToggleSelected}
@@ -253,6 +260,7 @@ export function ArticleGridView({
   articles,
   isLoading,
   isAdmin,
+  canWrite,
   userId,
   isSubmitting,
   onCreate,
@@ -299,6 +307,7 @@ export function ArticleGridView({
           key={article.id}
           article={article}
           isAdmin={isAdmin}
+          canWrite={canWrite}
           userId={userId}
           isSubmitting={isSubmitting}
           onOpenEdit={onOpenEdit}

@@ -1,10 +1,10 @@
 import Image from 'next/image';
 import { Link } from '@/i18n/routing';
-import type { MyTour } from './types';
+import type { RecentTour } from './types';
 import { TOUR_STATUS, formatDate } from './constants';
 import { Skeleton, SectionHeader, EmptyState } from './ui';
 
-export default function RecentToursSection({ loading, myTours }: { loading: boolean; myTours: MyTour[] }) {
+export default function RecentToursSection({ loading, recentTours }: { loading: boolean; recentTours: RecentTour[] }) {
     return (
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm xl:col-span-7">
             <SectionHeader
@@ -28,7 +28,7 @@ export default function RecentToursSection({ loading, myTours }: { loading: bool
                             </div>
                         </div>
                     ))
-                ) : myTours.length === 0 ? (
+                ) : recentTours.length === 0 ? (
                     <EmptyState
                         icon="explore"
                         title="Chưa có tour nào"
@@ -37,7 +37,7 @@ export default function RecentToursSection({ loading, myTours }: { loading: bool
                         action="Tạo tour đầu tiên"
                     />
                 ) : (
-                    myTours.map(tour => {
+                    recentTours.map(tour => {
                         const status = TOUR_STATUS[tour.status] ?? { label: tour.status, cls: 'bg-slate-100 text-slate-600' };
                         return (
                             <Link key={tour.id} href="/admin/tours" className="flex items-center gap-3 px-6 py-4 transition-colors hover:bg-slate-50/70 focus:outline-none focus-visible:bg-blue-50">
@@ -60,7 +60,7 @@ export default function RecentToursSection({ loading, myTours }: { loading: bool
                     })
                 )}
             </div>
-            {myTours.length > 0 ? (
+            {recentTours.length > 0 ? (
                 <div className="border-t border-slate-100 px-6 py-3">
                     <Link href="/admin/tours" className="inline-flex min-h-10 items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
                         Xem tất cả tour

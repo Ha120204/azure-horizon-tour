@@ -81,7 +81,7 @@ export function TourFilters({
         () => [
             { value: '', label: 'Tất cả điểm đến', description: 'Không giới hạn điểm đến', icon: 'travel_explore' },
             ...destinations.map(destination => ({
-                value: destination.name,
+                value: String(destination.id),
                 label: destination.name,
                 description: 'Lọc theo điểm đến',
                 icon: 'location_on',

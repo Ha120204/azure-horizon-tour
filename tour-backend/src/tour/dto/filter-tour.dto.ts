@@ -58,6 +58,10 @@ export class FilterTourDto {
   locale?: string;
 
   @IsOptional()
+  @Matches(POSITIVE_INTEGER, { message: 'destinationId phải là số nguyên dương' })
+  destinationId?: string; // Lọc chính xác theo ID điểm đến (dùng ở admin)
+
+  @IsOptional()
   @IsString()
   departure?: string; // Lọc theo điểm khởi hành (contains, case-insensitive)
 

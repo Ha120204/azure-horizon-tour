@@ -8,4 +8,4 @@ export const PRESETS = [
 
 export const GRAN_MAP: Record<string, string> = { daily: 'Theo ngày', weekly: 'Theo tuần', monthly: 'Theo tháng' };
 
-export const PIE_COLORS = ['#3B82F6', '#F59E0B', '#EF4444'];
+export const PIE_COLORS = ['#3B82F6', '#F59E0B', '#F97316', '#EF4444'];

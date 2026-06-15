@@ -143,7 +143,7 @@ export default function TopAppBar({ currentUserRole: authenticatedRole = '' }: T
     };
     const baseMeta = getPageMeta(pathname ?? '');
     const meta = (pathname ?? '').replace(/^\/(en|vi)/, '') === '/admin/staffs' && userRole === 'SUPER_ADMIN'
-        ? { title: 'Quản lý quản trị viên', icon: 'manage_accounts', subtitle: 'Quản lý tài khoản quản trị viên vận hành hệ thống' }
+        ? { title: 'Quản lý nhân sự', icon: 'manage_accounts', subtitle: 'Quản lý tài khoản quản trị viên và nhân viên nội bộ của hệ thống.' }
         : baseMeta;
     const visibleNotifTypes = new Set(
         TABS.filter(tab => tab.key !== 'all' && canAccessRole(userRole, tab.roles)).flatMap(tab => tab.types)

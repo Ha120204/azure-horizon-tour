@@ -2,10 +2,13 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { StatisticsService } from './statistics.service';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { StatisticsDateRangeDto, StatisticsRevenueQueryDto, StatisticsTopQueryDto } from './dto/statistics-query.dto';
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('ADMIN', 'SUPER_ADMIN')
+@SuperAdminArea('statistics')
 @Controller('statistics')
 export class StatisticsController {
   constructor(private readonly statisticsService: StatisticsService) {}
@@ -15,11 +18,8 @@ export class StatisticsController {
    * KPI tổng hợp + so sánh với kỳ trước tương đương
    */
   @Get('overview')
-  async getOverview(
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-  ) {
-    const data = await this.statisticsService.getOverview(dateFrom, dateTo);
+  async getOverview(@Query() query: StatisticsDateRangeDto) {
+    const data = await this.statisticsService.getOverview(query.dateFrom, query.dateTo);
     return { message: 'Success', data };
   }
 
@@ -28,12 +28,8 @@ export class StatisticsController {
    * Doanh thu theo granularity: daily | weekly | monthly
    */
   @Get('revenue')
-  async getRevenueChart(
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-    @Query('granularity') granularity?: 'daily' | 'weekly' | 'monthly',
-  ) {
-    const data = await this.statisticsService.getRevenueChart(dateFrom, dateTo, granularity);
+  async getRevenueChart(@Query() query: StatisticsRevenueQueryDto) {
+    const data = await this.statisticsService.getRevenueChart(query.dateFrom, query.dateTo, query.granularity);
     return { message: 'Success', data };
   }
 
@@ -42,11 +38,8 @@ export class StatisticsController {
    * Phân bổ trạng thái + payment + trend trong kỳ
    */
   @Get('bookings/status')
-  async getBookingStatus(
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-  ) {
-    const data = await this.statisticsService.getBookingStatusDistribution(dateFrom, dateTo);
+  async getBookingStatus(@Query() query: StatisticsDateRangeDto) {
+    const data = await this.statisticsService.getBookingStatusDistribution(query.dateFrom, query.dateTo);
     return { message: 'Success', data };
   }
 
@@ -55,15 +48,11 @@ export class StatisticsController {
    * Doanh thu theo điểm đến (horizontal bar chart)
    */
   @Get('destinations/revenue')
-  async getDestinationRevenue(
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-    @Query('limit') limit?: string,
-  ) {
+  async getDestinationRevenue(@Query() query: StatisticsTopQueryDto) {
     const data = await this.statisticsService.getRevenueByDestination(
-      dateFrom,
-      dateTo,
-      limit ? Number(limit) : 8,
+      query.dateFrom,
+      query.dateTo,
+      query.limit ?? 8,
     );
     return { message: 'Success', data };
   }
@@ -73,15 +62,11 @@ export class StatisticsController {
    * Top tour bán chạy trong kỳ
    */
   @Get('tours/top')
-  async getTopTours(
-    @Query('limit') limit?: string,
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-  ) {
+  async getTopTours(@Query() query: StatisticsTopQueryDto) {
     const data = await this.statisticsService.getTopTours(
-      limit ? Number(limit) : 5,
-      dateFrom,
-      dateTo,
+      query.limit ?? 5,
+      query.dateFrom,
+      query.dateTo,
     );
     return { message: 'Success', data };
   }
@@ -91,15 +76,11 @@ export class StatisticsController {
    * Top khách hàng chi tiêu nhiều nhất trong kỳ
    */
   @Get('customers/top')
-  async getTopCustomers(
-    @Query('limit') limit?: string,
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-  ) {
+  async getTopCustomers(@Query() query: StatisticsTopQueryDto) {
     const data = await this.statisticsService.getTopCustomers(
-      limit ? Number(limit) : 5,
-      dateFrom,
-      dateTo,
+      query.limit ?? 5,
+      query.dateFrom,
+      query.dateTo,
     );
     return { message: 'Success', data };
   }

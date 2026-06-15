@@ -1,5 +1,5 @@
 ﻿import AdminPagination from '@/components/admin/AdminPagination';
-import { statusConfig, typeConfig } from '../_lib/config';
+import { statusConfig, typeConfig, UNLIMITED_USES } from '../_lib/config';
 import { formatCurrency, formatDate, isNeverExpires } from '../_lib/helpers';
 import type { Meta, ModalMode, Voucher, VoucherSortBy, VoucherSortOrder } from '../_lib/types';
 
@@ -230,12 +230,12 @@ function VoucherTableRow({
   onCopyCode: (voucher: Voucher) => void;
   onCopyShareLink: (voucher: Voucher) => void;
 }) {
-  const hasFiniteMaxUses = voucher.maxUses > 0 && voucher.maxUses < 999_999_999;
+  const hasFiniteMaxUses = voucher.maxUses > 0 && voucher.maxUses < UNLIMITED_USES;
   const usageRatio = hasFiniteMaxUses ? Math.min(voucher.usedCount / voucher.maxUses, 1) : (voucher.usedCount > 0 ? 0.06 : 0);
   const status = statusConfig[voucher.computedStatus];
   const type = typeConfig[voucher.discountType];
   const isInactive = voucher.computedStatus !== 'active';
-  const canManage = currentUserRole !== null && currentUserRole !== 'STAFF';
+  const canManage = currentUserRole === 'ADMIN';
   const signals = getVoucherSignals(voucher, usageRatio);
 
   return (
@@ -300,7 +300,7 @@ function VoucherTableRow({
             />
           </div>
           <span className="text-xs text-on-surface-variant whitespace-nowrap font-label">
-            {voucher.usedCount}/{voucher.maxUses >= 999_999_999 ? '∞' : voucher.maxUses}
+            {voucher.usedCount}/{voucher.maxUses >= UNLIMITED_USES ? '∞' : voucher.maxUses}
           </span>
         </div>
       </td>
@@ -383,7 +383,7 @@ function VoucherTableRow({
             />
           )}
 
-          {currentUserRole === 'SUPER_ADMIN' && (
+          {currentUserRole === 'ADMIN' && (
             <IconActionButton
               icon="delete"
               label={`Xóa voucher ${voucher.code}`}

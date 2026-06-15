@@ -29,24 +29,26 @@ function decodeJwtRole(token: string): string | null {
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Guard localized admin paths: /(vi|en)/admin/...  (skip /admin/login)
-  const adminMatch = /^\/(vi|en)(\/admin(?:\/|$))/.exec(pathname);
+  // Guard admin paths: /admin/... (vi, no prefix) OR /(vi|en)/admin/... (explicit locale)
+  // Skip /admin/login itself to avoid redirect loops.
+  const adminMatch = /^(?:\/(vi|en))?(\/admin(?:\/|$))/.exec(pathname);
   if (adminMatch) {
-    const adminSubPath = adminMatch[2]; // "/admin", "/admin/dashboard", etc.
     const isLoginPage =
-      adminSubPath === '/admin/login' || adminSubPath.startsWith('/admin/login/');
+      pathname.endsWith('/admin/login') || pathname.includes('/admin/login/');
 
     if (!isLoginPage) {
-      const locale = adminMatch[1];
+      const locale = adminMatch[1] ?? 'vi';
+      const loginPath = locale === 'vi' ? '/admin/login' : `/${locale}/admin/login`;
+      const homePath = locale === 'vi' ? '/' : `/${locale}`;
       const token = request.cookies.get('accessToken')?.value;
 
       if (!token) {
-        return NextResponse.redirect(new URL(`/${locale}/admin/login`, request.url));
+        return NextResponse.redirect(new URL(loginPath, request.url));
       }
 
       const role = decodeJwtRole(token);
       if (!ADMIN_ROLES.has(role ?? '')) {
-        return NextResponse.redirect(new URL(`/${locale}`, request.url));
+        return NextResponse.redirect(new URL(homePath, request.url));
       }
     }
   }

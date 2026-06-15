@@ -48,7 +48,7 @@ export default function ConciergeHeader({
                     disabled={!hasAccessToken}
                     title={hasAccessToken ? t('conciergeApp.historyTooltip') : t('conciergeApp.historyLoginRequired')}
                     aria-label={t('conciergeApp.historyTooltip')}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 transition-all hover:bg-blue-50 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-45"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 transition-all hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
                 >
                     <span className="material-symbols-outlined text-[14px]">history</span>
                     {t('conciergeApp.history')}
@@ -58,7 +58,7 @@ export default function ConciergeHeader({
                     onClick={handleStartNewConversation}
                     title={t('conciergeApp.newChatTooltip')}
                     aria-label={t('conciergeApp.newChatTooltip')}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 transition-all hover:bg-blue-100"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/10 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/10"
                 >
                     <span className="material-symbols-outlined text-[14px]">add</span>
                     {t('conciergeApp.newChat')}

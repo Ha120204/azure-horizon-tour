@@ -21,7 +21,7 @@ export function CustomerTableRow({
     onToggleStatus,
 }: CustomerTableRowProps) {
     const sc = statusConfig[user.status] || statusConfig.Active;
-    const canManage = currentUserRole === 'ADMIN' || currentUserRole === 'SUPER_ADMIN';
+    const canManage = currentUserRole === 'ADMIN';
     const totalSpent = user.totalSpent ?? 0;
     const hasBookings = user.bookingCount > 0;
 

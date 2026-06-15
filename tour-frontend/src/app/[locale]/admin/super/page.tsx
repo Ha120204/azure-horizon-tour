@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/http/constants';
-import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { fetchWithAuth, api } from '@/lib/http/fetchWithAuth';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import {
     SuperErrorState,
@@ -44,6 +45,15 @@ export default function SuperAdminOverviewPage() {
         onRefresh: () => fetchOverview({ silent: true }),
     });
 
+    const handleUpdateRisk = useCallback(async (key: string, status: 'REVIEWED' | 'RESOLVED') => {
+        const result = await api.patch(`/admin/super/risks/${key}`, { status });
+        if (!result.ok) {
+            toastEmitter.error('Không thể cập nhật trạng thái rủi ro');
+            return;
+        }
+        void fetchOverview({ silent: true });
+    }, [fetchOverview]);
+
     const exportAudit = async () => {
         setIsExporting(true);
         try {
@@ -57,7 +67,7 @@ export default function SuperAdminOverviewPage() {
             anchor.click();
             URL.revokeObjectURL(url);
         } catch {
-            setError('Không thể xuất báo cáo audit. Vui lòng thử lại.');
+            toastEmitter.error('Không thể xuất báo cáo audit. Vui lòng thử lại.');
         } finally {
             setIsExporting(false);
         }
@@ -80,6 +90,7 @@ export default function SuperAdminOverviewPage() {
             isExporting={isExporting}
             onRefresh={() => { void fetchOverview(); }}
             onExportAudit={() => { void exportAudit(); }}
+            onUpdateRisk={handleUpdateRisk}
         />
     );
 }

@@ -5,7 +5,7 @@ import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { PAYMENT_METHOD_CFG } from '../_lib/config';
 import { getErrorMessage } from '../_lib/helpers';
-import type { Booking } from '../_lib/types';
+import type { Booking, BookingConfirmSource } from '../_lib/types';
 
 // ─── Booking Edit Form ────────────────────────────────────────────────────────
 // Renders the payment-action section for PENDING + unpaid/processing bookings:
@@ -13,6 +13,7 @@ import type { Booking } from '../_lib/types';
 
 export function BookingEditForm({
   booking,
+  isAdmin,
   showInStoreForm,
   showReconcileForm,
   onShowInStoreForm,
@@ -24,13 +25,14 @@ export function BookingEditForm({
   onClose,
 }: {
   booking: Booking;
+  isAdmin: boolean;
   showInStoreForm: boolean;
   showReconcileForm: boolean;
   onShowInStoreForm: () => void;
   onHideInStoreForm: () => void;
   onShowReconcileForm: () => void;
   onHideReconcileForm: () => void;
-  onConfirmSuccess: (updated: Booking) => void | Promise<void>;
+  onConfirmSuccess: (updated: Booking, source?: BookingConfirmSource) => void | Promise<void>;
   setActionError: (error: string) => void;
   onClose: () => void;
 }) {
@@ -61,7 +63,7 @@ export function BookingEditForm({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message ?? 'Xác nhận thất bại');
-      await onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' });
+      await onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' }, 'IN_STORE');
       onHideInStoreForm();
     } catch (e: unknown) { setActionError(getErrorMessage(e, 'Có lỗi xảy ra')); }
     finally { setIsConfirmingInStore(false); }
@@ -74,7 +76,7 @@ export function BookingEditForm({
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message ?? 'Sync thất bại');
       const data = json?.data ?? json;
-      if (data?.synced) await onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' });
+      if (data?.synced) await onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' }, 'PAYOS_SYNC');
       else setActionError(data?.message ?? 'PayOS chưa ghi nhận thanh toán.');
     } catch (e: unknown) { setActionError(getErrorMessage(e, 'Không kết nối được PayOS')); }
     finally { setIsSyncingPayos(false); }
@@ -92,7 +94,7 @@ export function BookingEditForm({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message ?? 'Đối soát thất bại');
-      await onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' });
+      await onConfirmSuccess({ ...booking, status: 'CONFIRMED', paymentStatus: 'PAID' }, 'RECONCILE');
       onHideReconcileForm();
     } catch (e: unknown) { setActionError(getErrorMessage(e, 'Có lỗi xảy ra')); }
     finally { setIsReconciling(false); }
@@ -172,8 +174,8 @@ export function BookingEditForm({
         </div>
       )}
 
-      {/* ── PayOS: nút sync + mở reconcile ── */}
-      {booking.paymentMethod === 'PAYOS' && !showReconcileForm && (
+      {/* ── PayOS: nút sync + mở reconcile (chỉ Admin) ── */}
+      {booking.paymentMethod === 'PAYOS' && !showReconcileForm && isAdmin && (
         <div className="flex flex-wrap gap-2">
           <button onClick={handleSyncPayos} disabled={isSyncingPayos}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-sky-700 bg-sky-50 border border-sky-200 hover:bg-sky-100 disabled:opacity-60 transition-colors outline-none">
@@ -189,8 +191,19 @@ export function BookingEditForm({
         </div>
       )}
 
-      {/* ── PayOS: form đối soát thủ công ── */}
-      {booking.paymentMethod === 'PAYOS' && showReconcileForm && (
+      {/* ── PayOS: STAFF không có quyền đối soát / xác nhận ── */}
+      {booking.paymentMethod === 'PAYOS' && !isAdmin && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant">
+            <span className="material-symbols-outlined text-[16px]">lock</span>
+            Chỉ Admin mới đối soát và xác nhận thanh toán PayOS. Bạn có thể nhắc khách thanh toán.
+          </p>
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
+        </div>
+      )}
+
+      {/* ── PayOS: form đối soát thủ công (chỉ Admin) ── */}
+      {booking.paymentMethod === 'PAYOS' && isAdmin && showReconcileForm && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
           <p className="text-sm font-bold text-amber-800 flex items-center gap-2">
             <span className="material-symbols-outlined text-base">receipt_long</span>

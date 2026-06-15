@@ -13,6 +13,7 @@ import type {
     SupportRequestDetail,
     Ticket,
     TicketCategory,
+    TicketAssignee,
     TicketResponse,
     TicketStatus,
     TicketView,
@@ -130,6 +131,10 @@ export function resolveInitialCategory(value: string | null): TicketCategory | '
 
 export function resolveInitialView(value: string | null): TicketView {
     return value === 'open' ? 'OPEN' : value === 'overdue' ? 'OVERDUE' : 'ALL';
+}
+
+export function resolveInitialAssignee(value: string | null): TicketAssignee {
+    return value === 'me' ? 'ME' : value === 'none' ? 'NONE' : 'ALL';
 }
 
 export function getInitials(name: string) {

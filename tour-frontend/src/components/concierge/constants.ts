@@ -2,12 +2,6 @@ import type { QuickContact, PromptSuggestion } from './types';
 
 export const QUICK_CONTACTS: QuickContact[] = [
     {
-        label: 'Call Azure Horizon',
-        href: 'tel:+84386761856',
-        icon: 'call',
-        className: 'bg-primary text-white hover:bg-primary-container',
-    },
-    {
         label: 'Facebook',
         href: 'https://www.facebook.com/daothanhha120204',
         textIcon: 'f',

@@ -750,86 +750,6 @@ export class BookingService {
    * Admin: Xác nhận thủ công booking PENDING
    * Dùng khi khách đã thanh toán ngoài hệ thống (chuyển khoản sai nội dung, tiền mặt, v.v.)
    */
-  async confirmManual(bookingId: number, adminId?: number) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        tour: { select: { id: true, name: true } },
-      },
-    });
-
-    if (!booking) throw new NotFoundException('Booking không tồn tại');
-    if (booking.status === 'CONFIRMED')
-      throw new BadRequestException('Đơn hàng đã được xác nhận trước đó');
-    if (booking.status === 'CANCELLED')
-      throw new BadRequestException('Không thể xác nhận đơn hàng đã hủy');
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const confirmed = await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          status: 'CONFIRMED',
-          paymentStatus: 'PAID',
-          confirmedById: adminId || null,
-        },
-        include: {
-          user: {
-            select: { id: true, fullName: true, email: true, avatarUrl: true },
-          },
-          tour: {
-            select: { id: true, name: true, imageUrl: true, tourCode: true },
-          },
-        },
-      });
-
-      // Voucher đã claimed lúc tạo booking. Assisted booking thì claim tại đây.
-      if (booking.isAssistedBooking) {
-        await this.markVoucherAsUsed(tx, booking.userId, booking.voucherCode);
-      }
-
-      // Cập nhật PENDING transaction hiện có → SUCCESS, hoặc tạo mới nếu chưa có
-      const now = new Date();
-      const txnUpdate = await tx.paymentTransaction.updateMany({
-        where: { bookingId, status: 'PENDING' },
-        data: {
-          status: 'SUCCESS',
-          confirmedSource: 'ADMIN_OVERRIDE',
-          confirmedById: adminId ?? null,
-          confirmedAt: now,
-          confirmedNote: 'Xác nhận thủ công bởi admin',
-        },
-      });
-      if (txnUpdate.count === 0) {
-        await tx.paymentTransaction.create({
-          data: {
-            bookingId,
-            gateway: 'MANUAL',
-            amount: Math.round(Number(booking.totalPrice)),
-            status: 'SUCCESS',
-            confirmedSource: 'ADMIN_OVERRIDE',
-            confirmedById: adminId ?? null,
-            confirmedAt: now,
-            confirmedNote: 'Xác nhận thủ công bởi admin',
-          },
-        });
-      }
-
-      return confirmed;
-    });
-
-    this.logger.log(
-      `[ADMIN MANUAL] Booking confirmed manually bookingId=${bookingId} adminId=${adminId ?? 'system'}`,
-    );
-
-    return {
-      ...updated,
-      totalPrice: Number(updated.totalPrice),
-      unitPriceAtBooking: Number(updated.unitPriceAtBooking),
-      discountAmount: Number(updated.discountAmount),
-    };
-  }
-
   async updatePaymentMethod(
     bookingId: number,
     paymentMethod: 'PAYOS' | 'IN_STORE',
@@ -928,24 +848,19 @@ export class BookingService {
   async updateAdminNote(bookingId: number, adminId: number, note: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
-      select: { id: true, contactInfo: true },
+      select: { id: true },
     });
     if (!booking) throw new NotFoundException('Booking khong ton tai');
 
-    const existing = booking.contactInfo;
-    const contactInfo =
-      existing && typeof existing === 'object' && !Array.isArray(existing)
-        ? { ...(existing as Record<string, unknown>) }
-        : {};
-    contactInfo.adminNote = note.trim();
-    contactInfo.adminNoteUpdatedAt = new Date().toISOString();
-    contactInfo.adminNoteById = adminId;
-
-    const updated = await this.prisma.booking.update({
+    const trimmed = note.trim();
+    return this.prisma.booking.update({
       where: { id: bookingId },
-      data: { contactInfo: contactInfo as Prisma.InputJsonValue },
+      data: {
+        adminNote: trimmed || null,
+        adminNoteById: trimmed ? adminId : null,
+        adminNoteUpdatedAt: trimmed ? new Date() : null,
+      },
     });
-    return updated;
   }
 
   async adminCancelBooking(bookingId: number, adminId: number, reason: string) {
@@ -994,6 +909,10 @@ export class BookingService {
       departureTo,
       needsCustomerCall,
     );
+  }
+
+  async getRecentBookings(limit = 5) {
+    return this.queryService.getRecentBookings(limit);
   }
 
   async retryPayment(bookingId: number, userId: number) {

@@ -197,7 +197,7 @@ export function ReviewCard({
                         </button>
 
                         <a
-                            href={`/${locale}/tour/${review.tour.id}`}
+                            href={`${locale !== 'vi' ? `/${locale}` : ''}/tour/${review.tour.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:bg-primary/5 hover:text-primary"

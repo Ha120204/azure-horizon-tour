@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useRouter } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { clearClientUserStorage, fetchOptionalAuth, logoutAuthSession, saveClientUserStorage } from '@/lib/auth/authSession';
+import { getDefaultAdminPathForRole, isAdminRole } from '@/lib/admin/adminAccess';
 
 export default function AdminLoginPage() {
     const router = useRouter();
@@ -20,10 +21,11 @@ export default function AdminLoginPage() {
     const emailRef = useRef<HTMLInputElement>(null);
     const skipExistingAuthCheck = searchParams.get('loggedOut') === '1' || searchParams.get('switch') === '1';
 
-    const getAdminHomePath = () => {
+    const getAdminHomePath = (role?: string) => {
         const match = (pathname ?? '').match(/^\/(vi|en)(?=\/|$)/);
         const localePrefix = match ? `/${match[1]}` : '';
-        return `${localePrefix}/admin`;
+        const base = isAdminRole(role) ? getDefaultAdminPathForRole(role) : '/admin';
+        return `${localePrefix}${base}`;
     };
 
     useEffect(() => {
@@ -43,7 +45,7 @@ export default function AdminLoginPage() {
                     const role = profile.role;
 
                     if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'STAFF') {
-                        router.replace('/admin');
+                        router.replace(getDefaultAdminPathForRole(role));
                         return;
                     }
 
@@ -105,8 +107,8 @@ export default function AdminLoginPage() {
             // Phát sự kiện auth
             window.dispatchEvent(new Event('auth-change'));
 
-            // Chuyển hướng vào dashboard
-            window.location.assign(getAdminHomePath());
+            // Chuyển hướng vào dashboard (super admin → /admin/super)
+            window.location.assign(getAdminHomePath(role));
         } catch {
             setError('Lỗi kết nối đến máy chủ. Vui lòng thử lại sau.');
             setIsLoading(false);

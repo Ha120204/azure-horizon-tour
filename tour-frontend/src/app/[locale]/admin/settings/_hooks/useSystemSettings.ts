@@ -5,9 +5,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
-import { PANEL_META } from '../_lib/config';
+import { toastEmitter } from '@/lib/http/toastEmitter';
+import { PANEL_META, SETTING_DISPLAY_META } from '../_lib/config';
 import { canEdit, formatDuration } from '../_lib/helpers';
-import type { GroupedSettings, SettingsPanel, SystemHealth } from '../_lib/types';
+import type { GroupedSettings, SecurityInfo, SettingMeta, SettingsPanel, SystemHealth } from '../_lib/types';
 
 const resolveSettingsPanel = (value: string | null): SettingsPanel =>
     value && Object.prototype.hasOwnProperty.call(PANEL_META, value) ? value as SettingsPanel : 'company';
@@ -17,10 +18,12 @@ export function useSystemSettings() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [grouped, setGrouped] = useState<GroupedSettings>({});
+    const [settingMeta, setSettingMeta] = useState<Record<string, SettingMeta>>({});
     const [userRole, setUserRole] = useState('');
+    const [fetchError, setFetchError] = useState('');
     const [health, setHealth] = useState<SystemHealth | null>(null);
     const [healthLoading, setHealthLoading] = useState(false);
-    const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+    const [securityInfo, setSecurityInfo] = useState<SecurityInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [now, setNow] = useState(new Date());
     const activePanel = resolveSettingsPanel(searchParams.get('tab'));
@@ -30,28 +33,46 @@ export function useSystemSettings() {
         return () => clearInterval(t);
     }, []);
 
-    const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
-        setToast({ msg, type });
-        setTimeout(() => setToast(null), 3000);
-    }, []);
-
     const fetchSettings = useCallback(async () => {
         try {
-            const [settingsRes, profileRes] = await Promise.all([
+            const [settingsRes, metaRes, profileRes, securityRes] = await Promise.all([
                 fetchWithAuth(`${API_BASE_URL}/settings`),
+                fetchWithAuth(`${API_BASE_URL}/settings/meta`),
                 fetchWithAuth(`${API_BASE_URL}/auth/profile`),
+                fetchWithAuth(`${API_BASE_URL}/settings/security-info`),
             ]);
             if (settingsRes.ok) {
                 const json = await settingsRes.json();
                 setGrouped(json.data ?? {});
+            } else {
+                setFetchError('Không tải được cài đặt hệ thống. Vui lòng thử lại.');
+            }
+            if (metaRes.ok) {
+                const json = await metaRes.json();
+                const constraints: Record<string, Omit<SettingMeta, 'impact' | 'risky'>> = json.data ?? {};
+                const merged: Record<string, SettingMeta> = Object.fromEntries(
+                    Object.entries(constraints).map(([key, c]) => [
+                        key,
+                        {
+                            ...c,
+                            impact: SETTING_DISPLAY_META[key]?.impact ?? 'Cấu hình vận hành hệ thống.',
+                            risky: SETTING_DISPLAY_META[key]?.risky,
+                        },
+                    ]),
+                );
+                setSettingMeta(merged);
             }
             if (profileRes.ok) {
                 const json = await profileRes.json();
                 const role = json.role ?? json.data?.role ?? '';
                 setUserRole(role);
             }
+            if (securityRes.ok) {
+                const json = await securityRes.json();
+                setSecurityInfo(json.data ?? null);
+            }
         } catch {
-            // Keep the settings shell usable; individual sections will show empty states.
+            setFetchError('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.');
         } finally {
             setLoading(false);
         }
@@ -112,11 +133,12 @@ export function useSystemSettings() {
     const handleManualHealthCheck = useCallback(async () => {
         setActivePanel('runtime');
         const ok = await checkSystemHealth();
-        showToast(
-            ok ? 'Đã cập nhật trạng thái hệ thống.' : 'Không kiểm tra được trạng thái hệ thống. Hãy restart backend nếu vừa cập nhật code.',
-            ok ? 'success' : 'error',
-        );
-    }, [checkSystemHealth, setActivePanel, showToast]);
+        if (ok) {
+            toastEmitter.success('Đã cập nhật trạng thái hệ thống.');
+        } else {
+            toastEmitter.error('Không kiểm tra được trạng thái hệ thống. Hãy restart backend nếu vừa cập nhật code.');
+        }
+    }, [checkSystemHealth, setActivePanel]);
 
     const handleSave = useCallback(async (updates: Record<string, string>) => {
         try {
@@ -130,14 +152,14 @@ export function useSystemSettings() {
                 const message = Array.isArray(error?.message) ? error.message.join(', ') : error?.message;
                 throw new Error(message || 'Lưu thất bại. Vui lòng thử lại.');
             }
-            showToast('Đã lưu cài đặt thành công!');
+            toastEmitter.success('Đã lưu cài đặt thành công!');
             fetchSettings();
             return true;
         } catch (error) {
-            showToast(error instanceof Error ? error.message : 'Lưu thất bại. Vui lòng thử lại.', 'error');
+            toastEmitter.error(error instanceof Error ? error.message : 'Lưu thất bại. Vui lòng thử lại.');
             return false;
         }
-    }, [fetchSettings, showToast]);
+    }, [fetchSettings]);
 
     const editable = canEdit(userRole);
     const visiblePanels = (Object.keys(PANEL_META) as SettingsPanel[])
@@ -153,10 +175,12 @@ export function useSystemSettings() {
 
     return {
         grouped,
+        settingMeta,
+        securityInfo,
         userRole,
+        fetchError,
         health,
         healthLoading,
-        toast,
         loading,
         now,
         activePanel,
@@ -167,5 +191,6 @@ export function useSystemSettings() {
         setActivePanel,
         handleManualHealthCheck,
         handleSave,
+        retryFetch: fetchSettings,
     };
 }

@@ -7,17 +7,28 @@ import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { exportBookingsCsv } from '../_lib/exportCsv';
 import {
+  canRemindPayment,
   getApiErrorMessage,
   getErrorMessage,
 } from '../_lib/helpers';
 import type {
   Booking,
+  BookingConfirmSource,
   BookingListPayload,
   BookingSavedViewKey,
   Meta,
   PaymentStats,
   Stats,
 } from '../_lib/types';
+
+function getConfirmMessage(source: BookingConfirmSource | undefined, bookingCode: string) {
+  switch (source) {
+    case 'IN_STORE': return `Đã ghi nhận thu tại quầy cho đơn ${bookingCode}`;
+    case 'PAYOS_SYNC': return `Đã đồng bộ PayOS — đơn ${bookingCode} đã thanh toán`;
+    case 'RECONCILE': return `Đã đối soát thủ công cho đơn ${bookingCode}`;
+    default: return `Đã cập nhật đơn ${bookingCode}`;
+  }
+}
 
 const initialStats: Stats = {
   pending: 0,
@@ -60,6 +71,7 @@ export function useBookingManagement() {
   const [stats, setStats] = useState<Stats>(initialStats);
   const [meta, setMeta] = useState<Meta>(initialMeta);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [isExporting, setIsExporting] = useState(false);
 
   const [search, setSearch] = useState(initialSearch);
@@ -77,6 +89,9 @@ export function useBookingManagement() {
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  // SUPER_ADMIN xem read-only: isAdmin vẫn true (layout), canWrite=false để ẩn thao tác
+  const [canWrite, setCanWrite] = useState(false);
   const [hasFreshData, setHasFreshData] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
@@ -95,6 +110,12 @@ export function useBookingManagement() {
     searchTimer.current = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [search]);
+
+  useEffect(() => {
+    const role = localStorage.getItem('userRole') ?? '';
+    setIsAdmin(role === 'ADMIN' || role === 'SUPER_ADMIN');
+    setCanWrite(role === 'ADMIN');
+  }, []);
 
   const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -143,7 +164,7 @@ export function useBookingManagement() {
     const qs = buildQs({ page: String(page), limit: String(pageSize) });
     const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/all?${qs}`);
     const json = await res.json();
-    if (!res.ok) throw new Error();
+    if (!res.ok) throw new Error(getApiErrorMessage(json, 'Lỗi tải danh sách đặt tour'));
     return json?.data ?? json;
   }, [buildQs, page, pageSize]);
 
@@ -157,12 +178,13 @@ export function useBookingManagement() {
       lastBookingSignature.current = buildBookingSignature(payload);
       setHasFreshData(false);
       setLastSyncedAt(new Date());
-    } catch {
-      showToast('Lỗi tải danh sách đặt tour', false);
+      setLoadError('');
+    } catch (error: unknown) {
+      setLoadError(getErrorMessage(error, 'Lỗi tải danh sách đặt tour'));
     } finally {
       setIsLoading(false);
     }
-  }, [buildBookingSignature, getBookingsPayload, showToast]);
+  }, [buildBookingSignature, getBookingsPayload]);
 
   useEffect(() => {
     void fetchBookings();
@@ -240,7 +262,8 @@ export function useBookingManagement() {
     shouldRefresh: shouldRefreshFromRealtime,
   });
 
-  const handleConfirmSuccess = useCallback(async (updated: Booking) => {
+  const handleConfirmSuccess = useCallback(async (updated: Booking, source?: BookingConfirmSource) => {
+    const successMessage = getConfirmMessage(source, updated.bookingCode);
     try {
       const payload = await getBookingsPayload();
       const refreshedBookings = payload.bookings ?? [];
@@ -256,19 +279,15 @@ export function useBookingManagement() {
       setHasFreshData(false);
       setLastSyncedAt(new Date());
       await fetchPaymentStats();
+      showToast(successMessage);
     } catch {
+      // Backend đã xử lý xong, chỉ là không refetch được danh sách. Không suy đoán
+      // số liệu thống kê — chỉ cập nhật đúng đơn vừa thao tác và nhắc người dùng làm mới.
       setBookings(prev => prev.map(booking => booking.id === updated.id ? updated : booking));
       setSelectedBooking(updated);
-      setStats(prev => ({
-        ...prev,
-        pending: Math.max(0, prev.pending - 1),
-        confirmed: prev.confirmed + 1,
-        paidCount: prev.paidCount + 1,
-        totalRevenue: prev.totalRevenue + updated.totalPrice,
-      }));
-      void fetchPaymentStats();
+      setHasFreshData(true);
+      showToast(`${successMessage}. Chưa tải lại được danh sách — bấm "Có dữ liệu mới" để cập nhật số liệu.`);
     }
-    showToast(`✓ Đã xác nhận thủ công đơn ${updated.bookingCode}`);
   }, [buildBookingSignature, fetchPaymentStats, getBookingsPayload, showToast]);
 
   const handleExport = useCallback(async () => {
@@ -362,11 +381,7 @@ export function useBookingManagement() {
   }, [fetchBookings, showToast]);
 
   const bulkResendPaymentRequests = useCallback(async (targets: Booking[]) => {
-    const eligibleBookings = targets.filter(booking =>
-      booking.status === 'PENDING' &&
-      booking.paymentStatus === 'UNPAID' &&
-      booking.paymentMethod === 'PAYOS',
-    );
+    const eligibleBookings = targets.filter(canRemindPayment);
 
     if (eligibleBookings.length === 0) {
       showToast('Không có đơn PayOS chờ thanh toán trong danh sách đã chọn', false);
@@ -503,6 +518,7 @@ export function useBookingManagement() {
     stats,
     meta,
     isLoading,
+    loadError,
     isExporting,
     search,
     statusFilter,
@@ -517,6 +533,8 @@ export function useBookingManagement() {
     pageSize,
     selectedBooking,
     toast,
+    isAdmin,
+    canWrite,
     hasFreshData,
     lastSyncedAt,
     paymentStats,

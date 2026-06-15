@@ -215,6 +215,15 @@ export class TourQueryService {
       ...publishedWhere,
       startDate: { gte: new Date() },
     };
+    // KPI cards for STAFF show their own published tours, not the whole system
+    const kpiPublishedWhere: Prisma.TourWhereInput =
+      requesterRole === 'STAFF' && requesterId
+        ? { ...publishedWhere, createdById: requesterId }
+        : publishedWhere;
+    const kpiFuturePublishedWhere: Prisma.TourWhereInput =
+      requesterRole === 'STAFF' && requesterId
+        ? { ...kpiPublishedWhere, startDate: { gte: new Date() } }
+        : futurePublishedWhere;
 
     const [
       totalVisible,
@@ -229,7 +238,7 @@ export class TourQueryService {
     ] = await Promise.all([
       this.prisma.tour.count({ where: visibleWhere }),
       this.prisma.tour.count({ where: { deletedAt: null } }),
-      this.prisma.tour.count({ where: publishedWhere }),
+      this.prisma.tour.count({ where: kpiPublishedWhere }),
       this.prisma.tour.count({ where: workflowWhere(TourStatus.DRAFT) }),
       this.prisma.tour.count({
         where: workflowWhere(TourStatus.PENDING_REVIEW),
@@ -237,11 +246,11 @@ export class TourQueryService {
       this.prisma.tour.count({ where: workflowWhere(TourStatus.REJECTED) }),
       this.prisma.tour.count({ where: workflowWhere(TourStatus.COMPLETED) }),
       this.prisma.tour.aggregate({
-        where: futurePublishedWhere,
+        where: kpiFuturePublishedWhere,
         _sum: { availableSeats: true },
       }),
       this.prisma.tour.aggregate({
-        where: publishedWhere,
+        where: kpiPublishedWhere,
         _avg: { price: true },
       }),
     ]);
@@ -386,6 +395,44 @@ export class TourQueryService {
     const tour = await this.assertCanPermanentDeleteTour(id);
     await this.prisma.tour.delete({ where: { id } });
     return { message: `Tour "${tour.name}" đã bị xóa vĩnh viễn.` };
+  }
+
+  async bulkHide(ids: number[], requesterId?: number, requesterRole?: string) {
+    const uniqueIds = [
+      ...new Set(ids.filter((id) => Number.isInteger(id) && id > 0)),
+    ];
+    if (uniqueIds.length === 0)
+      throw new BadRequestException('Danh sách tour không hợp lệ');
+
+    const isAdminRole =
+      requesterRole === 'SUPER_ADMIN' || requesterRole === 'ADMIN';
+
+    const tours = await this.prisma.tour.findMany({
+      where: { id: { in: uniqueIds }, deletedAt: null },
+      select: { id: true, createdById: true, status: true },
+    });
+
+    const eligibleIds = isAdminRole
+      ? tours.map((t) => t.id)
+      : tours
+          .filter(
+            (t) =>
+              t.createdById === requesterId &&
+              (t.status === TourStatus.DRAFT || t.status === TourStatus.REJECTED),
+          )
+          .map((t) => t.id);
+
+    if (eligibleIds.length > 0) {
+      await this.prisma.tour.updateMany({
+        where: { id: { in: eligibleIds } },
+        data: { deletedAt: new Date() },
+      });
+    }
+
+    return {
+      deleted: eligibleIds.length,
+      skipped: uniqueIds.length - eligibleIds.length,
+    };
   }
 
   async bulkRestoreTours(ids: number[]) {

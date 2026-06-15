@@ -39,7 +39,7 @@ export function MarketingCampaignOverview({
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-extrabold text-slate-950">Chiến dịch gần đây</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Bản nháp được lưu trên máy này; trạng thái gửi được đồng bộ từ hệ thống.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Bản nháp và trạng thái gửi được đồng bộ từ hệ thống.</p>
           </div>
           <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full">{drafts.length} chiến dịch</span>
         </div>

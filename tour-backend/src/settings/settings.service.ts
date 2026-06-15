@@ -380,6 +380,43 @@ export class SettingsService implements OnModuleInit {
     };
   }
 
+  getSecurityInfo() {
+    const jwtExpires = process.env.JWT_EXPIRES_IN ?? '15m';
+    const jwtRefreshExpires = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
+    const throttleLimit = process.env.THROTTLE_LIMIT ?? '100';
+    const throttleTtl = process.env.THROTTLE_TTL ?? '60';
+
+    const formatExpiry = (value: string) => {
+      const num = parseInt(value, 10);
+      if (value.endsWith('m')) return `${num} phút`;
+      if (value.endsWith('h')) return `${num} giờ`;
+      if (value.endsWith('d')) return `${num} ngày`;
+      if (value.endsWith('s')) return `${num} giây`;
+      return value;
+    };
+
+    return {
+      jwtExpires: formatExpiry(jwtExpires),
+      jwtRefreshExpires: formatExpiry(jwtRefreshExpires),
+      rateLimit: `${throttleLimit} req / ${throttleTtl}s / IP`,
+    };
+  }
+
+  getMeta() {
+    return Object.fromEntries(
+      Object.entries(SETTING_DEFINITIONS).map(([key, def]) => [
+        key,
+        {
+          type: def.type === 'phone' ? 'tel' : def.type === 'integer' ? 'number' : def.type,
+          ...(def.min !== undefined ? { min: def.min } : {}),
+          ...(def.max !== undefined ? { max: def.max } : {}),
+          ...(def.maxLength !== undefined ? { maxLength: def.maxLength } : {}),
+          required: def.required ?? false,
+        },
+      ]),
+    );
+  }
+
   async updateMany(updates: Record<string, string>, adminId: number) {
     await this.ensureDefaultSettings();
 

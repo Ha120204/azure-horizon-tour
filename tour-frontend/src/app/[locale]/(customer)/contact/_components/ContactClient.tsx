@@ -1,13 +1,34 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
+import SupportTicketDetail from '@/components/profile/SupportTicketDetail';
 import { ContactInfoPanel } from './ContactInfoPanel';
 import { ContactFormPanel } from './ContactFormPanel';
+import { TicketLookupPanel } from './TicketLookupPanel';
 import { useContactForm } from '../_hooks/useContactForm';
+import { useGuestTicketModal } from '../_hooks/useGuestTicketModal';
 
 export default function ContactClient() {
     const form = useContactForm();
+    const ticketModal = useGuestTicketModal();
+    const { open: openTicket } = ticketModal;
+    const searchParams = useSearchParams();
+    const autoOpenedRef = useRef(false);
+
+    const ticketIdParam = searchParams.get('ticketId');
+    const accessCodeParam = searchParams.get('accessCode');
+
+    useEffect(() => {
+        if (autoOpenedRef.current) return;
+        if (!ticketIdParam || !accessCodeParam) return;
+        const ticketId = Number(ticketIdParam);
+        if (!Number.isInteger(ticketId) || ticketId <= 0) return;
+        autoOpenedRef.current = true;
+        void openTicket(ticketId, accessCodeParam);
+    }, [ticketIdParam, accessCodeParam, openTicket]);
 
     return (
         <div className="min-h-screen bg-surface text-on-surface antialiased">
@@ -33,9 +54,20 @@ export default function ContactClient() {
                     />
                     <ContactFormPanel form={form} />
                 </div>
+
+                <TicketLookupPanel onView={ticketModal.open} isOpening={ticketModal.isLoading} />
             </main>
 
             <Footer />
+
+            {ticketModal.ticket && (
+                <SupportTicketDetail
+                    ticket={ticketModal.ticket}
+                    lookupAccessCode={ticketModal.accessCode}
+                    onClose={ticketModal.close}
+                    onTicketUpdate={ticketModal.setTicket}
+                />
+            )}
         </div>
     );
 }

@@ -1,9 +1,6 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
-import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
-import { API_BASE_URL } from '@/lib/http/constants';
 import {
   AVATAR_COLORS,
   CONFIRMED_SOURCE_LABEL,
@@ -11,54 +8,9 @@ import {
   PAY_CFG,
   STATUS_CFG,
 } from '../_lib/config';
-import { fmt, fmtDate, fmtDateTime, getInitials, toValidDate } from '../_lib/helpers';
-import type { Booking, BookingNotification, BookingTransportAssignment, PaymentTransaction } from '../_lib/types';
-
-export function getVisibleTransactions(
-  booking: Booking,
-  currentGateway: 'MANUAL' | 'PAYOS',
-  hasSuccessfulCurrentGateway: boolean,
-): PaymentTransaction[] {
-  const seenOpenPayos = new Set<string>();
-  return [...(booking.transactions ?? [])]
-    .sort((a, b) => {
-      const createdDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      return createdDiff || b.id - a.id;
-    })
-    .filter((tx) => {
-      if (tx.status === 'SUCCESS') return true;
-      if (
-        booking.paymentStatus === 'PAID' &&
-        tx.gateway === currentGateway &&
-        tx.status === 'PENDING' &&
-        hasSuccessfulCurrentGateway
-      ) {
-        return false;
-      }
-      if (booking.paymentMethod === 'IN_STORE' && tx.gateway !== 'MANUAL') return false;
-      if (booking.paymentMethod === 'PAYOS' && tx.gateway !== 'PAYOS') return false;
-
-      if (tx.gateway === 'PAYOS' && tx.status === 'PENDING') {
-        const key = `${tx.gateway}:${tx.status}:${Math.round(Number(tx.amount) || 0)}`;
-        if (seenOpenPayos.has(key)) return false;
-        seenOpenPayos.add(key);
-      }
-
-      return true;
-    });
-}
-
-function toTelHref(phone?: string | null) {
-  return phone?.replace(/[^\d+]/g, '') ?? '';
-}
-
-function toZaloPhone(phone?: string | null) {
-  const digits = phone?.replace(/\D/g, '') ?? '';
-  if (!digits) return '';
-  if (digits.startsWith('84')) return digits;
-  if (digits.startsWith('0')) return `84${digits.slice(1)}`;
-  return digits;
-}
+import { fmt, fmtDate, fmtDateTime, getInitials, getVisibleTransactions, toTelHref, toZaloPhone } from '../_lib/helpers';
+import type { Booking, BookingNotification, PaymentTransaction } from '../_lib/types';
+import { TransportAssignmentSection } from './TransportAssignmentSection';
 
 type BookingTimelineItem = {
   id: string;
@@ -106,17 +58,16 @@ type CancellationPolicySummary = {
   note: string;
 };
 
-function daysBetweenCalendarDates(from: Date, to: Date) {
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime();
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime();
-  return Math.ceil((end - start) / 86_400_000);
-}
+// Văn bản mô tả điều kiện cho từng bậc hoàn tiền — chỉ là phần hiển thị.
+// Quyết định bậc nào / hoàn bao nhiêu % do backend tính (booking.cancellationPolicy).
+const REFUND_CONDITION_BY_TIER: Record<'FULL_REFUND_24H' | 'EIGHTY_REFUND' | 'HALF_REFUND', string> = {
+  FULL_REFUND_24H: 'Hủy trong 24 giờ sau khi đặt.',
+  EIGHTY_REFUND: 'Hủy trước ngày khởi hành từ 7 ngày trở lên.',
+  HALF_REFUND: 'Hủy trước ngày khởi hành từ 3 đến dưới 7 ngày.',
+};
 
 function getCancellationPolicySummary(booking: Booking): CancellationPolicySummary {
-  const departureDate = toValidDate(booking.departureDate);
-  const createdAt = toValidDate(booking.createdAt);
-  const now = new Date();
-
+  // Trạng thái đã chốt — hiển thị theo dữ liệu thực tế của đơn, không phải quy tắc tính.
   if (booking.status === 'CANCELLED') {
     return {
       statusLabel: 'Đơn đã hủy',
@@ -139,9 +90,11 @@ function getCancellationPolicySummary(booking: Booking): CancellationPolicySumma
     };
   }
 
-  if (!departureDate) {
+  // Đơn còn hiệu lực — render theo chính sách backend đã tính sẵn (nguồn sự thật duy nhất).
+  const policy = booking.cancellationPolicy;
+  if (!policy) {
     return {
-      statusLabel: 'Thiếu ngày khởi hành',
+      statusLabel: 'Chưa xác định',
       statusTone: 'bg-slate-50 text-slate-700 border-slate-200',
       refundLabel: 'Chưa xác định',
       condition: 'Không đủ dữ liệu để tính chính sách hủy.',
@@ -150,351 +103,55 @@ function getCancellationPolicySummary(booking: Booking): CancellationPolicySumma
     };
   }
 
-  const daysUntilDeparture = daysBetweenCalendarDates(now, departureDate);
+  const deadline =
+    policy.daysUntilDeparture < 0 ? `Đã khởi hành ngày ${fmtDate(booking.departureDate)}`
+    : policy.daysUntilDeparture === 0 ? `Khởi hành hôm nay (${fmtDate(booking.departureDate)})`
+    : `Còn ${policy.daysUntilDeparture} ngày trước khởi hành`;
+  const refundLabel = policy.refundPercent > 0
+    ? `${policy.refundPercent}% · ${fmt(policy.estimatedRefundAmount)}`
+    : fmt(0);
 
-  if (daysUntilDeparture < 0) {
-    return {
-      statusLabel: 'Không thể hủy',
-      statusTone: 'bg-slate-50 text-slate-700 border-slate-200',
-      refundLabel: fmt(0),
-      condition: 'Chuyến đi đã qua ngày khởi hành.',
-      deadline: `Đã khởi hành ngày ${fmtDate(booking.departureDate)}`,
-      note: 'Không hỗ trợ hủy online cho chuyến đi đã hoàn tất hoặc đã khởi hành.',
-    };
+  switch (policy.policyTier) {
+    case 'UNPAID':
+      return {
+        statusLabel: 'Có thể hủy',
+        statusTone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        refundLabel,
+        condition: 'Đơn chưa thanh toán nên không phát sinh khoản hoàn tiền.',
+        deadline: `Trước ngày khởi hành ${fmtDate(booking.departureDate)}`,
+        note: 'Hủy đơn sẽ giải phóng chỗ giữ, không cần xử lý hoàn tiền.',
+      };
+    case 'FULL_REFUND_24H':
+    case 'EIGHTY_REFUND':
+    case 'HALF_REFUND':
+      return {
+        statusLabel: 'Có thể hoàn tiền',
+        statusTone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        refundLabel,
+        condition: REFUND_CONDITION_BY_TIER[policy.policyTier],
+        deadline,
+        note: 'Khoản hoàn dự kiến sẽ được admin xác nhận khi duyệt hủy.',
+      };
+    case 'NO_REFUND':
+      return {
+        statusLabel: 'Không hoàn tiền',
+        statusTone: 'bg-red-50 text-red-700 border-red-200',
+        refundLabel,
+        condition: 'Hủy dưới 3 ngày trước ngày khởi hành.',
+        deadline,
+        note: 'Có thể vẫn cần ghi chú xử lý nếu admin hỗ trợ ngoại lệ.',
+      };
+    case 'NOT_CANCELABLE':
+    default:
+      return {
+        statusLabel: 'Không thể hủy',
+        statusTone: 'bg-slate-50 text-slate-700 border-slate-200',
+        refundLabel: fmt(0),
+        condition: policy.cancelUnavailableReason ?? 'Không hỗ trợ hủy online cho đơn này.',
+        deadline,
+        note: 'Cần xử lý thủ công nếu có tình huống đặc biệt.',
+      };
   }
-
-  if (daysUntilDeparture === 0) {
-    return {
-      statusLabel: 'Không thể hủy online',
-      statusTone: 'bg-red-50 text-red-700 border-red-200',
-      refundLabel: fmt(0),
-      condition: 'Tour khởi hành hôm nay.',
-      deadline: `Khởi hành ${fmtDate(booking.departureDate)}`,
-      note: 'Cần xử lý thủ công nếu có tình huống đặc biệt.',
-    };
-  }
-
-  if (booking.paymentStatus !== 'PAID') {
-    return {
-      statusLabel: 'Có thể hủy',
-      statusTone: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      refundLabel: fmt(0),
-      condition: 'Đơn chưa thanh toán nên không phát sinh khoản hoàn tiền.',
-      deadline: `Trước ngày khởi hành ${fmtDate(booking.departureDate)}`,
-      note: 'Hủy đơn sẽ giải phóng chỗ giữ, không cần xử lý hoàn tiền.',
-    };
-  }
-
-  const hoursSinceBooking = createdAt ? (now.getTime() - createdAt.getTime()) / 3_600_000 : Number.POSITIVE_INFINITY;
-  const fullRefundDeadline = createdAt ? new Date(createdAt.getTime() + 24 * 3_600_000) : null;
-  let refundPercent = 0;
-  let condition = 'Hủy dưới 3 ngày trước ngày khởi hành.';
-  let deadline = 'Không còn hạn hủy có hoàn tiền.';
-
-  if (hoursSinceBooking <= 24) {
-    refundPercent = 100;
-    condition = 'Hủy trong 24 giờ sau khi đặt.';
-    deadline = fullRefundDeadline ? `Hủy trước ${fmtDateTime(fullRefundDeadline.toISOString())}` : 'Trong 24 giờ sau khi đặt';
-  } else if (daysUntilDeparture >= 7) {
-    refundPercent = 80;
-    condition = 'Hủy trước ngày khởi hành từ 7 ngày trở lên.';
-    deadline = `Còn ${daysUntilDeparture} ngày trước khởi hành`;
-  } else if (daysUntilDeparture >= 3) {
-    refundPercent = 50;
-    condition = 'Hủy trước ngày khởi hành từ 3 đến dưới 7 ngày.';
-    deadline = `Còn ${daysUntilDeparture} ngày trước khởi hành`;
-  }
-
-  return {
-    statusLabel: refundPercent > 0 ? 'Có thể hoàn tiền' : 'Không hoàn tiền',
-    statusTone: refundPercent > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200',
-    refundLabel: `${refundPercent}% · ${fmt(Math.round((booking.totalPrice * refundPercent) / 100))}`,
-    condition,
-    deadline,
-    note: refundPercent > 0
-      ? 'Khoản hoàn dự kiến sẽ được admin xác nhận khi duyệt hủy.'
-      : 'Có thể vẫn cần ghi chú xử lý nếu admin hỗ trợ ngoại lệ.',
-  };
-}
-
-// ─── Transport Assignment Section ────────────────────────────────────────────
-
-type TransportForm = {
-  outboundTicketCodes: string;
-  outboundSeatNumbers: string;
-  outboundPnrCode: string;
-  returnTicketCodes: string;
-  returnSeatNumbers: string;
-  returnPnrCode: string;
-  vehiclePlate: string;
-  seatNumbers: string;
-  notes: string;
-};
-
-function parseLines(val: string): string[] {
-  return val.split('\n').map(s => s.trim()).filter(Boolean);
-}
-
-function assignmentToForm(a: BookingTransportAssignment): TransportForm {
-  return {
-    outboundTicketCodes: a.outboundTicketCodes.join('\n'),
-    outboundSeatNumbers: a.outboundSeatNumbers.join('\n'),
-    outboundPnrCode: a.outboundPnrCode ?? '',
-    returnTicketCodes: a.returnTicketCodes.join('\n'),
-    returnSeatNumbers: a.returnSeatNumbers.join('\n'),
-    returnPnrCode: a.returnPnrCode ?? '',
-    vehiclePlate: a.vehiclePlate ?? '',
-    seatNumbers: a.seatNumbers.join('\n'),
-    notes: a.notes ?? '',
-  };
-}
-
-const EMPTY_FORM: TransportForm = {
-  outboundTicketCodes: '',
-  outboundSeatNumbers: '',
-  outboundPnrCode: '',
-  returnTicketCodes: '',
-  returnSeatNumbers: '',
-  returnPnrCode: '',
-  vehiclePlate: '',
-  seatNumbers: '',
-  notes: '',
-};
-
-function TransportAssignmentSection({ bookingId, initial }: { bookingId: number; initial: BookingTransportAssignment | null | undefined }) {
-  const [assignment, setAssignment] = useState<BookingTransportAssignment | null>(initial ?? null);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<TransportForm>(initial ? assignmentToForm(initial) : EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  const set = (field: keyof TransportForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(f => ({ ...f, [field]: e.target.value }));
-
-  const handleOpen = () => {
-    setForm(assignment ? assignmentToForm(assignment) : EMPTY_FORM);
-    setError('');
-    setSuccess('');
-    setOpen(true);
-  };
-
-  const handleSubmit = async () => {
-    setSaving(true);
-    setError('');
-    setSuccess('');
-    try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/booking/${bookingId}/transport`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          outboundTicketCodes: parseLines(form.outboundTicketCodes),
-          outboundSeatNumbers: parseLines(form.outboundSeatNumbers),
-          outboundPnrCode: form.outboundPnrCode.trim() || undefined,
-          returnTicketCodes: parseLines(form.returnTicketCodes),
-          returnSeatNumbers: parseLines(form.returnSeatNumbers),
-          returnPnrCode: form.returnPnrCode.trim() || undefined,
-          vehiclePlate: form.vehiclePlate.trim() || undefined,
-          seatNumbers: parseLines(form.seatNumbers),
-          notes: form.notes.trim() || undefined,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.message ?? 'Không lưu được thông tin vé');
-      setAssignment(json.data ?? json);
-      setOpen(false);
-      setSuccess('Đã lưu thông tin vé thành công.');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra, vui lòng thử lại');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const inputCls = 'w-full rounded-xl border border-outline-variant/30 bg-surface px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:ring-2 focus:ring-primary/40';
-  const textareaCls = `${inputCls} resize-none`;
-  const labelCls = 'block text-xs font-semibold text-on-surface-variant mb-1';
-
-  return (
-    <section>
-      <h3 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary text-[14px]">airplane_ticket</span>
-          Phương tiện &amp; Vé
-        </span>
-        <button
-          type="button"
-          onClick={handleOpen}
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/20 bg-primary/5 text-primary text-[11px] font-bold hover:bg-primary/10 transition-colors normal-case tracking-normal"
-        >
-          <span className="material-symbols-outlined text-[13px]">edit</span>
-          {assignment ? 'Cập nhật vé' : 'Gán thông tin vé'}
-        </button>
-      </h3>
-
-      {/* Success banner */}
-      {success && !open && (
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">
-          <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-          {success}
-        </div>
-      )}
-
-      {/* Existing assignment display */}
-      {assignment && !open && (
-        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm space-y-3">
-          {(assignment.outboundTicketCodes.length > 0 || assignment.outboundPnrCode) && (
-            <div>
-              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-2">
-                <span className="material-symbols-outlined text-[14px]">flight_takeoff</span>
-                Chiều đi
-              </p>
-              <div className="space-y-1 text-xs">
-                {assignment.outboundPnrCode && <div className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">PNR</span><span className="font-mono font-bold">{assignment.outboundPnrCode}</span></div>}
-                {assignment.outboundTicketCodes.map((c, i) => <div key={i} className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">Vé {i + 1}</span><span className="font-mono font-bold">{c}</span></div>)}
-                {assignment.outboundSeatNumbers.length > 0 && <div className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">Ghế</span><span className="font-mono font-bold">{assignment.outboundSeatNumbers.join(', ')}</span></div>}
-              </div>
-            </div>
-          )}
-          {(assignment.returnTicketCodes.length > 0 || assignment.returnPnrCode) && (
-            <div className="border-t border-blue-100 pt-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-2">
-                <span className="material-symbols-outlined text-[14px]">flight_land</span>
-                Chiều về
-              </p>
-              <div className="space-y-1 text-xs">
-                {assignment.returnPnrCode && <div className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">PNR</span><span className="font-mono font-bold">{assignment.returnPnrCode}</span></div>}
-                {assignment.returnTicketCodes.map((c, i) => <div key={i} className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">Vé {i + 1}</span><span className="font-mono font-bold">{c}</span></div>)}
-                {assignment.returnSeatNumbers.length > 0 && <div className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">Ghế</span><span className="font-mono font-bold">{assignment.returnSeatNumbers.join(', ')}</span></div>}
-              </div>
-            </div>
-          )}
-          {(assignment.vehiclePlate || assignment.seatNumbers.length > 0) && (
-            <div className="border-t border-blue-100 pt-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-2">
-                <span className="material-symbols-outlined text-[14px]">directions_bus</span>
-                Xe
-              </p>
-              <div className="space-y-1 text-xs">
-                {assignment.vehiclePlate && <div className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">Biển số</span><span className="font-mono font-bold">{assignment.vehiclePlate}</span></div>}
-                {assignment.seatNumbers.length > 0 && <div className="flex gap-2"><span className="text-slate-500 w-16 shrink-0">Ghế</span><span className="font-mono font-bold">{assignment.seatNumbers.join(', ')}</span></div>}
-              </div>
-            </div>
-          )}
-          {assignment.notes && <p className="border-t border-blue-100 pt-3 text-xs text-slate-500">{assignment.notes}</p>}
-          <p className="text-[11px] text-slate-400">Gán lúc {fmtDateTime(assignment.assignedAt)}</p>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!assignment && !open && (
-        <div className="rounded-2xl border border-dashed border-outline-variant/30 bg-surface-container-low p-4 text-center text-sm text-on-surface-variant">
-          Chưa có thông tin vé nào được gán cho đơn này.
-        </div>
-      )}
-
-      {/* Form */}
-      {open && (
-        <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-low p-4 space-y-4">
-          {error && (
-            <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">
-              <span className="material-symbols-outlined text-base">error</span>
-              {error}
-            </div>
-          )}
-
-          {/* Chiều đi */}
-          <div>
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-3">
-              <span className="material-symbols-outlined text-[14px]">flight_takeoff</span>
-              Chiều đi
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls}>Mã vé — mỗi vé một dòng</label>
-                <textarea rows={3} className={textareaCls} placeholder={"0552123456789\n0552987654321"} value={form.outboundTicketCodes} onChange={set('outboundTicketCodes')} />
-              </div>
-              <div>
-                <label className={labelCls}>Số ghế — mỗi ghế một dòng</label>
-                <textarea rows={2} className={textareaCls} placeholder={"12A\n12B"} value={form.outboundSeatNumbers} onChange={set('outboundSeatNumbers')} />
-              </div>
-              <div>
-                <label className={labelCls}>Mã PNR</label>
-                <input type="text" className={inputCls} placeholder="VN-ABC123" value={form.outboundPnrCode} onChange={set('outboundPnrCode')} />
-              </div>
-            </div>
-          </div>
-
-          {/* Chiều về */}
-          <div className="border-t border-outline-variant/10 pt-4">
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-3">
-              <span className="material-symbols-outlined text-[14px]">flight_land</span>
-              Chiều về
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls}>Mã vé — mỗi vé một dòng</label>
-                <textarea rows={3} className={textareaCls} placeholder={"0552123456789\n0552987654321"} value={form.returnTicketCodes} onChange={set('returnTicketCodes')} />
-              </div>
-              <div>
-                <label className={labelCls}>Số ghế — mỗi ghế một dòng</label>
-                <textarea rows={2} className={textareaCls} placeholder={"12A\n12B"} value={form.returnSeatNumbers} onChange={set('returnSeatNumbers')} />
-              </div>
-              <div>
-                <label className={labelCls}>Mã PNR</label>
-                <input type="text" className={inputCls} placeholder="VN-DEF456" value={form.returnPnrCode} onChange={set('returnPnrCode')} />
-              </div>
-            </div>
-          </div>
-
-          {/* Xe */}
-          <div className="border-t border-outline-variant/10 pt-4">
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3">
-              <span className="material-symbols-outlined text-[14px]">directions_bus</span>
-              Xe khách / ô tô
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls}>Biển số xe</label>
-                <input type="text" className={inputCls} placeholder="51B-123.45" value={form.vehiclePlate} onChange={set('vehiclePlate')} />
-              </div>
-              <div>
-                <label className={labelCls}>Số ghế — mỗi ghế một dòng</label>
-                <textarea rows={2} className={textareaCls} placeholder={"A1\nA2"} value={form.seatNumbers} onChange={set('seatNumbers')} />
-              </div>
-            </div>
-          </div>
-
-          {/* Ghi chú */}
-          <div className="border-t border-outline-variant/10 pt-4">
-            <label className={labelCls}>Ghi chú nội bộ</label>
-            <textarea rows={2} className={textareaCls} placeholder="Ví dụ: hành lý ký gửi 20kg..." value={form.notes} onChange={set('notes')} />
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container disabled:opacity-50"
-            >
-              Hủy
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1.5"
-            >
-              {saving && <span className="material-symbols-outlined text-[15px] animate-spin">progress_activity</span>}
-              Lưu thông tin vé
-            </button>
-          </div>
-        </div>
-      )}
-    </section>
-  );
 }
 
 function getBookingTimeline(
@@ -1006,6 +663,13 @@ export function BookingDetailView({
               </h3>
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
                 {adminNote}
+                {(booking.adminNoteByName || booking.adminNoteUpdatedAt) && (
+                  <p className="mt-2 flex items-center gap-1 border-t border-amber-200/60 pt-2 text-[11px] font-medium text-amber-700/80">
+                    <span className="material-symbols-outlined text-[13px]">history_edu</span>
+                    {booking.adminNoteByName ? `Ghi bởi ${booking.adminNoteByName}` : 'Ghi chú nội bộ'}
+                    {booking.adminNoteUpdatedAt && ` · ${fmtDateTime(booking.adminNoteUpdatedAt)}`}
+                  </p>
+                )}
               </div>
             </section>
           )}

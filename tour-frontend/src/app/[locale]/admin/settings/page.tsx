@@ -1,6 +1,7 @@
 'use client';
 
 import { API_BASE_URL } from '@/lib/http/constants';
+import ViewGrantsPanel from './_components/ViewGrantsPanel';
 import { EditableSection } from './_components/EditableSection';
 import { HealthStatusSection } from './_components/HealthStatusSection';
 import { InfoSection } from './_components/InfoSection';
@@ -20,18 +21,28 @@ export default function SystemSettingsPage() {
         );
     }
 
+    if (settings.fetchError) {
+        return (
+            <main className="flex-1 pt-8 px-8 pb-16 overflow-y-auto w-full max-w-[1100px] mx-auto">
+                <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                        <span className="material-symbols-outlined text-[28px]" style={{ fontVariationSettings: "'FILL' 1" }}>error</span>
+                    </div>
+                    <h1 className="mt-5 text-xl font-bold text-slate-800">Không tải được cài đặt</h1>
+                    <p className="mt-2 text-sm text-slate-500">{settings.fetchError}</p>
+                    <button
+                        onClick={() => { void settings.retryFetch(); }}
+                        className="mt-6 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+                    >
+                        Thử lại
+                    </button>
+                </div>
+            </main>
+        );
+    }
+
     return (
         <main className="flex-1 pt-8 px-8 pb-16 overflow-y-auto w-full max-w-[1100px] mx-auto">
-            {settings.toast && (
-                <div className="fixed top-6 right-8 z-50" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl border ${settings.toast.type === 'success' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                        <span className={`material-symbols-outlined text-[20px] ${settings.toast.type === 'success' ? 'text-emerald-600' : 'text-red-600'}`} style={{ fontVariationSettings: "'FILL' 1" }}>
-                            {settings.toast.type === 'success' ? 'check_circle' : 'error'}
-                        </span>
-                        <span className={`text-sm font-semibold ${settings.toast.type === 'success' ? 'text-emerald-800' : 'text-red-800'}`}>{settings.toast.msg}</span>
-                    </div>
-                </div>
-            )}
 
             <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
                 <div>
@@ -105,6 +116,7 @@ export default function SystemSettingsPage() {
                         settings={settings.grouped[settings.activePanel] ?? []}
                         editable={settings.editable}
                         onSave={settings.handleSave}
+                        settingMeta={settings.settingMeta}
                     />
                 )}
 
@@ -132,9 +144,9 @@ export default function SystemSettingsPage() {
                         {...settings.activeMeta}
                         rows={[
                             { icon: 'token', label: 'Cơ chế xác thực', value: 'JWT · Passport.js · HttpOnly Cookie' },
-                            { icon: 'timer', label: 'Access Token hết hạn', value: '15 phút', hint: 'JWT_EXPIRES_IN trong .env' },
-                            { icon: 'lock_clock', label: 'Refresh Token hết hạn', value: '7 ngày', hint: 'JWT_REFRESH_EXPIRES_IN trong .env' },
-                            { icon: 'speed', label: 'Rate Limiting', value: '100 req / 60s / IP (auth routes: 5 req/phút)', hint: 'ThrottlerModule trong app.module.ts' },
+                            { icon: 'timer', label: 'Access Token hết hạn', value: settings.securityInfo?.jwtExpires ?? '—', hint: 'JWT_EXPIRES_IN trong .env' },
+                            { icon: 'lock_clock', label: 'Refresh Token hết hạn', value: settings.securityInfo?.jwtRefreshExpires ?? '—', hint: 'JWT_REFRESH_EXPIRES_IN trong .env' },
+                            { icon: 'speed', label: 'Rate Limiting', value: settings.securityInfo?.rateLimit ?? '—', hint: 'THROTTLE_LIMIT / THROTTLE_TTL trong .env' },
                             { icon: 'verified_user', label: 'Phân quyền (RBAC)', value: 'SUPER_ADMIN · ADMIN · STAFF · CUSTOMER' },
                         ]}
                     />
@@ -161,6 +173,8 @@ export default function SystemSettingsPage() {
                         ]}
                     />
                 )}
+
+                {settings.userRole === 'SUPER_ADMIN' && <ViewGrantsPanel />}
 
                 <div className="flex items-center justify-between py-4 px-1 text-xs text-slate-400 border-t border-slate-100">
                     <span>Azure Horizon Admin Console v1.0.0</span>

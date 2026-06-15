@@ -448,7 +448,7 @@ export function TourReferenceDrawer({ tour, isStaff, isLoading, onClose, onCreat
                                 <div className="space-y-2">
                                     {tour.status === 'PUBLISHED' && (
                                         <a
-                                            href={`/vi/tour/${tour.id}`}
+                                            href={`/tour/${tour.id}`}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-on-primary transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary outline-none"

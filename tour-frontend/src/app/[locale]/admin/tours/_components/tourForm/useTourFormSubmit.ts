@@ -91,6 +91,7 @@ export function useTourFormSubmit({
     const payload = { ...form, duration: finalDuration, startDate: primaryStartDate, status: nextStatus };
 
     setSaveAction(action);
+    let tourId: number | undefined;
     try {
       let response: Response;
       const url = mode === "edit" ? `${API_BASE_URL}/tour/${editId}` : `${API_BASE_URL}/tour`;
@@ -129,7 +130,7 @@ export function useTourFormSubmit({
         );
       }
       const saved = await response.json();
-      const tourId = saved?.data?.id ?? saved?.id ?? initialData?.id;
+      tourId = saved?.data?.id ?? saved?.id ?? initialData?.id;
 
       if (tourId && packages.length > 0) {
         const pkgPayload = packages
@@ -353,6 +354,11 @@ export function useTourFormSubmit({
       onSuccess(successMessage, saved?.data ?? saved, action);
       onClose();
     } catch (err: unknown) {
+      // Khi tạo mới, nếu tour đã được lưu nhưng các bước tiếp theo (packages/departures/…)
+      // thất bại, xóa tour vừa tạo để tránh để lại DRAFT rỗng không có nội dung.
+      if (mode === "create" && tourId) {
+        await fetchWithAuth(`${API_BASE_URL}/tour/${tourId}`, { method: "DELETE" }).catch(() => {});
+      }
       setGlobalError(normalizeTourMessage(err instanceof Error ? err.message : undefined));
     } finally {
       setSaveAction(null);

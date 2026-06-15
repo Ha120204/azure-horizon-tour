@@ -120,7 +120,7 @@ export function ContactFormPanel({ form }: ContactFormPanelProps) {
                             )}
                             {!isLoggedIn && submittedTicketId > 0 && submittedAccessCode && (
                                 <Link
-                                    href={`/support/track/${submittedTicketId}?accessCode=${encodeURIComponent(submittedAccessCode)}`}
+                                    href={`/contact?ticketId=${submittedTicketId}&accessCode=${encodeURIComponent(submittedAccessCode)}`}
                                     className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-headline text-sm font-bold text-white transition-colors hover:bg-primary-container"
                                 >
                                     <span className="material-symbols-outlined text-sm">support_agent</span>

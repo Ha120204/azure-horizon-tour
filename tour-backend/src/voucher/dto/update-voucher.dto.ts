@@ -1,3 +1,4 @@
+import { PartialType } from '@nestjs/mapped-types';
 import { CreateVoucherDto } from './create-voucher.dto';
 
-export type UpdateVoucherDto = Partial<CreateVoucherDto>;
+export class UpdateVoucherDto extends PartialType(CreateVoucherDto) {}

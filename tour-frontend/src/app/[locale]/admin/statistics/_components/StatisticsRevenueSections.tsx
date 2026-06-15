@@ -8,7 +8,7 @@ import { SectionCard } from './SectionCard';
 import { Skeleton } from './Skeleton';
 import { DestTooltip, RevenueTooltip } from './tooltips';
 import { GRAN_MAP } from '../_lib/config';
-import { formatAxisVND, formatShortVND, formatVND } from '../_lib/helpers';
+import { formatAxisVND, formatVND } from '../_lib/helpers';
 import type { DestRevenue, RevenuePoint } from '../_lib/types';
 
 interface RevenueTrendSectionProps {
@@ -107,7 +107,7 @@ export function DestinationRevenueSection({
         <div className="mb-5">
             <SectionCard
                 title="Doanh thu theo điểm đến"
-                subtitle="Top điểm đến có doanh thu cao nhất trong kỳ (chỉ tính booking đã xác nhận)"
+                subtitle="Top điểm đến có doanh thu cao nhất trong kỳ (chỉ tính booking đã thanh toán)"
                 icon="map"
                 accent="green"
             >
@@ -133,7 +133,7 @@ export function DestinationRevenueSection({
                                         <YAxis type="category" dataKey="name" tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} width={130} />
                                         <Tooltip content={<DestTooltip />} cursor={{ fill: 'rgba(59,130,246,0.04)' }} />
                                         <Bar dataKey="revenue" fill="url(#destGrad)" radius={[0, 6, 6, 0]}
-                                            label={{ position: 'right', formatter: (value: unknown) => formatShortVND(Number(value)), fill: '#64748B', fontSize: 11 }}
+                                            label={{ position: 'right', formatter: (value: unknown) => formatVND(Number(value)), fill: '#64748B', fontSize: 11 }}
                                         />
                                         <defs>
                                             <linearGradient id="destGrad" x1="0" y1="0" x2="1" y2="0">
@@ -152,7 +152,7 @@ export function DestinationRevenueSection({
                                             <span className="text-slate-300 font-bold flex-shrink-0">#{index + 1}</span>
                                             <span className="text-slate-600 truncate font-medium">{destination.name}</span>
                                         </div>
-                                        <span className="text-emerald-600 font-bold flex-shrink-0">{formatShortVND(destination.revenue)}</span>
+                                        <span className="text-emerald-600 font-bold flex-shrink-0">{formatVND(destination.revenue)}</span>
                                     </div>
                                 ))}
                             </div>

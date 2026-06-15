@@ -5,6 +5,7 @@ import type { ArticleViewMode } from '../_lib/types';
 interface ArticlePageHeaderProps {
   viewMode: ArticleViewMode;
   isAdmin: boolean;
+  canWrite: boolean;
   showTrash: boolean;
   trashCount: number;
   onViewModeChange: (mode: ArticleViewMode) => void;
@@ -16,6 +17,7 @@ interface ArticlePageHeaderProps {
 export function ArticlePageHeader({
   viewMode,
   isAdmin,
+  canWrite,
   showTrash,
   trashCount,
   onViewModeChange,
@@ -50,7 +52,7 @@ export function ArticlePageHeader({
         >
           <span className="material-symbols-outlined text-[18px]">refresh</span>Làm mới
         </button>
-        {isAdmin && (
+        {canWrite && (
           <button
             onClick={onToggleTrash}
             className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors outline-none ${
@@ -68,13 +70,15 @@ export function ArticlePageHeader({
             )}
           </button>
         )}
-        <button
-          id="create-article-btn"
-          onClick={onCreate}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold hover:bg-primary/90 transition-all active:scale-[0.98] shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <span className="material-symbols-outlined text-[18px]">post_add</span>{isAdmin ? 'Thêm bài viết' : 'Tạo bản nháp'}
-        </button>
+        {(canWrite || !isAdmin) && (
+          <button
+            id="create-article-btn"
+            onClick={onCreate}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold hover:bg-primary/90 transition-all active:scale-[0.98] shadow-sm hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <span className="material-symbols-outlined text-[18px]">post_add</span>{isAdmin ? 'Thêm bài viết' : 'Tạo bản nháp'}
+          </button>
+        )}
       </div>
     </div>
   );

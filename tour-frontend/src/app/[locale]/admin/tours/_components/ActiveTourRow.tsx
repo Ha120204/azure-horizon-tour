@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useParams } from 'next/navigation';
 import { formatCurrency, formatDate, getTourStatusBadge } from '../_lib/helpers';
 import type { Tour } from '../_lib/types';
 
@@ -45,6 +46,7 @@ export function ActiveTourRow({
     onReview,
     onDelete,
 }: ActiveTourRowProps) {
+    const { locale } = useParams<{ locale: string }>();
     const tourStatusBadge = getTourStatusBadge(tour.status ?? 'PUBLISHED');
     const isMyTour = tour.createdById === userId;
     const canStaffEdit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
@@ -172,13 +174,13 @@ export function ActiveTourRow({
                     </div>
                     {tour.status === 'PUBLISHED' && (
                         <div className="relative group/tip">
-                            <button onClick={() => window.open(`/vi/tour/${tour.id}`, '_blank')} aria-label={`Xem tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
+                            <button onClick={() => window.open(`${locale !== 'vi' ? `/${locale}` : ''}/tour/${tour.id}`, '_blank')} aria-label={`Xem tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
                                 <span className="material-symbols-outlined text-[18px]">open_in_new</span>
                             </button>
                             <span className="pointer-events-none absolute -top-8 right-0 z-[120] whitespace-nowrap rounded-md bg-on-surface px-2 py-1 text-[10px] font-medium text-surface opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100">Xem trang khách<span className="absolute right-3 top-full border-4 border-transparent border-t-on-surface" /></span>
                         </div>
                     )}
-                    {(isAdmin || isMyTour) && tour.status === 'PUBLISHED' && (
+                    {isAdmin && tour.status === 'PUBLISHED' && (
                         <div className="relative group/tip">
                             <button onClick={() => onOpenContent(tour)} aria-label={`Quản lý nội dung tour ${tour.name}`} className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-violet-500/10 hover:text-violet-600 transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none">
                                 <span className="material-symbols-outlined text-[18px]">auto_awesome</span>

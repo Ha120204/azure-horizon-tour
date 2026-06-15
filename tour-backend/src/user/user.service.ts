@@ -318,7 +318,7 @@ export class UserService {
     const [recentBookings, paidBookingSummary, lastBookingSummary] =
       await Promise.all([
         this.prisma.booking.findMany({
-          where: { userId: id },
+          where: { userId: id, deletedAt: null },
           orderBy: { createdAt: 'desc' },
           take: 5,
           select: {

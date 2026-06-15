@@ -9,6 +9,7 @@ function createServiceHarness() {
   const txBookingUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
   const txTourUpdate = jest.fn().mockResolvedValue({});
   const txTourDepartureUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+  const paymentTransactionCreate = jest.fn().mockResolvedValue({});
 
   const tx = {
     booking: {
@@ -21,6 +22,9 @@ function createServiceHarness() {
     tourDeparture: {
       updateMany: txTourDepartureUpdateMany,
     },
+    paymentTransaction: {
+      create: paymentTransactionCreate,
+    },
   };
 
   const bookingFindUnique = jest.fn();
@@ -30,7 +34,6 @@ function createServiceHarness() {
   const transaction = jest.fn((callback: (client: typeof tx) => unknown) =>
     Promise.resolve(callback(tx)),
   );
-  const paymentTransactionCreate = jest.fn().mockResolvedValue({});
 
   const prisma = {
     booking: {

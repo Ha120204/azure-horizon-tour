@@ -45,6 +45,7 @@ import { PaymentService } from '../payment/payment.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
 import { BookingPaymentService } from './booking-payment.service';
 import { BookingTransportService, AssignBookingTransportDto } from './booking-transport.service';
+import { superAdminCanAccessArea } from '../auth/decorators/super-admin-area.decorator';
 
 type AuthenticatedRequest = {
   user?: {
@@ -75,9 +76,12 @@ const getAuthRole = (req: AuthenticatedRequest): string =>
 @Injectable()
 class StaffOrAdminGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const role = ctx.switchToHttp().getRequest<AuthenticatedRequest>()
-      .user?.role;
+    const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+    const role = req.user?.role;
     if (role !== 'ADMIN' && role !== 'SUPER_ADMIN' && role !== 'STAFF') {
+      throw new ForbiddenException('Bạn không có quyền truy cập tính năng này');
+    }
+    if (role === 'SUPER_ADMIN' && !superAdminCanAccessArea(req, 'bookings')) {
       throw new ForbiddenException('Bạn không có quyền truy cập tính năng này');
     }
     return true;
@@ -88,9 +92,14 @@ class StaffOrAdminGuard implements CanActivate {
 @Injectable()
 class AdminOnlyGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
-    const role = ctx.switchToHttp().getRequest<AuthenticatedRequest>()
-      .user?.role;
+    const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+    const role = req.user?.role;
     if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException(
+        'Chỉ Admin mới có quyền thực hiện thao tác này',
+      );
+    }
+    if (role === 'SUPER_ADMIN' && !superAdminCanAccessArea(req, 'bookings')) {
       throw new ForbiddenException(
         'Chỉ Admin mới có quyền thực hiện thao tác này',
       );
@@ -249,12 +258,24 @@ export class BookingController {
   }
 
   /**
+   * Staff + Admin: 5 booking mới nhất cho dashboard widget — select tối thiểu, không aggregate.
+   * GET /booking/admin/recent?limit=5
+   */
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Get('admin/recent')
+  async getRecentBookings(@Query('limit') limit?: string) {
+    const data = await this.bookingService.getRecentBookings(limit ? Number(limit) : 5);
+    return { message: 'Success', data };
+  }
+
+  /**
    * Staff + Admin: Lấy toàn bộ booking (có filter) — Staff chỉ đọc
    * GET /booking/admin/all?status=PENDING&paymentStatus=UNPAID&search=BKG
    */
   @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
   @Get('admin/all')
   async getAllBookings(
+    @Req() req: AuthenticatedRequest,
     @Query('status') status?: string,
     @Query('paymentStatus') paymentStatus?: string,
     @Query('search') search?: string,
@@ -286,6 +307,13 @@ export class BookingController {
       departureTo,
       needsCustomerCall === 'true',
     );
+
+    // Doanh thu chỉ dành cho Admin/Super Admin — không trả số tiền cho STAFF.
+    const role = getAuthRole(req);
+    if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+      result.stats.totalRevenue = 0;
+    }
+
     return { message: 'Success', ...result };
   }
 
@@ -721,16 +749,6 @@ export class BookingController {
         message,
       },
     );
-  }
-
-  @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
-  @Post('admin/:id/confirm-manual')
-  @AuditLog('UPDATE', 'Booking')
-  async confirmManual(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    return this.bookingService.confirmManual(Number(id), getAuthUserId(req));
   }
 
   // ============== TRANSPORT ASSIGNMENT ==============

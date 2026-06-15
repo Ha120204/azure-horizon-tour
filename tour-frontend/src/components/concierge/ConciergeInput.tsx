@@ -31,7 +31,7 @@ export default function ConciergeInput({
                         e.preventDefault();
                         handleSendMessage();
                     }}
-                    className="flex items-center rounded-full border border-slate-300/80 bg-slate-50 p-1.5 shadow-sm ring-blue-800/20 transition-all focus-within:bg-white focus-within:ring-2"
+                    className="flex items-center rounded-full border border-slate-300/80 bg-slate-50 p-1.5 shadow-sm ring-primary/20 transition-all focus-within:bg-white focus-within:ring-2"
                 >
                     <input
                         ref={inputRef}
@@ -42,13 +42,13 @@ export default function ConciergeInput({
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         maxLength={1000}
-                        disabled={isTyping}
+                        disabled={isTyping || isStreaming}
                     />
                     {isStreaming ? (
                         <button
                             type="button"
                             onClick={handleStopGeneration}
-                            aria-label="Dừng"
+                            aria-label={t('conciergeApp.stopGeneration')}
                             className="w-10 h-10 bg-red-500 text-white rounded-full shadow-md flex items-center justify-center hover:bg-red-600 transition-colors"
                         >
                             <span
@@ -64,7 +64,7 @@ export default function ConciergeInput({
                             id="ai-chat-send"
                             disabled={!inputValue.trim() || isTyping || cooldown}
                             aria-label={t('conciergeApp.sendMessage')}
-                            className="w-10 h-10 bg-blue-800 text-white rounded-full shadow-md flex items-center justify-center hover:bg-blue-900 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                            className="w-10 h-10 bg-primary text-white rounded-full shadow-md flex items-center justify-center hover:bg-primary-container transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
                         >
                             <span
                                 className="material-symbols-outlined text-[18px]"

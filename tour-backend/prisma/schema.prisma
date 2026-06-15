@@ -55,22 +55,24 @@ enum TransportType {
 // BẢNG NGƯỜI DÙNG (USER)
 // =============================================
 model User {
-  id               Int       @id @default(autoincrement())
-  email            String    @unique
-  password         String? // Optional: Google users don't have password
-  fullName         String
-  phone            String?
-  avatarUrl        String?
-  dob              String?
-  gender           String?
-  identityType     String? // "CCCD" | "PASSPORT"
-  identityNo       String? // Mã số giấy tờ tuỳ thân
-  role             Role      @default(CUSTOMER)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  deletedAt        DateTime? // [PHASE 1] Soft Delete
-  authTokenVersion   Int       @default(0)
-  authRevokedAt      DateTime?
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique
+  password            String? // Optional: Google users don't have password
+  fullName            String
+  phone               String?
+  avatarUrl           String?
+  dob                 String?
+  gender              String?
+  identityType        String? // "CCCD" | "PASSPORT"
+  identityNo          String? // Mã số giấy tờ tuỳ thân
+  role                Role      @default(CUSTOMER)
+  // Khu vận hành mà SUPER_ADMIN tự bật để xem (read-only). Rỗng = chỉ thấy 4 quyền governance.
+  superAdminViewGrants String[] @default([])
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime? // [PHASE 1] Soft Delete
+  authTokenVersion    Int       @default(0)
+  authRevokedAt       DateTime?
   passwordResetToken  String?
   passwordResetExpiry DateTime?
 
@@ -408,10 +410,13 @@ model Booking {
   totalPrice         Float
   unitPriceAtBooking Float? // [PHASE 1] Đóng băng giá vé tại thời điểm đặt
 
-  departureId Int? // [PHASE 2] Liên kết đến Lịch khởi hành
-  packageId   Int? // [PHASE 2] Liên kết đến Gói Tour
-  contactInfo Json? // [PHASE 2] Thông tin liên hệ người đặt (tên, email, phone)
-  passengers  Json? // [PHASE 2] Danh sách hành khách
+  departureId        Int? // [PHASE 2] Liên kết đến Lịch khởi hành
+  packageId          Int? // [PHASE 2] Liên kết đến Gói Tour
+  contactInfo        Json? // [PHASE 2] Thông tin liên hệ người đặt (tên, email, phone)
+  passengers         Json? // [PHASE 2] Danh sách hành khách
+  adminNote          String?   @db.Text // Ghi chú nội bộ của admin/staff về đơn (không hiển thị cho khách)
+  adminNoteById      Int? // Người sửa ghi chú gần nhất
+  adminNoteUpdatedAt DateTime? // Thời điểm sửa ghi chú gần nhất
 
   status               BookingStatus @default(PENDING)
   paymentStatus        PaymentStatus @default(UNPAID)
@@ -799,6 +804,40 @@ model Subscriber {
   unsubscribedAt    DateTime?
   unsubscribeReason String?
   createdAt         DateTime  @default(now())
+}
+
+// =============================================
+// BẢNG CHIẾN DỊCH TIẾP THỊ QUA EMAIL
+// Gồm cả bản nháp (DRAFT) lẫn các trạng thái gửi.
+// Mỗi chiến dịch là một dòng → cập nhật theo id,
+// tránh ghi đè cả tập (lost-update).
+// =============================================
+model MarketingCampaign {
+  id                       String    @id @default(uuid())
+  campaignName             String
+  type                     String? // PROMOTION | TRAVEL_STORY | NEWSLETTER
+  subject                  String
+  previewText              String?
+  body                     String    @db.Text
+  audience                 String // ALL_ACTIVE | CURRENT_FILTER | MANUAL_SELECTION
+  audienceFilter           Json? // { status, search }
+  recipientIds             Int[]     @default([])
+  status                   String    @default("DRAFT") // DRAFT | SCHEDULED | SENDING | SENT | FAILED | CANCELLED
+  scheduledAt              DateTime?
+  recipientEstimate        Int       @default(0)
+  processedCount           Int       @default(0)
+  sentCount                Int       @default(0)
+  failedCount              Int       @default(0)
+  lastProcessedRecipientId Int?
+  lockedAt                 DateTime? // Khóa phân tán cho cron (chống đa-instance)
+  errorMessage             String?
+  sentAt                   DateTime?
+  cancelledAt              DateTime?
+  createdBy                Int? // ID admin tạo chiến dịch (audit nhẹ)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([status, scheduledAt])
 }
 
 // =============================================

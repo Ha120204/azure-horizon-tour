@@ -72,7 +72,9 @@ export default function LoginPage() {
                     router.push('/');
                 }
             } else {
-                if (res.status === 401) {
+                if (res.status === 403) {
+                    setError(t('auth.accountLocked'));
+                } else if (res.status === 401) {
                     setError(t('auth.invalidCred'));
                 } else if (res.status === 429) {
                     setError(t('auth.tooManyLoginAttempts'));

@@ -1,5 +1,6 @@
 'use client';
 
+import Dialog from '@/components/ui/Dialog';
 import { CustomerBulkActionBar } from './_components/CustomerBulkActionBar';
 import { CustomerDetailModal } from './_components/CustomerDetailModal';
 import { CustomerFilters } from './_components/CustomerFilters';
@@ -12,7 +13,8 @@ import { useCustomerManagement } from './_hooks/useCustomerManagement';
 
 export default function CustomerManagementPage() {
     const customer = useCustomerManagement();
-    const canManageCustomers = customer.currentUserRole === 'ADMIN' || customer.currentUserRole === 'SUPER_ADMIN';
+    // SUPER_ADMIN chỉ xem (read-only) khu vận hành — không quản lý khách hàng
+    const canManageCustomers = customer.currentUserRole === 'ADMIN';
 
     return (
         <main className="flex-1 pt-8 px-8 pb-12 overflow-y-auto w-full max-w-[1600px] mx-auto" style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -96,6 +98,26 @@ export default function CustomerManagementPage() {
                     isToggling={customer.isToggling}
                     onCancel={() => customer.setToggleTarget(null)}
                     onConfirm={customer.handleToggleStatus}
+                />
+            )}
+
+            {customer.bulkConfirm && (
+                <Dialog
+                    open
+                    onClose={customer.cancelBulkUpdate}
+                    variant={customer.bulkConfirm.status === 'deactivated' ? 'danger' : 'success'}
+                    icon={customer.bulkConfirm.status === 'deactivated' ? 'block' : 'lock_open'}
+                    title={customer.bulkConfirm.status === 'deactivated' ? 'Khóa tài khoản hàng loạt?' : 'Mở khóa tài khoản hàng loạt?'}
+                    description={
+                        customer.bulkConfirm.status === 'deactivated' ? (
+                            <>Bạn sắp khóa <strong className="text-on-surface">{customer.bulkConfirm.ids.length}</strong> tài khoản khách hàng. Những tài khoản này sẽ không thể đăng nhập cho đến khi được mở khóa lại.</>
+                        ) : (
+                            <>Bạn sắp mở khóa <strong className="text-on-surface">{customer.bulkConfirm.ids.length}</strong> tài khoản khách hàng để có thể đăng nhập bình thường.</>
+                        )
+                    }
+                    confirmLabel={customer.bulkConfirm.status === 'deactivated' ? 'Khóa tất cả' : 'Mở khóa tất cả'}
+                    onConfirm={customer.confirmBulkUpdate}
+                    loading={customer.isBulkUpdating}
                 />
             )}
 

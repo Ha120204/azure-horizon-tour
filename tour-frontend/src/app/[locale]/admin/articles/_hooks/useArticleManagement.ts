@@ -79,6 +79,8 @@ export function useArticleManagement() {
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  // SUPER_ADMIN chỉ xem (read-only): giữ isAdmin cho layout/phân biệt staff, dùng canWrite để gate thao tác.
+  const canWrite = isAdmin && userRole !== 'SUPER_ADMIN';
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -529,6 +531,7 @@ export function useArticleManagement() {
     userRole,
     userId,
     isAdmin,
+    canWrite,
     articleStats,
     drawerMode,
     editTarget,

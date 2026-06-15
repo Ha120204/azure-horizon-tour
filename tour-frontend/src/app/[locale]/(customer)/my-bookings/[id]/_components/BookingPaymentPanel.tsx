@@ -80,6 +80,7 @@ type Props = {
     isCancelRequested: boolean;
     isExpired: boolean;
     canCancelBooking: boolean;
+    canReview?: boolean;
     cancellationPolicy?: CancellationPolicy;
     tripLifecycle: string;
     tripUnavailableReason: string;
@@ -93,13 +94,15 @@ type Props = {
     onRetryPayment: () => void;
     onOpenCancelModal: () => void;
     onOpenIssueForm: () => void;
+    onOpenReviewModal?: () => void;
 };
 
 export function BookingPaymentPanel({
     booking, isPaid, isPending, isPaymentReviewing, isCancelled, isCancelRequested,
-    isExpired, canCancelBooking, cancellationPolicy,
+    isExpired, canCancelBooking, canReview, cancellationPolicy,
+    tripLifecycle, tripUnavailableReason,
     totalPriceNumber, refundAmountNumber, secondsLeft, payError, isPaying,
-    paymentIssueResult, paymentSupportTicket, onRetryPayment, onOpenCancelModal, onOpenIssueForm,
+    paymentIssueResult, paymentSupportTicket, onRetryPayment, onOpenCancelModal, onOpenIssueForm, onOpenReviewModal,
 }: Props) {
     const { t, formatPrice, formatDateTime } = useLocale();
 
@@ -181,20 +184,32 @@ export function BookingPaymentPanel({
                         <span className="relative z-10">{t('my_bookings.eTicket')}</span>
                     </Link>
 
-                    {/* Cancel — secondary action, only shown when cancelable */}
-                    {canCancelBooking && (
+                    {/* Secondary actions: Review (when completed) or Cancel (when cancelable) */}
+                    {(canCancelBooking || (tripLifecycle === 'COMPLETED' && canReview)) && (
                         <div className="border-t border-slate-100 pt-4 space-y-2">
                             <p className="text-center text-[11px] font-medium uppercase tracking-wider text-slate-400">
                                 Hành động khác
                             </p>
-                            <button
-                                type="button"
-                                onClick={onOpenCancelModal}
-                                className="group flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-transparent py-2.5 text-sm font-bold text-red-400 outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50 hover:text-red-600 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
-                            >
-                                <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover:rotate-90 motion-reduce:transform-none">cancel</span>
-                                Yêu Cầu Hủy Tour
-                            </button>
+                            {tripLifecycle === 'COMPLETED' && canReview && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenReviewModal}
+                                    className="group flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 py-2.5 text-sm font-bold text-amber-700 outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+                                >
+                                    <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover:scale-110 motion-reduce:transform-none" style={{ fontVariationSettings: "'FILL' 1" }}>star_rate</span>
+                                    Đánh Giá Chuyến Đi
+                                </button>
+                            )}
+                            {canCancelBooking && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenCancelModal}
+                                    className="group flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-transparent py-2.5 text-sm font-bold text-red-400 outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50 hover:text-red-600 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+                                >
+                                    <span className="material-symbols-outlined text-base transition-transform duration-200 ease-out group-hover:rotate-90 motion-reduce:transform-none">cancel</span>
+                                    Yêu Cầu Hủy Tour
+                                </button>
+                            )}
                         </div>
                     )}
                 </>

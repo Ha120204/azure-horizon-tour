@@ -1,5 +1,8 @@
 export const NEVER_YEAR = 2099;
 
+// maxUses sentinel = "không giới hạn lượt" (đồng bộ với backend)
+export const UNLIMITED_USES = 999_999_999;
+
 export const statusConfig: Record<string, { label: string; dot: string; text: string }> = {
   active:   { label: 'Hoạt động',    dot: 'bg-tertiary',  text: 'text-tertiary' },
   scheduled: { label: 'Chưa bắt đầu', dot: 'bg-primary', text: 'text-primary' },

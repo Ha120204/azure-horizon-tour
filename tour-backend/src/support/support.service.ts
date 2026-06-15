@@ -224,6 +224,8 @@ export class SupportService {
     search?:   string;
     view?:     string;
     sort?:     string;
+    assigned?: string;
+    currentUserId?: number;
     page?:     number;
     limit?:    number;
   }) {
@@ -244,6 +246,11 @@ export class SupportService {
     }
     if (query.category && query.category !== 'ALL') {
       where.category = query.category as TicketCategory;
+    }
+    if (query.assigned === 'me' && query.currentUserId != null) {
+      where.assignedStaffId = query.currentUserId;
+    } else if (query.assigned === 'none') {
+      where.assignedStaffId = null;
     }
     if (query.search) {
       where.OR = [
@@ -611,5 +618,29 @@ export class SupportService {
     });
 
     return updated;
+  }
+
+  // ─── [CUSTOMER] Tra cứu ticket bằng email + accessCode ──────────────────────
+  async lookupTicketByEmailAndAccessCode(email: string, accessCode: string) {
+    const ticket = await this.prisma.supportTicket.findFirst({
+      where: {
+        accessCode,
+        customerEmail: { equals: email.trim(), mode: 'insensitive' },
+      },
+      select: {
+        id: true,
+        subject: true,
+        status: true,
+        category: true,
+        createdAt: true,
+        accessCode: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Không tìm thấy yêu cầu hỗ trợ. Vui lòng kiểm tra lại email và mã truy cập.');
+    }
+
+    return ticket;
   }
 }

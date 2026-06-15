@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException, HttpException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, ForbiddenException, NotFoundException, BadRequestException, HttpException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -104,9 +104,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Kiểm tra tài khoản đã bị vô hiệu hóa chưa
     if (user.deletedAt) {
-      throw new UnauthorizedException('Your account has been deactivated. Please contact an administrator.');
+      throw new ForbiddenException('ACCOUNT_LOCKED');
     }
 
     const { password, ...result } = user;
@@ -393,7 +392,7 @@ export class AuthService {
     const byGoogleId = await this.prisma.user.findUnique({ where: { googleId } });
     if (byGoogleId) {
       if (byGoogleId.deletedAt) {
-        throw new UnauthorizedException('Your account has been deactivated. Please contact an administrator.');
+        throw new ForbiddenException('ACCOUNT_LOCKED');
       }
       return byGoogleId;
     }
@@ -402,7 +401,7 @@ export class AuthService {
     const byEmail = await this.prisma.user.findUnique({ where: { email } });
     if (byEmail) {
       if (byEmail.deletedAt) {
-        throw new UnauthorizedException('Your account has been deactivated. Please contact an administrator.');
+        throw new ForbiddenException('ACCOUNT_LOCKED');
       }
       // Gán googleId và đánh dấu authProvider = "both"
       const updated = await this.prisma.user.update({

@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import CancelBookingModal from '@/components/booking/CancelBookingModal';
+import ReviewModal from '@/components/review/ReviewModal';
 import { useLocale } from '@/context/LocaleContext';
 import { useBookingDetail } from './_hooks/useBookingDetail';
+import { useCanReview } from '@/hooks/useCanReview';
 import { BookingHeroImage } from './_components/BookingHeroImage';
 import { BookingEssentialSummary } from './_components/BookingEssentialSummary';
 import { BookingDepartureGuide } from './_components/BookingDepartureGuide';
@@ -102,6 +105,8 @@ export default function BookingDetailPage() {
         paymentData, qrSuccess, clearPaymentData,
         handleRetryPayment, handleCancelSuccess, submitPaymentIssue,
     } = useBookingDetail();
+    const { canReview, setCanReview } = useCanReview(booking?.tour?.id ?? 0);
+    const [showReviewModal, setShowReviewModal] = useState(false);
 
     if (isLoading) return <BookingDetailSkeleton />;
     if (fetchError) return <BookingFetchError onRetry={refetchBooking} />;
@@ -200,6 +205,7 @@ export default function BookingDetailPage() {
                                         isCancelRequested={Boolean(isCancelRequested)}
                                         isExpired={isExpired}
                                         canCancelBooking={canCancelBooking}
+                                        canReview={canReview}
                                         cancellationPolicy={cancellationPolicy}
                                         tripLifecycle={tripLifecycle}
                                         tripUnavailableReason={tripUnavailableReason}
@@ -213,6 +219,7 @@ export default function BookingDetailPage() {
                                         onRetryPayment={handleRetryPayment}
                                         onOpenCancelModal={() => setShowCancelModal(true)}
                                         onOpenIssueForm={() => { setShowIssueForm(true); setPaymentIssueResult(null); }}
+                                        onOpenReviewModal={() => setShowReviewModal(true)}
                                     />
                                 </div>
                             </section>
@@ -240,6 +247,15 @@ export default function BookingDetailPage() {
                     totalPriceNumber={totalPriceNumber}
                     onSubmit={submitPaymentIssue}
                     onClose={() => setShowIssueForm(false)}
+                />
+            )}
+
+            {booking.tour?.id && (
+                <ReviewModal
+                    isOpen={showReviewModal}
+                    onClose={() => setShowReviewModal(false)}
+                    tourId={booking.tour.id}
+                    onSuccess={() => setCanReview(false)}
                 />
             )}
 

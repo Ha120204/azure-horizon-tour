@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TourDepartureService } from './tour-departure.service';
 import type { CreateDepartureDto, UpsertDepartureTransportDto } from './tour-departure.service';
@@ -31,6 +32,7 @@ const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
   return rawId == null ? undefined : Number(rawId);
 };
 
+@SuperAdminArea('tours')
 @Controller('tour/:tourId/departures')
 export class TourDepartureController {
   constructor(private readonly tourDepartureService: TourDepartureService) {}

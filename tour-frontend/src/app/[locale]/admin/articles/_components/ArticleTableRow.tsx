@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { useParams } from 'next/navigation';
 import type { Article } from './ArticleDrawer';
 import type { ArticleReviewAction, ArticleStatus, SharedArticleViewProps } from '../_lib/types';
 import { getCatCfg, getStatusCfg, fmtDate, getWorkflowHint } from '../_lib/helpers';
@@ -16,6 +17,7 @@ export function ArticleTableRow({
   article,
   isSelected,
   isAdmin,
+  canWrite,
   userId,
   isSubmitting,
   onToggleSelected,
@@ -27,8 +29,11 @@ export function ArticleTableRow({
 }: ArticleTableRowProps) {
   const categoryConfig = getCatCfg(article.category);
   const articleStatus = article.status ?? 'PUBLISHED';
+  // SUPER_ADMIN xem read-only: ẩn mọi thao tác (giữ isAdmin để không nhầm thành staff)
+  const isReadOnly = isAdmin && !canWrite;
   const staffCanManage = !isAdmin && (article.createdById == null || article.createdById === userId) && (articleStatus === 'DRAFT' || articleStatus === 'REJECTED');
-  const canEditArticle = isAdmin || staffCanManage;
+  const canEditArticle = canWrite || staffCanManage;
+  const { locale } = useParams<{ locale: string }>();
   const [imageFailed, setImageFailed] = useState(false);
 
   return (
@@ -39,14 +44,16 @@ export function ArticleTableRow({
       }}
     >
       <td className="py-3.5 pl-5 pr-2" onClick={e => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => onToggleSelected(article.id)}
-          className="w-4 h-4 rounded border-outline-variant accent-primary cursor-pointer"
-          aria-label={`Chọn bài viết ${article.title || 'chưa có tiêu đề'}`}
-          title={`Chọn bài viết ${article.title || 'chưa có tiêu đề'}`}
-        />
+        {!isReadOnly && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelected(article.id)}
+            className="w-4 h-4 rounded border-outline-variant accent-primary cursor-pointer"
+            aria-label={`Chọn bài viết ${article.title || 'chưa có tiêu đề'}`}
+            title={`Chọn bài viết ${article.title || 'chưa có tiêu đề'}`}
+          />
+        )}
       </td>
       <td className="py-3.5 px-5" onClick={e => e.stopPropagation()}>
         <div className="w-16 h-11 rounded-lg overflow-hidden bg-surface-container shrink-0">
@@ -84,7 +91,7 @@ export function ArticleTableRow({
         <ArticleStatusCell article={article} />
       </td>
       <td className="py-3.5 px-5" onClick={e => e.stopPropagation()}>
-        {articleStatus === 'PUBLISHED' ? (
+        {articleStatus === 'PUBLISHED' && !isReadOnly ? (
           <div className="relative group/tip inline-block">
             <button
               onClick={() => onToggleFeatured(article)}
@@ -105,11 +112,11 @@ export function ArticleTableRow({
             <TooltipIconButton
               icon="open_in_new"
               label="Xem"
-              onClick={() => window.open(`/vi/journal/${article.slug}`, '_blank')}
+              onClick={() => window.open(`/${locale}/journal/${article.slug}`, '_blank')}
               className="hover:bg-primary/10 hover:text-primary"
             />
           )}
-          {isAdmin && articleStatus === 'PENDING_REVIEW' && (
+          {canWrite && articleStatus === 'PENDING_REVIEW' && (
             <>
               <TooltipIconButton
                 icon="check_circle"
@@ -159,7 +166,7 @@ export function ArticleTableRow({
               <span>Gửi duyệt</span>
             </button>
           )}
-          {isAdmin && (
+          {(canWrite || staffCanManage) && (
             <TooltipIconButton
               icon="delete"
               label="Xóa"

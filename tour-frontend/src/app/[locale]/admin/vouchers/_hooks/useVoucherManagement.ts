@@ -6,10 +6,13 @@ import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import {
+  escapeCsv,
   formatCurrencyCompact,
   getApiMessage,
   getErrorMessage,
+  makeDuplicateCode,
 } from '../_lib/helpers';
+import { UNLIMITED_USES } from '../_lib/config';
 import type {
   Meta,
   ModalMode,
@@ -48,18 +51,6 @@ const parseSortBy = (value: string | null): VoucherSortBy =>
 const parseSortOrder = (value: string | null): VoucherSortOrder =>
   SORT_ORDERS.has(value ?? '') ? value as VoucherSortOrder : 'desc';
 
-const escapeCsv = (value: string | number | boolean | null | undefined) => {
-  const raw = value == null ? '' : String(value);
-  return /[",\n\r]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
-};
-
-const makeDuplicateCode = (code: string) => {
-  const normalized = code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-  const suffix = `_C${Date.now().toString().slice(-4)}`;
-  const base = (normalized || 'VOUCHER').slice(0, 20 - suffix.length);
-  return `${base}${suffix}`;
-};
-
 export function useVoucherManagement() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -70,6 +61,7 @@ export function useVoucherManagement() {
   const [meta, setMeta] = useState<Meta>({ totalItems: 0, totalPages: 1, currentPage: 1 });
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState(false);
 
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [debouncedSearch, setDebouncedSearch] = useState(() => (searchParams.get('search') ?? '').trim());
@@ -110,18 +102,10 @@ export function useVoucherManagement() {
   }, []);
 
   useEffect(() => {
-    fetchWithAuth(`${API_BASE_URL}/auth/profile`)
-      .then((response: Response) => response.json())
-      .then((payload: unknown) => {
-        const profile = payload && typeof payload === 'object' && 'data' in payload
-          ? (payload as { data?: unknown }).data
-          : payload;
-        const role = profile && typeof profile === 'object' && 'role' in profile
-          ? (profile as { role?: unknown }).role
-          : undefined;
-        setCurrentUserRole(typeof role === 'string' ? role : '');
-      })
-      .catch(() => {});
+    // Admin layout đã xác thực và lưu role vào localStorage — đọc lại để tránh
+    // gọi trùng /auth/profile mỗi lần vào trang.
+    if (typeof window === 'undefined') return;
+    setCurrentUserRole(localStorage.getItem('userRole') ?? '');
   }, []);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
@@ -150,8 +134,10 @@ export function useVoucherManagement() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       setStats(json?.data ?? json);
+      setStatsError(false);
     } catch {
-      // Stats are supplemental; list operations should remain usable.
+      // Số liệu thống kê là phụ; đánh dấu lỗi để hiển thị "—" thay vì 0 giả.
+      setStatsError(true);
     } finally {
       setIsLoadingStats(false);
     }
@@ -195,7 +181,7 @@ export function useVoucherManagement() {
 
   useAdminAutoRefresh({
     intervalMs: 90 * 1000,
-    pause: Boolean(modalMode || detailId || deleteTarget || isDeleting || toggleLoadingId),
+    pause: Boolean(modalMode || detailId || deleteTarget || isDeleting || toggleLoadingId || isBulkUpdating),
     onRefresh: refreshVoucherData,
   });
 
@@ -290,12 +276,11 @@ export function useVoucherManagement() {
       const raw = await res.json();
       const updated = raw?.data ?? raw;
       const newIsActive = updated?.isActive !== undefined ? Boolean(updated.isActive) : !voucher.isActive;
+      const serverStatus = updated?.computedStatus as Voucher['computedStatus'] | undefined;
       setVouchers((prev) => prev.map((item) => item.id === voucher.id ? {
         ...item,
         isActive: newIsActive,
-        computedStatus: newIsActive
-          ? (item.computedStatus === 'inactive' ? 'active' : item.computedStatus)
-          : 'inactive',
+        computedStatus: serverStatus ?? (newIsActive ? item.computedStatus : 'inactive'),
       } : item));
       showToast(`${newIsActive ? 'Đã kích hoạt' : 'Đã vô hiệu hóa'} voucher "${voucher.code}"`);
       fetchStats();
@@ -344,13 +329,15 @@ export function useVoucherManagement() {
 
     setIsBulkUpdating(true);
     try {
-      await Promise.all(targets.map(async (voucher) => {
-        const res = await fetchWithAuth(`${API_BASE_URL}/voucher/admin/${voucher.id}/toggle`, { method: 'PATCH' });
-        if (!res.ok) {
-          const payload = await res.json().catch(() => null);
-          throw new Error(getApiMessage(payload, `Không thể cập nhật ${voucher.code}`));
-        }
-      }));
+      const res = await fetchWithAuth(`${API_BASE_URL}/voucher/admin/bulk-active`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: targets.map((voucher) => voucher.id), isActive: targetActive }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(getApiMessage(payload, 'Cập nhật hàng loạt thất bại'));
+      }
 
       showToast(`${targetActive ? 'Đã kích hoạt' : 'Đã vô hiệu hóa'} ${targets.length} voucher`);
       clearSelection();
@@ -392,7 +379,7 @@ export function useVoucherManagement() {
       voucher.maxDiscountAmount ?? '',
       voucher.minOrderValue,
       voucher.usedCount,
-      voucher.maxUses >= 999_999_999 ? 'unlimited' : voucher.maxUses,
+      voucher.maxUses >= UNLIMITED_USES ? 'unlimited' : voucher.maxUses,
       voucher.usageLimitPerUser ?? '',
       voucher.startsAt,
       voucher.expiresAt,
@@ -489,20 +476,25 @@ export function useVoucherManagement() {
     });
   }, [clearSelection, updateQuery]);
 
+  const formatKpiCount = (value?: number) =>
+    isLoadingStats ? '…' : statsError ? '—' : (value ?? 0).toLocaleString('vi-VN');
+  const formatKpiMoney = (value?: number) =>
+    isLoadingStats ? '…' : statsError ? '—' : formatCurrencyCompact(value ?? 0);
+
   const kpis: VoucherKpiItem[] = [
     {
       icon: 'local_activity',
       label: 'Đang Hoạt Động',
-      value: isLoadingStats ? '…' : (stats?.totalActive ?? 0).toLocaleString('vi-VN'),
+      value: formatKpiCount(stats?.totalActive),
       color: 'bg-tertiary/10 text-tertiary',
-      hint: 'Bấm để lọc voucher đang bật',
+      hint: 'Bấm để lọc voucher đang có hiệu lực',
       onClick: () => filterByStatus('active'),
       active: filterStatus === 'active',
     },
     {
       icon: 'event_busy',
       label: 'Hết Hạn Tháng Này',
-      value: isLoadingStats ? '…' : (stats?.totalExpiredThisMonth ?? 0).toLocaleString('vi-VN'),
+      value: formatKpiCount(stats?.totalExpiredThisMonth),
       color: 'bg-slate-500/10 text-slate-600',
       hint: 'Bấm để xem voucher đã hết hạn trong tháng',
       onClick: () => filterByStatus('expiredThisMonth'),
@@ -511,7 +503,7 @@ export function useVoucherManagement() {
     {
       icon: 'sell',
       label: 'Tổng Lượt Đổi',
-      value: isLoadingStats ? '…' : (stats?.totalRedemptions ?? 0).toLocaleString('vi-VN'),
+      value: formatKpiCount(stats?.totalRedemptions),
       color: 'bg-primary/10 text-primary',
       hint: 'Bấm để xem voucher đã phát sinh lượt đổi',
       onClick: () => filterByStatus('redeemed'),
@@ -520,7 +512,7 @@ export function useVoucherManagement() {
     {
       icon: 'schedule',
       label: 'Sắp Hết Hạn (7 ngày)',
-      value: isLoadingStats ? '…' : (stats?.expiringSoon ?? 0).toLocaleString('vi-VN'),
+      value: formatKpiCount(stats?.expiringSoon),
       color: 'bg-amber-500/10 text-amber-600',
       hint: 'Bấm để xem voucher cần xử lý trước khi hết hạn',
       onClick: () => filterByStatus('expiringSoon'),
@@ -529,7 +521,7 @@ export function useVoucherManagement() {
     {
       icon: 'payments',
       label: 'Tổng Giảm Giá Đã Cấp',
-      value: isLoadingStats ? '…' : formatCurrencyCompact(stats?.totalDiscountGiven ?? 0),
+      value: formatKpiMoney(stats?.totalDiscountGiven),
       color: 'bg-secondary/10 text-secondary',
       hint: 'Toàn thời gian, chỉ tính booking đã thanh toán',
       active: false,
@@ -542,6 +534,8 @@ export function useVoucherManagement() {
     vouchers,
     meta,
     isLoadingList,
+    statsError,
+    refreshStats: fetchStats,
     search,
     filterType,
     filterStatus,

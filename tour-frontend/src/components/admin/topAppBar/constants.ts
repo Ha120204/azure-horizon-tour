@@ -55,7 +55,7 @@ export const COMMAND_GROUPS: CommandGroup[] = [
         actions: [
             { label: 'Khách hàng', desc: 'Lịch sử, hạng thành viên', icon: 'people', href: '/admin/customers', color: 'text-violet-500', roles: ALL_ADMIN_ROLES },
             { label: 'Kiểm duyệt Nhận xét', desc: 'Duyệt, ẩn, phản hồi review', icon: 'reviews', href: '/admin/reviews', color: 'text-purple-500', roles: ADMIN_AND_SUPER_ROLES },
-            { label: 'Quản lý quản trị viên', desc: 'Tài khoản quản trị viên vận hành hệ thống', icon: 'manage_accounts', href: '/admin/staffs', color: 'text-rose-500', roles: ['SUPER_ADMIN'] },
+            { label: 'Quản lý nhân sự', desc: 'Tài khoản quản trị viên và nhân viên nội bộ', icon: 'manage_accounts', href: '/admin/staffs', color: 'text-rose-500', roles: ['SUPER_ADMIN'] },
             { label: 'Quản lý nhân viên', desc: 'Tài khoản nhân viên nội bộ', icon: 'badge', href: '/admin/staffs', color: 'text-rose-500', roles: ['ADMIN'] },
         ],
     },

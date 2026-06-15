@@ -27,6 +27,8 @@ export function useStaffManagement() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [meta, setMeta] = useState<Meta>({ totalItems: 0, totalPages: 1, currentPage: 1 });
     const [isLoading, setIsLoading] = useState(true);
+    const [isFetching, setIsFetching] = useState(false);
+    const everLoadedRef = useRef(false);
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
     const [search, setSearch] = useState('');
@@ -61,15 +63,17 @@ export function useStaffManagement() {
     const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
 
     const isSuperAdminView = currentUserRole === 'SUPER_ADMIN';
-    const managedRole = isSuperAdminView ? 'ADMIN' : 'STAFF';
-    const managedRoleLabel = isSuperAdminView ? 'quản trị viên' : 'nhân viên';
-    const pageTitle = isSuperAdminView ? 'Quản lý quản trị viên' : 'Quản lý nhân viên';
+    // SUPER_ADMIN quản cả admin lẫn nhân viên — chọn nhóm đang xem qua bộ lọc role
+    const [staffRoleScope, setStaffRoleScope] = useState<'ADMIN' | 'STAFF'>('ADMIN');
+    const managedRole = isSuperAdminView ? staffRoleScope : 'STAFF';
+    const managedRoleLabel = managedRole === 'ADMIN' ? 'quản trị viên' : 'nhân viên';
+    const pageTitle = isSuperAdminView ? 'Quản lý nhân sự' : 'Quản lý nhân viên';
     const pageDescription = isSuperAdminView
-        ? 'Quản lý các tài khoản quản trị viên vận hành hệ thống.'
+        ? 'Quản lý tài khoản quản trị viên và nhân viên nội bộ của hệ thống.'
         : 'Quản lý tài khoản nhân viên nội bộ của hệ thống.';
-    const createTitle = isSuperAdminView ? 'Thêm quản trị viên mới' : 'Thêm nhân viên mới';
-    const createDescription = isSuperAdminView ? 'Tạo tài khoản quản trị viên nội bộ' : 'Tạo tài khoản nhân viên nội bộ';
-    const createButtonLabel = isSuperAdminView ? 'Thêm quản trị viên' : 'Thêm nhân viên';
+    const createTitle = `Thêm ${managedRoleLabel} mới`;
+    const createDescription = `Tạo tài khoản ${managedRoleLabel} nội bộ`;
+    const createButtonLabel = `Thêm ${managedRoleLabel}`;
     const canEditRoles = false;
 
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +81,9 @@ export function useStaffManagement() {
 
     useEffect(() => {
         setCreateForm(form => ({ ...form, role: managedRole }));
+        // Đổi nhóm role → reset trang & bỏ chọn (tránh selection lẫn role khi bulk)
+        setPage(1);
+        setSelectedStaffIds(new Set());
     }, [managedRole]);
 
     useEffect(() => {
@@ -102,7 +109,11 @@ export function useStaffManagement() {
 
     const fetchUsers = useCallback(async () => {
         if (!currentUserRole) return;
-        setIsLoading(true);
+        if (!everLoadedRef.current) {
+            setIsLoading(true);
+        } else {
+            setIsFetching(true);
+        }
         try {
             const qs = new URLSearchParams();
             if (debouncedSearch) qs.append('search', debouncedSearch);
@@ -118,10 +129,12 @@ export function useStaffManagement() {
             const json = await res.json();
             setUsers(json.data ?? []);
             if (json.meta) setMeta(json.meta);
+            everLoadedRef.current = true;
         } catch {
             showToast('Lỗi tải danh sách tài khoản.', 'error');
         } finally {
             setIsLoading(false);
+            setIsFetching(false);
         }
     }, [currentUserRole, debouncedSearch, filterStatus, managedRole, page, pageSize, showToast, sortBy, sortDir]);
 
@@ -465,34 +478,37 @@ export function useStaffManagement() {
     const totalManagedCount = stats?.totalUsers ?? meta.totalItems;
     const activeManagedCount = stats?.activeUsers ?? visibleActiveCount;
     const newManagedCount = stats?.newThisMonth ?? visibleNewThisMonth;
+    const isAdminScope = managedRole === 'ADMIN';
     const kpis = useMemo<StaffKpiItem[]>(() => [
         {
-            icon: isSuperAdminView ? 'admin_panel_settings' : 'shield_person',
-            label: isSuperAdminView ? 'Tổng quản trị viên' : 'Tổng nhân viên',
+            icon: isAdminScope ? 'admin_panel_settings' : 'shield_person',
+            label: isAdminScope ? 'Tổng quản trị viên' : 'Tổng nhân viên',
             value: totalManagedCount,
-            helper: isSuperAdminView ? 'Tài khoản quản trị viên nội bộ' : 'Tài khoản nhân viên nội bộ',
+            helper: isAdminScope ? 'Tài khoản quản trị viên nội bộ' : 'Tài khoản nhân viên nội bộ',
             color: 'bg-amber-500/10 text-amber-600',
         },
         {
             icon: 'verified_user',
-            label: isSuperAdminView ? 'Quản trị viên hoạt động' : 'Nhân viên hoạt động',
+            label: isAdminScope ? 'Quản trị viên hoạt động' : 'Nhân viên hoạt động',
             value: activeManagedCount,
             helper: `${activeManagedCount.toLocaleString('vi-VN')}/${totalManagedCount.toLocaleString('vi-VN')} tài khoản có thể đăng nhập`,
             color: 'bg-emerald-500/10 text-emerald-600',
         },
         {
             icon: 'person_add',
-            label: isSuperAdminView ? 'Quản trị viên mới tháng này' : 'Nhân viên mới tháng này',
+            label: isAdminScope ? 'Quản trị viên mới tháng này' : 'Nhân viên mới tháng này',
             value: newManagedCount,
             helper: `Tính trong tháng ${currentMonthLabel}`,
             color: 'bg-violet-500/10 text-violet-600',
         },
-    ], [activeManagedCount, currentMonthLabel, isSuperAdminView, newManagedCount, totalManagedCount]);
+    ], [activeManagedCount, currentMonthLabel, isAdminScope, newManagedCount, totalManagedCount]);
 
     return {
         users,
         meta,
         isLoading,
+        isFetching,
+        managedRole,
         currentUserRole,
         search,
         filterStatus,
@@ -526,6 +542,9 @@ export function useStaffManagement() {
         isCreating,
         createErrors,
         isSuperAdminView,
+        staffRoleScope,
+        setStaffRoleScope,
+        managedRoleLabel,
         pageTitle,
         pageDescription,
         createTitle,

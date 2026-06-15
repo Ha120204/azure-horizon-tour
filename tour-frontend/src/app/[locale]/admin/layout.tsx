@@ -21,6 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const pathname = usePathname();
     const [authState, setAuthState] = useState<'loading' | 'authorized' | 'unauthorized'>('loading');
     const [currentUserRole, setCurrentUserRole] = useState<AdminRole | ''>('');
+    const [currentUserGrants, setCurrentUserGrants] = useState<string[]>([]);
 
     // Kiểm tra xem đường dẫn hiện tại có phải trang login admin không
     const cleanPath = getCleanAdminPath(pathname);
@@ -43,6 +44,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 const user = await res.json();
                 const profile = user.data ?? user;
                 const role = profile.role;
+                const grants: string[] = Array.isArray(profile.superAdminViewGrants)
+                    ? profile.superAdminViewGrants
+                    : [];
 
                 if (!isAdminRole(role)) {
                     setAuthState('unauthorized');
@@ -50,13 +54,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     return;
                 }
 
-                if (!canAccessAdminPath(cleanPath, role)) {
+                if (!canAccessAdminPath(cleanPath, role, grants)) {
                     setAuthState('unauthorized');
                     router.replace(getDefaultAdminPathForRole(role));
                     return;
                 }
 
                 setCurrentUserRole(role);
+                setCurrentUserGrants(grants);
                 saveClientUserStorage({
                     id: profile.id,
                     userId: profile.userId,
@@ -112,7 +117,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     return (
         <div className="bg-surface text-on-surface font-body antialiased min-h-screen flex w-full">
-            <SideNavBar currentUserRole={currentUserRole} />
+            <SideNavBar currentUserRole={currentUserRole} currentUserGrants={currentUserGrants} />
             <div className="flex-1 ml-72 flex flex-col min-h-screen relative">
                 <TopAppBar currentUserRole={currentUserRole} />
                 {children}

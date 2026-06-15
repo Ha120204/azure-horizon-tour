@@ -3,6 +3,13 @@
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { Link } from '@/i18n/routing';
 import { PIE_COLORS } from '../_lib/config';
+
+const PAYMENT_STYLE: Record<string, { bg: string; icon: string; ic: string; tc: string; href: string }> = {
+    PAID: { bg: 'bg-emerald-50 border-emerald-100', icon: 'check_circle', ic: '#10B981', tc: 'text-emerald-700', href: '/admin/bookings?paymentStatus=PAID' },
+    UNPAID: { bg: 'bg-amber-50 border-amber-100', icon: 'pending_actions', ic: '#F59E0B', tc: 'text-amber-700', href: '/admin/bookings?paymentStatus=UNPAID' },
+    PROCESSING: { bg: 'bg-blue-50 border-blue-100', icon: 'sync', ic: '#3B82F6', tc: 'text-blue-700', href: '/admin/bookings?paymentStatus=PROCESSING' },
+    FAILED: { bg: 'bg-red-50 border-red-100', icon: 'cancel', ic: '#EF4444', tc: 'text-red-700', href: '/admin/bookings?paymentStatus=FAILED' },
+};
 import type { BookingStatusData } from '../_lib/types';
 import { EmptyState } from './EmptyState';
 import { InsightNote } from './InsightNote';
@@ -76,10 +83,8 @@ export function StatisticsBookingSections({
                 {loading || !bookingStatus ? <Skeleton className="h-64" /> : (
                     <div className="flex flex-col gap-4">
                         <div className="grid grid-cols-2 gap-3">
-                            {bookingStatus.paymentStatus.map((ps, i) => {
-                                const s = i === 0
-                                    ? { bg: 'bg-emerald-50 border-emerald-100', icon: 'check_circle', ic: '#10B981', tc: 'text-emerald-700', href: '/admin/bookings?paymentStatus=PAID' }
-                                    : { bg: 'bg-amber-50 border-amber-100', icon: 'pending_actions', ic: '#F59E0B', tc: 'text-amber-700', href: '/admin/bookings?paymentStatus=UNPAID' };
+                            {bookingStatus.paymentStatus.map((ps) => {
+                                const s = PAYMENT_STYLE[ps.key] ?? PAYMENT_STYLE['UNPAID'];
                                 return (
                                     <Link key={ps.name} href={s.href} className={`block p-4 rounded-xl border transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${s.bg}`}>
                                         <span className="material-symbols-outlined text-xl mb-1.5 block" style={{ color: s.ic, fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>

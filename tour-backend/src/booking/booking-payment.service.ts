@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from '../payment/payment.service';
 import { MailService } from '../mail/mail.service';
@@ -543,19 +544,23 @@ export class BookingPaymentService {
    * Dùng cho widget dashboard admin — phân tích nguồn tiền vào thực tế.
    */
   async getPaymentStats(dateFrom?: string, dateTo?: string) {
-    const where: {
-      status: string;
-      confirmedAt?: { gte?: Date; lte?: Date };
-    } = { status: 'SUCCESS' };
+    // Chỉ tính giao dịch SUCCESS của đơn HIỆN đang PAID (chưa hủy/hoàn) để khớp với
+    // KPI "Tổng doanh thu" (vốn lọc paymentStatus = 'PAID'). Đơn đã hủy sau khi thanh
+    // toán có paymentStatus = 'FAILED' nên bị loại, tránh lệch giữa hai con số.
+    const where: Prisma.PaymentTransactionWhereInput = {
+      status: 'SUCCESS',
+      booking: { paymentStatus: 'PAID', deletedAt: null },
+    };
 
     if (dateFrom || dateTo) {
-      where.confirmedAt = {};
-      if (dateFrom) where.confirmedAt.gte = new Date(dateFrom);
+      const confirmedAt: Prisma.DateTimeNullableFilter<'PaymentTransaction'> = {};
+      if (dateFrom) confirmedAt.gte = new Date(dateFrom);
       if (dateTo) {
         const end = new Date(dateTo);
         end.setHours(23, 59, 59, 999);
-        where.confirmedAt.lte = end;
+        confirmedAt.lte = end;
       }
+      where.confirmedAt = confirmedAt;
     }
 
     const [transactions, totalResult] = await Promise.all([

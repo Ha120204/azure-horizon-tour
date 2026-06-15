@@ -3,6 +3,7 @@
 import { StatisticsBookingSections } from './_components/StatisticsBookingSections';
 import { StatisticsDateControls } from './_components/StatisticsDateControls';
 import { StatisticsHeader } from './_components/StatisticsHeader';
+import { StatisticsKpiSection } from './_components/StatisticsKpiSection';
 import { DestinationRevenueSection, RevenueTrendSection } from './_components/StatisticsRevenueSections';
 import { StatisticsTopSections } from './_components/StatisticsTopSections';
 import { useStatisticsDashboard } from './_hooks/useStatisticsDashboard';
@@ -33,6 +34,11 @@ export default function StatisticsPage() {
                 onCustomToChange={statistics.setCustomTo}
                 onCustomApply={statistics.handleCustomApply}
                 onRefresh={() => statistics.fetchAll()}
+            />
+
+            <StatisticsKpiSection
+                loading={statistics.loading}
+                overview={statistics.overview}
             />
 
             <RevenueTrendSection

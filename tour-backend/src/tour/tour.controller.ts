@@ -21,6 +21,7 @@ import {
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TourService } from './tour.service';
 import { TourPermissionService } from './tour-permission.service';
@@ -75,6 +76,7 @@ const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
 const getAuthRole = (req: AuthenticatedRequest): string | undefined =>
   req.user?.role;
 
+@SuperAdminArea('tours')
 @Controller('tour')
 export class TourController {
   constructor(
@@ -240,6 +242,18 @@ export class TourController {
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
+  @Delete('bulk')
+  @AuditLog('DELETE', 'Tour')
+  bulkHide(@Req() req: AuthenticatedRequest, @Body() body: { ids?: number[] }) {
+    return this.tourService.bulkHide(
+      (body.ids ?? []).map(Number),
+      getAuthUserId(req),
+      getAuthRole(req),
+    );
+  }
+
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Delete(':id')
   @AuditLog('DELETE', 'Tour')
   remove(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
@@ -264,7 +278,7 @@ export class TourController {
     return this.tourService.bulkPermanentDelete((body.ids ?? []).map(Number));
   }
 
-  /** PATCH /tour/:id/restore — Khôi phục tour từ Trash về PENDING_REVIEW (Admin) */
+  /** PATCH /tour/:id/restore — Khôi phục tour từ Trash, giữ nguyên status cũ (Admin) */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN')
   @Patch(':id/restore')
@@ -283,6 +297,18 @@ export class TourController {
   }
 
   // ── Workflow: Submit for Review ─────────────────────────────────────
+
+  /** POST /tour/bulk-submit — Gửi duyệt hàng loạt (Staff). Tours không đủ điều kiện bị bỏ qua. */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('STAFF')
+  @Post('bulk-submit')
+  @AuditLog('UPDATE', 'Tour')
+  bulkSubmitForReview(@Req() req: AuthenticatedRequest, @Body() body: { ids?: number[] }) {
+    return this.tourService.bulkSubmitForReview(
+      (body.ids ?? []).map(Number),
+      getAuthUserId(req)!,
+    );
+  }
 
   /**
    * POST /tour/:id/submit

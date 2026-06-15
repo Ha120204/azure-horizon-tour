@@ -660,16 +660,39 @@ export class BookingQueryService {
       : [];
     const departureMap = new Map(departures.map(departure => [departure.id, departure.departureDate]));
 
+    const noteEditorIds = [...new Set(
+      bookings
+        .map(booking => booking.adminNoteById)
+        .filter((id): id is number => typeof id === 'number'),
+    )];
+    const noteEditors = noteEditorIds.length > 0
+      ? await this.prisma.user.findMany({
+          where: { id: { in: noteEditorIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const noteEditorMap = new Map(noteEditors.map(editor => [editor.id, editor.fullName]));
+
     return {
       bookings: bookings.map((b) => {
         const contactInfo = b.contactInfo && typeof b.contactInfo === 'object' && !Array.isArray(b.contactInfo)
           ? b.contactInfo as Record<string, unknown>
           : {};
+        const departureDate = b.departureId ? departureMap.get(b.departureId) ?? b.tour.startDate : b.tour.startDate;
         return {
           ...b,
           contactPhone: typeof contactInfo.phone === 'string' ? contactInfo.phone : b.user.phone ?? null,
-          adminNote: typeof contactInfo.adminNote === 'string' ? contactInfo.adminNote : null,
-          departureDate: b.departureId ? departureMap.get(b.departureId) ?? b.tour.startDate : b.tour.startDate,
+          adminNote: b.adminNote ?? null,
+          adminNoteUpdatedAt: b.adminNoteUpdatedAt ?? null,
+          adminNoteByName: b.adminNoteById != null ? noteEditorMap.get(b.adminNoteById) ?? null : null,
+          departureDate,
+          cancellationPolicy: this.cancellationService.buildCancellationPolicy({
+            status: b.status,
+            paymentStatus: b.paymentStatus,
+            totalPrice: b.totalPrice,
+            createdAt: b.createdAt,
+            departureDate,
+          }),
           totalPrice: Number(b.totalPrice),
           unitPriceAtBooking: Number(b.unitPriceAtBooking),
           discountAmount: Number(b.discountAmount),
@@ -743,5 +766,23 @@ export class BookingQueryService {
       this.logger.error('Loi khi proxy anh:', getErrorMessage(error));
       throw new NotFoundException('Failed to proxy image');
     }
+  }
+
+  async getRecentBookings(limit = 5) {
+    return this.prisma.booking.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        bookingCode: true,
+        totalPrice: true,
+        numberOfPeople: true,
+        status: true,
+        createdAt: true,
+        user: { select: { fullName: true, email: true, avatarUrl: true } },
+        tour: { select: { name: true, tourCode: true } },
+      },
+    });
   }
 }

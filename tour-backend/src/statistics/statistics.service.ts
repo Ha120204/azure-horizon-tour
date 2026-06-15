@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -9,15 +9,18 @@ export class StatisticsService {
   // HELPERS
   // ══════════════════════════════════════════════════════
 
-  /** Parse date range, mặc định = N ngày gần nhất */
+  /** Parse date range, mặc định = N ngày gần nhất — biên kỳ và bucket đều dùng UTC */
   private parseDateRange(dateFrom?: string, dateTo?: string, defaultDays = 30) {
-    const to = dateTo ? new Date(dateTo) : new Date();
-    const from = dateFrom
-      ? new Date(dateFrom)
-      : new Date(to.getTime() - defaultDays * 24 * 60 * 60 * 1000);
-    to.setHours(23, 59, 59, 999);
-    from.setHours(0, 0, 0, 0);
-    return { from, to };
+    const todayUtc = new Date().toISOString().split('T')[0];
+    const toStr = dateTo ?? todayUtc;
+    const toMs = new Date(toStr + 'T00:00:00.000Z').getTime();
+    const fromStr = dateFrom
+      ? dateFrom
+      : new Date(toMs - defaultDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return {
+      from: new Date(fromStr + 'T00:00:00.000Z'),
+      to: new Date(toStr + 'T23:59:59.999Z'),
+    };
   }
 
   /** Tính kỳ trước tương đương (cùng độ dài) để so sánh */
@@ -38,6 +41,7 @@ export class StatisticsService {
   // 1. KPI OVERVIEW — so sánh với kỳ trước tương đương
   // ══════════════════════════════════════════════════════
   async getOverview(dateFrom?: string, dateTo?: string) {
+    try {
     const { from, to } = this.parseDateRange(dateFrom, dateTo, 30);
     const { prevFrom, prevTo } = this.getPreviousPeriod(from, to);
 
@@ -51,12 +55,12 @@ export class StatisticsService {
       previousNewCustomers,
     ] = await Promise.all([
       this.prisma.booking.aggregate({
-        where: { deletedAt: null, paymentStatus: 'PAID', createdAt: { gte: from, lte: to } },
+        where: { deletedAt: null, paymentStatus: 'PAID', status: { not: 'CANCELLED' }, createdAt: { gte: from, lte: to } },
         _sum: { totalPrice: true },
         _count: { id: true },
       }),
       this.prisma.booking.aggregate({
-        where: { deletedAt: null, paymentStatus: 'PAID', createdAt: { gte: prevFrom, lte: prevTo } },
+        where: { deletedAt: null, paymentStatus: 'PAID', status: { not: 'CANCELLED' }, createdAt: { gte: prevFrom, lte: prevTo } },
         _sum: { totalPrice: true },
         _count: { id: true },
       }),
@@ -90,8 +94,8 @@ export class StatisticsService {
     const confirmedCount = statusMap['CONFIRMED'] || 0;
     const cancelledCount = statusMap['CANCELLED'] || 0;
 
-    // AOV = Revenue / confirmed bookings
-    const aov = confirmedCount > 0 ? Math.round(currentRev / confirmedCount) : 0;
+    // AOV = Revenue(PAID) / Bookings(PAID) — mẫu số thống nhất cả hai kỳ
+    const aov = currentRevAgg._count.id > 0 ? Math.round(currentRev / currentRevAgg._count.id) : 0;
     const prevAov =
       previousRevAgg._count.id > 0
         ? Math.round(previousRev / previousRevAgg._count.id)
@@ -128,6 +132,10 @@ export class StatisticsService {
         changePercent: this.calcChange(currentNewCustomers, previousNewCustomers),
       },
     };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể tải dữ liệu tổng quan');
+    }
   }
 
   // ══════════════════════════════════════════════════════
@@ -138,12 +146,14 @@ export class StatisticsService {
     dateTo?: string,
     granularity: 'daily' | 'weekly' | 'monthly' = 'monthly',
   ) {
+    try {
     const { from, to } = this.parseDateRange(dateFrom, dateTo, 30);
 
     const bookings = await this.prisma.booking.findMany({
       where: {
         deletedAt: null,
         paymentStatus: 'PAID',
+        status: { not: 'CANCELLED' },
         createdAt: { gte: from, lte: to },
       },
       select: { createdAt: true, totalPrice: true },
@@ -151,6 +161,7 @@ export class StatisticsService {
     });
 
     const MONTHS = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'];
+    const multiYear = from.getUTCFullYear() !== to.getUTCFullYear();
     const grouped: Record<string, { revenue: number; bookings: number; label: string }> = {};
 
     for (const b of bookings) {
@@ -160,19 +171,20 @@ export class StatisticsService {
       if (granularity === 'daily') {
         const d = b.createdAt;
         key = d.toISOString().split('T')[0];
-        label = `${d.getDate()}/${d.getMonth() + 1}`;
+        label = `${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
       } else if (granularity === 'weekly') {
-        const d = new Date(b.createdAt);
-        const dayOfWeek = d.getDay();
-        const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-        const monday = new Date(d);
-        monday.setDate(diff);
+        const d = b.createdAt;
+        const dayOfWeek = d.getUTCDay();
+        const diff = d.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), diff));
         key = monday.toISOString().split('T')[0];
-        label = `${monday.getDate()}/${monday.getMonth() + 1}`;
+        label = `${monday.getUTCDate()}/${monday.getUTCMonth() + 1}`;
       } else {
         const d = b.createdAt;
-        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        label = MONTHS[d.getMonth()];
+        key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        label = multiYear
+          ? `${MONTHS[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}`
+          : MONTHS[d.getUTCMonth()];
       }
 
       if (!grouped[key]) grouped[key] = { revenue: 0, bookings: 0, label };
@@ -190,12 +202,17 @@ export class StatisticsService {
       }));
 
     return { granularity, from: from.toISOString(), to: to.toISOString(), data };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể tải dữ liệu biểu đồ doanh thu');
+    }
   }
 
   // ══════════════════════════════════════════════════════
   // 3. BOOKING STATUS — filter theo khoảng thời gian
   // ══════════════════════════════════════════════════════
   async getBookingStatusDistribution(dateFrom?: string, dateTo?: string) {
+    try {
     const { from, to } = this.parseDateRange(dateFrom, dateTo, 30);
 
     const [statusGroups, paymentGroups, trendBookings] = await Promise.all([
@@ -231,26 +248,35 @@ export class StatisticsService {
       distribution: [
         { name: 'Đã xác nhận', value: statusMap['CONFIRMED'] || 0, key: 'CONFIRMED' },
         { name: 'Chờ xử lý', value: statusMap['PENDING'] || 0, key: 'PENDING' },
+        { name: 'Yêu cầu hủy', value: statusMap['CANCEL_REQUESTED'] || 0, key: 'CANCEL_REQUESTED' },
         { name: 'Đã hủy', value: statusMap['CANCELLED'] || 0, key: 'CANCELLED' },
       ],
       paymentStatus: [
-        { name: 'Đã thanh toán', value: paymentGroups.find(p => p.paymentStatus === 'PAID')?._count.paymentStatus || 0 },
-        { name: 'Chưa thanh toán', value: paymentGroups.find(p => p.paymentStatus === 'UNPAID')?._count.paymentStatus || 0 },
+        { name: 'Đã thanh toán', value: paymentGroups.find(p => p.paymentStatus === 'PAID')?._count.paymentStatus || 0, key: 'PAID' },
+        { name: 'Chưa thanh toán', value: paymentGroups.find(p => p.paymentStatus === 'UNPAID')?._count.paymentStatus || 0, key: 'UNPAID' },
+        { name: 'Đang xử lý', value: paymentGroups.find(p => p.paymentStatus === 'PROCESSING')?._count.paymentStatus || 0, key: 'PROCESSING' },
+        { name: 'Thanh toán lỗi', value: paymentGroups.find(p => p.paymentStatus === 'FAILED')?._count.paymentStatus || 0, key: 'FAILED' },
       ],
       recentTrend: Object.entries(trendMap).map(([date, count]) => ({ date, count })),
     };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể tải phân bố trạng thái booking');
+    }
   }
 
   // ══════════════════════════════════════════════════════
   // 4. REVENUE BY DESTINATION — biểu đồ ngang
   // ══════════════════════════════════════════════════════
   async getRevenueByDestination(dateFrom?: string, dateTo?: string, limit = 8) {
+    try {
     const { from, to } = this.parseDateRange(dateFrom, dateTo, 365);
 
     const bookings = await this.prisma.booking.findMany({
       where: {
         deletedAt: null,
-        status: 'CONFIRMED',
+        paymentStatus: 'PAID',
+        status: { not: 'CANCELLED' },
         createdAt: { gte: from, lte: to },
       },
       select: {
@@ -272,17 +298,22 @@ export class StatisticsService {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, limit)
       .map(d => ({ ...d, revenue: Math.round(d.revenue) }));
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể tải doanh thu theo điểm đến');
+    }
   }
 
   // ══════════════════════════════════════════════════════
   // 5. TOP TOURS — filter theo kỳ
   // ══════════════════════════════════════════════════════
   async getTopTours(limit = 5, dateFrom?: string, dateTo?: string) {
+    try {
     const { from, to } = this.parseDateRange(dateFrom, dateTo, 365);
 
     const topByBookings = await this.prisma.booking.groupBy({
       by: ['tourId'],
-      where: { deletedAt: null, status: 'CONFIRMED', createdAt: { gte: from, lte: to } },
+      where: { deletedAt: null, paymentStatus: 'PAID', status: { not: 'CANCELLED' }, createdAt: { gte: from, lte: to } },
       _count: { tourId: true },
       _sum: { totalPrice: true, numberOfPeople: true },
       orderBy: { _count: { tourId: 'desc' } },
@@ -313,17 +344,22 @@ export class StatisticsService {
         availableSeats: tour?.availableSeats ?? 0,
       };
     });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể tải top tours');
+    }
   }
 
   // ══════════════════════════════════════════════════════
   // 6. TOP CUSTOMERS — filter theo kỳ
   // ══════════════════════════════════════════════════════
   async getTopCustomers(limit = 5, dateFrom?: string, dateTo?: string) {
+    try {
     const { from, to } = this.parseDateRange(dateFrom, dateTo, 365);
 
     const topBySpending = await this.prisma.booking.groupBy({
       by: ['userId'],
-      where: { deletedAt: null, paymentStatus: 'PAID', createdAt: { gte: from, lte: to } },
+      where: { deletedAt: null, paymentStatus: 'PAID', status: { not: 'CANCELLED' }, createdAt: { gte: from, lte: to } },
       _count: { userId: true },
       _sum: { totalPrice: true },
       orderBy: { _sum: { totalPrice: 'desc' } },
@@ -349,18 +385,23 @@ export class StatisticsService {
         memberSince: user?.createdAt ?? null,
       };
     });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể tải top khách hàng');
+    }
   }
 
   // ══════════════════════════════════════════════════════
   // 7. VOUCHER STATS — không filter theo kỳ (tổng quan)
   // ══════════════════════════════════════════════════════
   async getVoucherStats() {
+    try {
     const [totalVouchers, activeVouchers, totalDiscountResult, bookingsWithVoucher, mostUsedVouchers] =
       await Promise.all([
         this.prisma.voucher.count(),
         this.prisma.voucher.count({ where: { isActive: true } }),
         this.prisma.booking.aggregate({
-          where: { deletedAt: null, paymentStatus: 'PAID', discountAmount: { gt: 0 } },
+          where: { deletedAt: null, paymentStatus: 'PAID', status: { not: 'CANCELLED' }, discountAmount: { gt: 0 } },
           _sum: { discountAmount: true },
           _count: { id: true },
         }),
@@ -395,5 +436,9 @@ export class StatisticsService {
         usageRate: v.maxUses > 0 ? Math.round((v.usedCount / v.maxUses) * 100) : 0,
       })),
     };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Không thể tải thống kê voucher');
+    }
   }
 }

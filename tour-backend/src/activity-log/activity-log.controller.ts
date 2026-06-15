@@ -1,10 +1,12 @@
-import { Controller, Get, Param, Query, Res, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res, ParseIntPipe, UseGuards, Request } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { ActivityLogService, LogQueryDto } from './activity-log.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
+
+type AuthenticatedRequest = { user: { role: string } };
 
 @Controller('admin/logs')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -23,8 +25,8 @@ export class ActivityLogController {
     @Get('export')
     @Roles('SUPER_ADMIN')
     @AuditLog('EXPORT', 'SystemLog')
-    async exportCsv(@Query() query: LogQueryDto, @Res() res: Response) {
-        const csv = await this.logService.exportCsv(query);
+    async exportCsv(@Query() query: LogQueryDto, @Res() res: Response, @Request() req: AuthenticatedRequest) {
+        const csv = await this.logService.exportCsv(query, req.user.role);
         const fileName = `nhat-ky-${new Date().toISOString().slice(0, 10)}.csv`;
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -33,14 +35,14 @@ export class ActivityLogController {
 
     // GET /admin/logs — Danh sách với filter + pagination
     @Get()
-    async findAll(@Query() query: LogQueryDto) {
-        return this.logService.findAll(query);
+    async findAll(@Query() query: LogQueryDto, @Request() req: AuthenticatedRequest) {
+        return this.logService.findAll(query, req.user.role);
     }
 
     // GET /admin/logs/:id — Chi tiết 1 log
     @Get(':id')
-    async findOne(@Param('id', ParseIntPipe) id: number) {
-        const log = await this.logService.findOne(id);
+    async findOne(@Param('id', ParseIntPipe) id: number, @Request() req: AuthenticatedRequest) {
+        const log = await this.logService.findOne(id, req.user.role);
         return { data: log };
     }
 }

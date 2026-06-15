@@ -22,7 +22,7 @@ export default function VoucherManagementPage() {
         onCreate={voucher.openCreate}
       />
 
-      <VoucherKpiGrid kpis={voucher.kpis} />
+      <VoucherKpiGrid kpis={voucher.kpis} statsError={voucher.statsError} onRetry={voucher.refreshStats} />
 
       <VoucherFilters
         search={voucher.search}
@@ -41,7 +41,7 @@ export default function VoucherManagementPage() {
         selectedCount={voucher.selectedCount}
         activeCount={voucher.selectedActiveCount}
         inactiveCount={voucher.selectedInactiveCount}
-        canManage={voucher.currentUserRole !== null && voucher.currentUserRole !== 'STAFF'}
+        canManage={voucher.currentUserRole === 'ADMIN'}
         isBulkUpdating={voucher.isBulkUpdating}
         onExport={voucher.exportSelectedVouchers}
         onBulkDeactivate={voucher.bulkDeactivate}

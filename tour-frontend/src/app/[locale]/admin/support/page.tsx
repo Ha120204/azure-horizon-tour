@@ -13,6 +13,7 @@ import {
     isOpenTicket,
     normalizeTicket,
     readApiError,
+    resolveInitialAssignee,
     resolveInitialCategory,
     resolveInitialStatus,
     resolveInitialView,
@@ -26,6 +27,7 @@ import type {
     ReplyResponse,
     StatsResponse,
     Ticket,
+    TicketAssignee,
     TicketCategory,
     TicketListResponse,
     TicketResponse,
@@ -56,6 +58,7 @@ export default function SupportPage() {
     const [activeStatus, setActiveStatus] = useState<TicketStatus | 'ALL'>(() => resolveInitialStatus(searchParams.get('status')));
     const [activeCategory, setActiveCategory] = useState<TicketCategory | 'ALL'>(() => resolveInitialCategory(searchParams.get('category')));
     const [activeView, setActiveView] = useState<TicketView>(() => resolveInitialView(searchParams.get('view')));
+    const [activeAssignee, setActiveAssignee] = useState<TicketAssignee>(() => resolveInitialAssignee(searchParams.get('assigned')));
     const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
     const [page, setPage] = useState(() => {
         const p = parseInt(searchParams.get('page') ?? '1', 10);
@@ -83,12 +86,13 @@ export default function SupportPage() {
         if (activeStatus !== 'ALL') params.set('status', activeStatus);
         if (activeCategory !== 'ALL') params.set('category', activeCategory);
         if (activeView !== 'ALL') params.set('view', activeView === 'OPEN' ? 'open' : 'overdue');
+        if (activeAssignee !== 'ALL') params.set('assigned', activeAssignee === 'ME' ? 'me' : 'none');
         if (debouncedSearch) params.set('search', debouncedSearch);
         if (page > 1) params.set('page', page.toString());
         if (sort !== 'updated') params.set('sort', sort);
         const nextUrl = params.toString() ? `${pathname}?${params}` : pathname;
         router.replace(nextUrl, { scroll: false });
-    }, [activeCategory, activeStatus, activeView, debouncedSearch, page, pathname, router, sort]);
+    }, [activeAssignee, activeCategory, activeStatus, activeView, debouncedSearch, page, pathname, router, sort]);
 
     const fetchTickets = useCallback(async (options: FetchTicketsOptions = {}) => {
         if (!options.silent) setLoading(true);
@@ -97,6 +101,7 @@ export default function SupportPage() {
             if (activeStatus !== 'ALL') params.set('status', activeStatus);
             if (activeCategory !== 'ALL') params.set('category', activeCategory);
             if (activeView !== 'ALL') params.set('view', activeView === 'OPEN' ? 'open' : 'overdue');
+            if (activeAssignee !== 'ALL') params.set('assigned', activeAssignee === 'ME' ? 'me' : 'none');
             if (debouncedSearch) params.set('search', debouncedSearch);
             if (sort !== 'updated') params.set('sort', sort);
             params.set('page', page.toString());
@@ -138,7 +143,7 @@ export default function SupportPage() {
         } finally {
             if (!options.silent) setLoading(false);
         }
-    }, [activeStatus, activeCategory, activeView, debouncedSearch, page, sort]);
+    }, [activeStatus, activeCategory, activeView, activeAssignee, debouncedSearch, page, sort]);
 
     const fetchSelectedDetail = useCallback(async (ticketId: number) => {
         try {
@@ -320,6 +325,11 @@ export default function SupportPage() {
         setActiveView((current) => current === view ? 'ALL' : view);
     };
 
+    const handleAssigneeChange = (assignee: TicketAssignee) => {
+        setPage(1);
+        setActiveAssignee(assignee);
+    };
+
     const sharedSidebarProps = {
         search,
         counts,
@@ -363,6 +373,8 @@ export default function SupportPage() {
                     currentPage={page}
                     totalPages={totalPages}
                     sort={sort}
+                    activeAssignee={activeAssignee}
+                    onAssigneeChange={handleAssigneeChange}
                     onViewToggle={handleViewToggle}
                     onSelect={(ticket) => void handleSelect(ticket)}
                     onPageChange={setPage}

@@ -40,7 +40,7 @@ export default function ConciergeWidget() {
             <div
                 role="dialog"
                 aria-modal="true"
-                aria-label="Azure Horizon AI Concierge"
+                aria-label={ctx.t('conciergeApp.dialogLabel')}
                 className={`fixed inset-x-3 bottom-3 top-auto z-50 flex h-[min(720px,calc(100dvh-1.5rem))] flex-col overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[min(680px,calc(100dvh-3rem))] sm:w-[430px] ${
                     ctx.isOpen ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none translate-y-6 scale-[0.98] opacity-0'
                 }`}
@@ -48,7 +48,7 @@ export default function ConciergeWidget() {
                 {/* Nút đóng */}
                 <button
                     onClick={() => ctx.setIsOpen(false)}
-                    aria-label="Đóng"
+                    aria-label={ctx.t('conciergeApp.closeChat')}
                     className="absolute right-4 top-4 z-[60] flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900"
                 >
                     <span className="material-symbols-outlined text-[19px]">close</span>
@@ -85,6 +85,7 @@ export default function ConciergeWidget() {
                         hasAccessToken={ctx.hasAccessToken}
                         language={ctx.language}
                         messagesEndRef={ctx.messagesEndRef}
+                        scrollContainerRef={ctx.scrollContainerRef}
                         handleSendMessage={ctx.handleSendMessage}
                         setIsOpen={ctx.setIsOpen}
                         t={ctx.t}

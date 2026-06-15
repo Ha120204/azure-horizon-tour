@@ -177,6 +177,22 @@
       "supplier": "Supplier",
       "corporate": "Corporate group",
       "other": "Other partner"
+    },
+    "lookupTitle": "Look up your support request",
+    "lookupDesc": "Submitted a request but lost the link from your email? Enter your email and access code to find it.",
+    "lookupEmail": "Email used when submitting the request",
+    "lookupAccessCode": "Access code",
+    "lookupAccessCodeHint": "From your confirmation email, format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "lookupSubmit": "Look up",
+    "lookupSearching": "Searching...",
+    "lookupNotFound": "Request not found. Please check your email and access code.",
+    "lookupViewDetail": "View request details",
+    "lookupCreatedAt": "Submitted on",
+    "lookupStatusLabel": "Status",
+    "lookupStatus": {
+      "NEW": "New",
+      "IN_PROGRESS": "In progress",
+      "RESOLVED": "Resolved"
     }
   },
   "journal": {

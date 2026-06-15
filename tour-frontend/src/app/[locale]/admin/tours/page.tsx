@@ -22,7 +22,7 @@ export default function AdminToursPage() {
             </a>
 
             <TourPageHeader
-                isStaff={tour.isStaff}
+                canCreate={tour.canWrite || tour.isStaff}
                 onExportCSV={tour.handleExportCSV}
                 onCreate={tour.openCreateModal}
             />
@@ -36,7 +36,7 @@ export default function AdminToursPage() {
 
             <TourKpiGrid isAdmin={tour.isAdmin} filterStatus={tour.filterStatus} kpis={tour.kpis} />
 
-            {tour.isAdmin && (
+            {tour.canWrite && (
                 <TourTabs
                     activeTab={tour.activeTab}
                     activeCount={tour.meta.totalItems}
@@ -75,7 +75,7 @@ export default function AdminToursPage() {
                     submitCount={tour.selectedBulkSubmitCount}
                     hideCount={tour.selectedBulkHideCount}
                     isStaff={tour.isStaff}
-                    isAdmin={tour.isAdmin}
+                    isAdmin={tour.canWrite}
                     isBulkDeleting={tour.isBulkDeleting}
                     isBulkSubmitting={tour.isBulkSubmitting}
                     onClear={() => tour.setSelectedIds(new Set())}
@@ -85,7 +85,7 @@ export default function AdminToursPage() {
                 />
             )}
 
-            {tour.activeTab === 'trash' && tour.isAdmin && (
+            {tour.activeTab === 'trash' && tour.canWrite && (
                 <TrashTourControls
                     searchInput={trash.trashSearchInput}
                     status={trash.trashStatus}
@@ -102,10 +102,11 @@ export default function AdminToursPage() {
                 />
             )}
 
-            {tour.activeTab === 'trash' && tour.isAdmin && (
+            {tour.activeTab === 'trash' && tour.canWrite && (
                 <TrashToursTable
                     trashedTours={trash.trashedTours}
                     isLoading={trash.isLoadingTrash}
+                    isError={trash.isTrashError}
                     meta={trash.trashMeta}
                     selectedIds={trash.trashSelectedIds}
                     isAllSelected={trash.isTrashAllSelected}
@@ -115,6 +116,7 @@ export default function AdminToursPage() {
                     onRestore={trash.handleRestore}
                     onPermanentDelete={trash.setPermDeleteTarget}
                     onPageChange={trash.setTrashPage}
+                    onRetry={trash.fetchTrashedTours}
                 />
             )}
 
@@ -122,6 +124,7 @@ export default function AdminToursPage() {
                 <ActiveToursTable
                     tours={tour.tours}
                     isLoading={tour.isLoading}
+                    isError={tour.isError}
                     meta={tour.meta}
                     page={tour.page}
                     pageSize={tour.pageSize}
@@ -129,7 +132,7 @@ export default function AdminToursPage() {
                     isAllSelected={tour.isAllSelected}
                     userId={tour.userId}
                     isStaff={tour.isStaff}
-                    isAdmin={tour.isAdmin}
+                    isAdmin={tour.canWrite}
                     submittingTourId={tour.isSubmitting}
                     onToggleSelectAll={tour.toggleSelectAll}
                     onToggleSelect={tour.toggleSelectOne}
@@ -142,6 +145,7 @@ export default function AdminToursPage() {
                     onDelete={tour.setDeleteTarget}
                     onPageChange={tour.setPage}
                     onPageSizeChange={tour.changePageSize}
+                    onRetry={tour.fetchTours}
                 />
             )}
 

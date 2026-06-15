@@ -281,7 +281,7 @@ export class ContactService {
         'http://localhost:3001',
       );
       const ticketLookupUrl = accessCode
-        ? `${frontendUrl}/support/track/${ticketId}?accessCode=${encodeURIComponent(accessCode)}`
+        ? `${frontendUrl}/contact?ticketId=${ticketId}&accessCode=${encodeURIComponent(accessCode)}`
         : undefined;
       const safeAccessCode = accessCode ? escapeHtml(accessCode) : undefined;
       const safeTicketLookupUrl = ticketLookupUrl

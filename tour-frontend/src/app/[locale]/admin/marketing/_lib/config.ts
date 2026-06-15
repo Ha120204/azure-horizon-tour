@@ -2,8 +2,6 @@ import type { CampaignDraft, CampaignForm, CampaignType, SubscriberStats, Subscr
 
 export const EMPTY_STATS: SubscriberStats = { total: 0, active: 0, inactive: 0, thisMonth: 0 };
 
-export const CAMPAIGN_DRAFTS_KEY = 'azure_horizon_campaign_drafts';
-
 export const EMPTY_CAMPAIGN_FORM: CampaignForm = {
   name: '',
   type: 'PROMOTION',

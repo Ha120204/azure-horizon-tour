@@ -15,6 +15,7 @@ import ConfirmBookingModal from '@/components/checkout/ConfirmBookingModal';
 import { buildLocalizedLoginPath } from '@/lib/auth/authRedirect';
 import { clearClientUserStorage, fetchAuthProfile } from '@/lib/auth/authSession';
 import type { PassengerType } from '@/lib/booking/passengerDetails';
+import { getPassengerNameError, validatePassengerIdentityNo } from '@/lib/booking/passengerDetails';
 import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
 
 interface Passenger {
@@ -134,7 +135,7 @@ function CheckoutContent() {
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState<'PAYOS' | 'IN_STORE'>('PAYOS');
+    const paymentMethod = 'PAYOS';
 
     // Toast Alert State
     const [errorMsg, setErrorMsg] = useState('');
@@ -171,6 +172,26 @@ function CheckoutContent() {
         if (!leadTraveler.fullName || !leadTraveler.dob || !leadTraveler.gender) {
             showError(t('checkout.errors.leadData'));
             return;
+        }
+
+        const leadNameErr = getPassengerNameError(leadTraveler.fullName);
+        if (leadNameErr) { showError(leadNameErr); return; }
+
+        if (!leadTraveler.identityNo) {
+            showError(t('checkout.errors.leadIdentityRequired'));
+            return;
+        }
+        const leadIdentityErr = getIdentityError(leadTraveler.identityType || 'CCCD', leadTraveler.identityNo, t);
+        if (leadIdentityErr) { showError(leadIdentityErr); return; }
+
+        for (let i = 0; i < passengers.length; i++) {
+            const p = passengers[i];
+            const pNameErr = getPassengerNameError(p.fullName);
+            if (pNameErr) { showError(pNameErr); return; }
+            if (p.identityNo) {
+                const pIdentityErr = validatePassengerIdentityNo(p.identityType || 'CCCD', p.identityNo, t);
+                if (pIdentityErr) { showError(pIdentityErr); return; }
+            }
         }
 
         if (activeFormType) {
@@ -586,6 +607,26 @@ function CheckoutContent() {
             return;
         }
 
+        const leadNameErr = getPassengerNameError(leadTraveler.fullName);
+        if (leadNameErr) { showError(leadNameErr); return; }
+
+        if (!leadTraveler.identityNo) {
+            showError(t('checkout.errors.leadIdentityRequired'));
+            return;
+        }
+        const leadIdentityErr = getIdentityError(leadTraveler.identityType || 'CCCD', leadTraveler.identityNo, t);
+        if (leadIdentityErr) { showError(leadIdentityErr); return; }
+
+        for (let i = 0; i < passengers.length; i++) {
+            const p = passengers[i];
+            const pNameErr = getPassengerNameError(p.fullName);
+            if (pNameErr) { showError(pNameErr); return; }
+            if (p.identityNo) {
+                const pIdentityErr = validatePassengerIdentityNo(p.identityType || 'CCCD', p.identityNo, t);
+                if (pIdentityErr) { showError(pIdentityErr); return; }
+            }
+        }
+
         if (!tourData) {
             showError(t('checkout.errors.invalidOrder'));
             return;
@@ -708,43 +749,6 @@ function CheckoutContent() {
                         departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
                     />
 
-                    <section className="rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
-                        <h2 className="text-lg font-bold text-on-surface mb-4">
-                            {t('checkout.paymentMethodTitle')}
-                        </h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setPaymentMethod('PAYOS')}
-                                className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
-                                    paymentMethod === 'PAYOS'
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-outline-variant/30 hover:border-outline-variant'
-                                }`}
-                            >
-                                <span className={`mt-0.5 material-symbols-outlined text-xl ${paymentMethod === 'PAYOS' ? 'text-primary' : 'text-on-surface-variant'}`} aria-hidden="true">qr_code_2</span>
-                                <div>
-                                    <p className="font-semibold text-sm text-on-surface">{t('checkout.payosTitle')}</p>
-                                    <p className="text-xs text-on-surface-variant mt-0.5">{t('checkout.payosDesc')}</p>
-                                </div>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setPaymentMethod('IN_STORE')}
-                                className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
-                                    paymentMethod === 'IN_STORE'
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-outline-variant/30 hover:border-outline-variant'
-                                }`}
-                            >
-                                <span className={`mt-0.5 material-symbols-outlined text-xl ${paymentMethod === 'IN_STORE' ? 'text-primary' : 'text-on-surface-variant'}`} aria-hidden="true">store</span>
-                                <div>
-                                    <p className="font-semibold text-sm text-on-surface">{t('checkout.inStoreTitle')}</p>
-                                    <p className="text-xs text-on-surface-variant mt-0.5">{t('checkout.inStoreDesc')}</p>
-                                </div>
-                            </button>
-                        </div>
-                    </section>
                 </div>
 
                 <OrderSummary

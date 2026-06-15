@@ -1,5 +1,27 @@
 import type { PassengerType as SharedPassengerType } from '@/lib/booking/passengerDetails';
 
+export type BookingConfirmSource = 'IN_STORE' | 'PAYOS_SYNC' | 'RECONCILE';
+
+export type CancellationPolicyTier =
+  | 'UNPAID'
+  | 'FULL_REFUND_24H'
+  | 'EIGHTY_REFUND'
+  | 'HALF_REFUND'
+  | 'NO_REFUND'
+  | 'NOT_CANCELABLE';
+
+export interface BookingCancellationPolicy {
+  canCancel: boolean;
+  tripLifecycle: 'UPCOMING' | 'DEPARTING_TODAY' | 'COMPLETED';
+  cancelUnavailableReason?: string;
+  refundPercent: number;
+  estimatedRefundAmount: number;
+  refundNote: string;
+  policyTier: CancellationPolicyTier;
+  departureDate: string;
+  daysUntilDeparture: number;
+}
+
 export interface BookingUser {
   id: number;
   fullName: string;
@@ -76,11 +98,14 @@ export interface Booking {
   departureDate?: string | null;
   contactPhone?: string | null;
   adminNote?: string | null;
+  adminNoteUpdatedAt?: string | null;
+  adminNoteByName?: string | null;
   user: BookingUser;
   tour: BookingTour | null;
   refundAmount?: number | null;
   refundedAt?: string | null;
   refundNote?: string | null;
+  cancellationPolicy?: BookingCancellationPolicy | null;
   notifications?: BookingNotification[];
   transactions?: PaymentTransaction[];
   supportTickets?: { id: number; status: string; category: string; subject?: string | null; createdAt: string }[];

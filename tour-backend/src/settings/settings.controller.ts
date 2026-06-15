@@ -5,10 +5,6 @@ import {
   Body,
   UseGuards,
   Request,
-  ForbiddenException,
-  Injectable,
-  CanActivate,
-  ExecutionContext,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SettingsService } from './settings.service';
@@ -21,19 +17,6 @@ type AuthenticatedSettingsRequest = {
     role: string;
   };
 };
-
-// ── Guard: chỉ SUPER_ADMIN mới sửa được cấu hình hệ thống ───────────────────
-@Injectable()
-class AdminGuard implements CanActivate {
-  canActivate(ctx: ExecutionContext): boolean {
-    const req = ctx.switchToHttp().getRequest<AuthenticatedSettingsRequest>();
-    const role = req.user?.role;
-    if (role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('Chỉ Super Admin mới có quyền chỉnh sửa cài đặt hệ thống');
-    }
-    return true;
-  }
-}
 
 @Controller('settings')
 export class SettingsController {
@@ -48,6 +31,26 @@ export class SettingsController {
   async getHealth() {
     const data = await this.settingsService.getHealth();
     return { message: 'Success', data };
+  }
+
+  /**
+   * GET /settings/security-info — Giá trị JWT/rate-limit thật từ process.env
+   */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('security-info')
+  getSecurityInfo() {
+    return { message: 'Success', data: this.settingsService.getSecurityInfo() };
+  }
+
+  /**
+   * GET /settings/meta — Validation constraints per key (type, min, max, maxLength, required)
+   */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('meta')
+  getMeta() {
+    return { message: 'Success', data: this.settingsService.getMeta() };
   }
 
   /**
@@ -86,7 +89,8 @@ export class SettingsController {
    * Body: { "company_name": "Azure Horizon", "booking_hold_minutes": "20" }
    * Chỉ SUPER_ADMIN
    */
-  @UseGuards(AuthGuard('jwt'), AdminGuard)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('SUPER_ADMIN')
   @Patch()
   async updateMany(
     @Body() body: Record<string, string>,

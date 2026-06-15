@@ -2,6 +2,7 @@ export type TicketStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 export type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
 export type TicketView = 'ALL' | 'OPEN' | 'OVERDUE';
 export type TicketSort = 'updated' | 'oldest' | 'overdue';
+export type TicketAssignee = 'ALL' | 'ME' | 'NONE';
 
 export interface Reply {
     id: number;

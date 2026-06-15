@@ -21,9 +21,11 @@ import {
   CustomerReplyDto,
   RateTicketDto,
   LookupQueryDto,
+  LookupByEmailDto,
 } from './dto/support.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 
 type AuthUser = {
@@ -68,6 +70,7 @@ const getAuthDisplayName = (
 @Controller('support')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('ADMIN', 'SUPER_ADMIN', 'STAFF')
+@SuperAdminArea('support')
 export class SupportController {
   constructor(private readonly supportService: SupportService) {}
 
@@ -76,14 +79,16 @@ export class SupportController {
     return this.supportService.getStats(getAuthUserId(req));
   }
 
-  // GET /support/tickets?status=NEW&category=booking&search=...&page=1&limit=20
+  // GET /support/tickets?status=NEW&category=booking&search=...&assigned=me&page=1&limit=20
   @Get('tickets')
   async getTickets(
+    @Request() req: AuthenticatedRequest,
     @Query('status')   status?:   string,
     @Query('category') category?: string,
     @Query('search')   search?:   string,
     @Query('view')     view?:     string,
     @Query('sort')     sort?:     string,
+    @Query('assigned') assigned?: string,
     @Query('page')     page?:     string,
     @Query('limit')    limit?:    string,
   ) {
@@ -93,6 +98,8 @@ export class SupportController {
       search,
       view,
       sort,
+      assigned,
+      currentUserId: getAuthUserId(req),
       page:  page  ? parseInt(page)  : 1,
       limit: limit ? parseInt(limit) : 20,
     });
@@ -148,6 +155,16 @@ export class SupportController {
 @Controller('support/customer')
 export class SupportCustomerController {
   constructor(private readonly supportService: SupportService) {}
+
+  /**
+   * GET /support/customer/lookup?email=xxx&accessCode=yyy
+   * - Tra cứu ticket bằng email + accessCode (không cần biết ticketId).
+   * - Dành cho khách vãng lai mất link email xác nhận.
+   */
+  @Get('lookup')
+  async lookupTicket(@Query() query: LookupByEmailDto) {
+    return this.supportService.lookupTicketByEmailAndAccessCode(query.email, query.accessCode);
+  }
 
   /**
    * GET /support/customer/my-tickets

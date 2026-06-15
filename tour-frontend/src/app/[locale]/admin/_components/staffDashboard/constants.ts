@@ -46,36 +46,3 @@ export function formatTime(date: Date | null) {
     if (!date) return 'Chưa cập nhật';
     return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
-
-// ── API utilities ─────────────────────────────────────────────────────────────
-export function toObject(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-export function toArray(value: unknown): unknown[] {
-    if (Array.isArray(value)) return value;
-    const obj = toObject(value);
-    const data = obj.data;
-    const dataObj = toObject(data);
-    const candidates = [
-        obj.data,
-        obj.tours,
-        dataObj.tours,
-        obj.tickets,
-        dataObj.tickets,
-        dataObj.data,
-        dataObj.items,
-        obj.items,
-        obj.bookings,
-        dataObj.bookings,
-    ];
-    for (const candidate of candidates) {
-        if (Array.isArray(candidate)) return candidate;
-    }
-    return [];
-}
-
-export function getNumber(source: Record<string, unknown>, key: string) {
-    const value = source[key];
-    return typeof value === 'number' ? value : 0;
-}

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { logoutAuthSession } from '@/lib/auth/authSession';
-import { canAccessRole, getCleanAdminPath, type AdminRole } from '@/lib/admin/adminAccess';
+import { canAccessRole, canSuperAdminAccessArea, getCleanAdminPath, type AdminRole, type SuperAdminArea } from '@/lib/admin/adminAccess';
 import React, { useState } from 'react';
 
 type NavItem = {
@@ -14,24 +14,25 @@ type NavItem = {
     label: string;
     roles: AdminRole[];
     section: 'super' | 'operations' | 'governance';
+    area?: SuperAdminArea;
 };
 
 const navItems: NavItem[] = [
     { href: '/admin/super',      icon: 'admin_panel_settings', label: 'Tổng quan cấp cao', roles: ['SUPER_ADMIN'], section: 'super' },
-    { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Quản lý quản trị viên', roles: ['SUPER_ADMIN'], section: 'super' },
+    { href: '/admin/staffs',     icon: 'manage_accounts',      label: 'Quản lý nhân sự', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/logs',       icon: 'history',              label: 'Nhật ký hành động', roles: ['SUPER_ADMIN'], section: 'super' },
     { href: '/admin/settings',   icon: 'settings',             label: 'Cấu hình hệ thống', roles: ['SUPER_ADMIN'], section: 'super' },
 
-    { href: '/admin',            icon: 'dashboard',            label: 'Tổng quan', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/statistics', icon: 'bar_chart',            label: 'Thống kê', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
-    { href: '/admin/tours',      icon: 'explore',              label: 'Quản lý Tour', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/bookings',   icon: 'event_note',           label: 'Đơn đặt', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/customers',  icon: 'group',                label: 'Khách hàng', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/vouchers',   icon: 'confirmation_number',  label: 'Mã giảm giá', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/marketing',  icon: 'campaign',             label: 'Tiếp thị', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
-    { href: '/admin/articles',   icon: 'article',              label: 'Bài viết', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
-    { href: '/admin/reviews',    icon: 'reviews',              label: 'Đánh giá', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations' },
-    { href: '/admin/support',    icon: 'support_agent',        label: 'Hỗ trợ', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations' },
+    { href: '/admin',            icon: 'dashboard',            label: 'Tổng quan', roles: ['ADMIN', 'STAFF'], section: 'operations' },
+    { href: '/admin/statistics', icon: 'bar_chart',            label: 'Thống kê', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations', area: 'statistics' },
+    { href: '/admin/tours',      icon: 'explore',              label: 'Quản lý Tour', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations', area: 'tours' },
+    { href: '/admin/bookings',   icon: 'event_note',           label: 'Đơn đặt', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations', area: 'bookings' },
+    { href: '/admin/customers',  icon: 'group',                label: 'Khách hàng', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations', area: 'customers' },
+    { href: '/admin/vouchers',   icon: 'confirmation_number',  label: 'Mã giảm giá', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations', area: 'vouchers' },
+    { href: '/admin/marketing',  icon: 'campaign',             label: 'Tiếp thị', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations', area: 'marketing' },
+    { href: '/admin/articles',   icon: 'article',              label: 'Bài viết', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations', area: 'articles' },
+    { href: '/admin/reviews',    icon: 'reviews',              label: 'Đánh giá', roles: ['SUPER_ADMIN', 'ADMIN'], section: 'operations', area: 'reviews' },
+    { href: '/admin/support',    icon: 'support_agent',        label: 'Hỗ trợ', roles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'], section: 'operations', area: 'support' },
 
     { href: '/admin/staffs',     icon: 'badge',                label: 'Nhân viên', roles: ['ADMIN'], section: 'governance' },
     { href: '/admin/logs',       icon: 'history',              label: 'Nhật ký', roles: ['ADMIN'], section: 'governance' },
@@ -46,11 +47,13 @@ const SECTION_LABEL: Record<NavItem['section'], string> = {
 
 type SideNavBarProps = {
     currentUserRole?: AdminRole | '';
+    currentUserGrants?: string[];
 };
 
-export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: SideNavBarProps) {
+export default function SideNavBar({ currentUserRole: authenticatedRole = '', currentUserGrants: grantsProp = [] }: SideNavBarProps) {
     const pathname = usePathname();
     const [currentUserRole, setCurrentUserRole] = useState<string>(authenticatedRole);
+    const [currentUserGrants, setCurrentUserGrants] = useState<string[]>(grantsProp);
     const [currentUserName, setCurrentUserName] = useState('Admin');
 
     React.useEffect(() => {
@@ -58,6 +61,10 @@ export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: 
             setCurrentUserRole(authenticatedRole);
         }
     }, [authenticatedRole]);
+
+    React.useEffect(() => {
+        setCurrentUserGrants(grantsProp);
+    }, [grantsProp]);
 
     React.useEffect(() => {
         const applyLocalRole = () => {
@@ -77,6 +84,7 @@ export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: 
                 const role = profile.role || '';
                 const fullName = profile.fullName || localStorage.getItem('userName') || 'Admin';
                 setCurrentUserRole(role);
+                setCurrentUserGrants(Array.isArray(profile.superAdminViewGrants) ? profile.superAdminViewGrants : []);
                 setCurrentUserName(fullName);
                 if (profile.fullName) localStorage.setItem('userName', profile.fullName);
                 if (role) localStorage.setItem('userRole', role);
@@ -103,7 +111,11 @@ export default function SideNavBar({ currentUserRole: authenticatedRole = '' }: 
         return cleanPath.startsWith(href);
     };
 
-    const visibleItems = navItems.filter(item => canAccessRole(currentUserRole, item.roles));
+    const visibleItems = navItems.filter(item => {
+        if (!canAccessRole(currentUserRole, item.roles)) return false;
+        if (currentUserRole === 'SUPER_ADMIN') return canSuperAdminAccessArea(item.area, currentUserGrants);
+        return true;
+    });
     const sections = (['super', 'operations', 'governance'] as const)
         .map(section => ({
             section,

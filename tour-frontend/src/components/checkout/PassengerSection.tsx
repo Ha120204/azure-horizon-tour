@@ -161,8 +161,8 @@ export default function PassengerSection({
     const adultCount = 1 + passengers.filter(p => p.type === 'Adult (12+)').length;
     const infantCount = passengers.filter(p => p.type === 'Infant (<4)').length;
     const isInfantFull = infantCount >= adultCount;
-    // Local validation errors for the active passenger form
-    const [fieldErrors, setFieldErrors] = useState<{ fullName?: string; dob?: string; identityNo?: string }>({});
+    // Local validation errors — only "required" errors shown on save attempt
+    const [fieldErrors, setFieldErrors] = useState<{ fullName?: string; dob?: string }>({});
 
     // Identity document validation
     function getIdentityDocTypes(type: PassengerType) {
@@ -173,19 +173,23 @@ export default function PassengerSection({
         return validatePassengerIdentityNo(idType, idNo, t);
     }
 
+    // Computed errors — shown in real-time as user types (same pattern as ContactInfoForm)
+    const leadNameError = getNameError(leadTraveler.fullName);
+    const leadIdentityError = validateIdentityNo(leadTraveler.identityType || 'CCCD', leadTraveler.identityNo);
+    const tempNameError = tempFormData.fullName ? getNameError(tempFormData.fullName) : null;
+    const tempIdentityError = validateIdentityNo(
+        tempFormData.identityType || (activeFormType === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD'),
+        tempFormData.identityNo || ''
+    );
+
     // Trigger validation on save attempt
     const handleValidatedSave = () => {
-        const nameErr = getNameError(tempFormData.fullName);
         const ageErr = activeFormType ? getAgeError(activeFormType, tempFormData.dob, referenceDate) : null;
         const errors: { fullName?: string; dob?: string } = {};
-        if (nameErr) errors.fullName = nameErr;
-        if (ageErr) errors.dob = ageErr;
         if (!tempFormData.fullName.trim()) errors.fullName = 'Vui lòng nhập họ và tên.';
         if (!tempFormData.dob) errors.dob = 'Vui lòng chọn ngày sinh.';
-        if (!tempFormData.gender) {
-            // gender validation stays in parent via onSavePassenger
-        }
-        if (Object.keys(errors).length > 0) {
+        else if (ageErr) errors.dob = ageErr;
+        if (Object.keys(errors).length > 0 || tempNameError || tempIdentityError) {
             setFieldErrors(errors);
             return;
         }
@@ -235,12 +239,18 @@ export default function PassengerSection({
                         <div className="md:col-span-2">
                             <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.fullName')} <span className="text-error">*</span></label>
                             <input
-                                className="w-full bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm"
+                                className={`w-full bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${leadNameError ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
                                 type="text"
                                 placeholder={t('checkout.enterFullName')}
                                 value={leadTraveler.fullName}
                                 onChange={(e) => setLeadTraveler({ ...leadTraveler, fullName: e.target.value })}
                             />
+                            {leadNameError && (
+                                <p className="mt-1.5 text-xs text-error font-medium flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[13px]">error</span>
+                                    {leadNameError}
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.dob')} <span className="text-error">*</span></label>
@@ -276,7 +286,7 @@ export default function PassengerSection({
                                     onChange={(value) => setLeadTraveler({ ...leadTraveler, identityType: value, identityNo: '' })}
                                 />
                                 <input
-                                    className="flex-1 bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm"
+                                    className={`flex-1 bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${leadIdentityError ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
                                     type="text"
                                     placeholder={(leadTraveler.identityType || 'CCCD') === 'CCCD' ? t('checkout.enterCitizenId') : t('checkout.enterPassport')}
                                     value={leadTraveler.identityNo || ''}
@@ -289,7 +299,13 @@ export default function PassengerSection({
                                     }}
                                 />
                             </div>
-                            {leadTraveler.identityNo && !validateIdentityNo(leadTraveler.identityType || 'CCCD', leadTraveler.identityNo) && (
+                            {leadIdentityError && (
+                                <p className="mt-1.5 text-xs text-error font-medium flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[13px]">error</span>
+                                    {leadIdentityError}
+                                </p>
+                            )}
+                            {leadTraveler.identityNo && !leadIdentityError && (
                                 <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                                     <span className="material-symbols-outlined text-[13px]">check_circle</span>{t('checkout.valid')}
                                 </p>
@@ -502,7 +518,7 @@ export default function PassengerSection({
                                 <div className="md:col-span-2">
                                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.fullName')} <span className="text-error">*</span></label>
                                     <input
-                                        className={`w-full bg-white border rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm ${fieldErrors.fullName ? 'border-error/60 bg-error/5' : 'border-outline-variant/20'}`}
+                                        className={`w-full bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${(fieldErrors.fullName || tempNameError) ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
                                         placeholder={t('checkout.enterFullName')}
                                         type="text"
                                         value={tempFormData.fullName}
@@ -511,10 +527,10 @@ export default function PassengerSection({
                                             if (fieldErrors.fullName) setFieldErrors(prev => ({ ...prev, fullName: undefined }));
                                         }}
                                     />
-                                    {fieldErrors.fullName && (
+                                    {(fieldErrors.fullName || tempNameError) && (
                                         <p className="mt-1.5 text-xs text-error font-medium flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[13px]">error</span>
-                                            {fieldErrors.fullName}
+                                            {fieldErrors.fullName || tempNameError}
                                         </p>
                                     )}
                                 </div>
@@ -594,7 +610,7 @@ export default function PassengerSection({
                                         />
                                         <input
                                             className={`flex-1 bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${
-                                                fieldErrors.identityNo ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'
+                                                tempIdentityError ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'
                                             }`}
                                             type="text"
                                             placeholder={
@@ -605,28 +621,23 @@ export default function PassengerSection({
                                             value={tempFormData.identityNo || ''}
                                             maxLength={(tempFormData.identityType || 'CCCD') === 'CCCD' ? 12 : 20}
                                             onChange={(e) => {
-                                                const t = tempFormData.identityType || 'CCCD';
-                                                const v = t === 'CCCD'
+                                                const idType = tempFormData.identityType || 'CCCD';
+                                                const v = idType === 'CCCD'
                                                     ? e.target.value.replace(/\D/g, '')
-                                                    : t === 'PASSPORT'
+                                                    : idType === 'PASSPORT'
                                                         ? e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
                                                         : e.target.value;
                                                 setTempFormData({ ...tempFormData, identityNo: v });
-                                                if (fieldErrors.identityNo) setFieldErrors(prev => ({ ...prev, identityNo: undefined }));
-                                            }}
-                                            onBlur={(e) => {
-                                                const err = validateIdentityNo(tempFormData.identityType || 'CCCD', e.target.value);
-                                                if (err) setFieldErrors(prev => ({ ...prev, identityNo: err }));
                                             }}
                                         />
                                     </div>
-                                    {fieldErrors.identityNo && (
+                                    {tempIdentityError && (
                                         <p className="mt-1.5 text-xs text-error font-medium flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[13px]">error</span>
-                                            {fieldErrors.identityNo}
+                                            {tempIdentityError}
                                         </p>
                                     )}
-                                    {tempFormData.identityNo && !fieldErrors.identityNo && (
+                                    {tempFormData.identityNo && !tempIdentityError && (
                                         <p className="mt-1.5 text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[13px]">check_circle</span>{t('checkout.valid')}
                                         </p>

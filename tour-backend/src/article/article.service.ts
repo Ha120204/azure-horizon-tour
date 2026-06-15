@@ -397,7 +397,7 @@ export class ArticleService {
     };
   }
 
-  async adminFindById(id: number) {
+  async adminFindById(id: number, requesterId?: number, requesterRole?: string) {
     const article = await this.prisma.article.findUnique({
       where: { id },
       include: {
@@ -406,6 +406,15 @@ export class ArticleService {
       },
     });
     if (!article) throw new NotFoundException('Bài viết không tồn tại');
+
+    // Staff chỉ xem được bài PUBLISHED hoặc bài do mình tạo (đồng bộ visibility với adminFindAll)
+    const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
+    if (!isAdmin) {
+      const isOwner = article.createdById === null || article.createdById === requesterId;
+      if (article.status !== ArticleStatus.PUBLISHED && !isOwner) {
+        throw new ForbiddenException('Bạn không có quyền xem bài viết này');
+      }
+    }
     return article;
   }
 
@@ -586,6 +595,7 @@ export class ArticleService {
       updateData.status = ArticleStatus.DRAFT;
       updateData.publishedAt = null;
       updateData.reviewNote = null;
+      updateData.isFeatured = false;
     } else if (wantsPublish) {
       updateData.status = ArticleStatus.PUBLISHED;
       updateData.publishedAt = existing.publishedAt ?? new Date();
@@ -601,7 +611,14 @@ export class ArticleService {
 
     const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
     if (!isAdmin) {
-      throw new ForbiddenException('Chỉ Admin mới có thể xóa bài viết');
+      // Staff chỉ được xóa (vào thùng rác) bài Nháp/Bị từ chối do chính mình tạo
+      const isOwner = existing.createdById === null || existing.createdById === requesterId;
+      if (!isOwner) {
+        throw new ForbiddenException('Bạn không có quyền xóa bài viết này');
+      }
+      if (existing.status !== ArticleStatus.DRAFT && existing.status !== ArticleStatus.REJECTED) {
+        throw new ForbiddenException('Chỉ có thể xóa bài viết ở trạng thái Nháp hoặc Bị từ chối');
+      }
     }
     // Soft delete — chuyển vào thùng rác
     await this.prisma.article.update({

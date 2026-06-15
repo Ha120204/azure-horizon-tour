@@ -10,14 +10,17 @@ import {
   PAY_CFG,
   STATUS_CFG,
 } from '../_lib/config';
-import { fmt, fmtDate, getInitials } from '../_lib/helpers';
+import { canRemindPayment, fmt, fmtDate, getInitials, toTelHref, toZaloPhone } from '../_lib/helpers';
 import type { Booking, Meta } from '../_lib/types';
 
 interface BookingTableProps {
   bookings: Booking[];
   isLoading: boolean;
+  loadError: string;
+  onRetry: () => void;
   hasFilter: boolean;
   statusFilter: string;
+  canWrite: boolean;
   meta: Meta;
   pageSize: number;
   onOpenBooking: (booking: Booking) => void;
@@ -34,8 +37,11 @@ interface BookingTableProps {
 export function BookingTable({
   bookings,
   isLoading,
+  loadError,
+  onRetry,
   hasFilter,
   statusFilter,
+  canWrite,
   meta,
   pageSize,
   onOpenBooking,
@@ -96,6 +102,18 @@ export function BookingTable({
   return (
     <>
       <div id="bookings-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
+      {loadError && bookings.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-error/20 bg-error/5 px-5 py-3">
+          <p className="flex items-center gap-2 text-sm font-medium text-error">
+            <span className="material-symbols-outlined text-[18px]">cloud_off</span>
+            Không cập nhật được dữ liệu mới nhất — đang hiển thị dữ liệu trước đó.
+          </p>
+          <button onClick={onRetry} className="inline-flex items-center gap-1.5 rounded-xl border border-error/30 px-3 py-1.5 text-xs font-bold text-error hover:bg-error/10 outline-none">
+            <span className="material-symbols-outlined text-[15px]">refresh</span>
+            Thử lại
+          </button>
+        </div>
+      )}
       {selectedCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/10 bg-primary/5 px-5 py-3">
           <div>
@@ -129,14 +147,16 @@ export function BookingTable({
           <thead>
             <tr className="border-b border-outline-variant/15 bg-surface-container/40">
               <th className="w-11 py-3.5 pl-5 pr-2">
-                <input
-                  type="checkbox"
-                  checked={allCurrentPageSelected}
-                  disabled={bookings.length === 0 || isLoading}
-                  onChange={toggleCurrentPage}
-                  className="h-4 w-4 rounded border-outline-variant/40 text-primary focus:ring-primary"
-                  aria-label="Chọn tất cả đơn trên trang hiện tại"
-                />
+                {canWrite && (
+                  <input
+                    type="checkbox"
+                    checked={allCurrentPageSelected}
+                    disabled={bookings.length === 0 || isLoading}
+                    onChange={toggleCurrentPage}
+                    className="h-4 w-4 rounded border-outline-variant/40 text-primary focus:ring-primary"
+                    aria-label="Chọn tất cả đơn trên trang hiện tại"
+                  />
+                )}
               </th>
               {(() => {
                 const baseHeaders = ['Mã Đặt Tour', 'Khách Hàng', 'Tour', 'Giá Trị', 'Trạng Thái', 'Phương Thức'];
@@ -153,6 +173,22 @@ export function BookingTable({
           <tbody className="divide-y divide-outline-variant/8">
             {isLoading ? (
               Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
+            ) : loadError && bookings.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="py-24 text-center">
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 rounded-2xl bg-error/10 flex items-center justify-center mb-4">
+                      <span className="material-symbols-outlined text-3xl text-error">cloud_off</span>
+                    </div>
+                    <p className="font-bold text-on-surface">Không tải được danh sách đơn đặt tour</p>
+                    <p className="text-sm text-on-surface-variant mt-1 max-w-md whitespace-pre-line">{loadError}</p>
+                    <button onClick={onRetry} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90 outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                      <span className="material-symbols-outlined text-[16px]">refresh</span>
+                      Thử lại
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ) : bookings.length === 0 ? (
               <tr>
                 <td colSpan={10} className="py-24 text-center">
@@ -178,6 +214,7 @@ export function BookingTable({
                   key={booking.id}
                   booking={booking}
                   statusFilter={statusFilter}
+                  canWrite={canWrite}
                   onOpenBooking={onOpenBooking}
                   onCopyPaymentRequest={onCopyPaymentRequest}
                   onResendPaymentRequest={onResendPaymentRequest}
@@ -233,6 +270,7 @@ export function BookingTable({
 interface BookingTableRowProps {
   booking: Booking;
   statusFilter: string;
+  canWrite: boolean;
   onOpenBooking: (booking: Booking) => void;
   onCopyPaymentRequest: (booking: Booking) => void;
   onResendPaymentRequest: (booking: Booking) => void;
@@ -242,25 +280,10 @@ interface BookingTableRowProps {
   onOpenCancel: (booking: Booking) => void;
 }
 
-function toTelHref(phone?: string | null) {
-  return phone?.replace(/[^\d+]/g, '') ?? '';
-}
-
-function toZaloPhone(phone?: string | null) {
-  const digits = phone?.replace(/\D/g, '') ?? '';
-  if (!digits) return '';
-  if (digits.startsWith('84')) return digits;
-  if (digits.startsWith('0')) return `84${digits.slice(1)}`;
-  return digits;
-}
-
-function canRemindPayment(booking: Booking) {
-  return booking.status === 'PENDING' && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS';
-}
-
 function BookingTableRow({
   booking,
   statusFilter,
+  canWrite,
   onOpenBooking,
   onCopyPaymentRequest,
   onResendPaymentRequest,
@@ -301,13 +324,15 @@ function BookingTableRow({
       onClick={() => onOpenBooking(booking)}
     >
       <td className="py-4 pl-5 pr-2" onClick={event => event.stopPropagation()}>
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => onToggleSelected(booking.id)}
-          className="h-4 w-4 rounded border-outline-variant/40 text-primary focus:ring-primary"
-          aria-label={`Chọn đơn ${booking.bookingCode}`}
-        />
+        {canWrite && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelected(booking.id)}
+            className="h-4 w-4 rounded border-outline-variant/40 text-primary focus:ring-primary"
+            aria-label={`Chọn đơn ${booking.bookingCode}`}
+          />
+        )}
       </td>
       <td className="py-4 px-5">
         <span className="font-mono text-sm font-bold text-primary">{booking.bookingCode}</span>
@@ -490,7 +515,7 @@ function BookingTableRow({
               role="menu"
               className="absolute right-0 top-10 z-[80] w-52 overflow-hidden rounded-2xl border border-outline-variant/15 bg-white p-1.5 text-left shadow-2xl shadow-slate-900/12"
             >
-              {isPending && (
+              {isPending && canWrite && (
                 <button
                   type="button"
                   role="menuitem"
@@ -518,7 +543,7 @@ function BookingTableRow({
                   Copy thanh toán
                 </button>
               )}
-              {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && (
+              {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && canWrite && (
                 <button
                   type="button"
                   role="menuitem"
@@ -546,24 +571,26 @@ function BookingTableRow({
                   Mở Zalo
                 </a>
               )}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setIsActionMenuOpen(false);
-                  onOpenNote(booking);
-                }}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
-                  booking.adminNote
-                    ? 'text-amber-700 hover:bg-amber-50'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
-                aria-label={`Ghi chú nội bộ ${booking.bookingCode}`}
-              >
-                <span className="material-symbols-outlined text-[16px]">edit_note</span>
-                {booking.adminNote ? 'Sửa ghi chú' : 'Thêm ghi chú'}
-              </button>
-              {booking.status !== 'CANCELLED' && (
+              {canWrite && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    onOpenNote(booking);
+                  }}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
+                    booking.adminNote
+                      ? 'text-amber-700 hover:bg-amber-50'
+                      : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                  aria-label={`Ghi chú nội bộ ${booking.bookingCode}`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                  {booking.adminNote ? 'Sửa ghi chú' : 'Thêm ghi chú'}
+                </button>
+              )}
+              {booking.status !== 'CANCELLED' && canWrite && (
                 <button
                   type="button"
                   role="menuitem"

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { UNLIMITED_USES } from '../_lib/config';
 
 export interface VoucherFormData {
   id?: number;
@@ -133,7 +134,7 @@ export function useVoucherForm(
 ) {
   const isEdit = mode === 'edit';
   const initNeverExpires = !initialData?.expiresAt || initialData.expiresAt > NEVER_EXPIRES_THRESHOLD;
-  const initUnlimited = !initialData?.maxUses || Number(initialData.maxUses) >= 999_999_999;
+  const initUnlimited = !initialData?.maxUses || Number(initialData.maxUses) >= UNLIMITED_USES;
   const todayYMD = toLocalYMD();
 
   const [form, setForm] = useState<VoucherFormData>({

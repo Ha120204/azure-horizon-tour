@@ -36,6 +36,12 @@ export type OverviewData = {
         icon: string;
         tone: Tone;
         href: string;
+        workflow: {
+            status: 'OPEN' | 'REVIEWED' | 'RESOLVED';
+            reviewedAt: string | null;
+            resolvedAt: string | null;
+            reviewer: { id: number; name: string; role: string } | null;
+        };
     }[];
     highRiskActions: {
         id: number;

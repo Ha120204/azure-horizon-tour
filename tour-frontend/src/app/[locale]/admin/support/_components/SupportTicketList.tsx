@@ -1,6 +1,6 @@
 import { AVATAR_COLORS, CAT, STS } from '../_lib/config';
 import { calcOverdueSLA, fmtResponse, fmtSyncTime, fmtTime, formatSupportMessageLines, getInitials } from '../_lib/helpers';
-import type { Kpi, Ticket, TicketSort, TicketView } from '../_lib/types';
+import type { Kpi, Ticket, TicketAssignee, TicketSort, TicketView } from '../_lib/types';
 
 interface SupportTicketListProps {
     tickets: Ticket[];
@@ -14,6 +14,8 @@ interface SupportTicketListProps {
     currentPage: number;
     totalPages: number;
     sort: TicketSort;
+    activeAssignee: TicketAssignee;
+    onAssigneeChange: (assignee: TicketAssignee) => void;
     onViewToggle: (view: Exclude<TicketView, 'ALL'>) => void;
     onSelect: (ticket: Ticket) => void;
     onPageChange: (page: number) => void;
@@ -33,6 +35,8 @@ export function SupportTicketList({
     currentPage,
     totalPages,
     sort,
+    activeAssignee,
+    onAssigneeChange,
     onViewToggle,
     onSelect,
     onPageChange,
@@ -123,18 +127,32 @@ export function SupportTicketList({
                     })}
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
-                    <label className="flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px] text-outline" aria-hidden="true">sort</span>
-                        <select
-                            value={sort}
-                            onChange={(e) => onSortChange(e.target.value as TicketSort)}
-                            className="h-8 rounded-xl border border-outline-variant/40 bg-surface px-2 text-xs font-bold text-on-surface-variant outline-none transition hover:border-primary/30 focus-visible:ring-4 focus-visible:ring-primary/10"
-                        >
-                            <option value="updated">Vừa cập nhật</option>
-                            <option value="oldest">Chờ lâu nhất</option>
-                            <option value="overdue">Quá SLA trước</option>
-                        </select>
-                    </label>
+                    <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px] text-outline" aria-hidden="true">sort</span>
+                            <select
+                                value={sort}
+                                onChange={(e) => onSortChange(e.target.value as TicketSort)}
+                                className="h-8 rounded-xl border border-outline-variant/40 bg-surface px-2 text-xs font-bold text-on-surface-variant outline-none transition hover:border-primary/30 focus-visible:ring-4 focus-visible:ring-primary/10"
+                            >
+                                <option value="updated">Vừa cập nhật</option>
+                                <option value="oldest">Chờ lâu nhất</option>
+                                <option value="overdue">Quá SLA trước</option>
+                            </select>
+                        </label>
+                        <label className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px] text-outline" aria-hidden="true">person</span>
+                            <select
+                                value={activeAssignee}
+                                onChange={(e) => onAssigneeChange(e.target.value as TicketAssignee)}
+                                className="h-8 rounded-xl border border-outline-variant/40 bg-surface px-2 text-xs font-bold text-on-surface-variant outline-none transition hover:border-primary/30 focus-visible:ring-4 focus-visible:ring-primary/10"
+                            >
+                                <option value="ALL">Tất cả phụ trách</option>
+                                <option value="ME">Của tôi</option>
+                                <option value="NONE">Chưa giao</option>
+                            </select>
+                        </label>
+                    </div>
                     {lastSyncedAt && (
                         <p className="flex items-center gap-1.5 text-[11px] font-semibold text-outline">
                             <span className="material-symbols-outlined text-[14px]" aria-hidden="true">sync</span>

@@ -38,7 +38,7 @@ export class BookingCancellationService {
     return departure?.departureDate ?? booking.tour.startDate;
   }
 
-  private buildCancellationPolicy(booking: {
+  buildCancellationPolicy(booking: {
     status: BookingStatus;
     paymentStatus: PaymentStatus;
     totalPrice: number | Prisma.Decimal;
@@ -55,32 +55,32 @@ export class BookingCancellationService {
     const totalPrice = Number(booking.totalPrice);
 
     if (booking.status === 'CANCELLED') {
-      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Don dat tour da duoc huy.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Don dat tour da duoc huy.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
+      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Đơn đặt tour đã được hủy.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Đơn đặt tour đã được hủy.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
     }
     if (booking.status === 'CANCEL_REQUESTED') {
-      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Yeu cau huy dang cho xu ly.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Yeu cau huy dang cho admin xu ly.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
+      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Yêu cầu hủy đang chờ xử lý.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Yêu cầu hủy đang chờ admin xử lý.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
     }
     if (tripLifecycle === 'DEPARTING_TODAY') {
-      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Tour khoi hanh hom nay, khong the huy online.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Khong ho tro huy online vao ngay khoi hanh.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
+      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Tour khởi hành hôm nay, không thể hủy online.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Không hỗ trợ hủy online vào ngày khởi hành.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
     }
     if (tripLifecycle === 'COMPLETED') {
-      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Chuyen di da hoan thanh.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Chuyen di da hoan thanh, khong the huy booking.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
+      return { canCancel: false, tripLifecycle, cancelUnavailableReason: 'Chuyến đi đã hoàn thành.', refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Chuyến đi đã hoàn thành, không thể hủy booking.', policyTier: 'NOT_CANCELABLE', departureDate: booking.departureDate, daysUntilDeparture };
     }
     if (booking.paymentStatus !== 'PAID') {
-      return { canCancel: true, tripLifecycle, refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Chua thanh toan - khong co khoan hoan tien.', policyTier: 'UNPAID', departureDate: booking.departureDate, daysUntilDeparture };
+      return { canCancel: true, tripLifecycle, refundPercent: 0, estimatedRefundAmount: 0, refundNote: 'Chưa thanh toán – không có khoản hoàn tiền.', policyTier: 'UNPAID', departureDate: booking.departureDate, daysUntilDeparture };
     }
 
     const hoursSinceBooking = moment().diff(moment(booking.createdAt), 'hours', true);
     let refundPercent = 0;
-    let refundNote = 'Khong hoan tien (huy duoi 3 ngay truoc khoi hanh).';
+    let refundNote = 'Không hoàn tiền (hủy dưới 3 ngày trước khởi hành).';
     let policyTier: CancellationPolicyTier = 'NO_REFUND';
 
     if (hoursSinceBooking <= 24) {
-      refundPercent = 100; refundNote = 'Hoan 100% do huy trong 24h sau khi dat.'; policyTier = 'FULL_REFUND_24H';
+      refundPercent = 100; refundNote = 'Hoàn 100% do hủy trong 24h sau khi đặt.'; policyTier = 'FULL_REFUND_24H';
     } else if (daysUntilDeparture >= 7) {
-      refundPercent = 80; refundNote = 'Hoan 80% do huy truoc ngay khoi hanh tu 7 ngay tro len.'; policyTier = 'EIGHTY_REFUND';
+      refundPercent = 80; refundNote = 'Hoàn 80% do hủy trước ngày khởi hành từ 7 ngày trở lên.'; policyTier = 'EIGHTY_REFUND';
     } else if (daysUntilDeparture >= 3) {
-      refundPercent = 50; refundNote = 'Hoan 50% do huy truoc ngay khoi hanh tu 3 den duoi 7 ngay.'; policyTier = 'HALF_REFUND';
+      refundPercent = 50; refundNote = 'Hoàn 50% do hủy trước ngày khởi hành từ 3 đến dưới 7 ngày.'; policyTier = 'HALF_REFUND';
     }
 
     return { canCancel: true, tripLifecycle, refundPercent, estimatedRefundAmount: Math.round((totalPrice * refundPercent) / 100), refundNote, policyTier, departureDate: booking.departureDate, daysUntilDeparture };
@@ -110,13 +110,13 @@ export class BookingCancellationService {
       where: { id: bookingId, deletedAt: null },
       include: { user: true, tour: true },
     });
-    if (!booking) throw new NotFoundException('Booking khong ton tai');
-    if (booking.userId !== userId) throw new BadRequestException('Khong co quyen huy booking nay');
-    if (booking.status === 'CANCELLED') throw new BadRequestException('Booking nay da duoc huy truoc do');
-    if (booking.status === 'CANCEL_REQUESTED') throw new BadRequestException('Yeu cau huy cua ban dang cho xu ly');
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.userId !== userId) throw new BadRequestException('Không có quyền hủy booking này');
+    if (booking.status === 'CANCELLED') throw new BadRequestException('Booking này đã được hủy trước đó');
+    if (booking.status === 'CANCEL_REQUESTED') throw new BadRequestException('Yêu cầu hủy của bạn đang chờ xử lý');
 
     const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
-    if (!cancellationPolicy.canCancel) throw new BadRequestException(cancellationPolicy.cancelUnavailableReason ?? 'Khong the huy booking nay.');
+    if (!cancellationPolicy.canCancel) throw new BadRequestException(cancellationPolicy.cancelUnavailableReason ?? 'Không thể hủy booking này.');
 
     const refundAmount = cancellationPolicy.estimatedRefundAmount;
     const refundNote = cancellationPolicy.refundNote;
@@ -217,13 +217,12 @@ export class BookingCancellationService {
         departureId: booking.departureId,
         seats: booking.numberOfPeople,
       });
+      if (refundAmount > 0) {
+        await tx.paymentTransaction.create({
+          data: { bookingId, gateway: 'MANUAL', amount: refundAmount, status: 'PENDING', transactionRef: `REFUND-${bookingId}-${Date.now()}` },
+        });
+      }
     });
-
-    if (refundAmount > 0) {
-      await this.prisma.paymentTransaction.create({
-        data: { bookingId, gateway: 'MANUAL', amount: refundAmount, status: 'PENDING', transactionRef: `REFUND-${bookingId}-${Date.now()}` },
-      });
-    }
 
     try {
       if (booking.user?.email) {
@@ -274,12 +273,12 @@ export class BookingCancellationService {
       where: { id: bookingId, deletedAt: null },
       include: { user: true, tour: true },
     });
-    if (!booking) throw new NotFoundException('Booking khong ton tai');
-    if (booking.status === 'CANCELLED') throw new BadRequestException('Booking nay da duoc huy truoc do');
+    if (!booking) throw new NotFoundException('Booking không tồn tại');
+    if (booking.status === 'CANCELLED') throw new BadRequestException('Booking này đã được hủy trước đó');
 
     const cancellationPolicy = await this.getCancellationPolicyForBooking(booking);
     if (!cancellationPolicy.canCancel) {
-      throw new BadRequestException(cancellationPolicy.cancelUnavailableReason ?? 'Khong the huy booking nay.');
+      throw new BadRequestException(cancellationPolicy.cancelUnavailableReason ?? 'Không thể hủy booking này.');
     }
 
     const refundAmount = cancellationPolicy.estimatedRefundAmount;

@@ -1,4 +1,5 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, IsArray } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, IsArray, MaxLength, MinLength } from 'class-validator';
+
 import { Type } from 'class-transformer';
 
 export class CreateReviewDto {
@@ -11,6 +12,8 @@ export class CreateReviewDto {
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(20)
+  @MaxLength(1000)
   content: string;
 
   @IsArray()

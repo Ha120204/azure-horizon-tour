@@ -62,8 +62,8 @@ export interface BackendMarketingCampaign {
   audience: AudienceType;
   audienceFilter?: { status?: SubscriberStatus; search?: string; recipientIds?: number[] };
   recipientIds?: number[];
-  scheduledAt: string;
-  status: Exclude<CampaignDraft['status'], 'DRAFT'>;
+  scheduledAt?: string;
+  status: CampaignDraft['status'];
   recipientEstimate: number;
   processedCount?: number;
   sentCount: number;

@@ -98,6 +98,7 @@ export class TourService {
   ) {
     const {
       dest,
+      destinationId,
       travelScope: travelScopeInput,
       minPrice,
       maxPrice,
@@ -142,6 +143,10 @@ export class TourService {
       Object.values(TourStatus).includes(status as TourStatus)
     ) {
       where.status = status as TourStatus;
+    }
+
+    if (destinationId) {
+      appendAndFilter(where, { destinationId: parseInt(destinationId, 10) });
     }
 
     if (dest) {
@@ -443,6 +448,9 @@ export class TourService {
   async submitForReview(id: number, requesterId: number) {
     return this.workflowService.submitForReview(id, requesterId);
   }
+  async bulkSubmitForReview(ids: number[], requesterId: number) {
+    return this.workflowService.bulkSubmitForReview(ids, requesterId);
+  }
   async reviewTour(
     id: number,
     reviewerId: number,
@@ -556,6 +564,9 @@ export class TourService {
   }
   async permanentDelete(id: number) {
     return this.queryService.permanentDelete(id);
+  }
+  async bulkHide(ids: number[], requesterId?: number, requesterRole?: string) {
+    return this.queryService.bulkHide(ids, requesterId, requesterRole);
   }
   async bulkRestoreTours(ids: number[]) {
     return this.queryService.bulkRestoreTours(ids);

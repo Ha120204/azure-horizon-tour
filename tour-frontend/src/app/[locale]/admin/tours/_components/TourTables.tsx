@@ -8,6 +8,7 @@ import type { Meta, Tour, TourReviewAction, TrashedTour } from '../_lib/types';
 interface ActiveToursTableProps {
     tours: Tour[];
     isLoading: boolean;
+    isError?: boolean;
     meta: Meta;
     page: number;
     pageSize: number;
@@ -28,11 +29,13 @@ interface ActiveToursTableProps {
     onDelete: (tour: Tour) => void;
     onPageChange: (page: number) => void;
     onPageSizeChange: (pageSize: number) => void;
+    onRetry?: () => void;
 }
 
 export function ActiveToursTable({
     tours,
     isLoading,
+    isError = false,
     meta,
     page,
     pageSize,
@@ -53,6 +56,7 @@ export function ActiveToursTable({
     onDelete,
     onPageChange,
     onPageSizeChange,
+    onRetry,
 }: ActiveToursTableProps) {
     const hasSelectableTours = tours.some(canSelectTour);
 
@@ -94,6 +98,24 @@ export function ActiveToursTable({
                                 <td colSpan={11} className="py-20 text-center">
                                     <span className="material-symbols-outlined text-4xl text-primary animate-spin" aria-hidden="true">progress_activity</span>
                                     <p className="text-on-surface-variant text-sm mt-3">Đang tải dữ liệu…</p>
+                                </td>
+                            </tr>
+                        ) : isError ? (
+                            <tr>
+                                <td colSpan={11} className="py-20 text-center">
+                                    <span className="material-symbols-outlined text-4xl text-error mb-2 block" aria-hidden="true">wifi_off</span>
+                                    <p className="font-bold text-on-surface">Không tải được dữ liệu</p>
+                                    <p className="text-on-surface-variant text-sm mt-1">Đã xảy ra lỗi khi tải danh sách tour.</p>
+                                    {onRetry && (
+                                        <button
+                                            type="button"
+                                            onClick={onRetry}
+                                            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:bg-primary/90 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">refresh</span>
+                                            Thử lại
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ) : tours.length === 0 ? (
@@ -150,6 +172,7 @@ export function ActiveToursTable({
 interface TrashToursTableProps {
     trashedTours: TrashedTour[];
     isLoading: boolean;
+    isError?: boolean;
     meta: Meta;
     selectedIds: Set<number>;
     isAllSelected: boolean;
@@ -159,11 +182,13 @@ interface TrashToursTableProps {
     onRestore: (tour: TrashedTour) => void;
     onPermanentDelete: (tour: TrashedTour) => void;
     onPageChange: (page: number) => void;
+    onRetry?: () => void;
 }
 
 export function TrashToursTable({
     trashedTours,
     isLoading,
+    isError = false,
     meta,
     selectedIds,
     isAllSelected,
@@ -173,6 +198,7 @@ export function TrashToursTable({
     onRestore,
     onPermanentDelete,
     onPageChange,
+    onRetry,
 }: TrashToursTableProps) {
     return (
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden mb-4">
@@ -209,6 +235,22 @@ export function TrashToursTable({
                         {isLoading ? (
                             <tr><td colSpan={7} className="py-16 text-center">
                                 <span className="material-symbols-outlined text-3xl text-primary animate-spin">progress_activity</span>
+                            </td></tr>
+                        ) : isError ? (
+                            <tr><td colSpan={7} className="py-16 text-center">
+                                <span className="material-symbols-outlined text-4xl text-error mb-2 block" aria-hidden="true">wifi_off</span>
+                                <p className="font-semibold text-on-surface">Không tải được thùng rác</p>
+                                <p className="text-sm text-on-surface-variant mt-1">Đã xảy ra lỗi khi tải dữ liệu.</p>
+                                {onRetry && (
+                                    <button
+                                        type="button"
+                                        onClick={onRetry}
+                                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold hover:bg-primary/90 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">refresh</span>
+                                        Thử lại
+                                    </button>
+                                )}
                             </td></tr>
                         ) : trashedTours.length === 0 ? (
                             <tr><td colSpan={7} className="py-16 text-center">

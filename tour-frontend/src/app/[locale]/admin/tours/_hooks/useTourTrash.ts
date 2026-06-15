@@ -18,6 +18,7 @@ export function useTourTrash({ activeTab, isAdmin, fetchTours, fetchStats, showT
     const [trashMeta, setTrashMeta] = useState<Meta>({ totalItems: 0, totalPages: 1, currentPage: 1 });
     const [trashPage, setTrashPage] = useState(1);
     const [isLoadingTrash, setIsLoadingTrash] = useState(false);
+    const [isTrashError, setIsTrashError] = useState(false);
     const [trashSearchInput, setTrashSearchInput] = useState('');
     const [trashSearch, setTrashSearch] = useState('');
     const [trashStatus, setTrashStatus] = useState('');
@@ -32,6 +33,7 @@ export function useTourTrash({ activeTab, isAdmin, fetchTours, fetchStats, showT
 
     const fetchTrashedTours = useCallback(async () => {
         setIsLoadingTrash(true);
+        setIsTrashError(false);
         try {
             const qs = new URLSearchParams();
             qs.set('page', String(trashPage));
@@ -40,10 +42,12 @@ export function useTourTrash({ activeTab, isAdmin, fetchTours, fetchStats, showT
             if (trashStatus) qs.set('status', trashStatus);
             if (trashDeletable) qs.set('deletable', trashDeletable);
             const res = await fetchWithAuth(`${API_BASE_URL}/tour/trash?${qs.toString()}`);
+            if (!res.ok) throw new Error();
             const json = await res.json();
             setTrashedTours(json.data ?? []);
             if (json.meta) setTrashMeta(json.meta);
         } catch {
+            setIsTrashError(true);
             showToast('Lỗi tải thùng rác.', 'error');
         } finally {
             setIsLoadingTrash(false);
@@ -69,7 +73,7 @@ export function useTourTrash({ activeTab, isAdmin, fetchTours, fetchStats, showT
     useEffect(() => {
         if (!isAdmin) return;
         fetchWithAuth(`${API_BASE_URL}/tour/trash?page=1&limit=1`)
-            .then(r => r.json())
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); })
             .then(json => {
                 if (json.meta) {
                     setTrashMeta(prev => ({
@@ -197,6 +201,7 @@ export function useTourTrash({ activeTab, isAdmin, fetchTours, fetchStats, showT
         trashPage,
         setTrashPage,
         isLoadingTrash,
+        isTrashError,
         trashSearchInput,
         setTrashSearchInput,
         trashStatus,

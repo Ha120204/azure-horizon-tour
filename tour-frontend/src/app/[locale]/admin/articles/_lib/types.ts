@@ -9,6 +9,8 @@ export interface SharedArticleViewProps {
   isLoading: boolean;
   hasFilter: boolean;
   isAdmin: boolean;
+  // SUPER_ADMIN xem read-only: isAdmin vẫn true (layout + phân biệt staff), canWrite=false để ẩn thao tác
+  canWrite: boolean;
   userId: number | null;
   isSubmitting: number | null;
   onCreate: () => void;

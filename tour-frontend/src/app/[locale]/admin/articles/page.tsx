@@ -20,6 +20,7 @@ export default function ArticleManagementPage() {
       <ArticlePageHeader
         viewMode={article.viewMode}
         isAdmin={article.isAdmin}
+        canWrite={article.canWrite}
         showTrash={article.showTrash}
         trashCount={article.trashCount}
         onViewModeChange={article.setViewMode}
@@ -61,6 +62,7 @@ export default function ArticleManagementPage() {
           isLoading={article.isLoading}
           hasFilter={article.hasFilter}
           isAdmin={article.isAdmin}
+          canWrite={article.canWrite}
           userId={article.userId}
           isSubmitting={article.isSubmitting}
           meta={article.meta}
@@ -95,6 +97,7 @@ export default function ArticleManagementPage() {
           isLoading={article.isLoading}
           hasFilter={article.hasFilter}
           isAdmin={article.isAdmin}
+          canWrite={article.canWrite}
           userId={article.userId}
           isSubmitting={article.isSubmitting}
           onCreate={article.openCreate}
@@ -127,7 +130,7 @@ export default function ArticleManagementPage() {
         onConfirmDelete={article.handleDelete}
         onCancelDelete={() => article.setDeleteTarget(null)}
         showTrash={article.showTrash}
-        isAdmin={article.isAdmin}
+        isAdmin={article.canWrite}
         trashArticles={article.trashArticles}
         trashMeta={article.trashMeta}
         trashSearch={article.trashSearch}

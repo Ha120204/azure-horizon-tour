@@ -2,13 +2,15 @@
 
 import { AssistedBookingWorkspace } from './_components/AssistedBookingWorkspace';
 import { BookingDetailModal } from './_components/BookingDetailModal';
-import { BookingFilters, BookingKpiGrid, BookingPageHeader, BookingToast, PaymentStatsSection } from './_components/BookingPageSections';
+import { BookingFilters, BookingKpiGrid, BookingPageHeader, BookingSavedViews, BookingToast, PaymentStatsSection } from './_components/BookingPageSections';
 import { BookingTable } from './_components/BookingTable';
 import { CancelRequestPanel } from './_components/CancelRequestPanel';
 import { useBookingManagement } from './_hooks/useBookingManagement';
 
 export default function BookingManagementPage() {
   const booking = useBookingManagement();
+  // SUPER_ADMIN xem read-only: ẩn các công cụ thao tác (đặt hộ, duyệt hủy)
+  const isReadOnly = booking.isAdmin && !booking.canWrite;
 
   return (
     <main
@@ -27,12 +29,15 @@ export default function BookingManagementPage() {
         onExport={booking.handleExport}
       />
 
-      <AssistedBookingWorkspace onChanged={booking.refreshBookingsAndPaymentStats} showToast={booking.showToast} />
+      {!isReadOnly && (
+        <AssistedBookingWorkspace onChanged={booking.refreshBookingsAndPaymentStats} showToast={booking.showToast} />
+      )}
 
       <BookingKpiGrid
         stats={booking.stats}
         statusFilter={booking.statusFilter}
         paymentFilter={booking.paymentFilter}
+        isAdmin={booking.isAdmin}
         onFilterStatus={booking.filterByStatus}
         onFilterPayment={booking.filterByPayment}
       />
@@ -49,9 +54,17 @@ export default function BookingManagementPage() {
         onClearDates={booking.clearStatsDates}
       />
 
-      <CancelRequestPanel onActionDone={booking.refreshBookingsAndPaymentStats} />
+      {booking.canWrite && (
+        <CancelRequestPanel onActionDone={booking.refreshBookingsAndPaymentStats} />
+      )}
 
       <section className="mb-8" aria-label="Danh sách đơn đặt tour">
+        <BookingSavedViews
+          activeView={booking.activeSavedView}
+          stats={booking.stats}
+          onViewChange={booking.applySavedView}
+        />
+
         <BookingFilters
           search={booking.search}
           statusFilter={booking.statusFilter}
@@ -79,8 +92,11 @@ export default function BookingManagementPage() {
         <BookingTable
           bookings={booking.bookings}
           isLoading={booking.isLoading}
+          loadError={booking.loadError}
+          onRetry={booking.fetchBookings}
           hasFilter={booking.hasFilter}
           statusFilter={booking.statusFilter}
+          canWrite={booking.canWrite}
           meta={booking.meta}
           pageSize={booking.pageSize}
           onOpenBooking={booking.setSelectedBooking}
@@ -98,6 +114,8 @@ export default function BookingManagementPage() {
       {booking.selectedBooking && (
         <BookingDetailModal
           booking={booking.selectedBooking}
+          isAdmin={booking.isAdmin}
+          canWrite={booking.canWrite}
           onClose={() => booking.setSelectedBooking(null)}
           onConfirmSuccess={booking.handleConfirmSuccess}
           onCopyPaymentRequest={booking.copyPaymentRequest}

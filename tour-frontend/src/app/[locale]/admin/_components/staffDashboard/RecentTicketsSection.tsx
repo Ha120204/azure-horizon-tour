@@ -1,15 +1,15 @@
 import { Link } from '@/i18n/routing';
-import type { MyTicket } from './types';
+import type { RecentTicket } from './types';
 import { TICKET_STATUS, formatDate } from './constants';
 import { Skeleton, SectionHeader, EmptyState } from './ui';
 
 export default function RecentTicketsSection({
     loading,
-    myTickets,
+    recentTickets,
     openTickets,
 }: {
     loading: boolean;
-    myTickets: MyTicket[];
+    recentTickets: RecentTicket[];
     openTickets: number;
 }) {
     return (
@@ -32,7 +32,7 @@ export default function RecentTicketsSection({
                             <Skeleton className="h-3 w-1/2" />
                         </div>
                     ))
-                ) : myTickets.length === 0 ? (
+                ) : recentTickets.length === 0 ? (
                     <EmptyState
                         icon="support_agent"
                         title={openTickets > 0 ? `${openTickets.toLocaleString('vi-VN')} ticket đang mở trong hệ thống` : 'Không có ticket đang mở'}
@@ -43,7 +43,7 @@ export default function RecentTicketsSection({
                         action={openTickets > 0 ? 'Mở hàng đợi ticket' : 'Xem lịch sử hỗ trợ'}
                     />
                 ) : (
-                    myTickets.map(ticket => {
+                    recentTickets.map(ticket => {
                         const status = TICKET_STATUS[ticket.status] ?? { label: ticket.status, cls: 'bg-slate-100 text-slate-600' };
                         return (
                             <Link key={ticket.id} href="/admin/support?view=open" className="block px-6 py-4 transition-colors hover:bg-slate-50/70 focus:outline-none focus-visible:bg-blue-50">

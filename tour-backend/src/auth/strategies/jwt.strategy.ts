@@ -33,6 +33,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         id: true,
         email: true,
         role: true,
+        superAdminViewGrants: true,
         deletedAt: true,
         authTokenVersion: true,
       },
@@ -53,6 +54,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       sub: user.id,
       email: user.email,
       role: user.role,
+      superAdminViewGrants: user.superAdminViewGrants,
     };
   }
 }

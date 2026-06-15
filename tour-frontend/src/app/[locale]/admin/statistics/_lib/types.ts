@@ -4,7 +4,7 @@ export interface BookingStatusDist { name: string; value: number; key: string }
 export interface BookingStatusData {
     total: number;
     distribution: BookingStatusDist[];
-    paymentStatus: { name: string; value: number }[];
+    paymentStatus: { name: string; value: number; key: string }[];
     recentTrend: { date: string; count: number }[];
 }
 export interface TopTour {

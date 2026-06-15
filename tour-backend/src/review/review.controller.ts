@@ -26,6 +26,7 @@ import { AdminQueryReviewDto, AdminReplyDto } from './dto/admin-query-review.dto
 import { AuthGuard } from '@nestjs/passport';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
 type AuthUser = {
@@ -112,6 +113,7 @@ export class ReviewController {
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('ADMIN', 'SUPER_ADMIN')
+@SuperAdminArea('reviews')
 @Controller('review/admin')
 export class ReviewAdminController {
   constructor(private readonly reviewService: ReviewService) {}

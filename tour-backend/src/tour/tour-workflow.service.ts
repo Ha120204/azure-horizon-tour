@@ -74,6 +74,61 @@ export class TourWorkflowService {
     });
   }
 
+  async bulkSubmitForReview(ids: number[], requesterId: number) {
+    const uniqueIds = [
+      ...new Set(ids.filter((id) => Number.isInteger(id) && id > 0)),
+    ];
+    if (uniqueIds.length === 0)
+      throw new BadRequestException('Danh sách tour không hợp lệ');
+
+    const tours = await this.prisma.tour.findMany({
+      where: {
+        id: { in: uniqueIds },
+        deletedAt: null,
+        createdById: requesterId,
+        status: { in: [TourStatus.DRAFT, TourStatus.REJECTED] },
+      },
+      include: {
+        destination: {
+          select: { id: true, name: true, travelScope: true, countryCode: true },
+        },
+        departures: {
+          where: {
+            isActive: true,
+            departureDate: { gte: getMinBookableDate() },
+          },
+          select: { departureDate: true, availableSeats: true, isActive: true },
+        },
+        packages: {
+          where: { isActive: true },
+          select: { id: true, isActive: true },
+        },
+      },
+    });
+
+    const eligibleIds: number[] = [];
+    for (const tour of tours) {
+      try {
+        requirePublishableTour(tour, { requireDepartures: true, requirePackages: true });
+        eligibleIds.push(tour.id);
+      } catch {
+        // Tour chưa đủ điều kiện → bỏ qua, không fail toàn batch
+      }
+    }
+
+    if (eligibleIds.length > 0) {
+      await this.prisma.tour.updateMany({
+        where: { id: { in: eligibleIds } },
+        data: { status: TourStatus.PENDING_REVIEW, reviewNote: null },
+      });
+    }
+
+    return {
+      submitted: eligibleIds.length,
+      skipped: uniqueIds.length - eligibleIds.length,
+    };
+  }
+
   async reviewTour(
     id: number,
     reviewerId: number,

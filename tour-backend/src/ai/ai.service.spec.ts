@@ -16,6 +16,10 @@ describe('AiService', () => {
     },
   } as any;
 
+  const mockBookingCancellationService = {
+    getCancellationPolicyForBooking: jest.fn(),
+  } as any;
+
   const baseConfig = {
     AI_PROVIDER: 'llmgate',
     AI_API_KEY: 'test-key',
@@ -28,7 +32,7 @@ describe('AiService', () => {
     const configService = {
       get: jest.fn((key: string) => ({ ...baseConfig, ...overrides })[key]),
     } as unknown as ConfigService;
-    return new AiService(configService, mockPrisma);
+    return new AiService(configService, mockPrisma, mockBookingCancellationService);
   };
 
   beforeEach(() => {

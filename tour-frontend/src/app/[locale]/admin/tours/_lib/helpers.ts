@@ -41,6 +41,8 @@ export const getTourReviewMissingItems = (tour: Tour): string[] => {
         && !Number.isNaN(new Date(departure.departureDate).getTime())
         && Number(departure.availableSeats ?? 0) > 0
     );
+    // API trả về packages đã lọc isActive:true, nên chỉ cần kiểm tra length
+    const hasActivePackage = Array.isArray(tour.packages) && tour.packages.length > 0;
 
     if (!tour.name?.trim()) missing.push('Tên tour');
     if (!tour.description?.trim()) missing.push('Mô tả');
@@ -50,6 +52,7 @@ export const getTourReviewMissingItems = (tour: Tour): string[] => {
     if (tour.availableSeats == null || Number(tour.availableSeats) < 1) missing.push('Số ghế');
     if (!hasStartDate) missing.push('Ngày khởi hành');
     if (!hasValidDeparture) missing.push('Ít nhất 1 chuyến khởi hành');
+    if (!hasActivePackage) missing.push('Ít nhất 1 gói dịch vụ');
 
     return [...new Set(missing)];
 };

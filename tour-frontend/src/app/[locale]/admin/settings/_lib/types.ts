@@ -24,6 +24,12 @@ export interface SettingMeta {
     risky?: boolean;
 }
 
+export interface SecurityInfo {
+    jwtExpires: string;
+    jwtRefreshExpires: string;
+    rateLimit: string;
+}
+
 export type SystemHealthStatus = 'ok' | 'warning' | 'error';
 
 export interface SystemHealthItem {

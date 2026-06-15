@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
-import { API_BASE_URL } from '@/lib/http/constants';
-import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { api } from '@/lib/http/fetchWithAuth';
+import type { OverviewData } from '../../_lib/dashboard.types';
 import {
     getDateRange,
     getGranularity,
@@ -34,43 +34,52 @@ export function useStatisticsDashboard() {
     const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
     const [voucherOverview, setVoucherOverview] = useState<VoucherOverview | null>(null);
     const [topVouchers, setTopVouchers] = useState<TopVoucher[]>([]);
+    const [overview, setOverview] = useState<OverviewData | null>(null);
     const [loading, setLoading] = useState(true);
     const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
     const [dashboardError, setDashboardError] = useState('');
+    const fetchIdRef = useRef(0);
 
     const fetchAll = useCallback(async (options: { silent?: boolean } = {}) => {
-        if (!options.silent) setLoading(true);
-        if (!options.silent) setDashboardError('');
+        const currentId = ++fetchIdRef.current;
+        const silent = options.silent ?? false;
+        if (!silent) { setLoading(true); setDashboardError(''); }
         const { from, to } = dateRange;
         const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
         const gran = getGranularity(diffDays);
         try {
-            const [revRes, destRes, bsRes, toursRes, custRes, vouchRes] = await Promise.all([
-                fetchWithAuth(`${API_BASE_URL}/statistics/revenue?dateFrom=${from}&dateTo=${to}&granularity=${gran}`),
-                fetchWithAuth(`${API_BASE_URL}/statistics/destinations/revenue?dateFrom=${from}&dateTo=${to}&limit=8`),
-                fetchWithAuth(`${API_BASE_URL}/statistics/bookings/status?dateFrom=${from}&dateTo=${to}`),
-                fetchWithAuth(`${API_BASE_URL}/statistics/tours/top?limit=5&dateFrom=${from}&dateTo=${to}`),
-                fetchWithAuth(`${API_BASE_URL}/statistics/customers/top?limit=5&dateFrom=${from}&dateTo=${to}`),
-                fetchWithAuth(`${API_BASE_URL}/statistics/vouchers/summary`),
+            const [overviewRes, revRes, destRes, bsRes, toursRes, custRes, vouchRes] = await Promise.all([
+                api.get<OverviewData>(`/statistics/overview?dateFrom=${from}&dateTo=${to}`, { silent }),
+                api.get<{ data: RevenuePoint[] }>(`/statistics/revenue?dateFrom=${from}&dateTo=${to}&granularity=${gran}`, { silent }),
+                api.get<DestRevenue[]>(`/statistics/destinations/revenue?dateFrom=${from}&dateTo=${to}&limit=8`, { silent }),
+                api.get<BookingStatusData>(`/statistics/bookings/status?dateFrom=${from}&dateTo=${to}`, { silent }),
+                api.get<TopTour[]>(`/statistics/tours/top?limit=5&dateFrom=${from}&dateTo=${to}`, { silent }),
+                api.get<TopCustomer[]>(`/statistics/customers/top?limit=5&dateFrom=${from}&dateTo=${to}`, { silent }),
+                api.get<{ overview: VoucherOverview; topVouchers: TopVoucher[] }>(`/statistics/vouchers/summary`, { silent }),
             ]);
-            if (revRes.ok) { const j = await revRes.json(); setRevenueData(j.data?.data ?? []); }
-            if (destRes.ok) { const j = await destRes.json(); setDestRevenue(j.data ?? []); }
-            if (bsRes.ok) { const j = await bsRes.json(); setBookingStatus(j.data); }
-            if (toursRes.ok) { const j = await toursRes.json(); setTopTours(j.data ?? []); }
-            if (custRes.ok) { const j = await custRes.json(); setTopCustomers(j.data ?? []); }
+            if (fetchIdRef.current !== currentId) return;
+            if (overviewRes.ok) setOverview(overviewRes.data);
+            if (revRes.ok) setRevenueData(revRes.data.data ?? []);
+            if (destRes.ok) setDestRevenue(destRes.data ?? []);
+            if (bsRes.ok) setBookingStatus(bsRes.data);
+            if (toursRes.ok) setTopTours(toursRes.data ?? []);
+            if (custRes.ok) setTopCustomers(custRes.data ?? []);
             if (vouchRes.ok) {
-                const j = await vouchRes.json();
-                setVoucherOverview(j.data?.overview ?? null);
-                setTopVouchers(j.data?.topVouchers ?? []);
+                setVoucherOverview(vouchRes.data.overview ?? null);
+                setTopVouchers(vouchRes.data.topVouchers ?? []);
             }
-            setLastUpdatedAt(new Date());
-        } catch (e) {
-            if (options.silent) return;
-            console.error('Statistics error:', e);
-            setDashboardError('Không tải được dữ liệu thống kê. Vui lòng thử làm mới lại.');
+            const allFailed = [overviewRes, revRes, destRes, bsRes, toursRes, custRes, vouchRes].every(r => !r.ok);
+            if (!silent && allFailed) {
+                setDashboardError('Không tải được dữ liệu thống kê. Vui lòng thử làm mới lại.');
+            } else {
+                setLastUpdatedAt(new Date());
+            }
+        } catch {
+            if (fetchIdRef.current !== currentId) return;
+            if (!silent) setDashboardError('Không tải được dữ liệu thống kê. Vui lòng thử làm mới lại.');
         } finally {
-            if (options.silent) return;
-            setLoading(false);
+            if (fetchIdRef.current !== currentId) return;
+            if (!silent) setLoading(false);
         }
     }, [dateRange]);
 
@@ -125,6 +134,7 @@ export function useStatisticsDashboard() {
         to,
         gran,
         periodLabel,
+        overview,
         revenueData,
         destRevenue,
         bookingStatus,

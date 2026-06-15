@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { useAccessibleDialog } from '../../staffs/_hooks/useAccessibleDialog';
 import { bookingStatusStyle, statusConfig } from '../_lib/config';
 import { formatCurrency, formatDate, formatRelativeDate, getAvatarGradient, getInitials } from '../_lib/helpers';
 import type { CustomerEditForm, User } from '../_lib/types';
@@ -45,9 +46,19 @@ export function CustomerDetailModal({
     onSaveInfo,
     onToggleStatus,
 }: CustomerDetailModalProps) {
+    const dialogRef = useAccessibleDialog({ onClose, canClose: !isSaving });
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="customer-detail-title">
-            <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" onClick={onClose} />
+        <div
+            ref={dialogRef}
+            data-accessible-dialog="true"
+            tabIndex={-1}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 outline-none"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-detail-title"
+        >
+            <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" onClick={isSaving ? undefined : onClose} />
 
             <section className="relative flex max-h-[92vh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-outline-variant/15 bg-surface-container-lowest shadow-2xl animate-fade-slide-up">
                 {isLoading && !user ? (

@@ -1,328 +1,55 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
     PieChart, Pie, Cell,
 } from 'recharts';
-import { API_BASE_URL } from '@/lib/http/constants';
-import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { Link, useRouter } from '@/i18n/routing';
 import StaffDashboard from './_components/StaffDashboard';
-import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
-
-// ─── Preset Config ────────────────────────────────────────────────────────────
-
-const PRESETS = [
-    { label: '7 ngày', days: 7 },
-    { label: '30 ngày', days: 30 },
-    { label: '3 tháng', days: 90 },
-    { label: '12 tháng', days: 365 },
-] as const;
-
-function getDateRange(days: number) {
-    const to = new Date();
-    const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
-    return {
-        from: from.toISOString().split('T')[0],
-        to: to.toISOString().split('T')[0],
-    };
-}
-
-function getGranularity(days: number): 'daily' | 'weekly' | 'monthly' {
-    if (days <= 14) return 'daily';
-    if (days <= 90) return 'weekly';
-    return 'monthly';
-}
-
-const GRAN_LABEL: Record<string, string> = {
-    daily: 'Theo ngày', weekly: 'Theo tuần', monthly: 'Theo tháng',
-};
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface OverviewData {
-    period: { from: string; to: string };
-    revenue: { current: number; previous: number; changePercent: number };
-    bookings: { total: number; previous: number; confirmed: number; cancelled: number; cancellationRate: number; changePercent: number };
-    aov: { current: number; previous: number; changePercent: number };
-    tours: { active: number };
-    customers: { newInPeriod: number; previousNewInPeriod: number; changePercent: number };
-}
-interface RevenuePoint { key: string; label: string; revenue: number; bookings: number }
-interface BookingStatus {
-    total: number;
-    distribution: { name: string; value: number; key: string }[];
-}
-interface RecentBooking {
-    id: number; bookingCode: string; totalPrice: number; numberOfPeople: number;
-    status: string; createdAt: string;
-    user: { fullName: string; email: string; avatarUrl: string | null };
-    tour: { name: string; tourCode: string };
-}
-interface OperationalStats {
-    bookingPending: number;
-    cancelRequested: number;
-    tourPending: number;
-    articlePending: number;
-    supportOpen: number;
-}
-const EMPTY_OPERATIONAL_STATS: OperationalStats = {
-    bookingPending: 0,
-    cancelRequested: 0,
-    tourPending: 0,
-    articlePending: 0,
-    supportOpen: 0,
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const formatVND = (n: number) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 })
-        .format(Math.round(n))
-        .replace('₫', 'đ');
-
-const formatShortVND = (n: number) => {
-    return formatVND(n);
-};
-
-const formatAxisVND = (n: number) => {
-    if (n >= 1_000_000_000) return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(n / 1_000_000_000)} tỷ`;
-    if (n >= 1_000_000) return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(n / 1_000_000)} tr`;
-    if (n >= 1_000) return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(n / 1_000)}k`;
-    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(n);
-};
-
-const formatDate = (value: string) => new Date(value).toLocaleDateString('vi-VN');
-
-const getPeriodComparisonLabel = (isCustom: boolean, activeDays: number, from: string, to: string) => {
-    if (!isCustom) return `So sánh với ${activeDays} ngày trước đó`;
-    const diffDays = Math.max(1, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24)));
-    return `So sánh với ${diffDays} ngày trước kỳ tùy chỉnh`;
-};
-
-type TrendMeta = {
-    label: string;
-    direction: 'up' | 'down' | 'flat' | 'new';
-};
-
-const getTrendMeta = (current: number, previous: number, changePercent: number): TrendMeta => {
-    if (previous === 0 && current > 0) return { label: 'Mới phát sinh', direction: 'new' };
-    if (previous === 0 && current === 0) return { label: 'Chưa có kỳ trước', direction: 'flat' };
-    if (changePercent === 0) return { label: 'Không đổi', direction: 'flat' };
-    return {
-        label: `${changePercent > 0 ? '+' : ''}${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(changePercent)}%`,
-        direction: changePercent > 0 ? 'up' : 'down',
-    };
-};
-
-const statusConfig: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-    CONFIRMED: { label: 'Xác nhận', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    PENDING: { label: 'Chờ xử lý', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
-    CANCELLED: { label: 'Đã hủy', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
-};
-
-const PIE_COLORS = ['#3B82F6', '#F59E0B', '#EF4444'];
-
-type ChartPayload = { value?: number };
-type RevenueTooltipProps = {
-    active?: boolean;
-    payload?: ChartPayload[];
-    label?: string;
-};
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+import KpiCard from './_components/KpiCard';
+import RevenueTooltip from './_components/RevenueTooltip';
+import { useAdminDashboard } from './_hooks/useAdminDashboard';
+import { formatVND, formatAxisVND, formatDate, getGranularity } from './_lib/helpers';
+import { getTrendMeta, STATUS_CONFIG, PIE_COLORS, GRAN_LABEL, PRESETS } from './_lib/dashboard.types';
 
 function Skeleton({ className = '' }: { className?: string }) {
     return <div className={`bg-slate-200/80 rounded-xl animate-pulse ${className}`} />;
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-
-interface KpiCardProps {
-    icon: string; title: string; value: string; trend: TrendMeta;
-    sub?: string; gradient?: boolean; href?: string;
+function getPeriodComparisonLabel(isCustom: boolean, activeDays: number, from: string, to: string) {
+    if (!isCustom) return `So sánh với ${activeDays} ngày trước đó`;
+    const diffDays = Math.max(1, Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24)));
+    return `So sánh với ${diffDays} ngày trước kỳ tùy chỉnh`;
 }
-
-function KpiCard({ icon, title, value, trend, sub, gradient, href }: KpiCardProps) {
-    const tone = trend.direction === 'down'
-        ? 'bg-red-50 text-red-600 border border-red-100'
-        : trend.direction === 'flat'
-            ? 'bg-slate-100 text-slate-500 border border-slate-100'
-            : 'bg-emerald-50 text-emerald-700 border border-emerald-100';
-    const iconName = trend.direction === 'down'
-        ? 'trending_down'
-        : trend.direction === 'flat'
-            ? 'horizontal_rule'
-            : 'trending_up';
-
-    const content = (
-        <div className={`relative h-full rounded-2xl p-6 overflow-hidden group transition-[transform,box-shadow,border-color] duration-200 ${href ? 'hover:-translate-y-0.5 focus-within:ring-2 focus-within:ring-blue-500' : ''} ${gradient
-            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25'
-            : 'bg-white shadow-sm border border-slate-100 hover:shadow-slate-200/80 hover:border-slate-200'}`}>
-            <div className={`absolute -right-6 -top-6 w-28 h-28 rounded-full blur-2xl ${gradient ? 'bg-white/10' : 'bg-blue-50/60'}`} />
-            <div className="relative z-10">
-                <div className="flex justify-between items-start mb-5">
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${gradient ? 'bg-white/20' : 'bg-blue-50'}`}>
-                        <span className="material-symbols-outlined text-[22px]"
-                            style={{ color: gradient ? '#fff' : '#3B82F6', fontVariationSettings: "'FILL' 1" }}>
-                            {icon}
-                        </span>
-                    </div>
-                    <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${gradient ? 'bg-white/20 text-white' : tone}`}>
-                        <span className="material-symbols-outlined text-[11px]">{iconName}</span>
-                        {trend.label}
-                    </span>
-                </div>
-                <p className={`text-sm font-medium mb-1.5 ${gradient ? 'text-white/80' : 'text-slate-500'}`}>{title}</p>
-                <h3 className={`text-3xl font-bold tracking-tight font-headline ${gradient ? 'text-white' : 'text-slate-800'}`}>{value}</h3>
-                {sub && <p className={`text-xs mt-1.5 ${gradient ? 'text-white/60' : 'text-slate-400'}`}>{sub}</p>}
-                {href && <span className={`mt-4 inline-flex items-center gap-1 text-xs font-bold ${gradient ? 'text-white/80' : 'text-blue-600'}`}>Xem chi tiết <span className="material-symbols-outlined text-[13px]">arrow_forward</span></span>}
-            </div>
-        </div>
-    );
-
-    if (!href) return content;
-
-    return (
-        <Link href={href} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-            {content}
-        </Link>
-    );
-}
-
-// ─── Revenue Tooltip ──────────────────────────────────────────────────────────
-
-function RevenueTooltip({ active, payload, label }: RevenueTooltipProps) {
-    if (active && payload?.length) {
-        return (
-            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-sm">
-                <p className="text-slate-500 font-medium mb-1">{label}</p>
-                <p className="text-blue-600 font-bold">{formatVND(payload[0]?.value ?? 0)}</p>
-                {payload[1] && <p className="text-slate-400 text-xs mt-0.5">{payload[1].value} booking</p>}
-            </div>
-        );
-    }
-    return null;
-}
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AdminDashboardPage() {
     const router = useRouter();
 
-    // ── Role detection ──
     const [userRole, setUserRole] = useState<string>('');
-    const [userName, setUserName] = useState<string>('');
+    const [userName, setUserName] = useState<string>('Nhân viên');
     const [roleLoaded, setRoleLoaded] = useState(false);
 
+    // Layout đã xác thực và lưu profile vào localStorage trước khi render children.
+    // Đọc trực tiếp từ storage thay vì gọi API lần hai.
     useEffect(() => {
-        fetchWithAuth(`${API_BASE_URL}/auth/profile`)
-            .then(r => r.json())
-            .then(data => {
-                const profile = data.data ?? data;
-                setUserRole(profile.role ?? '');
-                setUserName(profile.fullName ?? 'Nhân viên');
-            })
-            .catch(() => {})
-            .finally(() => setRoleLoaded(true));
+        const role = localStorage.getItem('userRole') ?? '';
+        const name = localStorage.getItem('userName') || 'Nhân viên';
+        setUserRole(role || '__error__');
+        setUserName(name);
+        setRoleLoaded(true);
     }, []);
 
-    // ── Admin state ──
-    const today = new Date().toISOString().split('T')[0];
-    const [activeDays, setActiveDays] = useState<number>(30);
-    const [customFrom, setCustomFrom] = useState('');
-    const [customTo, setCustomTo] = useState(() => new Date().toISOString().split('T')[0]);
-    const [isCustom, setIsCustom] = useState(false);
-    const [dateRange, setDateRange] = useState(() => getDateRange(30));
+    const isAdminView = roleLoaded && userRole !== '' && userRole !== '__error__' && userRole !== 'STAFF';
 
-    const [overview, setOverview] = useState<OverviewData | null>(null);
-    const [revenueData, setRevenueData] = useState<RevenuePoint[]>([]);
-    const [bookingStatus, setBookingStatus] = useState<BookingStatus | null>(null);
-    const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
-    const [operationalStats, setOperationalStats] = useState<OperationalStats>(EMPTY_OPERATIONAL_STATS);
-    const [loading, setLoading] = useState(true);
-    const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-    const [dashboardError, setDashboardError] = useState('');
+    const {
+        today, activeDays, customFrom, customTo, isCustom, dateRange,
+        setCustomFrom, setCustomTo,
+        overview, revenueData, bookingStatus, recentBookings, operationalStats,
+        loading, lastUpdatedAt, dashboardError,
+        handlePreset, handleCustomApply, fetchAll,
+    } = useAdminDashboard(isAdminView);
 
-    const fetchAll = useCallback(async (options: { silent?: boolean } = {}) => {
-        if (!options.silent) setLoading(true);
-        if (!options.silent) setDashboardError('');
-        const { from, to } = dateRange;
-        const diffDays = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
-        const gran = getGranularity(diffDays);
-        try {
-            const [ovRes, revRes, bsRes, rbRes, opStatsRes] = await Promise.all([
-                fetchWithAuth(
-`${API_BASE_URL}/statistics/overview?dateFrom=${from}&dateTo=${to}`
-),
-                fetchWithAuth(
-`${API_BASE_URL}/statistics/revenue?dateFrom=${from}&dateTo=${to}&granularity=${gran}`
-),
-                fetchWithAuth(
-`${API_BASE_URL}/statistics/bookings/status?dateFrom=${from}&dateTo=${to}`
-),
-                fetchWithAuth(
-`${API_BASE_URL}/booking/admin/all?limit=5&status=ALL`
-),
-                // 1 call thay cho 4 (booking/stats + tour/stats + article/stats + support/stats)
-                // Cache 30s phia server -> khong bao gio hit DB moi autorefresh 60s
-                fetchWithAuth(
-`${API_BASE_URL}/booking/admin/operational-stats`
-),
-            ]);
-            if (ovRes.ok) { const j = await ovRes.json(); setOverview(j.data); }
-            if (revRes.ok) { const j = await revRes.json(); setRevenueData(j.data?.data ?? []); }
-            if (bsRes.ok) { const j = await bsRes.json(); setBookingStatus(j.data); }
-            if (rbRes.ok) {
-                const j = await rbRes.json();
-                const payload = j.data ?? j;
-                setRecentBookings(payload.bookings ?? []);
-            }
-            if (opStatsRes.ok) {
-                const j = await opStatsRes.json();
-                const op = j.data ?? j;
-                setOperationalStats({
-                    bookingPending:  op.bookingPending  ?? 0,
-                    cancelRequested: op.cancelRequested ?? 0,
-                    tourPending:     op.tourPending     ?? 0,
-                    articlePending:  op.articlePending  ?? 0,
-                    supportOpen:     op.supportOpen     ?? 0,
-                });
-            }
-            setLastUpdatedAt(new Date());
-        } catch (e) {
-            if (options.silent) return;
-            console.error('Dashboard error:', e);
-            setDashboardError('Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c d\u1eef li\u1ec7u t\u1ed5ng quan. Vui l\u00f2ng th\u1eed l\u00e0m m\u1edbi l\u1ea1i.');
-        } finally {
-            if (options.silent) return;
-            setLoading(false);
-        }
-    }, [dateRange]);
-
-    const handlePreset = (days: number) => {
-        setActiveDays(days);
-        setIsCustom(false);
-        setDateRange(getDateRange(days));
-    };
-
-    const handleCustomApply = () => {
-        if (!customFrom || !customTo || customFrom > customTo) return;
-        setIsCustom(true);
-        setActiveDays(0);
-        setDateRange({ from: customFrom, to: customTo });
-    };
-
-    useEffect(() => { if (userRole && userRole !== 'STAFF') fetchAll(); }, [fetchAll, userRole]);
-
-    useAdminAutoRefresh({
-        enabled: Boolean(userRole && userRole !== 'STAFF'),
-        intervalMs: 60 * 1000,
-        onRefresh: () => fetchAll({ silent: true }),
-    });
-
-    // ── Render Staff view early ──
     if (!roleLoaded) {
         return (
             <main className="flex-1 pt-8 px-8 min-h-screen bg-slate-50 flex items-center justify-center">
@@ -331,6 +58,28 @@ export default function AdminDashboardPage() {
                         <span className="material-symbols-outlined text-white text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
                     </div>
                     <p className="text-slate-400 text-sm">Đang tải dashboard...</p>
+                </div>
+            </main>
+        );
+    }
+
+    if (userRole === '__error__') {
+        return (
+            <main className="flex-1 pt-8 px-8 min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-red-400 text-[24px]">error</span>
+                    </div>
+                    <div>
+                        <p className="text-slate-700 font-semibold text-sm">Không tải được thông tin tài khoản</p>
+                        <p className="text-slate-400 text-xs mt-1">Vui lòng thử làm mới trang.</p>
+                    </div>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+                    >
+                        Tải lại trang
+                    </button>
                 </div>
             </main>
         );
@@ -345,8 +94,8 @@ export default function AdminDashboardPage() {
     const gran = getGranularity(diffDays);
     const periodComparisonLabel = getPeriodComparisonLabel(isCustom, activeDays || diffDays, from, to);
     const periodTitle = isCustom ? `${formatDate(from)} - ${formatDate(to)}` : `${activeDays} ngày gần nhất`;
-    const nonZeroRevenuePoints = revenueData.filter(point => point.revenue > 0).length;
-    const hasRevenueData = revenueData.some(point => point.revenue > 0);
+    const nonZeroRevenuePoints = revenueData.filter(p => p.revenue > 0).length;
+    const hasRevenueData = revenueData.some(p => p.revenue > 0);
 
     return (
         <main className="flex-1 pt-8 px-8 pb-16 max-w-[1600px] mx-auto w-full bg-slate-50 min-h-screen">
@@ -385,7 +134,7 @@ export default function AdminDashboardPage() {
                 </div>
             </div>
 
-            {/* ── Preset Filter Bar ── */}
+            {/* ── Error banner ── */}
             {dashboardError && (
                 <div className="mb-4 flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
                     <span className="material-symbols-outlined text-[18px]">error</span>
@@ -393,6 +142,7 @@ export default function AdminDashboardPage() {
                 </div>
             )}
 
+            {/* ── Filter Bar ── */}
             <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
                 <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Xem dữ liệu</span>
                 <div className="flex rounded-2xl bg-slate-100 p-1">
@@ -409,7 +159,6 @@ export default function AdminDashboardPage() {
                         </button>
                     ))}
                 </div>
-                {/* ── Custom date range picker ── */}
                 <div className="flex items-center gap-2 pl-0 lg:pl-3 lg:border-l lg:border-slate-200">
                     <span className="text-xs text-slate-400 font-medium hidden lg:block">Tùy chỉnh:</span>
                     <input
@@ -440,7 +189,6 @@ export default function AdminDashboardPage() {
                         Áp dụng
                     </button>
                 </div>
-
                 <div className="ml-auto flex items-center gap-3 text-xs text-slate-400">
                     <span className="flex items-center gap-1">
                         <span className="material-symbols-outlined text-[14px]">date_range</span>
@@ -462,11 +210,10 @@ export default function AdminDashboardPage() {
                     <>
                         <KpiCard
                             icon="payments" title="Doanh thu"
-                            value={formatShortVND(overview.revenue.current)}
+                            value={formatVND(overview.revenue.current)}
                             trend={getTrendMeta(overview.revenue.current, overview.revenue.previous, overview.revenue.changePercent)}
-                            sub={`Kỳ trước: ${formatShortVND(overview.revenue.previous)}`}
-                            gradient
-                            href="/admin/statistics"
+                            sub={`Kỳ trước: ${formatVND(overview.revenue.previous)}`}
+                            gradient href="/admin/statistics"
                         />
                         <KpiCard
                             icon="book_online" title="Tổng booking"
@@ -477,9 +224,9 @@ export default function AdminDashboardPage() {
                         />
                         <KpiCard
                             icon="analytics" title="Giá trị TB/đơn (AOV)"
-                            value={formatShortVND(overview.aov.current)}
+                            value={formatVND(overview.aov.current)}
                             trend={getTrendMeta(overview.aov.current, overview.aov.previous, overview.aov.changePercent)}
-                            sub={`Kỳ trước: ${formatShortVND(overview.aov.previous)}`}
+                            sub={`Kỳ trước: ${formatVND(overview.aov.previous)}`}
                             href="/admin/statistics"
                         />
                         <KpiCard
@@ -493,12 +240,12 @@ export default function AdminDashboardPage() {
                 ) : null}
             </div>
 
-            {/* ── Charts Row ── */}
+            {/* ── Operational Stats ── */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 {[
                     { href: '/admin/bookings?status=PENDING', icon: 'pending_actions', label: 'Booking chờ xử lý', value: operationalStats.bookingPending, tone: 'bg-amber-50 text-amber-700' },
                     { href: '/admin/bookings?status=CANCEL_REQUESTED', icon: 'assignment_late', label: 'Yêu cầu hủy', value: operationalStats.cancelRequested, tone: 'bg-orange-50 text-orange-700' },
-                    { href: '/admin/tours?status=PENDING', icon: 'approval', label: 'Tour chờ duyệt', value: operationalStats.tourPending, tone: 'bg-blue-50 text-blue-700' },
+                    { href: '/admin/tours?status=PENDING_REVIEW', icon: 'approval', label: 'Tour chờ duyệt', value: operationalStats.tourPending, tone: 'bg-blue-50 text-blue-700' },
                     { href: '/admin/articles?status=PENDING_REVIEW', icon: 'article', label: 'Bài chờ duyệt', value: operationalStats.articlePending, tone: 'bg-violet-50 text-violet-700' },
                     { href: '/admin/support?view=open', icon: 'support_agent', label: 'Ticket đang mở', value: operationalStats.supportOpen, tone: 'bg-teal-50 text-teal-700' },
                 ].map((item) => (
@@ -587,7 +334,7 @@ export default function AdminDashboardPage() {
                             </ResponsiveContainer>
                             <div className="space-y-2.5 mt-2">
                                 {bookingStatus.distribution.map((item, i) => {
-                                    const pct = bookingStatus.total > 0 ? ((item.value / bookingStatus.total) * 100).toFixed(1) : '0';
+                                    const pct = ((item.value / bookingStatus.total) * 100).toFixed(1);
                                     return (
                                         <div key={item.key} className="flex items-center justify-between text-sm">
                                             <div className="flex items-center gap-2">
@@ -646,7 +393,7 @@ export default function AdminDashboardPage() {
                                     <tr key={i} className="animate-pulse">
                                         {[28, 32, 40, 20, 20, 24].map((w, j) => (
                                             <td key={j} className="px-6 py-4">
-                                                <div className={`h-4 bg-slate-100 rounded w-${w}`} style={{ width: `${w * 4}px` }} />
+                                                <div className="h-4 bg-slate-100 rounded" style={{ width: `${w * 4}px` }} />
                                             </td>
                                         ))}
                                     </tr>
@@ -660,10 +407,12 @@ export default function AdminDashboardPage() {
                                 </tr>
                             ) : (
                                 recentBookings.map(b => {
-                                    const sc = statusConfig[b.status] ?? { label: b.status, bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
-                                    const initials = b.user?.fullName ? b.user.fullName.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase() : '??';
+                                    const sc = STATUS_CONFIG[b.status] ?? { label: b.status, bg: 'bg-slate-100', text: 'text-slate-500', dot: 'bg-slate-400' };
+                                    const initials = b.user?.fullName
+                                        ? b.user.fullName.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase()
+                                        : '??';
                                     return (
-                                        <tr key={b.id} className="hover:bg-slate-50/70 transition-colors cursor-pointer group" onClick={() => router.push(`/admin/bookings?search=${encodeURIComponent(b.bookingCode)}`)}>
+                                        <tr key={b.id} className="hover:bg-slate-50/70 transition-colors cursor-pointer" onClick={() => router.push(`/admin/bookings?search=${encodeURIComponent(b.bookingCode)}`)}>
                                             <td className="px-6 py-4 font-mono text-blue-600 font-semibold text-xs">{b.bookingCode}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2.5">

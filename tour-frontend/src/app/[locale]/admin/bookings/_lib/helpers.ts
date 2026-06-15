@@ -1,5 +1,5 @@
 import { PASSENGER_PRICING, passengerTypeOrder } from './config';
-import type { AssistedDraftForm, DraftPassenger, PassengerType, TourDepartureOption, TourOption } from './types';
+import type { AssistedDraftForm, Booking, DraftPassenger, PassengerType, PaymentTransaction, TourDepartureOption, TourOption } from './types';
 
 export const fmt = (n: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
@@ -217,3 +217,54 @@ export const hasLoadedBookingOptions = (tour?: TourOption) =>
     Array.isArray(tour.departures) &&
     tour.departures.every(hasDetailedDeparture),
   );
+
+// ─── Booking contact & payment helpers ──────────────────────────────────────
+
+export const toTelHref = (phone?: string | null) => phone?.replace(/[^\d+]/g, '') ?? '';
+
+export const toZaloPhone = (phone?: string | null) => {
+  const digits = phone?.replace(/\D/g, '') ?? '';
+  if (!digits) return '';
+  if (digits.startsWith('84')) return digits;
+  if (digits.startsWith('0')) return `84${digits.slice(1)}`;
+  return digits;
+};
+
+export const canRemindPayment = (booking: Booking) =>
+  booking.status === 'PENDING' &&
+  booking.paymentStatus === 'UNPAID' &&
+  booking.paymentMethod === 'PAYOS';
+
+export function getVisibleTransactions(
+  booking: Booking,
+  currentGateway: 'MANUAL' | 'PAYOS',
+  hasSuccessfulCurrentGateway: boolean,
+): PaymentTransaction[] {
+  const seenOpenPayos = new Set<string>();
+  return [...(booking.transactions ?? [])]
+    .sort((a, b) => {
+      const createdDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return createdDiff || b.id - a.id;
+    })
+    .filter((tx) => {
+      if (tx.status === 'SUCCESS') return true;
+      if (
+        booking.paymentStatus === 'PAID' &&
+        tx.gateway === currentGateway &&
+        tx.status === 'PENDING' &&
+        hasSuccessfulCurrentGateway
+      ) {
+        return false;
+      }
+      if (booking.paymentMethod === 'IN_STORE' && tx.gateway !== 'MANUAL') return false;
+      if (booking.paymentMethod === 'PAYOS' && tx.gateway !== 'PAYOS') return false;
+
+      if (tx.gateway === 'PAYOS' && tx.status === 'PENDING') {
+        const key = `${tx.gateway}:${tx.status}:${Math.round(Number(tx.amount) || 0)}`;
+        if (seenOpenPayos.has(key)) return false;
+        seenOpenPayos.add(key);
+      }
+
+      return true;
+    });
+}

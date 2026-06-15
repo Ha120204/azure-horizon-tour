@@ -7,10 +7,15 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request as ExpressRequest } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ArticleService } from './article.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { AuditLog } from '../common/decorators/audit-log.decorator';
+import { CreateArticleDto } from './dto/create-article.dto';
+import { UpdateArticleDto } from './dto/update-article.dto';
+import { BulkActionDto } from './dto/bulk-action.dto';
+import { ReviewArticleDto } from './dto/review-article.dto';
 
 type JwtRequestUser = {
   id?: number;
@@ -31,6 +36,7 @@ const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
 const getAuthRole = (req: AuthenticatedRequest): string | undefined =>
   req.user?.role;
 
+@SuperAdminArea('articles')
 @Controller('article')
 export class ArticleController {
   constructor(
@@ -113,8 +119,11 @@ export class ArticleController {
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Get('admin/:id')
-  async adminFindById(@Param('id', ParseIntPipe) id: number) {
-    return this.articleService.adminFindById(id);
+  async adminFindById(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.articleService.adminFindById(id, getAuthUserId(req), getAuthRole(req));
   }
 
   /** POST /article/admin/upload — Upload ảnh qua Cloudinary */
@@ -135,15 +144,11 @@ export class ArticleController {
   @AuditLog('UPDATE', 'Article')
   async adminBulkAction(
     @Req() req: AuthenticatedRequest,
-    @Body() body: {
-      ids?: number[];
-      action?: 'publish' | 'draft' | 'trash' | 'feature' | 'unfeature' | 'category' | 'submit';
-      category?: string;
-    },
+    @Body() body: BulkActionDto,
   ) {
     return this.articleService.adminBulkAction(
       body.ids,
-      body.action!,
+      body.action,
       getAuthUserId(req),
       getAuthRole(req),
       body.category,
@@ -157,14 +162,7 @@ export class ArticleController {
   @AuditLog('CREATE', 'Article')
   async adminCreate(
     @Req() req: AuthenticatedRequest,
-    @Body() dto: {
-      slug?: string; title?: string; titleEn?: string; category?: string;
-      excerpt?: string; excerptEn?: string;
-      seoTitle?: string; seoDescription?: string;
-      content?: string; contentEn?: string; imageUrl?: string; author?: string;
-      readTime?: number; isFeatured?: boolean;
-      saveMode?: 'draft' | 'publish';
-    },
+    @Body() dto: CreateArticleDto,
   ) {
     return this.articleService.adminCreate(dto, getAuthUserId(req), getAuthRole(req));
   }
@@ -189,7 +187,7 @@ export class ArticleController {
   async reviewArticle(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: AuthenticatedRequest,
-    @Body() body: { action: 'approve' | 'reject'; note?: string },
+    @Body() body: ReviewArticleDto,
   ) {
     return this.articleService.reviewArticle(id, getAuthUserId(req)!, body.action, body.note);
   }
@@ -202,14 +200,7 @@ export class ArticleController {
   async adminUpdate(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: AuthenticatedRequest,
-    @Body() dto: {
-      slug?: string; title?: string; titleEn?: string; category?: string;
-      excerpt?: string; excerptEn?: string;
-      seoTitle?: string; seoDescription?: string;
-      content?: string; contentEn?: string; imageUrl?: string; author?: string;
-      readTime?: number; isFeatured?: boolean;
-      saveMode?: 'draft' | 'publish';
-    },
+    @Body() dto: UpdateArticleDto,
   ) {
     return this.articleService.adminUpdate(id, dto, getAuthUserId(req), getAuthRole(req));
   }
@@ -223,9 +214,9 @@ export class ArticleController {
     return this.articleService.adminToggleFeatured(id);
   }
 
-  /** DELETE /article/admin/:id — Xóa bài viết */
+  /** DELETE /article/admin/:id — Admin xóa bất kỳ; Staff tự xóa nháp/bị từ chối của mình */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('SUPER_ADMIN', 'ADMIN')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'STAFF')
   @Delete('admin/:id')
   @AuditLog('DELETE', 'Article')
   async adminDelete(

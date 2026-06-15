@@ -367,6 +367,30 @@ export class SuperAdminService {
     };
   }
 
+  async getViewGrants(userId?: number) {
+    if (!userId) {
+      throw new BadRequestException('Không xác định được người dùng');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { superAdminViewGrants: true },
+    });
+    return { grants: user?.superAdminViewGrants ?? [] };
+  }
+
+  async updateViewGrants(userId: number | undefined, grants: string[]) {
+    if (!userId) {
+      throw new BadRequestException('Không xác định được người dùng');
+    }
+    const normalized = Array.from(new Set(grants));
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { superAdminViewGrants: normalized },
+      select: { superAdminViewGrants: true },
+    });
+    return { grants: user.superAdminViewGrants };
+  }
+
   async updateRiskReview(riskKey: string, status: string, note: string | undefined, reviewerId?: number) {
     const normalizedStatus = String(status || '').toUpperCase();
     if (!RISK_STATUSES.includes(normalizedStatus as (typeof RISK_STATUSES)[number])) {

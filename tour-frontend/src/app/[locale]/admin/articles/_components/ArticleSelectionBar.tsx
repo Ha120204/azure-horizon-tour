@@ -10,6 +10,7 @@ interface ArticleSelectionBarProps {
   selectedArticles: Article[];
   selectedCount: number;
   isAdmin: boolean;
+  canWrite: boolean;
   userId: number | null;
   isLoading: boolean;
   onClear: () => void;
@@ -20,6 +21,7 @@ export function ArticleSelectionBar({
   selectedArticles,
   selectedCount,
   isAdmin,
+  canWrite,
   userId,
   isLoading,
   onClear,
@@ -54,7 +56,7 @@ export function ArticleSelectionBar({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            {isAdmin ? (
+            {canWrite ? (
               <>
                 {publishCount > 0 && (
                   <BulkActionButton

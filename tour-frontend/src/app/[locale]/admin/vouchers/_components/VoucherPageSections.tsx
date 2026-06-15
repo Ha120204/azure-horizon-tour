@@ -54,7 +54,7 @@ export function VoucherPageHeader({ currentUserRole, onCreate }: VoucherPageHead
           Theo dõi lượt sử dụng, trạng thái và hiệu quả của từng chiến dịch mã giảm giá.
         </p>
       </div>
-      {currentUserRole !== null && currentUserRole !== 'STAFF' && (
+      {currentUserRole === 'ADMIN' && (
         <button
           id="btn-create-voucher"
           onClick={onCreate}
@@ -69,9 +69,36 @@ export function VoucherPageHeader({ currentUserRole, onCreate }: VoucherPageHead
   );
 }
 
-export function VoucherKpiGrid({ kpis }: { kpis: VoucherKpiItem[] }) {
+export function VoucherKpiGrid({
+  kpis,
+  statsError = false,
+  onRetry,
+}: {
+  kpis: VoucherKpiItem[];
+  statsError?: boolean;
+  onRetry?: () => void;
+}) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+    <div className="mb-8">
+      {statsError && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-error/20 bg-error/5 px-4 py-2.5 text-sm font-medium text-error">
+          <span className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">error</span>
+            Không tải được số liệu thống kê. Các chỉ số bên dưới hiển thị “—”.
+          </span>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-error transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error outline-none"
+            >
+              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">refresh</span>
+              Thử lại
+            </button>
+          )}
+        </div>
+      )}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
       {kpis.map((kpi) => {
         const content = (
           <div className="flex h-full flex-col gap-3">
@@ -117,6 +144,7 @@ export function VoucherKpiGrid({ kpis }: { kpis: VoucherKpiItem[] }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

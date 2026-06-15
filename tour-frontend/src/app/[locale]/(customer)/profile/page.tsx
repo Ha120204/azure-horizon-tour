@@ -74,6 +74,10 @@ export default function ProfilePage() {
         ? t('profile.memberSinceYear', { year: new Date(userData.createdAt).getFullYear() })
         : t('profile.memberSince');
 
+    const activeBookings = recentBookings.filter(
+        b => b.status !== 'CANCELLED' && b.status !== 'CANCEL_REQUESTED'
+    );
+
     return (
         <div className="bg-background text-on-background min-h-screen font-body flex flex-col relative">
             <Header />
@@ -217,13 +221,13 @@ export default function ProfilePage() {
                                 </Link>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {recentBookings.length === 0 ? (
+                                {activeBookings.length === 0 ? (
                                     <div className="col-span-full py-10 text-center bg-surface-container-lowest rounded-xl ambient-shadow">
                                         <p className="text-outline font-medium">{t('profile.noTrips')}</p>
                                         <Link href="/destinations" className="text-primary font-bold hover:underline mt-2 inline-block">{t('profile.exploreNow')}</Link>
                                     </div>
                                 ) : (
-                                    recentBookings.slice(0, 4).map((booking) => (
+                                    activeBookings.slice(0, 4).map((booking) => (
                                         <RecentBookingCard
                                             key={booking.id}
                                             booking={booking}

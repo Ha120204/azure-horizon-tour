@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { usePathname } from '@/i18n/routing';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchAuthProfile, fetchOptionalAuth } from '@/lib/auth/authSession';
@@ -26,7 +27,16 @@ export function useConcierge() {
     ]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // ID tour của trang đang mở (nếu có) để gửi kèm cho AI làm ngữ cảnh.
+    const pathname = usePathname();
+    const currentTourIdRef = useRef<number | null>(null);
+    useEffect(() => {
+        const match = /^\/tour\/(\d+)/.exec(pathname);
+        currentTourIdRef.current = match ? Number(match[1]) : null;
+    }, [pathname]);
     const isMountedRef = useRef(false);
     const cooldownTimerRef = useRef<number | undefined>(undefined);
     const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
@@ -38,9 +48,13 @@ export function useConcierge() {
         };
     }, []);
 
-    // ── Auto-scroll ────────────────────────────────────────────────────────
+    // ── Auto-scroll — chỉ cuộn khi user đang ở gần đáy (< 120px) ──────────
     useEffect(() => {
-        if (isOpen) {
+        if (!isOpen) return;
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom < 120) {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, isTyping, isOpen]);
@@ -189,7 +203,7 @@ export function useConcierge() {
     // ── Gửi tin nhắn ──────────────────────────────────────────────────────
     const handleSendMessage = useCallback(
         async (text = inputValue) => {
-            if (!text.trim() || isTyping || cooldown) return;
+            if (!text.trim() || isTyping || isStreaming || cooldown) return;
 
             const userMsg: Message = { id: Date.now().toString(), role: 'user', text };
             setMessages((prev) => [...prev, userMsg]);
@@ -208,7 +222,11 @@ export function useConcierge() {
                 const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/stream`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, sessionId: sessionId || undefined }),
+                    body: JSON.stringify({
+                        message: text,
+                        sessionId: sessionId || undefined,
+                        currentTourId: currentTourIdRef.current ?? undefined,
+                    }),
                 });
                 if (!isMountedRef.current) return;
 
@@ -245,7 +263,7 @@ export function useConcierge() {
 
                     for (const part of parts) {
                         if (!part.startsWith('data: ')) continue;
-                        let event: { searching?: boolean; token?: string; done?: boolean; tourCard?: Message['tourCard']; sessionId?: string; error?: string; followUps?: string[] };
+                        let event: { searching?: boolean; token?: string; done?: boolean; tourCard?: Message['tourCard']; sessionId?: string; error?: string; errorType?: string; followUps?: string[] };
                         try { event = JSON.parse(part.slice(6)); } catch { continue; }
 
                         if (event.searching) {
@@ -258,7 +276,10 @@ export function useConcierge() {
                             setIsTyping(false);
                             setIsStreaming(false);
                             readerRef.current = null;
-                            setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', text: event.error!, isError: true }]);
+                            const errorText = event.errorType === 'rate_limit'
+                                ? t('conciergeApp.rateLimitError')
+                                : t('conciergeApp.connectionError');
+                            setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', text: errorText, isError: true }]);
                             break outer;
                         }
 
@@ -318,7 +339,7 @@ export function useConcierge() {
                 ]);
             }
         },
-        [inputValue, isTyping, cooldown, loadSessions, hasAccessToken, t],
+        [inputValue, isTyping, isStreaming, cooldown, loadSessions, hasAccessToken, t],
     );
 
     // ── Handlers ──────────────────────────────────────────────────────────
@@ -390,6 +411,7 @@ export function useConcierge() {
         messages,
         // Refs
         messagesEndRef,
+        scrollContainerRef,
         inputRef,
         // Handlers
         loadSessions,

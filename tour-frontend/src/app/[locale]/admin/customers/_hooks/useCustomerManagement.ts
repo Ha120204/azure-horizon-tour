@@ -48,8 +48,9 @@ export function useCustomerManagement() {
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
     const [toggleTarget, setToggleTarget] = useState<User | null>(null);
     const [isToggling, setIsToggling] = useState(false);
-    const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set());
+    const [selectedCustomerMap, setSelectedCustomerMap] = useState<Map<number, User>>(new Map());
     const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+    const [bulkConfirm, setBulkConfirm] = useState<{ status: 'active' | 'deactivated'; ids: number[] } | null>(null);
     const [hasFreshData, setHasFreshData] = useState(false);
     const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
@@ -145,9 +146,20 @@ export function useCustomerManagement() {
         fetchUsers();
     }, [fetchUsers]);
 
+    // Giữ lựa chọn xuyên suốt các trang; chỉ làm tươi dữ liệu cho những dòng đang hiển thị.
     useEffect(() => {
-        const currentIds = new Set(users.map(user => user.id));
-        setSelectedCustomerIds(previous => new Set([...previous].filter(id => currentIds.has(id))));
+        setSelectedCustomerMap(previous => {
+            if (previous.size === 0) return previous;
+            let changed = false;
+            const next = new Map(previous);
+            users.forEach(user => {
+                if (next.has(user.id)) {
+                    next.set(user.id, user);
+                    changed = true;
+                }
+            });
+            return changed ? next : previous;
+        });
     }, [users]);
 
     useEffect(() => {
@@ -362,38 +374,40 @@ export function useCustomerManagement() {
         setEditForm(form => ({ ...form, ...patch }));
     }, []);
 
-    const selectedCustomers = useMemo(
-        () => users.filter(user => selectedCustomerIds.has(user.id)),
-        [selectedCustomerIds, users],
-    );
+    const selectedCustomerIds = useMemo(() => new Set(selectedCustomerMap.keys()), [selectedCustomerMap]);
+    const selectedCustomers = useMemo(() => [...selectedCustomerMap.values()], [selectedCustomerMap]);
     const selectedActiveCount = selectedCustomers.filter(user => user.status === 'Active').length;
     const selectedDeactivatedCount = selectedCustomers.filter(user => user.status === 'Deactivated').length;
-    const allCurrentPageSelected = users.length > 0 && users.every(user => selectedCustomerIds.has(user.id));
-    const someCurrentPageSelected = users.some(user => selectedCustomerIds.has(user.id));
+    const allCurrentPageSelected = users.length > 0 && users.every(user => selectedCustomerMap.has(user.id));
+    const someCurrentPageSelected = users.some(user => selectedCustomerMap.has(user.id));
 
     const toggleSelectedCustomer = useCallback((userId: number) => {
-        setSelectedCustomerIds(previous => {
-            const next = new Set(previous);
-            if (next.has(userId)) next.delete(userId);
-            else next.add(userId);
+        setSelectedCustomerMap(previous => {
+            const next = new Map(previous);
+            if (next.has(userId)) {
+                next.delete(userId);
+            } else {
+                const user = users.find(item => item.id === userId);
+                if (user) next.set(userId, user);
+            }
             return next;
         });
-    }, []);
+    }, [users]);
 
     const toggleCurrentPageSelection = useCallback(() => {
-        setSelectedCustomerIds(previous => {
-            const next = new Set(previous);
+        setSelectedCustomerMap(previous => {
+            const next = new Map(previous);
             if (users.length > 0 && users.every(user => next.has(user.id))) {
                 users.forEach(user => next.delete(user.id));
             } else {
-                users.forEach(user => next.add(user.id));
+                users.forEach(user => next.set(user.id, user));
             }
             return next;
         });
     }, [users]);
 
     const clearSelection = useCallback(() => {
-        setSelectedCustomerIds(new Set());
+        setSelectedCustomerMap(new Map());
     }, []);
 
     const exportSelectedCustomers = useCallback(() => {
@@ -405,25 +419,31 @@ export function useCustomerManagement() {
         showToast(`Đã xuất ${exportedCount} khách hàng ra CSV.`);
     }, [selectedCustomers, showToast]);
 
-    const bulkUpdateStatus = useCallback(async (status: 'active' | 'deactivated') => {
+    const requestBulkUpdate = useCallback((status: 'active' | 'deactivated') => {
         const targets = selectedCustomers.filter(user => (
             status === 'active' ? user.status === 'Deactivated' : user.status === 'Active'
         ));
         if (targets.length === 0) return;
 
+        if (targets.length > 200) {
+            showToast('Chỉ xử lý tối đa 200 tài khoản mỗi lần. Vui lòng bớt lựa chọn.', 'error');
+            return;
+        }
+
+        setBulkConfirm({ status, ids: targets.map(user => user.id) });
+    }, [selectedCustomers, showToast]);
+
+    const confirmBulkUpdate = useCallback(async () => {
+        if (!bulkConfirm) return;
+        const { status, ids } = bulkConfirm;
         const actionLabel = status === 'active' ? 'mở khóa' : 'khóa';
-        const confirmed = window.confirm(`Xác nhận ${actionLabel} ${targets.length} tài khoản khách hàng?`);
-        if (!confirmed) return;
 
         setIsBulkUpdating(true);
         try {
             const response = await fetchWithAuth(`${API_BASE_URL}/user/bulk-status`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ids: targets.map(user => user.id),
-                    status,
-                }),
+                body: JSON.stringify({ ids, status }),
             });
 
             const payload = await response.json().catch(() => null);
@@ -432,7 +452,8 @@ export function useCustomerManagement() {
             }
 
             const result = payload?.data ?? payload;
-            showToast(`Đã ${actionLabel} ${result?.updatedCount ?? targets.length} tài khoản.`);
+            showToast(`Đã ${actionLabel} ${result?.updatedCount ?? ids.length} tài khoản.`);
+            setBulkConfirm(null);
             clearSelection();
             await refreshCustomers();
         } catch (error: unknown) {
@@ -440,7 +461,7 @@ export function useCustomerManagement() {
         } finally {
             setIsBulkUpdating(false);
         }
-    }, [clearSelection, refreshCustomers, selectedCustomers, showToast]);
+    }, [bulkConfirm, clearSelection, refreshCustomers, showToast]);
 
     return {
         users,
@@ -454,6 +475,7 @@ export function useCustomerManagement() {
         allCurrentPageSelected,
         someCurrentPageSelected,
         isBulkUpdating,
+        bulkConfirm,
         search,
         filterStatus,
         bookingFilter,
@@ -482,8 +504,10 @@ export function useCustomerManagement() {
         toggleCurrentPageSelection,
         clearSelection,
         exportSelectedCustomers,
-        bulkActivateSelected: () => bulkUpdateStatus('active'),
-        bulkDeactivateSelected: () => bulkUpdateStatus('deactivated'),
+        bulkActivateSelected: () => requestBulkUpdate('active'),
+        bulkDeactivateSelected: () => requestBulkUpdate('deactivated'),
+        confirmBulkUpdate,
+        cancelBulkUpdate: () => setBulkConfirm(null),
         openDetail,
         closeDetail,
         startEditing,

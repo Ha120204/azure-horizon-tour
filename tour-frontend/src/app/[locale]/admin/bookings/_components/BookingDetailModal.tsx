@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Booking } from '../_lib/types';
+import type { Booking, BookingConfirmSource } from '../_lib/types';
 import { BookingDetailView } from './BookingDetailView';
 import { BookingActionBar } from './BookingActionBar';
 
@@ -9,14 +9,18 @@ import { BookingActionBar } from './BookingActionBar';
 
 export function BookingDetailModal({
   booking,
+  isAdmin,
+  canWrite,
   onClose,
   onConfirmSuccess,
   onCopyPaymentRequest,
   onResendPaymentRequest,
 }: {
   booking: Booking;
+  isAdmin: boolean;
+  canWrite: boolean;
   onClose: () => void;
-  onConfirmSuccess: (updated: Booking) => void | Promise<void>;
+  onConfirmSuccess: (updated: Booking, source?: BookingConfirmSource) => void | Promise<void>;
   onCopyPaymentRequest?: (booking: Booking) => void | Promise<void>;
   onResendPaymentRequest?: (booking: Booking, forceEmail?: boolean) => void | Promise<void>;
 }) {
@@ -46,6 +50,8 @@ export function BookingDetailModal({
         <BookingDetailView booking={booking} onClose={onClose} />
         <BookingActionBar
           booking={booking}
+          isAdmin={isAdmin}
+          canWrite={canWrite}
           showInStoreForm={showInStoreForm}
           showReconcileForm={showReconcileForm}
           onShowInStoreForm={() => setShowInStoreForm(true)}

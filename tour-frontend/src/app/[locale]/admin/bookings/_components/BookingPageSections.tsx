@@ -215,6 +215,7 @@ interface BookingKpiGridProps {
   stats: Stats;
   statusFilter: string;
   paymentFilter: string;
+  isAdmin: boolean;
   onFilterStatus: (status: Booking['status']) => void;
   onFilterPayment: (paymentStatus: Booking['paymentStatus']) => void;
 }
@@ -223,17 +224,19 @@ export function BookingKpiGrid({
   stats,
   statusFilter,
   paymentFilter,
+  isAdmin,
   onFilterStatus,
   onFilterPayment,
 }: BookingKpiGridProps) {
   const kpis = [
-    {
+    // Doanh thu chỉ hiển thị cho Admin/Super Admin.
+    ...(isAdmin ? [{
       icon: 'payments', label: 'Tổng doanh thu',
       value: fmtCompact(stats.totalRevenue),
       sub: `${stats.paidCount} đơn đã thanh toán`,
       bg: 'bg-blue-50', ic: 'text-blue-600',
       onClick: () => onFilterPayment('PAID'), active: paymentFilter === 'PAID',
-    },
+    }] : []),
     {
       icon: 'check_circle', label: 'Đã xác nhận',
       value: stats.confirmed.toLocaleString('vi-VN'),

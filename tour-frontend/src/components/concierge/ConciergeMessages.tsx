@@ -15,6 +15,7 @@ interface ConciergeMessagesProps {
     hasAccessToken: boolean;
     language: string;
     messagesEndRef: RefObject<HTMLDivElement | null>;
+    scrollContainerRef: RefObject<HTMLDivElement | null>;
     handleSendMessage: (text?: string) => void;
     setIsOpen: (v: boolean) => void;
     t: (key: string) => string;
@@ -29,12 +30,13 @@ export default function ConciergeMessages({
     hasAccessToken,
     language,
     messagesEndRef,
+    scrollContainerRef,
     handleSendMessage,
     setIsOpen,
     t,
 }: ConciergeMessagesProps) {
     return (
-        <div className="hide-scrollbar flex-1 space-y-5 overflow-y-auto p-5 pb-32">
+        <div ref={scrollContainerRef} className="hide-scrollbar flex-1 space-y-5 overflow-y-auto p-5 pb-32">
             {isLoadingHistory && (
                 <div className="text-center text-slate-400 text-sm py-4">{t('conciergeApp.loadingHistory')}</div>
             )}
@@ -78,10 +80,10 @@ export default function ConciergeMessages({
                                                 type="button"
                                                 onClick={() => handleSendMessage(t(prompt.textKey))}
                                                 disabled={isTyping || cooldown}
-                                                className={`inline-flex min-h-10 items-center justify-start gap-2 rounded-full border px-3.5 py-2 text-left text-xs font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow,transform] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800/30 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-55 ${
+                                                className={`inline-flex min-h-10 items-center justify-start gap-2 rounded-full border px-3.5 py-2 text-left text-xs font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow,transform] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-55 ${
                                                     isPrimary
-                                                        ? 'border-blue-700 bg-blue-50 text-blue-900 hover:bg-blue-100 hover:shadow-md'
-                                                        : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900'
+                                                        ? 'border-primary bg-primary/5 text-primary hover:bg-primary/10 hover:shadow-md'
+                                                        : 'border-slate-200 bg-white text-slate-700 hover:border-primary/30 hover:bg-primary/5 hover:text-primary'
                                                 }`}
                                             >
                                                 <span
@@ -98,7 +100,7 @@ export default function ConciergeMessages({
                             )}
 
                             {/* Tour Card */}
-                            {msg.tourCard && (
+                            {msg.tourCard?.image && (
                                 <div className="ml-11 w-[calc(100%-2.75rem)]">
                                     <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-500 group">
                                         <div className="relative h-48 overflow-hidden">
@@ -114,7 +116,7 @@ export default function ConciergeMessages({
                                                 }}
                                             />
                                             <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-lg">
-                                                <span className="text-blue-800 font-bold text-sm tracking-tight">
+                                                <span className="text-primary font-bold text-sm tracking-tight">
                                                     {msg.tourCard.price}
                                                 </span>
                                             </div>
@@ -127,7 +129,7 @@ export default function ConciergeMessages({
                                                 <Link
                                                     href={`/${language}/tour/${msg.tourCard.id}`}
                                                     onClick={() => setIsOpen(false)}
-                                                    className="block w-full text-center bg-blue-800 hover:bg-blue-900 text-white py-3 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors"
+                                                    className="block w-full text-center bg-primary hover:bg-primary-container text-white py-3 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors"
                                                 >
                                                     {t('conciergeApp.viewTourDetail')}
                                                 </Link>
@@ -150,7 +152,7 @@ export default function ConciergeMessages({
                                             type="button"
                                             onClick={() => handleSendMessage(suggestion)}
                                             disabled={isTyping || cooldown}
-                                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             {suggestion}
                                         </button>
@@ -168,9 +170,9 @@ export default function ConciergeMessages({
                                             if (lastUserMsg?.text) handleSendMessage(lastUserMsg.text);
                                         }}
                                         disabled={isTyping || cooldown}
-                                        className="text-xs font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-900 disabled:opacity-50"
+                                        className="text-xs font-semibold text-primary underline underline-offset-2 hover:text-primary-container disabled:opacity-50"
                                     >
-                                        Thử lại
+                                        {t('conciergeApp.retry')}
                                     </button>
                                 </div>
                             )}
@@ -196,8 +198,8 @@ export default function ConciergeMessages({
                         </span>
                     </div>
                     <div className="bg-white border border-slate-100 px-4 rounded-2xl rounded-tl-none w-fit flex items-center gap-2 h-[44px] shadow-sm">
-                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-                        <span className="text-xs font-semibold text-slate-500">Đang tìm kiếm tour phù hợp...</span>
+                        <div className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-pulse" />
+                        <span className="text-xs font-semibold text-slate-500">{t('conciergeApp.searching')}</span>
                     </div>
                 </div>
             )}
@@ -214,9 +216,9 @@ export default function ConciergeMessages({
                         </span>
                     </div>
                     <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none w-fit flex items-center gap-1.5 h-[44px] shadow-sm">
-                        <div className="w-1.5 h-1.5 bg-blue-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-1.5 h-1.5 bg-blue-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-1.5 h-1.5 bg-blue-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <div className="w-1.5 h-1.5 bg-primary/30 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-1.5 h-1.5 bg-primary/30 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-1.5 h-1.5 bg-primary/30 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
                 </div>
             )}

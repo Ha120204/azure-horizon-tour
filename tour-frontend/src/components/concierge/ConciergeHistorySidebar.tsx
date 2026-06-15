@@ -57,7 +57,7 @@ export default function ConciergeHistorySidebar({
                                         key={session.id}
                                         className={`group rounded-xl border p-3 transition-colors ${
                                             isActive
-                                                ? 'border-blue-200 bg-blue-50'
+                                                ? 'border-primary/20 bg-primary/5'
                                                 : 'border-slate-200 bg-white hover:bg-slate-50'
                                         }`}
                                     >
@@ -78,7 +78,7 @@ export default function ConciergeHistorySidebar({
                                                 </span>
                                             </div>
                                             <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
-                                                {session.preview || 'Chưa có nội dung xem trước.'}
+                                                {session.preview || t('conciergeApp.noPreview')}
                                             </p>
                                             <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                                                 {t('conciergeApp.messageCount', { count: session.messageCount })}

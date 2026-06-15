@@ -89,13 +89,21 @@ export class ActivityLogService {
     }
 
     // ── Danh sách log với pagination + filter ─────────────────────────────
-    async findAll(query: LogQueryDto) {
+    async findAll(query: LogQueryDto, viewerRole?: string) {
         const page  = Number(query.page)  || 1;
         const limit = Number(query.limit) || 20;
         const skip  = (page - 1) * limit;
 
         // Build WHERE with only guaranteed-safe fields
         const where: Prisma.SystemLogWhereInput = {};
+
+        // ADMIN không được xem log của SUPER_ADMIN — tương tự ADMIN_VISIBLE_USER_ROLES trong user.service
+        if (viewerRole === 'ADMIN') {
+            where.OR = [
+                { userId: null },                                      // log hệ thống (SYSTEM)
+                { user: { is: { role: { not: 'SUPER_ADMIN' } } } },   // mọi role trừ SUPER_ADMIN
+            ];
+        }
 
         if (query.action)   where.action   = query.action;
         if (query.resource) where.resource = query.resource;
@@ -188,8 +196,8 @@ export class ActivityLogService {
     }
 
     // ── Chi tiết 1 log ─────────────────────────────────────────────────────
-    async findOne(id: number) {
-        return this.prisma.systemLog.findUnique({
+    async findOne(id: number, viewerRole?: string) {
+        const log = await this.prisma.systemLog.findUnique({
             where: { id },
             include: {
                 user: {
@@ -197,6 +205,11 @@ export class ActivityLogService {
                 },
             },
         });
+        // ADMIN không được xem log của SUPER_ADMIN
+        if (viewerRole === 'ADMIN' && log?.user?.role === 'SUPER_ADMIN') {
+            return null;
+        }
+        return log;
     }
 
     // ── KPI Stats ──────────────────────────────────────────────────────────
@@ -229,10 +242,10 @@ export class ActivityLogService {
     }
 
     // ── Export CSV ─────────────────────────────────────────────────────────
-    async exportCsv(query: LogQueryDto): Promise<string> {
+    async exportCsv(query: LogQueryDto, viewerRole?: string): Promise<string> {
         // Lấy tất cả không giới hạn (với filter)
         const unlimitedQuery = { ...query, limit: 10000, page: 1 };
-        const { data } = await this.findAll(unlimitedQuery);
+        const { data } = await this.findAll(unlimitedQuery, viewerRole);
 
         const headers = ['ID', 'Thời gian', 'Hành động', 'Tài nguyên', 'Đối tượng', 'Mô tả', 'Người dùng', 'Email', 'Vai trò', 'IP'];
         const rows = data.map(log => [

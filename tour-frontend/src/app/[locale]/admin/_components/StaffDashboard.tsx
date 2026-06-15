@@ -1,6 +1,6 @@
 'use client';
 
-import { useStaffDashboard } from './staffDashboard/useStaffDashboard';
+import { useStaffDashboard } from '../_hooks/useStaffDashboard';
 import DashboardHeader from './staffDashboard/DashboardHeader';
 import WorkQueueSection from './staffDashboard/WorkQueueSection';
 import SlaSection from './staffDashboard/SlaSection';
@@ -11,7 +11,7 @@ import BookingLookupSection from './staffDashboard/BookingLookupSection';
 
 export default function StaffDashboard({ staffName }: { staffName: string }) {
     const {
-        stats, myTours, myTickets,
+        stats, recentTours, recentTickets,
         loading, loadError, lastUpdated, fetchData,
         searchQuery, handleQueryChange, bookingResults,
         searching, hasSearched, searchError, handleSearch,
@@ -45,8 +45,8 @@ export default function StaffDashboard({ staffName }: { staffName: string }) {
                 </section>
                 <ContentMetrics loading={loading} stats={stats} />
                 <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                    <RecentToursSection loading={loading} myTours={myTours} />
-                    <RecentTicketsSection loading={loading} myTickets={myTickets} openTickets={openTickets} />
+                    <RecentToursSection loading={loading} recentTours={recentTours} />
+                    <RecentTicketsSection loading={loading} recentTickets={recentTickets} openTickets={openTickets} />
                 </section>
                 <BookingLookupSection
                     searchQuery={searchQuery}

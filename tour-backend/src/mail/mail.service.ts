@@ -717,8 +717,8 @@ export class MailService {
   }) {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
     const trackUrl = data.accessCode
-      ? `${frontendUrl}/support/track/${data.ticketId}?accessCode=${encodeURIComponent(data.accessCode)}`
-      : `${frontendUrl}/support/track/${data.ticketId}`;
+      ? `${frontendUrl}/contact?ticketId=${data.ticketId}&accessCode=${encodeURIComponent(data.accessCode)}`
+      : `${frontendUrl}/contact?ticketId=${data.ticketId}`;
 
     const safeCustomerName = this.escapeHtml(data.customerName);
     const safeSubject      = this.escapeHtml(data.subject);

@@ -5,6 +5,7 @@ import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import type { VoucherDetail, VoucherAnalytics, UserVoucherEntry } from './types';
 import { statusConfig, formatCurrency } from './utils';
+import { UNLIMITED_USES } from '../../_lib/config';
 
 export function useVoucherDetail(voucherId: number | null, onClose: () => void) {
   const [data, setData] = useState<VoucherDetail | null>(null);
@@ -68,8 +69,8 @@ export function useVoucherDetail(voucherId: number | null, onClose: () => void) 
   };
 
   const usedCount = Number(data?.usedCount) || 0;
-  const maxUses = Number(data?.maxUses) || 999_999_999;
-  const isUnlimited = maxUses >= 999_999_999;
+  const maxUses = Number(data?.maxUses) || UNLIMITED_USES;
+  const isUnlimited = maxUses >= UNLIMITED_USES;
   const usageRatio = isUnlimited ? (usedCount > 0 ? 0.06 : 0) : Math.min(usedCount / maxUses, 1);
   const savedCount = data?._count?.userVouchers ?? 0;
   const userVouchers: UserVoucherEntry[] = data?.userVouchers ?? [];

@@ -1,14 +1,35 @@
 import {
   Controller, Post, Get, Delete, Patch,
-  Body, Param, Query, ParseIntPipe,
+  Body, Param, Query, Req, ParseIntPipe,
   BadRequestException, UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SubscriberService } from './subscriber.service';
-import { SubscribeDto } from './dto/subscribe.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
+import {
+  SubscribeDto,
+  SetSubscriberStatusDto,
+  CampaignTestDto,
+  CreateCampaignDto,
+  UpdateCampaignDto,
+  ScheduleCampaignDto,
+} from './dto';
 
+type AuthenticatedRequest = {
+  user?: {
+    userId?: number;
+    id?: number;
+  };
+};
+
+const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
+  const id = Number(req.user?.userId ?? req.user?.id);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+};
+
+@SuperAdminArea('marketing')
 @Controller('subscriber')
 export class SubscriberController {
   constructor(private readonly subscriberService: SubscriberService) {}
@@ -19,19 +40,21 @@ export class SubscriberController {
     return this.subscriberService.subscribe(dto.email);
   }
 
-  // Admin/Super Admin: GET /subscriber — danh sách subscribers
+  // Public: GET /subscriber/unsubscribe — xem thông tin liên kết hủy đăng ký
   @Get('unsubscribe')
   async getUnsubscribeDetails(@Query('token') token?: string) {
     if (!token?.trim()) throw new BadRequestException('Token hủy đăng ký là bắt buộc');
     return this.subscriberService.getUnsubscribeDetails(token.trim());
   }
 
+  // Public: POST /subscriber/unsubscribe — xác nhận hủy đăng ký
   @Post('unsubscribe')
   async unsubscribe(@Body() body: { token?: string; reason?: string }) {
     if (!body.token?.trim()) throw new BadRequestException('Token hủy đăng ký là bắt buộc');
     return this.subscriberService.unsubscribe(body.token.trim(), body.reason);
   }
 
+  // Admin/Super Admin: GET /subscriber — danh sách subscribers
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
@@ -57,6 +80,7 @@ export class SubscriberController {
     return this.subscriberService.getStats();
   }
 
+  // Admin/Super Admin: GET /subscriber/campaigns — bản nháp + chiến dịch
   @Get('campaigns')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
@@ -64,6 +88,33 @@ export class SubscriberController {
     return this.subscriberService.getCampaigns();
   }
 
+  // Admin/Super Admin: POST /subscriber/campaigns — tạo bản nháp
+  @Post('campaigns')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async createCampaign(@Body() dto: CreateCampaignDto, @Req() req: AuthenticatedRequest) {
+    return this.subscriberService.createDraft(dto, getAuthUserId(req));
+  }
+
+  // Admin/Super Admin: PATCH /subscriber/campaigns/:id — cập nhật bản nháp
+  @Patch('campaigns/:id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async updateCampaign(@Param('id') id: string, @Body() dto: UpdateCampaignDto) {
+    if (!id.trim()) throw new BadRequestException('ID chiến dịch là bắt buộc');
+    return this.subscriberService.updateDraft(id.trim(), dto);
+  }
+
+  // Admin/Super Admin: PATCH /subscriber/campaigns/:id/schedule — lên lịch gửi
+  @Patch('campaigns/:id/schedule')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async scheduleCampaign(@Param('id') id: string, @Body() dto: ScheduleCampaignDto) {
+    if (!id.trim()) throw new BadRequestException('ID chiến dịch là bắt buộc');
+    return this.subscriberService.scheduleCampaign(id.trim(), dto.scheduledAt);
+  }
+
+  // Admin/Super Admin: PATCH /subscriber/campaigns/:id/cancel — hủy lịch gửi
   @Patch('campaigns/:id/cancel')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
@@ -72,85 +123,41 @@ export class SubscriberController {
     return this.subscriberService.cancelCampaign(id.trim());
   }
 
+  // Admin/Super Admin: DELETE /subscriber/campaigns/:id — xóa bản nháp
+  @Delete('campaigns/:id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async deleteCampaign(@Param('id') id: string) {
+    if (!id.trim()) throw new BadRequestException('ID chiến dịch là bắt buộc');
+    return this.subscriberService.deleteDraft(id.trim());
+  }
+
+  // Admin/Super Admin: POST /subscriber/campaign/test — gửi thử nội bộ
+  @Post('campaign/test')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  async sendCampaignTest(@Body() dto: CampaignTestDto) {
+    return this.subscriberService.sendCampaignTest({
+      to: dto.to,
+      subject: dto.subject,
+      previewText: dto.previewText,
+      body: dto.body,
+      campaignName: dto.campaignName,
+    });
+  }
+
+  // Admin/Super Admin: PATCH /subscriber/:id/status — bật/tắt nhận tin
   @Patch(':id/status')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   async setStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { isActive?: boolean },
+    @Body() dto: SetSubscriberStatusDto,
   ) {
-    if (typeof body.isActive !== 'boolean') {
-      throw new BadRequestException('isActive phải là boolean');
-    }
-    return this.subscriberService.setActive(id, body.isActive);
+    return this.subscriberService.setActive(id, dto.isActive);
   }
 
-  @Post('campaign/test')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN')
-  async sendCampaignTest(@Body() body: {
-    to?: string;
-    subject?: string;
-    previewText?: string;
-    body?: string;
-    campaignName?: string;
-  }) {
-    if (!body.to || !body.to.includes('@')) {
-      throw new BadRequestException('Email gửi thử không hợp lệ');
-    }
-    if (!body.subject?.trim() || !body.body?.trim()) {
-      throw new BadRequestException('Tiêu đề và nội dung email là bắt buộc');
-    }
-    return this.subscriberService.sendCampaignTest({
-      to: body.to.trim().toLowerCase(),
-      subject: body.subject.trim(),
-      previewText: body.previewText?.trim(),
-      body: body.body.trim(),
-      campaignName: body.campaignName?.trim(),
-    });
-  }
-
-  @Post('campaign/schedule')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('ADMIN', 'SUPER_ADMIN')
-  async scheduleCampaign(@Body() body: {
-    campaignName?: string;
-    type?: string;
-    subject?: string;
-    previewText?: string;
-    body?: string;
-    audience?: 'ALL_ACTIVE' | 'CURRENT_FILTER' | 'MANUAL_SELECTION';
-    audienceFilter?: { status?: 'active' | 'inactive' | 'all'; search?: string; recipientIds?: number[] };
-    recipientIds?: number[];
-    scheduledAt?: string;
-  }) {
-    if (!body.campaignName?.trim() || !body.subject?.trim() || !body.body?.trim()) {
-      throw new BadRequestException('Tên chiến dịch, tiêu đề và nội dung email là bắt buộc');
-    }
-    if (!body.scheduledAt) {
-      throw new BadRequestException('Thời gian gửi là bắt buộc');
-    }
-    const scheduledDate = new Date(body.scheduledAt);
-    if (Number.isNaN(scheduledDate.getTime())) {
-      throw new BadRequestException('Thời gian gửi không hợp lệ');
-    }
-    if (scheduledDate.getTime() < Date.now() + 30_000) {
-      throw new BadRequestException('Thời gian gửi phải sau hiện tại ít nhất 30 giây');
-    }
-    return this.subscriberService.scheduleCampaign({
-      campaignName: body.campaignName.trim(),
-      type: body.type?.trim(),
-      subject: body.subject.trim(),
-      previewText: body.previewText?.trim(),
-      body: body.body.trim(),
-      audience: body.audience ?? 'ALL_ACTIVE',
-      audienceFilter: body.audienceFilter,
-      recipientIds: body.recipientIds,
-      scheduledAt: scheduledDate.toISOString(),
-    });
-  }
-
-  // Admin: DELETE /subscriber/:id — xóa subscriber
+  // Admin/Super Admin: DELETE /subscriber/:id — xóa subscriber
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')

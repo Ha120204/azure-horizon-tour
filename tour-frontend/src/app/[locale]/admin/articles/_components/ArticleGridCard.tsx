@@ -12,6 +12,7 @@ type ArticleGridCardProps = Omit<SharedArticleViewProps, 'articles' | 'isLoading
 export function ArticleGridCard({
   article,
   isAdmin,
+  canWrite,
   userId,
   isSubmitting,
   onOpenEdit,
@@ -24,7 +25,7 @@ export function ArticleGridCard({
   const articleStatus = (article.status ?? 'PUBLISHED') as ArticleStatus;
   const statusConfig = getStatusCfg(articleStatus);
   const staffCanManage = !isAdmin && (article.createdById == null || article.createdById === userId) && (articleStatus === 'DRAFT' || articleStatus === 'REJECTED');
-  const canEditArticle = isAdmin || staffCanManage;
+  const canEditArticle = canWrite || staffCanManage;
 
   return (
     <article
@@ -85,7 +86,7 @@ export function ArticleGridCard({
                 : <span className="material-symbols-outlined text-[18px]">send</span>}
             </button>
           )}
-          {isAdmin && articleStatus === 'PENDING_REVIEW' && (
+          {canWrite && articleStatus === 'PENDING_REVIEW' && (
             <>
               <button
                 onClick={() => onReview({ article, action: 'approve' })}
@@ -103,25 +104,23 @@ export function ArticleGridCard({
               </button>
             </>
           )}
-          {isAdmin && (
-            <>
-              {articleStatus === 'PUBLISHED' && (
-                <button
-                  onClick={() => onToggleFeatured(article)}
-                  aria-label="Toggle nổi bật"
-                  className={`w-10 h-10 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-110 transition-all shadow-md ${article.isFeatured ? 'bg-amber-400/90 text-white hover:bg-amber-400' : 'bg-white/90 text-amber-400 hover:bg-white'}`}
-                >
-                  <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                </button>
-              )}
-              <button
-                onClick={() => onDelete(article)}
-                aria-label="Xóa"
-                className="w-10 h-10 bg-error/90 backdrop-blur-sm text-on-error rounded-full flex items-center justify-center hover:bg-error hover:scale-110 transition-all shadow-md"
-              >
-                <span className="material-symbols-outlined text-[18px]">delete</span>
-              </button>
-            </>
+          {canWrite && articleStatus === 'PUBLISHED' && (
+            <button
+              onClick={() => onToggleFeatured(article)}
+              aria-label="Toggle nổi bật"
+              className={`w-10 h-10 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-110 transition-all shadow-md ${article.isFeatured ? 'bg-amber-400/90 text-white hover:bg-amber-400' : 'bg-white/90 text-amber-400 hover:bg-white'}`}
+            >
+              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+            </button>
+          )}
+          {(canWrite || staffCanManage) && (
+            <button
+              onClick={() => onDelete(article)}
+              aria-label="Xóa"
+              className="w-10 h-10 bg-error/90 backdrop-blur-sm text-on-error rounded-full flex items-center justify-center hover:bg-error hover:scale-110 transition-all shadow-md"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
           )}
         </div>
       </div>

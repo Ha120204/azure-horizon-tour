@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SuperAdminArea } from '../auth/decorators/super-admin-area.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { TourPackagePresetService } from './tour-package-preset.service';
 import type { CreatePackagePresetDto } from './tour-package-preset.service';
@@ -19,6 +20,7 @@ const getAuthUserId = (req: AuthenticatedRequest): number | undefined => {
 };
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
+@SuperAdminArea('tours')
 @Controller('tour/package-presets')
 export class TourPackagePresetController {
   constructor(private readonly svc: TourPackagePresetService) {}

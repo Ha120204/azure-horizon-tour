@@ -64,7 +64,7 @@ export function StaffKpiGrid({ kpis }: StaffKpiGridProps) {
 interface StaffFiltersProps {
     search: string;
     filterStatus: string;
-    isSuperAdminView: boolean;
+    managedRole: 'ADMIN' | 'STAFF';
     totalItems: number;
     onSearchChange: (value: string) => void;
     onStatusChange: (value: string) => void;
@@ -85,27 +85,28 @@ const statusOptions = [
 export function StaffFilters({
     search,
     filterStatus,
-    isSuperAdminView,
+    managedRole,
     totalItems,
     onSearchChange,
     onStatusChange,
     onResetFilters,
 }: StaffFiltersProps) {
     const hasActiveFilters = Boolean(search || filterStatus);
-    const itemLabel = isSuperAdminView ? 'quản trị viên' : 'nhân viên';
+    const isAdminScope = managedRole === 'ADMIN';
+    const itemLabel = isAdminScope ? 'quản trị viên' : 'nhân viên';
 
     return (
         <div className="mb-5 rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-3 shadow-sm sm:mb-6 sm:p-4">
             <div className="flex flex-wrap items-stretch gap-3 sm:items-center">
                 <div className="relative w-full min-w-0 flex-1">
                     <span className="material-symbols-outlined pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant" aria-hidden="true">search</span>
-                    <label htmlFor="search-users" className="sr-only">{isSuperAdminView ? 'Tìm kiếm quản trị viên' : 'Tìm kiếm nhân viên'}</label>
+                    <label htmlFor="search-users" className="sr-only">{isAdminScope ? 'Tìm kiếm quản trị viên' : 'Tìm kiếm nhân viên'}</label>
                     <input
                         id="search-users"
                         type="search"
                         autoComplete="off"
                         name="staff-search"
-                        placeholder={isSuperAdminView ? 'Tìm quản trị viên theo tên hoặc email…' : 'Tìm nhân viên theo tên hoặc email…'}
+                        placeholder={isAdminScope ? 'Tìm quản trị viên theo tên hoặc email…' : 'Tìm nhân viên theo tên hoặc email…'}
                         value={search}
                         onChange={e => onSearchChange(e.target.value)}
                         className="w-full rounded-xl border border-outline-variant/15 bg-surface-container-low py-2.5 pl-11 pr-11 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
@@ -124,9 +125,9 @@ export function StaffFilters({
                 <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
                     <div className="inline-flex items-center gap-2 rounded-xl border border-outline-variant/15 bg-surface-container-low px-4 py-2.5 text-sm font-semibold text-on-surface-variant">
                         <span className="material-symbols-outlined text-[17px]" aria-hidden="true">
-                            {isSuperAdminView ? 'admin_panel_settings' : 'badge'}
+                            {isAdminScope ? 'admin_panel_settings' : 'badge'}
                         </span>
-                        {isSuperAdminView ? 'Đối tượng: Quản trị viên' : 'Đối tượng: Nhân viên'}
+                        {isAdminScope ? 'Đối tượng: Quản trị viên' : 'Đối tượng: Nhân viên'}
                     </div>
                     <label htmlFor="filter-status" className="sr-only">Lọc theo trạng thái</label>
                     <StaffSelect

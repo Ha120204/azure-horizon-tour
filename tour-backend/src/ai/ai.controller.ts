@@ -18,12 +18,9 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { AiService } from './ai.service';
-import type { TourTranslationRequest, ArticleTranslationRequest } from './ai.service';
-
-type ChatRequestBody = {
-  message?: string;
-  sessionId?: string;
-};
+import { AiTranslationService } from './ai-translation.service';
+import type { TourTranslationRequest, ArticleTranslationRequest } from './ai-translation.service';
+import { ChatRequestDto } from './dto/chat-request.dto';
 
 type AuthenticatedRequest = {
   user?: {
@@ -33,7 +30,10 @@ type AuthenticatedRequest = {
 
 @Controller('ai')
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiService: AiService,
+    private readonly aiTranslationService: AiTranslationService,
+  ) {}
 
   @Get('status')
   getStatus() {
@@ -65,29 +65,18 @@ export class AiController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(OptionalJwtGuard)
   @Post('chat')
-  chat(@Body() body: ChatRequestBody, @Req() req: AuthenticatedRequest) {
-    const message = body.message?.trim();
-    if (!message) {
-      throw new BadRequestException('Message is required');
-    }
-
-    return this.aiService.chat(message, body.sessionId, req.user?.userId);
+  chat(@Body() body: ChatRequestDto, @Req() req: AuthenticatedRequest) {
+    return this.aiService.chat(body.message.trim(), body.sessionId, req.user?.userId, body.currentTourId);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(OptionalJwtGuard)
   @Post('chat/stream')
   async streamChat(
-    @Body() body: ChatRequestBody,
+    @Body() body: ChatRequestDto,
     @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const message = body.message?.trim();
-    if (!message) {
-      res.status(400).json({ message: 'Message is required' });
-      return;
-    }
-
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -96,11 +85,11 @@ export class AiController {
 
     const userId = req.user?.userId ?? null;
     try {
-      for await (const event of this.aiService.chatStream(message, body.sessionId, userId)) {
+      for await (const event of this.aiService.chatStream(body.message.trim(), body.sessionId, userId, body.currentTourId)) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
     } catch {
-      res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: 'Stream failed', errorType: 'unknown' })}\n\n`);
     } finally {
       res.end();
     }
@@ -114,7 +103,7 @@ export class AiController {
       throw new BadRequestException('Tour draft content is required');
     }
 
-    return this.aiService.translateTourDraft(body);
+    return this.aiTranslationService.translateTourDraft(body);
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -128,7 +117,7 @@ export class AiController {
       throw new BadRequestException('Cần có nội dung tiếng Việt để dịch');
     }
 
-    return this.aiService.translateArticleDraft(body);
+    return this.aiTranslationService.translateArticleDraft(body);
   }
 
   @UseGuards(OptionalJwtGuard)

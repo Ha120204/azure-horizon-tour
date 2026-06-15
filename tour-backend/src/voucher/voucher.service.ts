@@ -32,11 +32,17 @@ export type {
 
 const FAR_FUTURE = new Date('2099-12-31T23:59:59Z');
 const NEVER_YEAR = 2099;
+const UNLIMITED_USES = 999_999_999; // maxUses sentinel = "không giới hạn lượt"
 const CUSTOMER_SEGMENTS = new Set(['ALL', 'FIRST_TIME', 'RETURNING', 'SAVED_TO_WALLET']);
 
 function resolveExpiresAt(input?: string | null): Date {
   if (!input) return FAR_FUTURE;
-  const d = new Date(input);
+  // Ngày dạng YYYY-MM-DD → hết hạn cuối ngày theo giờ VN (UTC+7) để voucher còn
+  // hiệu lực trọn ngày được chọn, thay vì hết hiệu lực ngay 00:00.
+  const trimmed = input.trim();
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? new Date(`${trimmed}T23:59:59.999+07:00`)
+    : new Date(input);
   if (isNaN(d.getTime())) throw new BadRequestException('Ngày hết hạn không hợp lệ');
   return d;
 }
@@ -195,20 +201,20 @@ export class VoucherService {
 
     if (voucher.eligibleTourIds.length > 0) {
       if (!context.tourId || !voucher.eligibleTourIds.includes(context.tourId)) {
-        throw new BadRequestException('Ma nay khong ap dung cho tour dang chon');
+        throw new BadRequestException('Mã này không áp dụng cho tour đang chọn');
       }
     }
 
     if (voucher.eligibleDestinationIds.length > 0) {
       if (!context.tourId) {
-        throw new BadRequestException('Ma nay yeu cau tour hop le');
+        throw new BadRequestException('Mã này yêu cầu chọn tour hợp lệ');
       }
       const tour = await db.tour.findUnique({
         where: { id: context.tourId },
         select: { destinationId: true },
       });
       if (!tour || !voucher.eligibleDestinationIds.includes(tour.destinationId)) {
-        throw new BadRequestException('Ma nay khong ap dung cho diem den dang chon');
+        throw new BadRequestException('Mã này không áp dụng cho điểm đến đang chọn');
       }
     }
 
@@ -217,7 +223,7 @@ export class VoucherService {
     if (hasSegmentRestriction || voucher.usageLimitPerUser) {
       const userId = Number(context.userId);
       if (!Number.isInteger(userId) || userId <= 0) {
-        throw new BadRequestException('Ma nay yeu cau tai khoan khach hang hop le');
+        throw new BadRequestException('Mã này yêu cầu tài khoản khách hàng hợp lệ');
       }
 
       const [paidBookingCount, savedVoucher, usageCount] = await Promise.all([
@@ -245,12 +251,12 @@ export class VoucherService {
           (segments.includes('SAVED_TO_WALLET') && Boolean(savedVoucher));
 
         if (!eligible) {
-          throw new BadRequestException('Ma nay khong ap dung cho nhom khach hang cua ban');
+          throw new BadRequestException('Mã này không áp dụng cho nhóm khách hàng của bạn');
         }
       }
 
       if (voucher.usageLimitPerUser && usageCount >= voucher.usageLimitPerUser) {
-        throw new BadRequestException(`Ma nay chi duoc dung toi da ${voucher.usageLimitPerUser} lan moi khach`);
+        throw new BadRequestException(`Mã này chỉ được dùng tối đa ${voucher.usageLimitPerUser} lần mỗi khách`);
       }
     }
 
@@ -424,7 +430,7 @@ export class VoucherService {
     }));
 
     return {
-      totalActive: computedStats.filter((v) => v.isActive).length,
+      totalActive: computedStats.filter((v) => v.computedStatus === 'active').length,
       totalExpiredThisMonth: computedStats.filter((v) => v.computedStatus === 'expired' && isInCurrentMonth(v.expiresAt, now)).length,
       expiringSoon: computedStats.filter((v) =>
         v.computedStatus === 'active' &&
@@ -525,9 +531,6 @@ export class VoucherService {
           if (status === 'redeemed') {
             return v.usedCount > 0;
           }
-          if (status === 'active') {
-            return v.isActive;
-          }
           return v.computedStatus === status;
         })
       : data;
@@ -583,7 +586,7 @@ export class VoucherService {
         discountValue: dto.discountValue,
         maxDiscountAmount: dto.discountType === 'PERCENTAGE' ? (dto.maxDiscountAmount ?? null) : null,
         minOrderValue: dto.minOrderValue ?? 0,
-        maxUses: dto.maxUses ?? 999_999_999, // "unlimited"
+        maxUses: dto.maxUses ?? UNLIMITED_USES,
         usageLimitPerUser: dto.usageLimitPerUser ?? null,
         startsAt,
         expiresAt,
@@ -625,16 +628,16 @@ export class VoucherService {
     }
     if (dto.maxDiscountAmount !== undefined) {
       if (dto.maxDiscountAmount !== null && dto.maxDiscountAmount < 0) {
-        throw new BadRequestException('Tran giam gia khong hop le');
+        throw new BadRequestException('Trần giảm giá không hợp lệ');
       }
       updateData.maxDiscountAmount = dto.maxDiscountAmount;
     }
     if (dto.discountType === 'FIXED_AMOUNT') updateData.maxDiscountAmount = null;
     if (dto.minOrderValue !== undefined) updateData.minOrderValue = dto.minOrderValue;
-    if (dto.maxUses !== undefined) updateData.maxUses = dto.maxUses ?? 999_999_999;
+    if (dto.maxUses !== undefined) updateData.maxUses = dto.maxUses ?? UNLIMITED_USES;
     if (dto.usageLimitPerUser !== undefined) {
       if (dto.usageLimitPerUser !== null && dto.usageLimitPerUser < 1) {
-        throw new BadRequestException('Gioi han moi khach phai lon hon 0');
+        throw new BadRequestException('Giới hạn mỗi khách phải lớn hơn 0');
       }
       updateData.usageLimitPerUser = dto.usageLimitPerUser;
     }
@@ -655,7 +658,7 @@ export class VoucherService {
     const nextStartsAt = updateData.startsAt instanceof Date ? updateData.startsAt : voucher.startsAt;
     const nextExpiresAt = updateData.expiresAt instanceof Date ? updateData.expiresAt : voucher.expiresAt;
     if (!isNeverExpires(nextExpiresAt) && nextStartsAt >= nextExpiresAt) {
-      throw new BadRequestException('Ngay bat dau phai truoc ngay het han');
+      throw new BadRequestException('Ngày bắt đầu phải trước ngày hết hạn');
     }
 
     return this.prisma.voucher.update({ where: { id }, data: updateData });
@@ -666,10 +669,29 @@ export class VoucherService {
     const voucher = await this.prisma.voucher.findUnique({ where: { id } });
     if (!voucher) throw new NotFoundException('Voucher không tồn tại');
 
-    return this.prisma.voucher.update({
+    const updated = await this.prisma.voucher.update({
       where: { id },
       data: { isActive: !voucher.isActive },
     });
+
+    return { ...updated, computedStatus: computeVoucherStatus(updated, new Date()) };
+  }
+
+  /** Bật/tắt hàng loạt — atomic qua một updateMany, không thể fail một phần */
+  async adminBulkSetActive(ids: number[], isActive: boolean) {
+    const uniqueIds = Array.from(
+      new Set((ids ?? []).filter((id) => Number.isInteger(id) && id > 0)),
+    );
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('Danh sách voucher không hợp lệ');
+    }
+
+    const result = await this.prisma.voucher.updateMany({
+      where: { id: { in: uniqueIds } },
+      data: { isActive },
+    });
+
+    return { count: result.count };
   }
 
   /** Voucher service note. */
@@ -683,8 +705,10 @@ export class VoucherService {
       );
     }
 
-    await this.prisma.userVoucher.deleteMany({ where: { voucherId: id } });
-    return this.prisma.voucher.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.userVoucher.deleteMany({ where: { voucherId: id } });
+      return tx.voucher.delete({ where: { id } });
+    });
   }
 
   /** Voucher service note. */

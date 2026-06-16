@@ -4,3 +4,7 @@ docs/
 skills-lock.json
 /CLAUDE.md
 /README.md
+
+# dotenv root (dùng cho docker-compose) — không commit secret
+/.env
+!/.env.example

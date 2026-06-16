@@ -1,0 +1,3 @@
+api.azure-horizon.store {
+	reverse_proxy backend:3000
+}

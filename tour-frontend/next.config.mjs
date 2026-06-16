@@ -15,7 +15,11 @@ const nextConfig = {
     config.resolve.alias['next-intl/config'] = path.resolve('./src/i18n/request.ts');
     return config;
   },
-  turbopack: {},
+  turbopack: {
+    resolveAlias: {
+      'next-intl/config': './src/i18n/request.ts',
+    },
+  },
   images: {
     remotePatterns: [
       {

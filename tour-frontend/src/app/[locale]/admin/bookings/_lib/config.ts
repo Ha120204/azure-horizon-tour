@@ -46,6 +46,7 @@ export const CONFIRMED_SOURCE_LABEL: Record<string, string> = {
   IN_STORE_CASH: 'Tiền mặt',
   IN_STORE_BANK_TRANSFER: 'Chuyển khoản',
   IN_STORE_CARD_POS: 'Quẹt thẻ POS',
+  REFUND_MANUAL: 'Hoàn tiền thủ công',
   ADMIN_OVERRIDE: 'Admin override',
 };
 

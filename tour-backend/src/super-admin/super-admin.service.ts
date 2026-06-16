@@ -5,6 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const HIGH_RISK_ACTIONS = ['DELETE', 'ROLE_CHANGE', 'CANCEL_BOOKING', 'EXPORT', 'REVOKE_SESSION'];
 const RISK_STATUSES = ['OPEN', 'REVIEWED', 'RESOLVED'] as const;
+// Đồng bộ với các key sinh trong getOverview().rawOperationalRisks
+const VALID_RISK_KEYS = ['failed-payments', 'overdue-pending', 'sensitive-actions', 'support-overdue'] as const;
 type HealthTone = 'emerald' | 'amber' | 'red';
 type RawOperationalRisk = {
   key: string;
@@ -29,6 +31,9 @@ const startOfMonth = () => {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 };
 
+// Chỉ số rủi ro 0-100 (heuristic): mỗi tín hiệu nhân trọng số theo mức tác động
+// quản trị — thao tác nhạy cảm (đụng quyền/tiền) nặng nhất, nội dung chờ duyệt nhẹ nhất.
+// Ngưỡng phân loại ở getOverview: >=50 'warning', >=80 'critical'.
 const calculateRiskIndex = (input: {
   failedPayments: number;
   overduePending: number;
@@ -116,24 +121,14 @@ export class SuperAdminService {
     ];
   }
 
-  private buildPermissionMatrix() {
-    return [
-      { capability: 'Toàn quyền Super Overview', description: 'Xem risk index, high-risk audit, health và workflow rủi ro.', superAdmin: true, admin: false, staff: false },
-      { capability: 'Chỉnh cài đặt hệ thống', description: 'Thay đổi cấu hình vận hành trong trang Settings.', superAdmin: true, admin: false, staff: false },
-      { capability: 'Xuất audit log', description: 'Tải CSV nhật ký hệ thống phục vụ đối soát.', superAdmin: true, admin: false, staff: false },
-      { capability: 'Quản trị Admin', description: 'Tạo Admin, đổi role Admin/Staff và khóa tài khoản Admin.', superAdmin: true, admin: false, staff: false },
-      { capability: 'Thu hồi phiên đăng nhập', description: 'Buộc Admin/Staff đăng xuất khỏi toàn bộ thiết bị khi có rủi ro tài khoản.', superAdmin: true, admin: false, staff: false },
-      { capability: 'Quản trị Staff', description: 'Tạo, chỉnh sửa và khóa tài khoản nhân viên.', superAdmin: true, admin: true, staff: false },
-      { capability: 'Duyệt nội dung/tour', description: 'Phê duyệt, từ chối hoặc xuất bản nội dung vận hành.', superAdmin: true, admin: true, staff: false },
-      { capability: 'Xử lý booking', description: 'Theo dõi đơn, cập nhật trạng thái và hỗ trợ khách hàng.', superAdmin: true, admin: true, staff: true },
-    ];
-  }
-
   async getOverview() {
     const today = startOfToday();
     const monthStart = startOfMonth();
     const pendingOverdueSince = new Date(Date.now() - 30 * 60 * 1000);
     const supportOverdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Đo riêng để latency phản ánh đúng sức khỏe DB, không bị nhiễu bởi batch query bên dưới.
+    const databaseLatencyMs = await this.getDatabaseLatencyMs();
 
     const [
       monthlyRevenue,
@@ -150,7 +145,6 @@ export class SuperAdminService {
       supportOpen,
       supportOverdue,
       assistedDraftPending,
-      databaseLatencyMs,
     ] = await Promise.all([
       this.prisma.booking.aggregate({
         where: {
@@ -188,12 +182,7 @@ export class SuperAdminService {
         where: { action: { in: HIGH_RISK_ACTIONS }, createdAt: { gte: today } },
       }),
       this.prisma.systemLog.findMany({
-        where: {
-          OR: [
-            { action: { in: HIGH_RISK_ACTIONS } },
-            { resource: { in: ['User', 'Booking', 'Voucher'] } },
-          ],
-        },
+        where: { action: { in: HIGH_RISK_ACTIONS } },
         orderBy: { createdAt: 'desc' },
         take: 5,
         include: {
@@ -220,7 +209,6 @@ export class SuperAdminService {
       this.prisma.assistedBookingDraft.count({
         where: { status: 'PENDING_APPROVAL' },
       }),
-      this.getDatabaseLatencyMs(),
     ]);
 
     const paymentStatus = Object.fromEntries(
@@ -248,7 +236,7 @@ export class SuperAdminService {
         due: 'Hôm nay',
         icon: 'credit_card_off',
         tone: 'red',
-        href: '/admin/bookings',
+        href: '/admin/logs',
       },
       overduePendingBookings > 0 && {
         key: 'overdue-pending',
@@ -259,7 +247,7 @@ export class SuperAdminService {
         due: 'Trong ca hiện tại',
         icon: 'timer',
         tone: 'amber',
-        href: '/admin/bookings',
+        href: '/admin/logs',
       },
       sensitiveActionsToday > 0 && {
         key: 'sensitive-actions',
@@ -281,7 +269,7 @@ export class SuperAdminService {
         due: 'Hôm nay',
         icon: 'support_agent',
         tone: 'amber',
-        href: '/admin/support',
+        href: '/admin/logs',
       },
     ].filter(Boolean) as RawOperationalRisk[];
 
@@ -346,13 +334,7 @@ export class SuperAdminService {
         supportOverdue,
       },
       systemHealth: this.buildSystemHealth({ failedPayments, auditTotalToday, databaseLatencyMs }),
-      permissionMatrix: this.buildPermissionMatrix(),
       operationalRisks,
-      riskWorkflow: {
-        open: operationalRisks.filter(risk => risk.workflow.status === 'OPEN').length,
-        reviewed: operationalRisks.filter(risk => risk.workflow.status === 'REVIEWED').length,
-        resolved: operationalRisks.filter(risk => risk.workflow.status === 'RESOLVED').length,
-      },
       highRiskActions: highRiskLogs.map(log => ({
         id: log.id,
         actor: log.user?.fullName || 'System',
@@ -392,6 +374,9 @@ export class SuperAdminService {
   }
 
   async updateRiskReview(riskKey: string, status: string, note: string | undefined, reviewerId?: number) {
+    if (!VALID_RISK_KEYS.includes(riskKey as (typeof VALID_RISK_KEYS)[number])) {
+      throw new BadRequestException('Khóa rủi ro không hợp lệ');
+    }
     const normalizedStatus = String(status || '').toUpperCase();
     if (!RISK_STATUSES.includes(normalizedStatus as (typeof RISK_STATUSES)[number])) {
       throw new BadRequestException('Risk status must be OPEN, REVIEWED, or RESOLVED');

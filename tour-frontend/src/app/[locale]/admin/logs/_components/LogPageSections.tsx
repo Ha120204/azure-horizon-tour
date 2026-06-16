@@ -12,7 +12,6 @@ const ACTION_FILTER_OPTIONS: LogSelectOption[] = [
     { value: 'UPDATE', label: 'Cập nhật (UPDATE)', icon: 'edit' },
     { value: 'DELETE', label: 'Xóa (DELETE)', icon: 'delete' },
     { value: 'LOGIN', label: 'Đăng nhập (LOGIN)', icon: 'login' },
-    { value: 'LOGOUT', label: 'Đăng xuất (LOGOUT)', icon: 'logout' },
     { value: 'ROLE_CHANGE', label: 'Đổi quyền (ROLE_CHANGE)', icon: 'admin_panel_settings' },
     { value: 'CANCEL_BOOKING', label: 'Hủy đơn (CANCEL_BOOKING)', icon: 'event_busy' },
 ];
@@ -37,24 +36,27 @@ const SEVERITY_FILTER_OPTIONS: LogSelectOption[] = [
 
 interface LogsPageHeaderProps {
     isExporting: boolean;
+    canExport: boolean;
     onExport: () => void;
 }
 
-export function LogsPageHeader({ isExporting, onExport }: LogsPageHeaderProps) {
+export function LogsPageHeader({ isExporting, canExport, onExport }: LogsPageHeaderProps) {
     return (
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-outline-variant/20 pb-6">
             <div>
                 <h1 className="font-headline text-3xl font-bold text-primary tracking-tight leading-none mb-2">Nhật Ký Hành Động</h1>
                 <p className="font-body text-on-surface-variant text-sm">Theo dõi toàn bộ thao tác quản trị trên hệ thống</p>
             </div>
-            <button
-                onClick={onExport}
-                disabled={isExporting}
-                className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all disabled:opacity-50"
-            >
-                <span className="material-symbols-outlined text-[18px]">download</span>
-                {isExporting ? 'Đang xuất…' : 'Xuất CSV'}
-            </button>
+            {canExport && (
+                <button
+                    onClick={onExport}
+                    disabled={isExporting}
+                    className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all disabled:opacity-50"
+                >
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                    {isExporting ? 'Đang xuất…' : 'Xuất CSV'}
+                </button>
+            )}
         </div>
     );
 }

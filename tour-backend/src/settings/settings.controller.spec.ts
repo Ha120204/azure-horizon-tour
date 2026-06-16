@@ -33,11 +33,13 @@ describe('SettingsController authorization metadata', () => {
     expect(getHandlerMetadata('getPublic', GUARDS_METADATA)).toBeUndefined();
   });
 
-  it('does not grant update access through the read-only role metadata', () => {
-    expect(getHandlerMetadata('updateMany', 'roles')).toBeUndefined();
+  it('allows ADMIN and SUPER_ADMIN to call updateMany', () => {
+    expect(getHandlerMetadata<string[]>('updateMany', 'roles')).toEqual([
+      'ADMIN',
+      'SUPER_ADMIN',
+    ]);
 
     const guards = getHandlerMetadata<unknown[]>('updateMany', GUARDS_METADATA) ?? [];
-    expect(guards).toHaveLength(2);
-    expect(guards).not.toContain(RolesGuard);
+    expect(guards).toContain(RolesGuard);
   });
 });

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import { API_BASE_URL } from '@/lib/http/constants';
 
 import { pdf } from '@react-pdf/renderer';
@@ -305,7 +306,7 @@ function SuccessTicketContent() {
 
         } catch (error) {
             console.error("Lỗi khi tạo PDF:", error);
-            alert(sd.pdfError);
+            toastEmitter.error(sd.pdfError);
         } finally {
             setIsDownloading(false);
         }

@@ -16,8 +16,8 @@ export class ActivityLogController {
 
     // GET /admin/logs/stats — KPI summary
     @Get('stats')
-    async getStats() {
-        const stats = await this.logService.getStats();
+    async getStats(@Request() req: AuthenticatedRequest) {
+        const stats = await this.logService.getStats(req.user.role);
         return { data: stats };
     }
 

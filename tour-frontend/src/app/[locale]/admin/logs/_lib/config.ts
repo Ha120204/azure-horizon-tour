@@ -7,6 +7,8 @@ export const ACTION_COLORS: Record<string, string> = {
     ROLE_CHANGE: 'bg-amber-100 text-amber-700 border-amber-200',
     CANCEL_BOOKING: 'bg-orange-100 text-orange-700 border-orange-200',
     EXPORT: 'bg-violet-100 text-violet-700 border-violet-200',
+    APPROVE: 'bg-teal-100 text-teal-700 border-teal-200',
+    REVOKE_SESSION: 'bg-rose-100 text-rose-700 border-rose-200',
 };
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -18,6 +20,8 @@ export const ACTION_LABELS: Record<string, string> = {
     ROLE_CHANGE: 'ĐỔI QUYỀN',
     CANCEL_BOOKING: 'HỦY ĐƠN',
     EXPORT: 'XUẤT DỮ LIỆU',
+    APPROVE: 'DUYỆT',
+    REVOKE_SESSION: 'THU HỒI PHIÊN',
 };
 
 export const AUDIT_LOCALE = 'vi-VN';
@@ -25,10 +29,16 @@ export const AUDIT_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 export const RESOURCE_LABELS: Record<string, string> = {
     Article: 'Bài viết',
+    AssistedBookingDraft: 'Đặt tour trực tiếp',
+    Auth: 'Xác thực',
     Booking: 'Đơn đặt tour',
     Review: 'Đánh giá',
     Subscriber: 'Subscriber',
+    SuperAdminViewGrants: 'Quyền xem Super Admin',
+    SuperRiskReview: 'Xét duyệt rủi ro',
     SupportTicket: 'Ticket hỗ trợ',
+    SystemLog: 'Nhật ký hệ thống',
+    SystemSetting: 'Cài đặt hệ thống',
     Tour: 'Tour',
     TourDeparture: 'Lịch khởi hành',
     User: 'Người dùng',

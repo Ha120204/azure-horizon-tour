@@ -19,6 +19,7 @@ export default function SystemLogsPage() {
         <main className="flex-1 p-6 md:p-8 lg:p-10 w-full max-w-[1600px] mx-auto overflow-y-auto font-body bg-surface min-h-screen text-on-surface">
             <LogsPageHeader
                 isExporting={logs.isExporting}
+                canExport={logs.canExport}
                 onExport={logs.handleExport}
             />
 
@@ -68,6 +69,7 @@ export default function SystemLogsPage() {
             <LogsTable
                 logs={logs.displayLogs}
                 isLoading={logs.isLoading}
+                loadError={logs.loadError}
                 expandedRow={logs.expandedRow}
                 copiedLogId={logs.copiedLogId}
                 copyErrorLogId={logs.copyErrorLogId}

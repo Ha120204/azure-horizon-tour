@@ -87,17 +87,17 @@ export class SettingsController {
   /**
    * PATCH /settings — Cập nhật settings
    * Body: { "company_name": "Azure Horizon", "booking_hold_minutes": "20" }
-   * Chỉ SUPER_ADMIN
+   * ADMIN: chỉ nhóm company | SUPER_ADMIN: tất cả nhóm
    */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @Patch()
   async updateMany(
     @Body() body: Record<string, string>,
     @Request() req: AuthenticatedSettingsRequest,
   ) {
-    const adminId = req.user.userId;
-    const data = await this.settingsService.updateMany(body, adminId);
+    const { userId, role } = req.user;
+    const data = await this.settingsService.updateMany(body, userId, role);
     return { message: 'Success', data };
   }
 }

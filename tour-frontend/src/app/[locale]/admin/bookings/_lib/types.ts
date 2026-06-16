@@ -1,6 +1,6 @@
 import type { PassengerType as SharedPassengerType } from '@/lib/booking/passengerDetails';
 
-export type BookingConfirmSource = 'IN_STORE' | 'PAYOS_SYNC' | 'RECONCILE';
+export type BookingConfirmSource = 'IN_STORE' | 'PAYOS_SYNC' | 'RECONCILE' | 'REFUND';
 
 export type CancellationPolicyTier =
   | 'UNPAID'

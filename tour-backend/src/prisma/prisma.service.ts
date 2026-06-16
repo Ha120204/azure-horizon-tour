@@ -14,9 +14,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     private readonly pool: Pool;
 
     constructor() {
-        // Lấy chuỗi kết nối database từ biến môi trường. 
-        // Nếu không tìm thấy, fallback về chuỗi kết nối mặc định (thường dùng cho môi trường dev local).
-        const connectionString = process.env.DATABASE_URL || "postgresql://postgres:12022004@localhost:5432/tour_db?schema=public";
+        // Bắt buộc cấu hình qua biến môi trường — không hardcode credential vào source.
+        // Fail-fast nếu thiếu để tránh chạy nhầm vào DB sai (đặc biệt ở production).
+        const connectionString = process.env.DATABASE_URL;
+        if (!connectionString) {
+            throw new Error('DATABASE_URL chưa được cấu hình. Vui lòng thiết lập trong file .env.');
+        }
 
         // Khởi tạo một Connection Pool (hồ chứa kết nối) bằng thư viện 'pg'.
         // Việc dùng Pool giúp ứng dụng tái sử dụng các kết nối DB, tăng hiệu suất và tránh quá tải.

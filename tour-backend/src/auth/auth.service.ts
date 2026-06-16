@@ -6,6 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
+import { ActivityLogService } from '../activity-log/activity-log.service';
 
 type RefreshTokenPayload = {
   sub: number | string;
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly adminNotifications: AdminNotificationService,
+    private readonly logService: ActivityLogService,
   ) {}
 
   // =========================================================
@@ -81,9 +83,34 @@ export class AuthService {
   }
 
   // =========================================================
+  // GHI LOG ĐĂNG NHẬP (chỉ admin/staff, fire-and-forget)
+  // =========================================================
+  async createLoginLogSafe(
+    userId: number,
+    fullName: string,
+    role: string,
+    context?: { ipAddress?: string; userAgent?: string },
+  ) {
+    if (!['ADMIN', 'SUPER_ADMIN', 'STAFF'].includes(role)) return;
+    try {
+      await this.logService.create({
+        action: 'LOGIN',
+        resource: 'Auth',
+        userId,
+        targetName: fullName,
+        description: `[LOGIN] ${role} ${fullName} đăng nhập vào hệ thống`,
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+      });
+    } catch {
+      // Lỗi ghi log không được chặn luồng đăng nhập
+    }
+  }
+
+  // =========================================================
   // ĐĂNG NHẬP (email + password)
   // =========================================================
-  async login(email: string, pass: string) {
+  async login(email: string, pass: string, context?: { ipAddress?: string; userAgent?: string }) {
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -113,6 +140,8 @@ export class AuthService {
     const payload: JwtTokenPayload = { sub: user.id, email: user.email, role: user.role, tokenVersion: user.authTokenVersion };
     const access_token = this.signToken(payload);
     const refresh_token = this.signRefreshToken({ sub: user.id, tokenVersion: user.authTokenVersion });
+
+    void this.createLoginLogSafe(user.id, user.fullName, user.role, context);
 
     return { user: result, access_token, refresh_token };
   }

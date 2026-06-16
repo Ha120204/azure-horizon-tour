@@ -27,11 +27,17 @@ type AuthenticatedRequest = ExpressRequest & {
   user: JwtRequestUser;
 };
 
+// Production: FE (Vercel) và BE (Render) khác domain → cookie phải là
+// sameSite:'none' + secure:true thì trình duyệt mới gửi kèm fetch cross-site.
+// Dev (http localhost): 'none' bị từ chối khi không secure nên dùng 'lax'.
+const isProd = process.env.NODE_ENV === 'production';
+const COOKIE_SAME_SITE: CookieOptions['sameSite'] = isProd ? 'none' : 'lax';
+
 function authCookieOptions(maxAge: number): CookieOptions {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: COOKIE_SAME_SITE,
     path: '/',
     maxAge,
   };
@@ -40,8 +46,8 @@ function authCookieOptions(maxAge: number): CookieOptions {
 function clearAuthCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: COOKIE_SAME_SITE,
     path: '/',
   };
 }
@@ -65,10 +71,14 @@ export class AuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
-  async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) res: Response, @Req() req: ExpressRequest) {
     const data = await this.authService.login(
       loginDto.email,
       loginDto.password,
+      {
+        ipAddress: req.ip || (req.socket.remoteAddress ?? undefined),
+        userAgent: req.headers['user-agent'],
+      },
     );
 
     res.cookie(ACCESS_TOKEN_COOKIE, data.access_token, authCookieOptions(60 * 60 * 1000));
@@ -240,6 +250,13 @@ export class AuthController {
 
     res.cookie(ACCESS_TOKEN_COOKIE, access_token, authCookieOptions(60 * 60 * 1000));
     res.cookie(REFRESH_TOKEN_COOKIE, refresh_token, authCookieOptions(7 * 24 * 60 * 60 * 1000));
+
+    void this.authService.createLoginLogSafe(
+      user['id'] as number,
+      user['fullName'] as string,
+      user['role'] as string,
+      { ipAddress: req.ip, userAgent: req.headers['user-agent'] as string },
+    );
 
     // Redirect về trang callback của frontend kèm thông tin user
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';

@@ -55,10 +55,40 @@ export function BookingActionBar({
   const visibleTransactions = getVisibleTransactions(booking, currentGateway, hasSuccessfulCurrentGateway);
   const contactPhone = booking.contactPhone ?? booking.user.phone ?? '';
 
+  const refundAmount = Math.max(0, Number(booking.refundAmount) || 0);
+  const canConfirmRefund =
+    isAdmin && canWrite && booking.status === 'CANCELLED' && refundAmount > 0 && !booking.refundedAt;
+
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
+  const [isRefunding, setIsRefunding] = useState(false);
 
   const clearFeedback = () => { setActionError(''); setActionSuccess(''); };
+
+  const handleConfirmRefund = async () => {
+    clearFeedback();
+    if (!canConfirmRefund) return;
+    const ok = window.confirm(
+      `Xác nhận ĐÃ chuyển khoản hoàn ${refundAmount.toLocaleString('vi-VN')}đ cho khách?\n` +
+      'Thao tác này ghi nhận khoản hoàn đã hoàn tất và không thể hoàn tác.',
+    );
+    if (!ok) return;
+    setIsRefunding(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/${booking.id}/confirm-refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message ?? 'Không xác nhận được hoàn tiền');
+      await onConfirmSuccess(booking, 'REFUND');
+    } catch (error: unknown) {
+      setActionError(getErrorMessage(error, 'Không xác nhận được hoàn tiền'));
+    } finally {
+      setIsRefunding(false);
+    }
+  };
 
   const handleCopyBookingCode = async () => {
     clearFeedback();
@@ -241,7 +271,18 @@ export function BookingActionBar({
         />
       ) : (
         /* ── CASE: Đã xác nhận hoặc huỷ ── */
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canConfirmRefund && (
+            <button
+              type="button"
+              onClick={() => void handleConfirmRefund()}
+              disabled={isRefunding}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[17px]">{isRefunding ? 'progress_activity' : 'assignment_returned'}</span>
+              {isRefunding ? 'Đang ghi nhận…' : 'Đánh dấu đã hoàn tiền'}
+            </button>
+          )}
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
         </div>
       )}

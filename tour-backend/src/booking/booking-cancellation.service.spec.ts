@@ -10,6 +10,8 @@ function createServiceHarness() {
   const txTourUpdate = jest.fn().mockResolvedValue({});
   const txTourDepartureUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
   const paymentTransactionCreate = jest.fn().mockResolvedValue({});
+  const paymentTransactionFindFirst = jest.fn().mockResolvedValue(null);
+  const paymentTransactionUpdate = jest.fn().mockResolvedValue({});
 
   const tx = {
     booking: {
@@ -24,6 +26,8 @@ function createServiceHarness() {
     },
     paymentTransaction: {
       create: paymentTransactionCreate,
+      findFirst: paymentTransactionFindFirst,
+      update: paymentTransactionUpdate,
     },
   };
 
@@ -48,10 +52,12 @@ function createServiceHarness() {
     $transaction: transaction,
   } as unknown as PrismaService;
 
+  const sendRefundCompleted = jest.fn().mockResolvedValue({});
   const mailService = {
     sendCancelRequestConfirmation: jest.fn().mockResolvedValue({}),
     sendCancellationApproved: jest.fn().mockResolvedValue({}),
     sendCancellationRejected: jest.fn().mockResolvedValue({}),
+    sendRefundCompleted,
   } as unknown as MailService;
 
   const paymentService = {
@@ -77,6 +83,9 @@ function createServiceHarness() {
     txTourUpdate,
     txTourDepartureUpdateMany,
     paymentTransactionCreate,
+    paymentTransactionFindFirst,
+    paymentTransactionUpdate,
+    sendRefundCompleted,
   };
 }
 
@@ -165,5 +174,84 @@ describe('BookingCancellationService seat release', () => {
       },
     });
     expect(paymentTransactionCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('BookingCancellationService confirmRefund', () => {
+  it('marks the pending refund SUCCESS and stamps refundedAt on the booking', async () => {
+    const {
+      service,
+      bookingFindUnique,
+      txBookingUpdateMany,
+      paymentTransactionFindFirst,
+      paymentTransactionUpdate,
+      sendRefundCompleted,
+    } = createServiceHarness();
+    bookingFindUnique.mockResolvedValue({
+      id: 1,
+      bookingCode: 'BKG-010199-TEST',
+      status: 'CANCELLED',
+      refundAmount: 500_000,
+      refundedAt: null,
+      refundNote: 'Hoàn 50%',
+      user: { email: 'khach@example.com', fullName: 'Nguyen Van A' },
+      tour: { name: 'Test tour' },
+    });
+    paymentTransactionFindFirst.mockResolvedValue({ id: 99 });
+
+    const result = await service.confirmRefund(1, 42, { note: 'CK Vietcombank' });
+
+    expect(result.refundAmount).toBe(500_000);
+    expect(sendRefundCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'khach@example.com',
+        bookingCode: 'BKG-010199-TEST',
+        refundAmount: 500_000,
+      }),
+    );
+    expect(txBookingUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1, status: 'CANCELLED', refundedAt: null },
+        data: expect.objectContaining({ refundedAt: expect.any(Date) }),
+      }),
+    );
+    expect(paymentTransactionUpdate).toHaveBeenCalledWith({
+      where: { id: 99 },
+      data: expect.objectContaining({
+        status: 'SUCCESS',
+        confirmedSource: 'REFUND_MANUAL',
+        confirmedById: 42,
+      }),
+    });
+  });
+
+  it('rejects when the booking has no refund amount', async () => {
+    const { service, bookingFindUnique } = createServiceHarness();
+    bookingFindUnique.mockResolvedValue({
+      id: 1,
+      status: 'CANCELLED',
+      refundAmount: 0,
+      refundedAt: null,
+      refundNote: null,
+    });
+
+    await expect(service.confirmRefund(1, 42, {})).rejects.toThrow(
+      'Don nay khong phat sinh khoan hoan tien',
+    );
+  });
+
+  it('rejects when the refund was already confirmed', async () => {
+    const { service, bookingFindUnique } = createServiceHarness();
+    bookingFindUnique.mockResolvedValue({
+      id: 1,
+      status: 'CANCELLED',
+      refundAmount: 500_000,
+      refundedAt: new Date('2099-01-05T10:00:00.000Z'),
+      refundNote: null,
+    });
+
+    await expect(service.confirmRefund(1, 42, {})).rejects.toThrow(
+      'Khoan hoan tien da duoc xac nhan truoc do',
+    );
   });
 });

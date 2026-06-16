@@ -11,8 +11,6 @@ export const SETTING_DISPLAY_META: Record<string, { impact: string; risky?: bool
     booking_hold_minutes: { impact: 'Ảnh hưởng trực tiếp thời gian giữ ghế trước thanh toán.', risky: true },
     booking_max_people: { impact: 'Giới hạn số khách tối đa trong một lượt đặt.', risky: true },
     booking_min_people: { impact: 'Giới hạn số khách tối thiểu trong một lượt đặt.', risky: true },
-    announcement_enabled: { impact: 'Bật/tắt banner thông báo trên website công khai.', risky: true },
-    announcement_text: { impact: 'Nội dung banner thông báo hiển thị cho khách.' },
 };
 
 export const PANEL_META: Record<SettingsPanel, { title: string; subtitle: string; icon: string; iconBg: string; iconColor: string; kind: 'editable' | 'info' }> = {
@@ -25,11 +23,6 @@ export const PANEL_META: Record<SettingsPanel, { title: string; subtitle: string
         title: 'Chính sách đặt tour',
         subtitle: 'Các quy tắc kinh doanh áp dụng cho quy trình đặt tour.',
         icon: 'policy', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600', kind: 'editable',
-    },
-    announcement: {
-        title: 'Thông báo hệ thống',
-        subtitle: 'Banner thông báo hiển thị trên trang chủ khi cần thiết.',
-        icon: 'campaign', iconBg: 'bg-amber-50', iconColor: 'text-amber-600', kind: 'editable',
     },
     runtime: {
         title: 'Trạng thái hệ thống',

@@ -29,6 +29,7 @@ const PAGE_SIZE_OPTIONS: LogSelectOption[] = [
 interface LogsTableProps {
     logs: ActivityLog[];
     isLoading: boolean;
+    loadError: boolean;
     expandedRow: number | null;
     copiedLogId: number | null;
     copyErrorLogId: number | null;
@@ -47,6 +48,7 @@ interface LogsTableProps {
 export function LogsTable({
     logs,
     isLoading,
+    loadError,
     expandedRow,
     copiedLogId,
     copyErrorLogId,
@@ -89,6 +91,13 @@ export function LogsTable({
                     <tbody className="divide-y divide-outline-variant/10">
                         {isLoading ? (
                             Array.from({ length: 5 }).map((_, i) => <LogsSkeletonRow key={i} />)
+                        ) : loadError ? (
+                            <tr>
+                                <td colSpan={6} className="py-12 text-center">
+                                    <span className="material-symbols-outlined text-[48px] mb-3 block text-red-300">error</span>
+                                    <p className="text-sm font-medium text-red-600">Không tải được nhật ký. Vui lòng thử lại.</p>
+                                </td>
+                            </tr>
                         ) : logs.length === 0 ? (
                             <tr>
                                 <td colSpan={6} className="py-12 text-center text-outline">

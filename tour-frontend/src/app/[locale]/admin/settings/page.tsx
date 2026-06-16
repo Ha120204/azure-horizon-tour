@@ -50,7 +50,9 @@ export default function SystemSettingsPage() {
                     <p className="text-slate-500 text-sm mt-1">
                         {settings.editable
                             ? 'Cấu hình thông số vận hành — thay đổi có hiệu lực ngay lập tức.'
-                            : 'Xem thông tin cấu hình hệ thống. Chỉ Super Admin được thay đổi.'}
+                            : settings.canEditAny
+                                ? 'Nhóm cài đặt này chỉ Super Admin được chỉnh sửa.'
+                                : 'Xem thông tin cấu hình hệ thống. Chỉ Admin trở lên được thay đổi.'}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -58,7 +60,7 @@ export default function SystemSettingsPage() {
                         <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                             {settings.userRole === 'SUPER_ADMIN' ? 'admin_panel_settings' : settings.userRole === 'ADMIN' ? 'manage_accounts' : 'badge'}
                         </span>
-                        {settings.userRole === 'SUPER_ADMIN' ? 'Super Admin' : settings.userRole === 'ADMIN' ? 'Admin — Chỉ xem' : 'Staff — Chỉ xem'}
+                        {settings.userRole === 'SUPER_ADMIN' ? 'Super Admin' : settings.userRole === 'ADMIN' ? 'Admin' : 'Staff — Chỉ xem'}
                     </span>
                     <button
                         onClick={settings.handleManualHealthCheck}
@@ -73,12 +75,21 @@ export default function SystemSettingsPage() {
                 </div>
             </div>
 
-            {!settings.editable && settings.userRole && (
+            {!settings.editable && settings.userRole === 'ADMIN' && (
+                <div className="mb-6 flex items-start gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-200">
+                    <span className="material-symbols-outlined text-amber-500 text-[20px] flex-shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>lock</span>
+                    <div>
+                        <p className="text-sm font-bold text-amber-800">Nhóm này chỉ Super Admin được chỉnh sửa</p>
+                        <p className="text-sm text-amber-700 mt-0.5">Chuyển sang nhóm <strong>Thông tin công ty</strong> để chỉnh sửa thông tin hiển thị và thương hiệu.</p>
+                    </div>
+                </div>
+            )}
+            {!settings.editable && settings.userRole === 'STAFF' && settings.userRole && (
                 <div className="mb-6 flex items-start gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-200">
                     <span className="material-symbols-outlined text-blue-500 text-[20px] flex-shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
                     <div>
                         <p className="text-sm font-bold text-blue-800">Bạn đang ở chế độ chỉ xem</p>
-                        <p className="text-sm text-blue-700 mt-0.5">Tài khoản {settings.userRole === 'ADMIN' ? 'Admin' : 'Staff'} không có quyền chỉnh sửa cài đặt hệ thống. Chỉ Super Admin được thực hiện thay đổi.</p>
+                        <p className="text-sm text-blue-700 mt-0.5">Tài khoản Staff không có quyền chỉnh sửa cài đặt hệ thống.</p>
                     </div>
                 </div>
             )}

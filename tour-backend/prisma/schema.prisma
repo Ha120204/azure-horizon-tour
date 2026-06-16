@@ -563,6 +563,7 @@ model PaymentTransaction {
   //   IN_STORE_CASH               — Thu tiền mặt tại quầy
   //   IN_STORE_BANK_TRANSFER      — Chuyển khoản tại quầy (có biên lai)
   //   IN_STORE_CARD_POS           — Quẹt thẻ POS
+  //   REFUND_MANUAL               — Admin xác nhận đã chuyển khoản hoàn tiền cho khách
   //   ADMIN_OVERRIDE              — Override khẩn cấp (chỉ SUPER_ADMIN)
   confirmedSource String? // Enum string, null nếu chưa xác nhận
   confirmedById   Int? // Admin/Staff thực hiện xác nhận

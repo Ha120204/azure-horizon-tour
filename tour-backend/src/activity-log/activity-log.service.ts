@@ -34,6 +34,17 @@ export class LogQueryDto {
 
 const IMPORTANT_RESOURCES = ['Booking', 'User', 'Voucher', 'Tour'];
 
+// ADMIN không được xem log của SUPER_ADMIN
+function buildViewerScopeWhere(viewerRole?: string): Prisma.SystemLogWhereInput {
+    if (viewerRole !== 'ADMIN') return {};
+    return {
+        OR: [
+            { userId: null },
+            { user: { is: { role: { not: 'SUPER_ADMIN' } } } },
+        ],
+    };
+}
+
 const normalizeRoleFilter = (role?: string): Role | 'SYSTEM' | null => {
     const normalized = role?.trim().toUpperCase();
     if (!normalized) return null;
@@ -97,12 +108,9 @@ export class ActivityLogService {
         // Build WHERE with only guaranteed-safe fields
         const where: Prisma.SystemLogWhereInput = {};
 
-        // ADMIN không được xem log của SUPER_ADMIN — tương tự ADMIN_VISIBLE_USER_ROLES trong user.service
-        if (viewerRole === 'ADMIN') {
-            where.OR = [
-                { userId: null },                                      // log hệ thống (SYSTEM)
-                { user: { is: { role: { not: 'SUPER_ADMIN' } } } },   // mọi role trừ SUPER_ADMIN
-            ];
+        const scopeWhere = buildViewerScopeWhere(viewerRole);
+        if (Object.keys(scopeWhere).length > 0) {
+            where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), scopeWhere];
         }
 
         if (query.action)   where.action   = query.action;
@@ -139,7 +147,7 @@ export class ActivityLogService {
                 searchConditions.push({ id: numericSearch });
             }
 
-            where.OR = searchConditions;
+            where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { OR: searchConditions }];
         }
 
         const sortOrder: Prisma.SortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
@@ -155,15 +163,9 @@ export class ActivityLogService {
             }
         }
 
-        let data: any[] = [];
-        let total = 0;
-
-        // Count chạy độc lập — luôn ổn định
-        total = await this.prisma.systemLog.count({ where });
-
-        // findMany có include — nếu fail thì fallback không include
-        try {
-            data = await (this.prisma.systemLog.findMany({
+        const [total, data] = await Promise.all([
+            this.prisma.systemLog.count({ where }),
+            this.prisma.systemLog.findMany({
                 where,
                 skip,
                 take: limit,
@@ -172,17 +174,9 @@ export class ActivityLogService {
                     user: {
                         select: { id: true, fullName: true, email: true, role: true, avatarUrl: true },
                     },
-                } as any,
-            }) as any);
-        } catch (err) {
-            console.warn('[ActivityLog] include {user} failed, fallback:', (err)?.message);
-            data = await (this.prisma.systemLog.findMany({
-                where,
-                skip,
-                take: limit,
-                orderBy: { [sortBy]: sortOrder },
-            }) as any);
-        }
+                },
+            }),
+        ]);
 
         return {
             data,
@@ -213,15 +207,17 @@ export class ActivityLogService {
     }
 
     // ── KPI Stats ──────────────────────────────────────────────────────────
-    async getStats() {
+    async getStats(viewerRole?: string) {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
+        const scope = buildViewerScopeWhere(viewerRole);
 
         const [total, todayCount, byAction] = await Promise.all([
-            this.prisma.systemLog.count(),
-            this.prisma.systemLog.count({ where: { createdAt: { gte: todayStart } } }),
+            this.prisma.systemLog.count({ where: scope }),
+            this.prisma.systemLog.count({ where: { ...scope, createdAt: { gte: todayStart } } }),
             this.prisma.systemLog.groupBy({
                 by:      ['action'],
+                where:   scope,
                 _count:  { _all: true },
                 orderBy: { _count: { action: 'desc' } },
             }),
@@ -242,6 +238,15 @@ export class ActivityLogService {
     }
 
     // ── Export CSV ─────────────────────────────────────────────────────────
+
+    private csvCell(value: unknown): string {
+        let str = value === null || value === undefined ? '' : String(value);
+        str = str.replace(/"/g, '""');
+        // Trung hòa ký tự công thức Excel (= + - @ \t \r)
+        if (str.length > 0 && '=+-@\t\r'.includes(str[0])) str = `'${str}`;
+        return `"${str}"`;
+    }
+
     async exportCsv(query: LogQueryDto, viewerRole?: string): Promise<string> {
         // Lấy tất cả không giới hạn (với filter)
         const unlimitedQuery = { ...query, limit: 10000, page: 1 };
@@ -254,14 +259,14 @@ export class ActivityLogService {
             log.action,
             log.resource,
             log.targetName || '',
-            `"${log.description.replace(/"/g, '""')}"`,
+            log.description,
             log.user?.fullName || 'System',
             log.user?.email || '',
             log.user?.role || '',
             log.ipAddress || '',
         ]);
 
-        const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+        const csv = [headers, ...rows].map(row => row.map(cell => this.csvCell(cell)).join(',')).join('\n');
         return '\uFEFF' + csv; // BOM để Excel hiểu UTF-8
     }
 }

@@ -309,7 +309,7 @@ export function BookingDetailView({
     : null;
   const refundStatus = booking.refundedAt
     ? { label: 'Đã hoàn', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'assignment_returned' }
-    : booking.paymentStatus === 'PAID' && (booking.status === 'CANCELLED' || booking.status === 'CANCEL_REQUESTED')
+    : refundAmount > 0 && (booking.status === 'CANCELLED' || booking.status === 'CANCEL_REQUESTED')
       ? { label: 'Đang xử lý', badge: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'sync' }
       : { label: 'Không phát sinh', badge: 'bg-slate-50 text-slate-700 border-slate-200', icon: 'remove_circle' };
   const cancellationPolicy = getCancellationPolicySummary(booking);

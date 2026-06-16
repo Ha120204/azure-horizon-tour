@@ -9,7 +9,7 @@ import helmet from 'helmet';
 
 // [PHASE 1] Best Practices imports
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -42,7 +42,7 @@ async function bootstrap() {
     transform: true,            // Tự động transform kiểu dữ liệu (string → number, etc.)
   }));
   app.useGlobalInterceptors(new TransformInterceptor());
-  app.useGlobalFilters(new PrismaExceptionFilter());
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   app.useStaticAssets(join(process.cwd(), 'public'));
   await app.listen(process.env.PORT ?? 3000);

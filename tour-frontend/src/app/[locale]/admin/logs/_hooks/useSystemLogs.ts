@@ -17,17 +17,24 @@ export function useSystemLogs() {
     const [logs, setLogs] = useState<ActivityLog[]>([]);
     const [stats, setStats] = useState<LogStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [canExport] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return localStorage.getItem('userRole') === 'SUPER_ADMIN';
+    });
     const [copiedLogId, setCopiedLogId] = useState<number | null>(null);
     const [copyErrorLogId, setCopyErrorLogId] = useState<number | null>(null);
     const [linkedLog, setLinkedLog] = useState<ActivityLog | null>(null);
     const [linkedLogError, setLinkedLogError] = useState<string | null>(null);
     const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const fetchAbortRef = useRef<AbortController | null>(null);
 
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalRecords, setTotalRecords] = useState(0);
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [actionFilter, setActionFilter] = useState('');
     const [resourceFilter, setResourceFilter] = useState('');
     const [roleFilter, setRoleFilter] = useState('');
@@ -90,6 +97,7 @@ export function useSystemLogs() {
     const applyKpiFilter = useCallback((filter: KpiFilter) => {
         if (filter === 'all') {
             setSearch('');
+            setDebouncedSearch('');
             setActionFilter('');
             setResourceFilter('');
             setRoleFilter('');
@@ -126,7 +134,12 @@ export function useSystemLogs() {
         currentPageSize: number,
         currentSortOrder: 'asc' | 'desc',
     ) => {
+        fetchAbortRef.current?.abort();
+        const controller = new AbortController();
+        fetchAbortRef.current = controller;
+
         setIsLoading(true);
+        setLoadError(false);
         try {
             const queryParams = new URLSearchParams({
                 page: currentPage.toString(),
@@ -142,40 +155,65 @@ export function useSystemLogs() {
             if (from) queryParams.append('dateFrom', from);
             if (to) queryParams.append('dateTo', to);
 
-            const [logsRes, statsRes] = await Promise.all([
-                fetchWithAuth(`${API_BASE_URL}/admin/logs?${queryParams.toString()}`),
-                fetchWithAuth(`${API_BASE_URL}/admin/logs/stats`),
-            ]);
+            const logsRes = await fetchWithAuth(
+                `${API_BASE_URL}/admin/logs?${queryParams.toString()}`,
+                { signal: controller.signal },
+            );
+
+            if (controller.signal.aborted) return;
 
             if (logsRes.ok) {
                 const logsJson = await logsRes.json();
                 setLogs(Array.isArray(logsJson?.data) ? logsJson.data : []);
                 setTotalPages(logsJson?.meta?.totalPages ?? 1);
                 setTotalRecords(logsJson?.meta?.total ?? 0);
+            } else {
+                setLoadError(true);
             }
+        } catch (error) {
+            if (controller.signal.aborted) return;
+            console.error('Error fetching logs:', error);
+            setLoadError(true);
+            toastEmitter.error('Lỗi tải dữ liệu', 'Không tải được nhật ký. Vui lòng thử lại.');
+        } finally {
+            if (!controller.signal.aborted) setIsLoading(false);
+        }
+    }, []);
 
+    const fetchStats = useCallback(async () => {
+        try {
+            const statsRes = await fetchWithAuth(`${API_BASE_URL}/admin/logs/stats`);
             if (statsRes.ok) {
                 const statsJson = await statsRes.json();
                 setStats(statsJson?.data ?? null);
             }
-        } catch (error) {
-            console.error('Error fetching logs:', error);
-        } finally {
-            setIsLoading(false);
+        } catch {
+            // Stats failure is non-critical — list error state handles display
         }
     }, []);
 
+    // Debounce chỉ áp cho search input (400ms), còn lại fetch ngay
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchLogs(page, search, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder);
-        }, 400);
+        const timer = setTimeout(() => setDebouncedSearch(search), 400);
         return () => clearTimeout(timer);
-    }, [page, search, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder, fetchLogs]);
+    }, [search]);
+
+    useEffect(() => {
+        fetchLogs(page, debouncedSearch, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder);
+    }, [page, debouncedSearch, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder, fetchLogs]);
+
+    // Stats fetch một lần lúc mount, sau đó theo auto-refresh
+    useEffect(() => {
+        void fetchStats();
+    }, [fetchStats]);
 
     useAdminAutoRefresh({
         intervalMs: 60 * 1000,
         pause: Boolean(isExporting || expandedRow),
-        onRefresh: () => fetchLogs(page, search, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder),
+        onRefresh: () => {
+            fetchLogs(page, debouncedSearch, actionFilter, resourceFilter, roleFilter, severityFilter, dateFrom, dateTo, pageSize, sortOrder);
+            void fetchStats();
+        },
     });
 
     useEffect(() => {
@@ -240,6 +278,7 @@ export function useSystemLogs() {
     useEffect(() => {
         return () => {
             if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+            fetchAbortRef.current?.abort();
         };
     }, []);
 
@@ -345,6 +384,7 @@ export function useSystemLogs() {
 
     const clearAllFilters = useCallback(() => {
         setSearch('');
+        setDebouncedSearch('');
         setActionFilter('');
         setResourceFilter('');
         setRoleFilter('');
@@ -359,7 +399,9 @@ export function useSystemLogs() {
         displayLogs,
         stats,
         isLoading,
+        loadError,
         isExporting,
+        canExport,
         copiedLogId,
         copyErrorLogId,
         linkedLogError,

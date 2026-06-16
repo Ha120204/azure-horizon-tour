@@ -7,6 +7,7 @@ import QRCode from 'react-qr-code';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import { useLocale } from '@/context/LocaleContext';
 import { API_BASE_URL } from '@/lib/http/constants';
 
@@ -82,7 +83,11 @@ const dict = {
         loading: "Đang tải thông tin thanh toán...",
         errorTitle: "Đã xảy ra lỗi",
         backBtn: "Quay lại xem Tour",
-        invalidCode: "Mã đặt chỗ không hợp lệ"
+        invalidCode: "Mã đặt chỗ không hợp lệ",
+        payErrorTitle: "Lỗi thanh toán",
+        payStartError: "Không thể khởi tạo thanh toán PayOS. Vui lòng thử lại.",
+        payMethodError: "Không thể cập nhật phương thức thanh toán. Vui lòng thử lại.",
+        payGenericError: "Có lỗi khi xử lý thanh toán. Vui lòng thử lại."
     },
     en: {
         step1: "Fill details",
@@ -123,7 +128,11 @@ const dict = {
         loading: "Loading payment details...",
         errorTitle: "An error occurred",
         backBtn: "Back to Explore Tours",
-        invalidCode: "Invalid booking code"
+        invalidCode: "Invalid booking code",
+        payErrorTitle: "Payment error",
+        payStartError: "Could not start PayOS payment. Please try again.",
+        payMethodError: "Could not update payment method. Please try again.",
+        payGenericError: "Something went wrong while processing payment. Please try again."
     }
 };
 
@@ -318,7 +327,10 @@ function PaymentSelectorContent() {
                         window.location.href = data.checkoutUrl;
                     }
                 } else {
-                    alert(result.message && result.message !== 'Success' ? result.message : 'Error starting PayOS payment');
+                    toastEmitter.error(
+                        d.payErrorTitle,
+                        result.message && result.message !== 'Success' ? result.message : d.payStartError,
+                    );
                 }
             } else if (selectedMethod === 'IN_STORE') {
                 const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/payment-method`, {
@@ -333,12 +345,12 @@ function PaymentSelectorContent() {
                 if (res.ok) {
                     router.push(`/${language}/success?bookingId=${bookingCode}`);
                 } else {
-                    alert(result.message || 'Error updating payment method');
+                    toastEmitter.error(d.payErrorTitle, result.message || d.payMethodError);
                 }
             }
         } catch (err) {
             console.error('Lỗi xác nhận thanh toán:', err);
-            alert('Error processing payment choice. Please try again.');
+            toastEmitter.error(d.payErrorTitle, d.payGenericError);
         } finally {
             setIsSubmitting(false);
         }

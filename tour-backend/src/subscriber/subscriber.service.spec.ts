@@ -55,8 +55,9 @@ describe('SubscriberService', () => {
         let updated: Campaign | null = null;
         campaigns = campaigns.map((c) => {
           if (c.id === id) {
-            updated = { ...c, ...data };
-            return updated;
+            const next = { ...c, ...data };
+            updated = next;
+            return next;
           }
           return c;
         });

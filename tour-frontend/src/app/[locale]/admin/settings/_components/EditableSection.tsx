@@ -212,7 +212,7 @@ export function EditableSection({
                                     )}
                                 </p>
                             </div>
-                            {!editable && <ReadOnlyBadge hint="Chỉ Super Admin được thay đổi cài đặt này" />}
+                            {!editable && <ReadOnlyBadge hint="Nhóm cài đặt này chỉ Super Admin được chỉnh sửa" />}
                         </div>
                     );
                 })}

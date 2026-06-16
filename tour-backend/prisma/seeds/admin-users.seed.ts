@@ -9,17 +9,19 @@ type AdminUserSeed = {
   role: Role;
 };
 
+// Thông tin đăng nhập admin/staff đọc từ biến môi trường — KHÔNG hardcode credential
+// vào source. Thiếu env tương ứng thì bỏ qua tài khoản đó (kèm cảnh báo).
 const adminUsers: AdminUserSeed[] = [
   {
-    email: 'daothanhha120204@gmail.com',
-    password: 'Ha12022004@',
+    email: process.env.SEED_SUPER_ADMIN_EMAIL ?? '',
+    password: process.env.SEED_SUPER_ADMIN_PASSWORD ?? '',
     fullName: 'Đào Thành Hà',
     phone: '0386761856',
     role: Role.SUPER_ADMIN,
   },
   {
-    email: 'phunghuyen23112004@gmail.com',
-    password: 'Huyen23112004@',
+    email: process.env.SEED_STAFF_EMAIL ?? '',
+    password: process.env.SEED_STAFF_PASSWORD ?? '',
     fullName: 'Phùng Thị Thu Huyền',
     phone: '0385773898',
     role: Role.STAFF,
@@ -28,6 +30,12 @@ const adminUsers: AdminUserSeed[] = [
 
 export async function seedAdminUsers(prisma: PrismaClient) {
   for (const user of adminUsers) {
+    if (!user.email || !user.password) {
+      console.warn(
+        `[seed] Bỏ qua tài khoản ${user.role}: thiếu biến môi trường email/password tương ứng.`,
+      );
+      continue;
+    }
     const hashedPassword = await bcrypt.hash(user.password, 10);
 
     await prisma.user.upsert({

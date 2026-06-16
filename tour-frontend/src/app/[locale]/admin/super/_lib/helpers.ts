@@ -18,7 +18,7 @@ export const formatShortVND = (value: number) => {
 };
 
 export const formatDateTime = (value: string) =>
-    new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+    new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 
 export const getStatusMeta = (status: OverviewData['status']) => {
     if (status === 'critical') return { label: 'Cần xử lý ngay', tone: 'red' as Tone };

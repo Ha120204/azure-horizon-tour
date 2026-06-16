@@ -12,7 +12,7 @@ export interface Setting {
 
 export type GroupedSettings = Record<string, Setting[]>;
 export type SettingInputType = 'text' | 'email' | 'tel' | 'number' | 'boolean';
-export type SettingsPanel = 'company' | 'booking' | 'announcement' | 'runtime' | 'security' | 'payment' | 'email';
+export type SettingsPanel = 'company' | 'booking' | 'runtime' | 'security' | 'payment' | 'email';
 
 export interface SettingMeta {
     type: SettingInputType;

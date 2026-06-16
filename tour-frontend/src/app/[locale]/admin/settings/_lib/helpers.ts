@@ -1,6 +1,12 @@
 import type { Setting, SettingMeta } from './types';
 
-export const canEdit = (role: string) => role === 'SUPER_ADMIN';
+const ADMIN_EDITABLE_GROUPS = new Set(['company']);
+
+export const canEditGroup = (role: string, group: string) => {
+    if (role === 'SUPER_ADMIN') return true;
+    if (role === 'ADMIN') return ADMIN_EDITABLE_GROUPS.has(group);
+    return false;
+};
 
 export const buildDraft = (settings: Setting[]): Record<string, string> =>
     Object.fromEntries(settings.map(s => [s.key, s.value]));
@@ -36,10 +42,6 @@ export const validateSettingDraftValue = (
     if (setting.key === 'booking_max_people' && Number(value) < Number(draft.booking_min_people)) {
         return 'Số khách tối đa không được nhỏ hơn số khách tối thiểu.';
     }
-    if (setting.key === 'announcement_text' && draft.announcement_enabled === 'true' && !value) {
-        return 'Nhập nội dung thông báo trước khi bật banner.';
-    }
-
     return '';
 };
 

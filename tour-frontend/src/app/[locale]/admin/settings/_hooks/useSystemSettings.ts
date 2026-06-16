@@ -7,7 +7,7 @@ import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { toastEmitter } from '@/lib/http/toastEmitter';
 import { PANEL_META, SETTING_DISPLAY_META } from '../_lib/config';
-import { canEdit, formatDuration } from '../_lib/helpers';
+import { canEditGroup, formatDuration } from '../_lib/helpers';
 import type { GroupedSettings, SecurityInfo, SettingMeta, SettingsPanel, SystemHealth } from '../_lib/types';
 
 const resolveSettingsPanel = (value: string | null): SettingsPanel =>
@@ -161,7 +161,8 @@ export function useSystemSettings() {
         }
     }, [fetchSettings]);
 
-    const editable = canEdit(userRole);
+    const editable = canEditGroup(userRole, activePanel);
+    const canEditAny = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const visiblePanels = (Object.keys(PANEL_META) as SettingsPanel[])
         .filter(panel => PANEL_META[panel].kind === 'info' || (grouped[panel]?.length ?? 0) > 0);
     const activeMeta = PANEL_META[activePanel];
@@ -186,6 +187,7 @@ export function useSystemSettings() {
         activePanel,
         activeMeta,
         editable,
+        canEditAny,
         visiblePanels,
         runtimeRows,
         setActivePanel,

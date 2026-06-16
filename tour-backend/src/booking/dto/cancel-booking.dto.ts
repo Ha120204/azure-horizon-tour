@@ -4,6 +4,7 @@ import {
   MaxLength,
   IsOptional,
   IsObject,
+  IsUrl,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -76,6 +77,23 @@ export class AdminCancelBookingDto {
   @MinLength(10, { message: 'Lý do hủy phải có ít nhất 10 ký tự' })
   @MaxLength(1000, { message: 'Lý do hủy không được vượt quá 1000 ký tự' })
   reason: string;
+}
+
+/**
+ * [ADMIN] Xác nhận đã chuyển khoản hoàn tiền cho khách (thủ công).
+ * POST /booking/admin/:id/confirm-refund
+ */
+export class ConfirmRefundDto {
+  /** Ghi chú đối soát hoàn tiền (mã giao dịch CK, người thực hiện…) */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+
+  /** URL ảnh biên lai chuyển khoản hoàn tiền (Cloudinary) */
+  @IsOptional()
+  @IsUrl({}, { message: 'evidenceUrl phải là URL hợp lệ' })
+  evidenceUrl?: string;
 }
 
 export class UpdateBookingNoteDto {

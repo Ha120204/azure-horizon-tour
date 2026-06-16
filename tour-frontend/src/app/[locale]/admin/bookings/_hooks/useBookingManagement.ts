@@ -26,6 +26,7 @@ function getConfirmMessage(source: BookingConfirmSource | undefined, bookingCode
     case 'IN_STORE': return `Đã ghi nhận thu tại quầy cho đơn ${bookingCode}`;
     case 'PAYOS_SYNC': return `Đã đồng bộ PayOS — đơn ${bookingCode} đã thanh toán`;
     case 'RECONCILE': return `Đã đối soát thủ công cho đơn ${bookingCode}`;
+    case 'REFUND': return `Đã xác nhận hoàn tiền cho đơn ${bookingCode}`;
     default: return `Đã cập nhật đơn ${bookingCode}`;
   }
 }

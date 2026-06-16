@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { PaymentService } from '../payment/payment.service';
 import type { CancellationPolicy, CancellationPolicyTier, TripLifecycle } from './types';
-import { getErrorMessage, releaseSeats } from './helpers/booking-helpers';
+import { calcSeatCount, getErrorMessage, releaseSeats } from './helpers/booking-helpers';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 
 @Injectable()
@@ -131,7 +131,7 @@ export class BookingCancellationService {
         await releaseSeats(tx, {
           tourId: booking.tourId,
           departureId: booking.departureId,
-          seats: booking.numberOfPeople,
+          seats: calcSeatCount(booking.passengers, booking.numberOfPeople),
         });
       });
 
@@ -210,12 +210,15 @@ export class BookingCancellationService {
     await this.prisma.$transaction(async (tx) => {
       await tx.booking.update({
         where: { id: bookingId },
-        data: { status: 'CANCELLED', paymentStatus: 'FAILED', cancelledAt: new Date(), cancelledBy: 'ADMIN', refundNote: adminNote || booking.refundNote, refundedAt: new Date() },
+        // refundedAt chỉ set khi tiền THỰC SỰ đã chuyển cho khách (admin xác nhận
+        // qua confirmRefund). Đơn không phát sinh hoàn tiền (refundAmount = 0) coi
+        // như đã xử lý xong ngay tại bước duyệt.
+        data: { status: 'CANCELLED', paymentStatus: 'FAILED', cancelledAt: new Date(), cancelledBy: 'ADMIN', refundNote: adminNote || booking.refundNote, refundedAt: refundAmount > 0 ? null : new Date() },
       });
       await releaseSeats(tx, {
         tourId: booking.tourId,
         departureId: booking.departureId,
-        seats: booking.numberOfPeople,
+        seats: calcSeatCount(booking.passengers, booking.numberOfPeople),
       });
       if (refundAmount > 0) {
         await tx.paymentTransaction.create({
@@ -238,6 +241,104 @@ export class BookingCancellationService {
 
     this.logger.log(`[ADMIN] Cancellation approved for bookingId=${bookingId}`);
     return { message: 'Da duyet huy booking va hoan tra ghe', refundAmount };
+  }
+
+  /**
+   * [ADMIN] Xác nhận đã CHUYỂN KHOẢN hoàn tiền cho khách (thủ công).
+   * PayOS không hỗ trợ refund qua API nên khoản hoàn được chuyển ngoài hệ thống;
+   * bước này chốt giao dịch refund PENDING → SUCCESS và đánh dấu booking.refundedAt.
+   */
+  async confirmRefund(
+    bookingId: number,
+    actorId: number,
+    dto: { note?: string; evidenceUrl?: string },
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId, deletedAt: null },
+      include: { user: true, tour: true },
+    });
+    if (!booking) throw new NotFoundException('Booking khong ton tai');
+    if (booking.status !== 'CANCELLED') {
+      throw new BadRequestException('Chi xac nhan hoan tien cho don da huy');
+    }
+    const refundAmount = Number(booking.refundAmount ?? 0);
+    if (refundAmount <= 0) {
+      throw new BadRequestException('Don nay khong phat sinh khoan hoan tien');
+    }
+    if (booking.refundedAt) {
+      throw new BadRequestException('Khoan hoan tien da duoc xac nhan truoc do');
+    }
+
+    const now = new Date();
+    const note = dto.note?.trim();
+
+    await this.prisma.$transaction(async (tx) => {
+      // updateMany + điều kiện refundedAt: null — idempotency guard, chặn double-confirm
+      const updated = await tx.booking.updateMany({
+        where: { id: bookingId, status: 'CANCELLED', refundedAt: null },
+        data: { refundedAt: now, ...(note ? { refundNote: note } : {}) },
+      });
+      if (updated.count === 0) {
+        throw new BadRequestException('Khoan hoan tien da duoc xac nhan truoc do');
+      }
+
+      const refundTxnData = {
+        status: 'SUCCESS',
+        confirmedSource: 'REFUND_MANUAL',
+        confirmedById: actorId,
+        confirmedAt: now,
+        confirmedNote: note ?? null,
+        evidenceUrl: dto.evidenceUrl ?? null,
+      };
+
+      const pendingRefund = await tx.paymentTransaction.findFirst({
+        where: {
+          bookingId,
+          gateway: 'MANUAL',
+          status: 'PENDING',
+          transactionRef: { startsWith: 'REFUND-' },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+
+      if (pendingRefund) {
+        await tx.paymentTransaction.update({
+          where: { id: pendingRefund.id },
+          data: refundTxnData,
+        });
+      } else {
+        await tx.paymentTransaction.create({
+          data: {
+            bookingId,
+            gateway: 'MANUAL',
+            amount: Math.round(refundAmount),
+            transactionRef: `REFUND-${bookingId}-${Date.now()}`,
+            ...refundTxnData,
+          },
+        });
+      }
+    });
+
+    try {
+      if (booking.user?.email) {
+        await this.mailService.sendRefundCompleted({
+          to: booking.user.email,
+          customerName: booking.user.fullName,
+          bookingCode: booking.bookingCode,
+          tourName: booking.tour.name,
+          refundAmount,
+          note,
+        });
+      }
+    } catch (emailError) {
+      this.logger.error('[EMAIL] Failed to send refund completed email:', getErrorMessage(emailError));
+    }
+
+    this.logger.log(
+      `[REFUND] Confirmed refund for bookingId=${bookingId} amount=${refundAmount} actorId=${actorId}`,
+    );
+    return { message: 'Da xac nhan hoan tien cho khach', refundAmount };
   }
 
   async rejectCancellation(bookingId: number, rejectReason: string) {
@@ -302,8 +403,15 @@ export class BookingCancellationService {
       await releaseSeats(tx, {
         tourId: booking.tourId,
         departureId: booking.departureId,
-        seats: booking.numberOfPeople,
+        seats: calcSeatCount(booking.passengers, booking.numberOfPeople),
       });
+      // Khoản hoàn tiền chờ admin chuyển khoản thủ công — ghi nhận PENDING để
+      // hiển thị minh bạch và để confirmRefund chốt sau khi đã chuyển.
+      if (refundAmount > 0) {
+        await tx.paymentTransaction.create({
+          data: { bookingId, gateway: 'MANUAL', amount: Math.round(refundAmount), status: 'PENDING', transactionRef: `REFUND-${bookingId}-${Date.now()}` },
+        });
+      }
     });
 
     if (booking.paymentMethod === 'PAYOS' && booking.paymentStatus !== 'PAID') {

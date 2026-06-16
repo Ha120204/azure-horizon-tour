@@ -1,12 +1,14 @@
+import 'dotenv/config';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { isUsableEnglishText } from '../src/tour/localization/translation-engine';
 import { localizeTour } from '../src/tour/localization/entity-localizers';
 
-const connectionString =
-  process.env.DATABASE_URL ??
-  'postgresql://postgres:12022004@localhost:5432/tour_db?schema=public';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL chưa được cấu hình. Vui lòng thiết lập trong file .env.');
+}
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool as never);
 const prisma = new PrismaClient({ adapter });

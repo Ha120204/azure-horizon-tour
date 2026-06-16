@@ -32,6 +32,7 @@ import {
   ApproveCancellationDto,
   RejectCancellationDto,
   AdminCancelBookingDto,
+  ConfirmRefundDto,
   UpdateBookingNoteDto,
 } from './dto/cancel-booking.dto';
 import {
@@ -605,6 +606,22 @@ export class BookingController {
       Number(id),
       dto.rejectReason.trim(),
     );
+  }
+
+  /**
+   * Admin xác nhận đã chuyển khoản hoàn tiền cho khách (thủ công)
+   * POST /booking/admin/:id/confirm-refund
+   * Body: { note?: string; evidenceUrl?: string }
+   */
+  @UseGuards(AuthGuard('jwt'), AdminOnlyGuard)
+  @Post('admin/:id/confirm-refund')
+  @AuditLog('UPDATE', 'Booking')
+  async confirmRefund(
+    @Param('id') id: string,
+    @Body() dto: ConfirmRefundDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.bookingService.confirmRefund(Number(id), getAuthUserId(req), dto);
   }
 
   @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)

@@ -147,12 +147,13 @@ const WORKFLOW_META: Record<RiskWorkflowStatus, { label: string; badge: string; 
 interface SuperOverviewContentProps {
     data: OverviewData;
     isExporting: boolean;
+    isRefreshing: boolean;
     onRefresh: () => void;
     onExportAudit: () => void;
     onUpdateRisk: (key: string, status: 'REVIEWED' | 'RESOLVED') => Promise<void>;
 }
 
-export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAudit, onUpdateRisk }: SuperOverviewContentProps) {
+export function SuperOverviewContent({ data, isExporting, isRefreshing, onRefresh, onExportAudit, onUpdateRisk }: SuperOverviewContentProps) {
     const [updatingKey, setUpdatingKey] = useState<string | null>(null);
     const statusMeta = getStatusMeta(data.status);
     const statusTone = toneStyles[statusMeta.tone];
@@ -164,13 +165,12 @@ export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAud
     ];
     const kpis = [
         { label: 'Doanh thu tháng', value: formatShortVND(data.kpis.monthlyRevenue), change: 'Tháng này', note: formatVND(data.kpis.monthlyRevenue), icon: 'payments', tone: 'blue' as Tone, gradient: true },
-        { label: 'Admin hoạt động', value: data.kpis.activeAdmins.toLocaleString('vi-VN'), change: `${data.kpis.roleChangesToday} role đổi`, note: `${data.kpis.totalAdminAccounts} tài khoản quản trị`, icon: 'admin_panel_settings', tone: 'violet' as Tone },
+        { label: 'Quản trị còn hiệu lực', value: data.kpis.activeAdmins.toLocaleString('vi-VN'), change: `${data.kpis.roleChangesToday} role đổi`, note: `${data.kpis.totalAdminAccounts} tổng · gồm đã xóa`, icon: 'admin_panel_settings', tone: 'violet' as Tone },
         { label: 'Cần can thiệp', value: data.kpis.interventionRequired.toLocaleString('vi-VN'), change: `${data.alerts.supportOverdue} quá hạn`, note: 'việc chưa đóng', icon: 'priority_high', tone: 'amber' as Tone },
         { label: 'Tỉ lệ thanh toán lỗi', value: `${data.kpis.failedPaymentRate}%`, change: `${data.alerts.failedPayments} lỗi`, note: 'trên nhóm chưa/không thanh toán', icon: 'credit_card_off', tone: 'red' as Tone },
     ];
     const secondaryStats = [
         { label: 'Audit hôm nay', value: data.kpis.auditEventsToday.toLocaleString('vi-VN'), icon: 'history', tone: 'blue' as Tone },
-        { label: 'High-risk events', value: data.kpis.highRiskEventsToday.toLocaleString('vi-VN'), icon: 'warning', tone: 'amber' as Tone },
         { label: 'Hỗ trợ đang mở', value: data.kpis.supportEscalations.toLocaleString('vi-VN'), icon: 'support_agent', tone: 'red' as Tone },
         { label: 'Draft chờ duyệt', value: data.alerts.assistedDraftPending.toLocaleString('vi-VN'), icon: 'approval_delegation', tone: 'emerald' as Tone },
     ];
@@ -201,7 +201,6 @@ export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAud
                                 <div className={`rounded-2xl border p-4 ${statusTone.soft} ${statusTone.border}`}>
                                     <p className={`text-[10px] font-bold uppercase tracking-[0.14em] ${statusTone.text}`}>Trạng thái</p>
                                     <p className={`mt-2 font-headline text-xl font-bold ${statusTone.text}`}>{statusMeta.label}</p>
-                                    <p className={`mt-2 text-xs font-medium ${statusTone.text}/75`}>{formatDateTime(data.generatedAt)}</p>
                                 </div>
                             </div>
                         </div>
@@ -218,9 +217,9 @@ export function SuperOverviewContent({ data, isExporting, onRefresh, onExportAud
                                 <span className="material-symbols-outlined text-[22px]" aria-hidden="true" style={{ fontVariationSettings: "'FILL' 1" }}>verified_user</span>
                             </span>
                         </div>
-                        <button onClick={onRefresh} className="mt-6 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
-                            Làm mới dữ liệu
+                        <button onClick={onRefresh} disabled={isRefreshing} className="mt-6 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                            <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true">{isRefreshing ? 'progress_activity' : 'refresh'}</span>
+                            {isRefreshing ? 'Đang làm mới...' : 'Làm mới dữ liệu'}
                         </button>
                     </section>
                 </div>

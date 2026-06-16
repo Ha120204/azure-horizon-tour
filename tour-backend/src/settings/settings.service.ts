@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 type SettingType = 'text' | 'email' | 'phone' | 'integer' | 'boolean';
@@ -72,21 +72,6 @@ const DEFAULT_SETTINGS = [
     description: 'Số lượng hành khách tối thiểu một lần đặt tour',
     group: 'booking',
   },
-  // --- Nhóm: Thông báo hệ thống ---
-  {
-    key: 'announcement_enabled',
-    value: 'false',
-    label: 'Bật thông báo bảo trì',
-    description: 'Hiển thị banner thông báo trên trang chủ khi hệ thống bảo trì',
-    group: 'announcement',
-  },
-  {
-    key: 'announcement_text',
-    value: '',
-    label: 'Nội dung thông báo',
-    description: 'Nội dung banner thông báo (để trống nếu không có)',
-    group: 'announcement',
-  },
 ];
 
 const SETTING_DEFINITIONS: Record<string, SettingDefinition> = {
@@ -98,9 +83,13 @@ const SETTING_DEFINITIONS: Record<string, SettingDefinition> = {
   booking_hold_minutes: { key: 'booking_hold_minutes', type: 'integer', min: 5, max: 120, required: true },
   booking_max_people: { key: 'booking_max_people', type: 'integer', min: 1, max: 99, required: true },
   booking_min_people: { key: 'booking_min_people', type: 'integer', min: 1, max: 99, required: true },
-  announcement_enabled: { key: 'announcement_enabled', type: 'boolean', required: true },
-  announcement_text: { key: 'announcement_text', type: 'text', maxLength: 240 },
 };
+
+const ADMIN_EDITABLE_GROUPS = new Set(['company']);
+
+const SETTING_GROUP: Record<string, string> = Object.fromEntries(
+  DEFAULT_SETTINGS.map(s => [s.key, s.group]),
+);
 
 const validateSettingValue = (definition: SettingDefinition, rawValue: string) => {
   const value = String(rawValue ?? '').trim();
@@ -157,8 +146,6 @@ export interface PublicSettings {
   company_phone: string;
   company_email: string;
   company_description: string;
-  announcement_enabled: string;
-  announcement_text: string;
 }
 
 type SystemHealthStatus = 'ok' | 'warning' | 'error';
@@ -203,10 +190,13 @@ export class SettingsService implements OnModuleInit {
     }
   }
 
-  /**
-   * Tự động seed giá trị mặc định khi bảng SystemSetting rỗng
-   */
+  private async retireObsoleteSettings() {
+    const RETIRED_KEYS = ['announcement_enabled', 'announcement_text'];
+    await this.prisma.systemSetting.deleteMany({ where: { key: { in: RETIRED_KEYS } } });
+  }
+
   async onModuleInit() {
+    await this.retireObsoleteSettings();
     await this.ensureDefaultSettings();
   }
 
@@ -266,8 +256,6 @@ export class SettingsService implements OnModuleInit {
       'company_phone',
       'company_email',
       'company_description',
-      'announcement_enabled',
-      'announcement_text',
     ];
     const settings = await this.prisma.systemSetting.findMany({
       where: { key: { in: allowedKeys } },
@@ -280,8 +268,6 @@ export class SettingsService implements OnModuleInit {
       company_phone: flat.company_phone ?? '',
       company_email: flat.company_email ?? '',
       company_description: flat.company_description ?? '',
-      announcement_enabled: flat.announcement_enabled ?? 'false',
-      announcement_text: flat.announcement_text ?? '',
     };
   }
 
@@ -417,7 +403,7 @@ export class SettingsService implements OnModuleInit {
     );
   }
 
-  async updateMany(updates: Record<string, string>, adminId: number) {
+  async updateMany(updates: Record<string, string>, adminId: number, role: string) {
     await this.ensureDefaultSettings();
 
     const entries = Object.entries(updates ?? {});
@@ -431,6 +417,15 @@ export class SettingsService implements OnModuleInit {
 
     if (unknownKeys.length > 0) {
       throw new BadRequestException(`Cài đặt không hợp lệ: ${unknownKeys.join(', ')}`);
+    }
+
+    if (role === 'ADMIN') {
+      const forbiddenKeys = entries
+        .map(([key]) => key)
+        .filter(key => !ADMIN_EDITABLE_GROUPS.has(SETTING_GROUP[key]));
+      if (forbiddenKeys.length > 0) {
+        throw new ForbiddenException('Admin chỉ được chỉnh sửa nhóm thông tin công ty');
+      }
     }
 
     const currentSettings = await this.prisma.systemSetting.findMany({
@@ -459,10 +454,6 @@ export class SettingsService implements OnModuleInit {
     const maxPeople = Number(merged.booking_max_people);
     if (Number.isFinite(minPeople) && Number.isFinite(maxPeople) && minPeople > maxPeople) {
       throw new BadRequestException('Số khách tối thiểu không được lớn hơn số khách tối đa');
-    }
-
-    if (merged.announcement_enabled === 'true' && !String(merged.announcement_text ?? '').trim()) {
-      throw new BadRequestException('Vui lòng nhập nội dung thông báo trước khi bật banner bảo trì');
     }
 
     const changes = entries

@@ -6,8 +6,6 @@ export type PublicSettings = {
     company_phone: string;
     company_email: string;
     company_description: string;
-    announcement_enabled: string;
-    announcement_text: string;
 };
 
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
@@ -16,8 +14,6 @@ export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
     company_phone: '+84 1900 1234',
     company_email: 'hello@azurehorizon.com',
     company_description: 'Pioneering premium travel experiences.',
-    announcement_enabled: 'false',
-    announcement_text: '',
 };
 
 export async function fetchPublicSettings(signal?: AbortSignal): Promise<PublicSettings> {

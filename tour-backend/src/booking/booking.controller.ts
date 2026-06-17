@@ -172,19 +172,19 @@ export class BookingController {
   @Post('payos-webhook')
   async payosWebhook(
     @Body() body: Parameters<PaymentService['verifyWebhook']>[0],
+    @Res() res: Response,
   ) {
-    // Luôn trả về { success: true } để PayOS không reject URL và không retry.
-    // Xử lý lỗi nội bộ hoàn toàn — không để exception ảnh hưởng HTTP response.
+    // Dùng @Res() để bypass TransformInterceptor — PayOS yêu cầu chính xác { success: true }
+    // ở root level, không được wrap thêm bất kỳ lớp nào.
     try {
       const webhookData = await this.paymentService.verifyWebhook(body);
-      // Fire-and-forget: nếu booking không tồn tại (vd test webhook từ PayOS) thì ignore
       this.bookingService.handlePayosReturn(webhookData.orderCode).catch((err) => {
         console.error('[PAYOS_WEBHOOK] Processing error:', getErrorMessage(err));
       });
     } catch (error) {
       console.error('[PAYOS_WEBHOOK] Signature verification failed:', getErrorMessage(error));
     }
-    return { success: true };
+    res.json({ success: true });
   }
 
   // ============== BOOKING CRUD ==============

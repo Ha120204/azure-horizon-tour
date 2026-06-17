@@ -1,0 +1,2 @@
+# Shell script phải giữ line-ending LF để chạy được trên Linux/VPS
+*.sh text eol=lf

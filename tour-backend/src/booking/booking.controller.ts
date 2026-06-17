@@ -184,7 +184,8 @@ export class BookingController {
     } catch (error) {
       console.error('[PAYOS_WEBHOOK] Signature verification failed:', getErrorMessage(error));
     }
-    res.json({ success: true });
+    // PayOS yêu cầu chính xác HTTP 200 — NestJS mặc định trả 201 cho @Post()
+    res.status(200).json({ success: true });
   }
 
   // ============== BOOKING CRUD ==============

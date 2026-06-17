@@ -750,7 +750,7 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={!isSuccess ? onClose : undefined} />
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
 
             <div className="relative z-10 bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-[440px] flex flex-col overflow-hidden">
 

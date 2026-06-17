@@ -33,14 +33,7 @@ export function useSimilarTours(tour: Tour, language: string): Tour[] {
             : Promise.resolve(null);
 
         fetchWithDest
-            .then((json) => {
-                const results = filterResult(json?.data ?? []);
-                if (results.length >= 1) return results;
-                // Fallback: bỏ dest, lấy tour bất kỳ
-                return fetch(`${API_BASE_URL}/tour?${baseParams.toString()}`)
-                    .then((res) => (res.ok ? res.json() : null))
-                    .then((fb) => filterResult(fb?.data ?? []));
-            })
+            .then((json) => filterResult(json?.data ?? []))
             .then((results) => {
                 if (!cancelled) setSimilarTours(results);
             })

@@ -1,4 +1,9 @@
-import { Prisma, PrismaClient, TourStatus, TransportType } from '@prisma/client';
+import {
+  Prisma,
+  PrismaClient,
+  TourStatus,
+  TransportType,
+} from '@prisma/client';
 
 type Region = 'Miền Bắc' | 'Miền Trung' | 'Miền Nam';
 
@@ -33,10 +38,28 @@ type DomesticTourSeed = {
     gallery: string[];
     itinerary: DayPlan[];
     faqs: { question: string; answer: string }[];
+    ticketPolicy?: TicketPolicy;
+    transport?: DomesticTransportSeed;
   };
 };
 
 const DOMESTIC_SCOPE = 'DOMESTIC' as const;
+
+type TicketPolicy = {
+  included?: string[];
+  optional?: string[];
+  excluded?: string[];
+};
+
+type DomesticTransportSeed = {
+  type: TransportType;
+  vehicleType: string;
+  vehicleTypeEn: string;
+  operator: string;
+  operatorEn: string;
+  notes: string;
+  notesEn: string;
+};
 
 function addDays(days: number): Date {
   const date = new Date();
@@ -49,86 +72,88 @@ function unsplashPhoto(photoId: string): string {
   return `https://images.unsplash.com/${photoId}?auto=format&fit=crop&q=80&w=1600`;
 }
 
+// Ảnh Unsplash riêng cho từng điểm đến (đã xác minh trả về 200, không dùng
+// trùng giữa các điểm). Lấy theo từ khóa địa danh để khớp đúng nơi.
 const IMAGES = {
   hanoi: [
-    unsplashPhoto('photo-1702118937156-d8f4d86076ac'),
-    unsplashPhoto('photo-1689080541115-5acffbf0a083'),
-    unsplashPhoto('photo-1702118937156-d8f4d86076ac'),
+    unsplashPhoto('photo-1613131145282-9476375618e1'),
+    unsplashPhoto('photo-1600869080148-338f85fb17f8'),
+    unsplashPhoto('photo-1721222847140-51f6297895c3'),
   ],
   haLong: [
-    unsplashPhoto('photo-1737484126640-7381808c768b'),
-    unsplashPhoto('photo-1680896444865-e76d81267f94'),
-    unsplashPhoto('photo-1737484126640-7381808c768b'),
+    unsplashPhoto('photo-1643029891412-92f9a81a8c16'),
+    unsplashPhoto('photo-1697850084120-4896a446a04d'),
+    unsplashPhoto('photo-1625396836163-80c0d3d7eb86'),
   ],
   ninhBinh: [
-    unsplashPhoto('photo-1626743656249-5d8fa287b941'),
     unsplashPhoto('photo-1557750255-c76072a7aad1'),
-    unsplashPhoto('photo-1740232187966-a42e7e4d1e76'),
+    unsplashPhoto('photo-1656692197297-cb1340b4d538'),
+    unsplashPhoto('photo-1725209276479-59220882e9b0'),
   ],
   sapa: [
-    unsplashPhoto('photo-1758002766412-82897c5e5429'),
-    unsplashPhoto('photo-1758004071806-4e6c85984f51'),
-    unsplashPhoto('photo-1758002766412-82897c5e5429'),
+    unsplashPhoto('photo-1609412058473-c199497c3c5d'),
+    unsplashPhoto('photo-1480996408299-fc0e830b5db1'),
+    unsplashPhoto('photo-1570366583862-f91883984fde'),
   ],
   haGiang: [
-    unsplashPhoto('photo-1728613902676-1d8b4e10eee5'),
-    unsplashPhoto('photo-1536511671359-849531c0a576'),
-    unsplashPhoto('photo-1462688681110-15bc88b1497c'),
+    unsplashPhoto('photo-1603269414002-7f3d2acd0409'),
+    unsplashPhoto('photo-1593852181728-bab1ce6c7f28'),
+    unsplashPhoto('photo-1721151450713-875275523e96'),
   ],
   quangBinh: [
-    unsplashPhoto('photo-1719461208377-94ec5820e414'),
-    unsplashPhoto('photo-1719461208377-94ec5820e414'),
+    unsplashPhoto('photo-1698658989153-a60a73549b4a'),
+    unsplashPhoto('photo-1719461208440-ae18bcc471bb'),
     unsplashPhoto('photo-1719461208377-94ec5820e414'),
   ],
   hue: [
-    unsplashPhoto('photo-1720456485611-a266e43e2bca'),
+    unsplashPhoto('photo-1696147861399-93bdb59749dd'),
+    unsplashPhoto('photo-1713685714770-384c5654f6be'),
     unsplashPhoto('photo-1705823637026-92c0ef6d6222'),
-    unsplashPhoto('photo-1608753529548-3898cb559f48'),
   ],
   daNang: [
-    unsplashPhoto('photo-1708776480405-7ae14fe1d4c4'),
-    unsplashPhoto('photo-1742033993624-ef07c72b059c'),
-    unsplashPhoto('photo-1708776480405-7ae14fe1d4c4'),
+    unsplashPhoto('photo-1559592413-7cec4d0cae2b'),
+    unsplashPhoto('photo-1603852452378-a4e8d84324a2'),
+    unsplashPhoto('photo-1555979864-7a8f9b4fddf8'),
   ],
   hoiAn: [
-    unsplashPhoto('photo-1716396435819-2a3706cc5f85'),
-    unsplashPhoto('photo-1761150285834-7ab9ce6dbfd4'),
-    unsplashPhoto('photo-1716396435819-2a3706cc5f85'),
+    unsplashPhoto('photo-1563354860-799d15199ac3'),
+    unsplashPhoto('photo-1613625695262-98bceeda4bc0'),
+    unsplashPhoto('photo-1652731011413-93d4c5aa5c7c'),
   ],
   nhaTrang: [
     unsplashPhoto('photo-1533002832-1721d16b4bb9'),
-    unsplashPhoto('photo-1669783517838-36886de8bbb3'),
-    unsplashPhoto('photo-1533002832-1721d16b4bb9'),
+    unsplashPhoto('photo-1687025846473-9bd391575faa'),
+    unsplashPhoto('photo-1503188991764-408493f288b9'),
   ],
   daLat: [
     unsplashPhoto('photo-1678099006439-dba9e4d3f9f5'),
-    unsplashPhoto('photo-1741524427564-0173c980c432'),
-    unsplashPhoto('photo-1678099006439-dba9e4d3f9f5'),
+    unsplashPhoto('photo-1626608017817-211d7c48177d'),
+    unsplashPhoto('photo-1552310065-aad9ebece999'),
   ],
   phuQuoc: [
-    unsplashPhoto('photo-1693282814784-649be45a459b'),
+    unsplashPhoto('photo-1746292448726-9e75b5f1067d'),
+    unsplashPhoto('photo-1693294603830-f44c9511d643'),
     unsplashPhoto('photo-1698809807960-758cf416e96e'),
-    unsplashPhoto('photo-1693282814784-649be45a459b'),
   ],
   muiNe: [
-    unsplashPhoto('photo-1758805139095-ca82860c7811'),
-    unsplashPhoto('photo-1758805139095-ca82860c7811'),
-    unsplashPhoto('photo-1758805139095-ca82860c7811'),
+    unsplashPhoto('photo-1488197047962-b48492212cda'),
+    unsplashPhoto('photo-1621795307430-3ff25aa08945'),
+    unsplashPhoto('photo-1482881497185-d4a9ddbe4151'),
   ],
   quyNhon: [
-    unsplashPhoto('photo-1722944175475-6bbc2d6812c6'),
-    unsplashPhoto('photo-1681183537042-b526fe1ab567'),
-    unsplashPhoto('photo-1722944175475-6bbc2d6812c6'),
+    unsplashPhoto('photo-1504457047772-27faf1c00561'),
+    unsplashPhoto('photo-1604325099517-d9ff3c837c3c'),
+    unsplashPhoto('photo-1606625379124-3882167b827b'),
   ],
   phuYen: [
-    unsplashPhoto('photo-1662622600433-f31acfd11e04'),
     unsplashPhoto('photo-1716479852357-a71a74d81537'),
-    unsplashPhoto('photo-1662622600433-f31acfd11e04'),
+    unsplashPhoto('photo-1646922840884-e50a01c5c97d'),
+    unsplashPhoto('photo-1611737730075-be7874d195b5'),
   ],
   canTho: [
-    unsplashPhoto('photo-1705589244475-7ebbc0d3a842'),
-    unsplashPhoto('photo-1705589244475-7ebbc0d3a842'),
-    unsplashPhoto('photo-1705589244475-7ebbc0d3a842'),
+    unsplashPhoto('photo-1692640480932-7d33837179de'),
+    unsplashPhoto('photo-1529271230144-e8c648ef570d'),
+    unsplashPhoto('photo-1689760661317-a839f59b1c32'),
   ],
   hoChiMinh: [
     unsplashPhoto('photo-1583417319070-4a69db38a482'),
@@ -136,19 +161,39 @@ const IMAGES = {
     unsplashPhoto('photo-1602646994030-464f98de5e5c'),
   ],
   mocChau: [
-    unsplashPhoto('photo-1764034372439-cf34b61ea0b9'),
-    unsplashPhoto('photo-1676557058888-7a785ef135af'),
-    unsplashPhoto('photo-1764034372439-cf34b61ea0b9'),
+    unsplashPhoto('photo-1694969775491-a36574e54ffd'),
+    unsplashPhoto('photo-1661174803717-49828c8b0066'),
+    unsplashPhoto('photo-1633730652897-b3d92a6fd47f'),
   ],
   maiChau: [
-    unsplashPhoto('photo-1752127388714-ea60220f243d'),
-    unsplashPhoto('photo-1752127388714-ea60220f243d'),
-    unsplashPhoto('photo-1752127388714-ea60220f243d'),
+    unsplashPhoto('photo-1709064155843-fe1acf2998eb'),
+    unsplashPhoto('photo-1745676540962-ed5b0f2514c2'),
+    unsplashPhoto('photo-1709064227258-9e1f3a0b8399'),
   ],
   caoBang: [
-    unsplashPhoto('photo-1713551584377-54729ca32b33'),
-    unsplashPhoto('photo-1697015556006-9e767c7187dc'),
-    unsplashPhoto('photo-1778381463733-0af6e3cba175'),
+    unsplashPhoto('photo-1599394502978-556699cdac2d'),
+    unsplashPhoto('photo-1746338790243-0fa086169679'),
+    unsplashPhoto('photo-1652288509700-233309520f9e'),
+  ],
+  vungTau: [
+    unsplashPhoto('photo-1713845693881-b120cf5aacc8'),
+    unsplashPhoto('photo-1623596711744-c10ed15581d9'),
+    unsplashPhoto('photo-1689289270364-8c94840201b8'),
+  ],
+  tayNinh: [
+    unsplashPhoto('photo-1651663608811-0d55fdfb0287'),
+    unsplashPhoto('photo-1731051983896-1839025c1836'),
+    unsplashPhoto('photo-1695745424983-b05a2c4da85b'),
+  ],
+  catBa: [
+    unsplashPhoto('photo-1589291432463-fbddbfd10bbd'),
+    unsplashPhoto('photo-1589291539517-2a6a2eda5790'),
+    unsplashPhoto('photo-1722471467241-5327b98a4976'),
+  ],
+  mekong: [
+    unsplashPhoto('photo-1543411789-1a67a2ac05c6'),
+    unsplashPhoto('photo-1677552926138-f7dbb71b226f'),
+    unsplashPhoto('photo-1624937195771-358add2e0d9d'),
   ],
 } as const;
 
@@ -162,7 +207,23 @@ function buildDescription(intro: string, focus: string, suitableFor: string) {
   ].join('\n');
 }
 
-function packageData(basePrice: number) {
+function includedTicketItems(ticketPolicy?: TicketPolicy) {
+  return ticketPolicy?.included?.length
+    ? ticketPolicy.included
+    : ['Vé tham quan theo lịch trình'];
+}
+
+function excludedTicketItems(ticketPolicy?: TicketPolicy) {
+  return [
+    ...(ticketPolicy?.optional ?? []).map((item) => `${item} nếu khách chọn`),
+    ...(ticketPolicy?.excluded ?? []),
+  ];
+}
+
+function packageData(basePrice: number, ticketPolicy?: TicketPolicy) {
+  const includedTickets = includedTicketItems(ticketPolicy);
+  const ticketExcludes = excludedTicketItems(ticketPolicy);
+
   return [
     {
       name: 'Gói Tiêu Chuẩn',
@@ -173,7 +234,7 @@ function packageData(basePrice: number) {
       includes: [
         'Xe du lịch theo chương trình',
         'Hướng dẫn viên tiếng Việt',
-        'Vé tham quan theo lịch trình',
+        ...includedTickets,
         'Bữa ăn tiêu chuẩn theo chương trình',
         'Bảo hiểm du lịch nội địa',
       ],
@@ -181,6 +242,7 @@ function packageData(basePrice: number) {
         'Chi phí cá nhân',
         'Đồ uống ngoài thực đơn',
         'Phụ thu phòng đơn nếu có',
+        ...ticketExcludes,
       ],
       sortOrder: 0,
     },
@@ -193,7 +255,7 @@ function packageData(basePrice: number) {
       includes: [
         'Xe du lịch đời mới theo chương trình',
         'Hướng dẫn viên kinh nghiệm',
-        'Vé tham quan theo lịch trình',
+        ...includedTickets,
         'Khách sạn/retreat tiêu chuẩn cao hơn',
         'Bữa ăn nâng cấp với đặc sản địa phương',
         'Bảo hiểm du lịch nội địa',
@@ -202,6 +264,7 @@ function packageData(basePrice: number) {
         'Chi phí cá nhân',
         'Dịch vụ ngoài chương trình',
         'Phụ thu phòng đơn nếu có',
+        ...ticketExcludes,
       ],
       sortOrder: 1,
     },
@@ -214,7 +277,7 @@ function packageData(basePrice: number) {
       includes: [
         'Xe riêng theo lịch trình',
         'Hướng dẫn viên riêng',
-        'Vé tham quan theo lịch trình',
+        ...includedTickets,
         'Khách sạn/retreat chọn lọc',
         'Bữa ăn riêng theo tư vấn',
         'Hỗ trợ điều chỉnh lịch trình trước khởi hành',
@@ -223,6 +286,7 @@ function packageData(basePrice: number) {
         'Chi phí cá nhân',
         'Dịch vụ phát sinh ngoài hợp đồng',
         'Vé máy bay nếu không ghi rõ trong chương trình',
+        ...ticketExcludes,
       ],
       sortOrder: 2,
     },
@@ -237,6 +301,111 @@ function buildTimeline(day: DayPlan): Prisma.InputJsonValue {
     { time: '14:00', activity: day.activities[1] ?? 'Tiếp tục tham quan' },
     { time: '18:00', activity: 'Ăn tối và nghỉ ngơi' },
   ];
+}
+
+type GeneratedTourDay = {
+  title: string;
+  description: string;
+  accommodation?: string;
+  transport?: string;
+  activities: string[];
+  imageUrl?: string;
+};
+
+type GeneratedTourOptions = {
+  tourCode: string;
+  name: string;
+  intro: string;
+  focus: string;
+  suitableFor: string;
+  price: number;
+  duration: string;
+  availableSeats: number;
+  tourType: string;
+  departurePoint: string;
+  highlights: string[];
+  gallery: string[];
+  itinerary: GeneratedTourDay[];
+  faqs?: { question: string; answer: string }[];
+  ticketPolicy?: TicketPolicy;
+  transport?: DomesticTransportSeed;
+};
+
+function rotateGallery(gallery: string[], offset: number) {
+  if (gallery.length === 0) return gallery;
+  return gallery.map((_, index) => gallery[(index + offset) % gallery.length]);
+}
+
+function destinationStay(destinationName: string) {
+  return `Khách sạn/homestay ${destinationName} theo gói`;
+}
+
+function ticketPolicyAnswer(ticketPolicy?: TicketPolicy) {
+  const included = includedTicketItems(ticketPolicy).join(', ');
+  const optional = ticketPolicy?.optional?.length
+    ? ` Các hạng mục tùy chọn gồm ${ticketPolicy.optional.join(', ')} và sẽ xác nhận khi tư vấn.`
+    : '';
+  return `Gói tiêu chuẩn đã bao gồm ${included}.${optional}`;
+}
+
+function createGeneratedDomesticTour(
+  destination: DomesticTourSeed['destination'],
+  options: GeneratedTourOptions,
+): DomesticTourSeed {
+  const gallery =
+    options.gallery.length > 0 ? options.gallery : [destination.imageUrl];
+
+  return {
+    destination: {
+      ...destination,
+      imageUrl: destination.imageUrl || gallery[0],
+    },
+    tour: {
+      tourCode: options.tourCode,
+      name: options.name,
+      description: buildDescription(
+        options.intro,
+        options.focus,
+        options.suitableFor,
+      ),
+      price: options.price,
+      duration: options.duration,
+      availableSeats: options.availableSeats,
+      imageUrl: gallery[0],
+      tourType: options.tourType,
+      departurePoint: options.departurePoint,
+      highlights: options.highlights,
+      gallery,
+      itinerary: options.itinerary.map((day, index) => ({
+        title: day.title,
+        description: day.description,
+        accommodation:
+          day.accommodation ??
+          (options.itinerary.length > 1 && index < options.itinerary.length - 1
+            ? destinationStay(destination.name)
+            : undefined),
+        transport:
+          day.transport ??
+          options.transport?.vehicleType ??
+          'Xe du lịch theo chương trình',
+        activities: day.activities,
+        imageUrl: day.imageUrl ?? gallery[index % gallery.length],
+      })),
+      faqs: options.faqs ?? [
+        {
+          question: `Tour ${destination.name} này phù hợp với ai?`,
+          answer:
+            'Tour phù hợp khách muốn có thêm lựa chọn cùng điểm đến, lịch trình vừa sức và có thể nâng cấp gói dịch vụ theo nhu cầu.',
+        },
+        {
+          question: 'Giá tour đã bao gồm vé tham quan chưa?',
+          answer: ticketPolicyAnswer(options.ticketPolicy),
+        },
+      ],
+      ticketPolicy: options.ticketPolicy,
+      transport: options.transport,
+    },
+  };
 }
 
 const tours: DomesticTourSeed[] = [
@@ -1623,7 +1792,1841 @@ const remainingDomesticTours: DomesticTourSeed[] = [
   },
 ];
 
-function departureData(basePrice: number, baseSeats: number, boardingPoint: string) {
+const TOUR_TICKET_POLICIES: Record<string, TicketPolicy> = {
+  'VN-HAN-001': {
+    included: ['Vé Văn Miếu hoặc Hoàng thành theo lịch trình'],
+    optional: ['Vé xem múa rối nước'],
+  },
+  'VN-HLG-002': {
+    included: ['Vé thắng cảnh vịnh Hạ Long', 'Kayak hoặc thuyền nan theo gói'],
+    optional: ['Đồ uống trên du thuyền', 'Phụ thu nâng hạng cabin'],
+  },
+  'VN-NBI-003': {
+    included: ['Vé Tràng An', 'Vé Hang Múa', 'Vé cố đô Hoa Lư'],
+    optional: ['Xe điện trong khu tham quan nếu phát sinh'],
+  },
+  'VN-SPA-004': {
+    included: ['Vé bản Cát Cát theo lịch trình'],
+    optional: ['Vé cáp treo Fansipan theo hạng vé tại thời điểm đặt'],
+  },
+  'VN-HGI-005': {
+    included: [
+      'Vé tham quan các điểm trên cung Hà Giang',
+      'Thuyền sông Nho Quế theo chương trình',
+    ],
+    optional: ['Phụ thu xe máy tự lái hoặc porter nếu khách yêu cầu'],
+  },
+  'VN-QBI-006': {
+    included: ['Vé động Phong Nha hoặc động Thiên Đường theo lịch trình'],
+    optional: ['Zipline, kayak hoặc trò chơi Sông Chày - Hang Tối'],
+  },
+  'VN-HUE-007': {
+    included: [
+      'Vé Đại Nội hoặc lăng tẩm theo chương trình',
+      'Thuyền rồng sông Hương theo lịch trình',
+    ],
+  },
+  'VN-DAD-008': {
+    included: ['Vé tham quan Sơn Trà và Ngũ Hành Sơn theo lịch trình'],
+    optional: ['Vé cáp treo Bà Nà Hills nếu không ghi rõ trong gói đã chọn'],
+  },
+  'VN-HANQ-009': {
+    included: [
+      'Vé phố cổ Hội An hoặc điểm làng nghề theo lịch trình',
+      'Thuyền thúng rừng dừa theo gói',
+    ],
+    optional: ['Vé show Ký Ức Hội An'],
+  },
+  'VN-NTR-010': {
+    included: [
+      'Tàu hoặc cano tham quan đảo theo lịch trình',
+      'Vé khu bảo tồn biển theo tuyến',
+    ],
+    optional: ['Lặn bình khí hoặc sea walking'],
+  },
+  'VN-DLI-011': {
+    included: ['Vé nông trại hoặc điểm tham quan Đà Lạt theo lịch trình'],
+    optional: ['Máng trượt, xe jeep hoặc trò chơi ngoài chương trình'],
+  },
+  'VN-PQC-012': {
+    included: ['Vé tham quan Nam Đảo theo lịch trình'],
+    optional: ['Vé cáp treo Hòn Thơm', 'Vé VinWonders hoặc Safari Phú Quốc'],
+  },
+  'VN-MNE-013': {
+    included: ['Vé đồi cát hoặc điểm tham quan Mũi Né theo lịch trình'],
+    optional: ['Xe jeep đồi cát bình minh'],
+  },
+  'VN-UIH-014': {
+    included: [
+      'Cano Kỳ Co theo điều kiện thời tiết',
+      'Vé Eo Gió theo lịch trình',
+    ],
+    optional: ['Lặn ngắm san hô nâng cấp'],
+  },
+  'VN-TBB-015': {
+    included: ['Vé Gành Đá Đĩa', 'Vé Mũi Điện theo lịch trình'],
+    optional: ['Xe điện hoặc dịch vụ chụp ảnh ngoài chương trình'],
+  },
+  'VN-VCA-016': {
+    included: ['Thuyền chợ nổi Cái Răng', 'Vé miệt vườn theo lịch trình'],
+    optional: ['Trải nghiệm làm bánh hoặc đờn ca tài tử riêng'],
+  },
+  'VN-SGN-017': {
+    included: [
+      'Vé Dinh Độc Lập hoặc bảo tàng theo điều kiện mở cửa',
+      'Vé địa đạo Củ Chi',
+    ],
+  },
+  'VN-MOC-018': {
+    included: [
+      'Vé thác Dải Yếm hoặc điểm hoa theo mùa',
+      'Vé điểm check-in đồi chè theo lịch trình',
+    ],
+    optional: ['Vé cầu kính hoặc trò chơi ngoài chương trình'],
+  },
+  'VN-MAI-019': {
+    included: ['Phí tham quan bản Lác hoặc bản làng theo lịch trình'],
+    optional: ['Thuê xe đạp, xe điện hoặc chương trình văn nghệ riêng'],
+  },
+  'VN-CBG-020': {
+    included: [
+      'Vé thác Bản Giốc',
+      'Vé động Ngườm Ngao',
+      'Vé khu di tích Pác Bó theo lịch trình',
+    ],
+    optional: ['Thuyền chân thác Bản Giốc nếu khách chọn'],
+  },
+};
+
+const DEFAULT_DOMESTIC_TRANSPORT: DomesticTransportSeed = {
+  type: TransportType.BUS,
+  vehicleType: 'Xe du lịch 29-45 chỗ',
+  vehicleTypeEn: '29-45 seat tour coach',
+  operator: 'Xe điều hành công ty',
+  operatorEn: 'Company-operated coach',
+  notes:
+    'Xe đón tại điểm tập trung đã thông báo. Quý khách có mặt trước 15 phút.',
+  notesEn:
+    'Pick-up at the designated meeting point. Please arrive 15 minutes early.',
+};
+
+const TOUR_TRANSPORTS: Record<string, DomesticTransportSeed> = {
+  'VN-HAN-001': {
+    type: TransportType.PRIVATE_CAR,
+    vehicleType: 'Xe 16-29 chỗ nội đô',
+    vehicleTypeEn: '16-29 seat city coach',
+    operator: 'Đội xe nội đô Hà Nội',
+    operatorEn: 'Hanoi city fleet',
+    notes:
+      'Lộ trình nội đô có kết hợp đi bộ trong phố cổ. Điểm đón có thể điều chỉnh theo tình hình giao thông.',
+    notesEn:
+      'City route with walking time in the Old Quarter. Pick-up may be adjusted for traffic.',
+  },
+  'VN-HLG-002': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe limousine/xe du lịch + du thuyền',
+    vehicleTypeEn: 'Limousine or coach plus cruise',
+    operator: 'Đối tác du thuyền Hạ Long',
+    operatorEn: 'Ha Long cruise partner',
+    notes:
+      'Bao gồm xe Hà Nội - Hạ Long và du thuyền theo hạng gói. Giờ tàu phụ thuộc điều phối cảng vụ.',
+    notesEn:
+      'Includes Hanoi - Ha Long transfer and cruise by package class. Cruise timing depends on port authority.',
+  },
+  'VN-NBI-003': {
+    type: TransportType.BUS,
+    vehicleType: 'Xe du lịch 29-45 chỗ',
+    vehicleTypeEn: '29-45 seat tour coach',
+    operator: 'Xe tuyến Hà Nội - Ninh Bình',
+    operatorEn: 'Hanoi - Ninh Binh coach',
+    notes: 'Có thuyền chèo tay tại Tràng An theo chương trình.',
+    notesEn: 'Trang An rowing boat is included according to the itinerary.',
+  },
+  'VN-SPA-004': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe limousine giường nằm/xe du lịch + cáp treo tùy gói',
+    vehicleTypeEn: 'Sleeper limousine or coach plus optional cable car',
+    operator: 'Đối tác vận chuyển Tây Bắc',
+    operatorEn: 'Northwest transport partner',
+    notes:
+      'Chặng Hà Nội - Sapa đi bằng limousine hoặc xe du lịch. Vé Fansipan xác nhận theo gói khách chọn.',
+    notesEn:
+      'Hanoi - Sapa by limousine or coach. Fansipan ticket is confirmed by selected package.',
+  },
+  'VN-HGI-005': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe du lịch + xe trung chuyển địa phương',
+    vehicleTypeEn: 'Tour coach plus local shuttle',
+    operator: 'Đối tác vận hành Hà Giang',
+    operatorEn: 'Ha Giang local operator',
+    notes:
+      'Một số cung đường đèo sử dụng xe trung chuyển phù hợp địa hình; không mặc định xe máy tự lái.',
+    notesEn:
+      'Some mountain passes use terrain-suitable local shuttles; self-drive motorbike is not the default.',
+  },
+  'VN-QBI-006': {
+    type: TransportType.PRIVATE_CAR,
+    vehicleType: 'Xe du lịch địa phương 16-29 chỗ',
+    vehicleTypeEn: '16-29 seat local coach',
+    operator: 'Đội xe Đồng Hới',
+    operatorEn: 'Dong Hoi local fleet',
+    notes:
+      'Đón tại Đồng Hới; lịch hang động có thể thay đổi theo thời tiết và điều kiện khai thác.',
+    notesEn:
+      'Pick-up in Dong Hoi; cave schedule may change due to weather and site operations.',
+  },
+  'VN-HUE-007': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe du lịch + thuyền rồng',
+    vehicleTypeEn: 'Tour coach plus dragon boat',
+    operator: 'Đối tác vận chuyển Huế',
+    operatorEn: 'Hue transport partner',
+    notes: 'Có thuyền rồng sông Hương khi điều kiện vận hành cho phép.',
+    notesEn:
+      'Perfume River dragon boat is arranged when operating conditions allow.',
+  },
+  'VN-DAD-008': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe du lịch + cáp treo theo gói',
+    vehicleTypeEn: 'Tour coach plus package-based cable car',
+    operator: 'Đội xe Đà Nẵng',
+    operatorEn: 'Da Nang local fleet',
+    notes:
+      'Vé cáp treo Bà Nà xác nhận theo gói và tình trạng mở bán tại thời điểm đặt.',
+    notesEn:
+      'Ba Na Hills cable car ticket is confirmed by package and ticket availability at booking time.',
+  },
+  'VN-HANQ-009': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe du lịch + thuyền thúng',
+    vehicleTypeEn: 'Tour coach plus basket boat',
+    operator: 'Đối tác Hội An',
+    operatorEn: 'Hoi An local partner',
+    notes:
+      'Bao gồm di chuyển Đà Nẵng - Hội An và thuyền thúng khi lịch trình có rừng dừa.',
+    notesEn:
+      'Includes Da Nang - Hoi An transfer and basket boat when coconut forest is scheduled.',
+  },
+  'VN-NTR-010': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe du lịch + tàu/cano biển đảo',
+    vehicleTypeEn: 'Tour coach plus island boat or speedboat',
+    operator: 'Đối tác tàu biển Nha Trang',
+    operatorEn: 'Nha Trang marine partner',
+    notes:
+      'Tuyến đảo phụ thuộc thời tiết biển; có thể đổi sang điểm tham quan thay thế khi cảng vụ hạn chế tàu.',
+    notesEn:
+      'Island route depends on sea conditions; alternatives may be used if port authority restricts boats.',
+  },
+  'VN-DLI-011': {
+    type: TransportType.PRIVATE_CAR,
+    vehicleType: 'Xe du lịch 16-29 chỗ',
+    vehicleTypeEn: '16-29 seat tour coach',
+    operator: 'Đội xe Đà Lạt',
+    operatorEn: 'Da Lat local fleet',
+    notes:
+      'Lịch trình có nhiều điểm dừng ngắn; xe chờ theo khung giờ đã xác nhận.',
+    notesEn:
+      'The itinerary has multiple short stops; vehicle waits according to confirmed timing.',
+  },
+  'VN-PQC-012': {
+    type: TransportType.PRIVATE_CAR,
+    vehicleType: 'Xe du lịch Phú Quốc 16-29 chỗ',
+    vehicleTypeEn: '16-29 seat Phu Quoc coach',
+    operator: 'Đối tác vận chuyển Phú Quốc',
+    operatorEn: 'Phu Quoc transport partner',
+    notes:
+      'Đón tại Phú Quốc; vé vui chơi Nam Đảo, cáp treo hoặc show hoàng hôn xác nhận theo gói.',
+    notesEn:
+      'Pick-up in Phu Quoc; South Island attractions, cable car, or sunset show are confirmed by package.',
+  },
+  'VN-MNE-013': {
+    type: TransportType.BUS,
+    vehicleType: 'Xe du lịch/limousine TP.HCM - Mũi Né',
+    vehicleTypeEn: 'Ho Chi Minh City - Mui Ne coach or limousine',
+    operator: 'Đối tác tuyến Phan Thiết - Mũi Né',
+    operatorEn: 'Phan Thiet - Mui Ne transport partner',
+    notes:
+      'Xe đi từ TP.HCM; jeep đồi cát là dịch vụ tùy chọn nếu khách muốn đi khung giờ bình minh.',
+    notesEn:
+      'Transfer departs from Ho Chi Minh City; sand dune jeep is optional for sunrise timing.',
+  },
+  'VN-UIH-014': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe du lịch + cano Kỳ Co',
+    vehicleTypeEn: 'Tour coach plus Ky Co speedboat',
+    operator: 'Đối tác biển đảo Quy Nhơn',
+    operatorEn: 'Quy Nhon marine partner',
+    notes:
+      'Cano Kỳ Co phụ thuộc thời tiết biển; nếu biển động sẽ đổi lịch hoặc điểm tham quan phù hợp.',
+    notesEn:
+      'Ky Co speedboat depends on sea conditions; route may change if the sea is rough.',
+  },
+  'VN-TBB-015': {
+    type: TransportType.PRIVATE_CAR,
+    vehicleType: 'Xe du lịch Phú Yên 16-29 chỗ',
+    vehicleTypeEn: '16-29 seat Phu Yen coach',
+    operator: 'Đội xe Tuy Hòa',
+    operatorEn: 'Tuy Hoa local fleet',
+    notes:
+      'Lộ trình nhiều điểm ven biển; thời gian Mũi Điện có thể điều chỉnh theo thời tiết.',
+    notesEn:
+      'Coastal itinerary with several stops; Mui Dien timing may adjust for weather.',
+  },
+  'VN-VCA-016': {
+    type: TransportType.COMBO,
+    vehicleType: 'Xe du lịch + thuyền chợ nổi',
+    vehicleTypeEn: 'Tour coach plus floating market boat',
+    operator: 'Đối tác Mekong',
+    operatorEn: 'Mekong local partner',
+    notes:
+      'Thuyền chợ nổi khởi hành sớm; khách cần có mặt đúng giờ để không lỡ phiên chợ.',
+    notesEn:
+      'Floating market boat leaves early; guests should arrive on time for the market session.',
+  },
+  'VN-SGN-017': {
+    type: TransportType.PRIVATE_CAR,
+    vehicleType: 'Xe du lịch nội đô và Củ Chi',
+    vehicleTypeEn: 'City and Cu Chi tour coach',
+    operator: 'Đội xe TP.HCM',
+    operatorEn: 'Ho Chi Minh City fleet',
+    notes:
+      'Một số điểm trung tâm phụ thuộc lịch mở cửa; xe điều chỉnh tuyến theo tình hình giao thông.',
+    notesEn:
+      'Some city attractions depend on opening hours; vehicle route may adjust for traffic.',
+  },
+  'VN-MOC-018': {
+    type: TransportType.BUS,
+    vehicleType: 'Xe du lịch Hà Nội - Mộc Châu',
+    vehicleTypeEn: 'Hanoi - Moc Chau tour coach',
+    operator: 'Đối tác tuyến Tây Bắc',
+    operatorEn: 'Northwest route partner',
+    notes:
+      'Có các điểm dừng nghỉ trên cung đường đèo; điểm hoa thay đổi theo mùa.',
+    notesEn:
+      'Rest stops are arranged on mountain roads; flower sites vary by season.',
+  },
+  'VN-MAI-019': {
+    type: TransportType.BUS,
+    vehicleType: 'Xe du lịch Hà Nội - Mai Châu',
+    vehicleTypeEn: 'Hanoi - Mai Chau tour coach',
+    operator: 'Đối tác tuyến Hòa Bình',
+    operatorEn: 'Hoa Binh route partner',
+    notes:
+      'Xe đón tại Hà Nội; xe đạp quanh bản là dịch vụ tùy chọn theo nhu cầu.',
+    notesEn: 'Pick-up in Hanoi; village cycling is optional on request.',
+  },
+  'VN-CBG-020': {
+    type: TransportType.BUS,
+    vehicleType: 'Xe du lịch Hà Nội - Cao Bằng',
+    vehicleTypeEn: 'Hanoi - Cao Bang tour coach',
+    operator: 'Đối tác tuyến Đông Bắc',
+    operatorEn: 'Northeast route partner',
+    notes:
+      'Cung đường dài có điểm nghỉ định kỳ; thuyền chân thác Bản Giốc xác nhận theo mực nước và quy định địa phương.',
+    notesEn:
+      'Long route with scheduled rest stops; Ban Gioc boat is confirmed by water level and local rules.',
+  },
+};
+
+const vungTauDestination: DomesticTourSeed['destination'] = {
+  name: 'Vũng Tàu',
+  slug: 'vung-tau',
+  region: 'Miền Nam',
+  description:
+    'Thành phố biển gần TP.HCM, nổi bật với Bãi Sau, hải đăng, Bạch Dinh, hải sản, Hồ Tràm và các resort nghỉ dưỡng cuối tuần.',
+  imageUrl: IMAGES.vungTau[0],
+};
+
+const tayNinhDestination: DomesticTourSeed['destination'] = {
+  name: 'Tây Ninh',
+  slug: 'tay-ninh',
+  region: 'Miền Nam',
+  description:
+    'Điểm đến văn hóa - tâm linh nổi bật với Núi Bà Đen, Tòa Thánh Cao Đài, hồ Dầu Tiếng, Ma Thiên Lãnh và ẩm thực bánh tráng đặc trưng.',
+  imageUrl: IMAGES.tayNinh[0],
+};
+
+const catBaDestination: DomesticTourSeed['destination'] = {
+  name: 'Hải Phòng - Cát Bà',
+  slug: 'hai-phong-cat-ba',
+  region: 'Miền Bắc',
+  description:
+    'Cửa ngõ biển đảo miền Bắc với phố cảng Hải Phòng, đảo Cát Bà, vịnh Lan Hạ, rừng quốc gia và trải nghiệm kayak, trekking, hải sản.',
+  imageUrl: IMAGES.catBa[0],
+};
+
+const mekongDestination: DomesticTourSeed['destination'] = {
+  name: 'Miền Tây',
+  slug: 'mien-tay',
+  region: 'Miền Nam',
+  description:
+    'Không gian sông nước Mekong với chợ nổi, vườn trái cây, làng nghề, rừng tràm, nhà cổ và nhịp sống miệt vườn Nam Bộ.',
+  imageUrl: IMAGES.mekong[0],
+};
+
+const newDomesticDestinationTours: DomesticTourSeed[] = [
+  createGeneratedDomesticTour(vungTauDestination, {
+    tourCode: 'VN-VTG-021',
+    name: 'Vũng Tàu Bãi Sau - Hải Đăng - Bạch Dinh 2 Ngày 1 Đêm',
+    intro:
+      'Chuyến đi Vũng Tàu cuối tuần từ TP.HCM, kết hợp biển Bãi Sau, hải đăng, Bạch Dinh, hải sản và thời gian nghỉ nhẹ bên bờ biển.',
+    focus:
+      'biển gần thành phố, điểm check-in biểu tượng và bữa ăn hải sản địa phương',
+    suitableFor:
+      'gia đình, nhóm bạn và khách muốn một chuyến nghỉ ngắn từ TP.HCM',
+    price: 1_950_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 85,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Tắm biển Bãi Sau và dạo phố biển Vũng Tàu',
+      'Check-in hải đăng, Bạch Dinh và tượng Chúa Kitô theo điều kiện mở cửa',
+      'Bữa ăn hải sản địa phương',
+      'Lịch trình phù hợp cuối tuần từ TP.HCM',
+    ],
+    gallery: [...IMAGES.vungTau],
+    itinerary: [
+      {
+        title: 'TP.HCM - Vũng Tàu - Bãi Sau',
+        description:
+          'Khởi hành từ TP.HCM, đến Vũng Tàu nhận phòng, dùng bữa trưa và tự do tắm biển Bãi Sau vào buổi chiều.',
+        activities: [
+          'Di chuyển TP.HCM - Vũng Tàu',
+          'Bãi Sau',
+          'Hải sản địa phương',
+        ],
+      },
+      {
+        title: 'Hải đăng - Bạch Dinh - Trở về',
+        description:
+          'Tham quan các điểm biểu tượng của thành phố biển, mua đặc sản và trở về TP.HCM.',
+        activities: ['Hải đăng Vũng Tàu', 'Bạch Dinh', 'Mua đặc sản'],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé Bạch Dinh hoặc điểm tham quan theo lịch trình'],
+      optional: ['Vé tham quan tượng Chúa Kitô nếu điểm mở cửa và khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.BUS,
+      vehicleType: 'Xe du lịch/limousine TP.HCM - Vũng Tàu',
+      vehicleTypeEn: 'Ho Chi Minh City - Vung Tau coach or limousine',
+      operator: 'Đối tác tuyến Vũng Tàu',
+      operatorEn: 'Vung Tau route partner',
+      notes:
+        'Xe khởi hành từ TP.HCM; giờ về có thể điều chỉnh nhẹ theo giao thông cao tốc.',
+      notesEn:
+        'Transfer departs from Ho Chi Minh City; return time may adjust for highway traffic.',
+    },
+  }),
+  createGeneratedDomesticTour(vungTauDestination, {
+    tourCode: 'VN-VTG-022',
+    name: 'Hồ Tràm - Bình Châu Nghỉ Dưỡng 2 Ngày 1 Đêm',
+    intro:
+      'Hành trình nghỉ dưỡng Hồ Tràm - Bình Châu dành cho khách muốn không gian biển yên tĩnh, resort, suối khoáng và nhịp đi chậm.',
+    focus: 'resort biển, suối khoáng, hải sản và thời gian thư giãn',
+    suitableFor: 'cặp đôi, gia đình và nhóm khách muốn nghỉ dưỡng cuối tuần',
+    price: 2_650_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 70,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Nghỉ dưỡng khu vực Hồ Tràm',
+      'Tham quan Bình Châu hoặc điểm thư giãn theo gói',
+      'Có thời gian tự do tại resort',
+      'Phù hợp khách muốn ít di chuyển',
+    ],
+    gallery: rotateGallery([...IMAGES.vungTau], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Hồ Tràm - Nhận phòng',
+        description:
+          'Di chuyển đến Hồ Tràm, dùng bữa trưa, nhận phòng và thư giãn tại bãi biển hoặc hồ bơi resort.',
+        activities: [
+          'Di chuyển TP.HCM - Hồ Tràm',
+          'Nhận phòng resort',
+          'Tự do nghỉ dưỡng',
+        ],
+      },
+      {
+        title: 'Bình Châu - Hải sản - Trở về',
+        description:
+          'Tham quan Bình Châu hoặc điểm thư giãn theo gói, dùng bữa trưa và trở về TP.HCM.',
+        activities: ['Bình Châu', 'Hải sản địa phương', 'Trở về TP.HCM'],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé điểm tham quan Bình Châu theo gói'],
+      optional: ['Dịch vụ suối khoáng hoặc spa ngoài gói'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.PRIVATE_CAR,
+      vehicleType: 'Xe riêng/limousine Hồ Tràm',
+      vehicleTypeEn: 'Private car or limousine to Ho Tram',
+      operator: 'Đối tác Hồ Tràm - Bình Châu',
+      operatorEn: 'Ho Tram - Binh Chau transport partner',
+      notes:
+        'Xe đưa đón theo nhóm; điểm dừng có thể điều chỉnh theo resort khách chọn.',
+      notesEn: 'Group transfer; stops may adjust by selected resort.',
+    },
+  }),
+  createGeneratedDomesticTour(vungTauDestination, {
+    tourCode: 'VN-VTG-023',
+    name: 'Vũng Tàu City Tour & Hải Sản 1 Ngày',
+    intro:
+      'Tour Vũng Tàu trong ngày dành cho khách muốn đổi gió nhanh, tham quan các điểm biểu tượng và thưởng thức hải sản.',
+    focus: 'city tour biển, điểm check-in và ẩm thực hải sản',
+    suitableFor: 'nhóm bạn, công ty nhỏ và khách có quỹ thời gian hạn chế',
+    price: 890_000,
+    duration: '1 ngày',
+    availableSeats: 90,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Đi Vũng Tàu trong ngày từ TP.HCM',
+      'Tham quan hải đăng hoặc Bạch Dinh theo lịch',
+      'Thưởng thức hải sản địa phương',
+      'Lịch trình gọn, dễ bán cho khách cuối tuần',
+    ],
+    gallery: rotateGallery([...IMAGES.vungTau], 2),
+    itinerary: [
+      {
+        title: 'TP.HCM - Vũng Tàu - City tour biển',
+        description:
+          'Khởi hành sớm từ TP.HCM, tham quan điểm biểu tượng, dùng bữa hải sản và có thời gian dạo biển trước khi trở về.',
+        transport: 'Xe du lịch/limousine',
+        activities: [
+          'Bạch Dinh hoặc hải đăng',
+          'Bãi Sau',
+          'Hải sản địa phương',
+        ],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé điểm tham quan theo lịch trình'],
+      optional: ['Chi phí tắm nước ngọt, ghế dù hoặc trò chơi biển'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.BUS,
+      vehicleType: 'Xe du lịch/limousine trong ngày',
+      vehicleTypeEn: 'Day-trip coach or limousine',
+      operator: 'Đối tác tuyến Vũng Tàu',
+      operatorEn: 'Vung Tau route partner',
+      notes: 'Khởi hành sớm từ TP.HCM; khách nên có mặt trước giờ hẹn 15 phút.',
+      notesEn:
+        'Early departure from Ho Chi Minh City; please arrive 15 minutes early.',
+    },
+  }),
+  createGeneratedDomesticTour(tayNinhDestination, {
+    tourCode: 'VN-TNN-024',
+    name: 'Tây Ninh Núi Bà Đen - Tòa Thánh Cao Đài 1 Ngày',
+    intro:
+      'Tour Tây Ninh trong ngày từ TP.HCM, kết hợp Núi Bà Đen, Tòa Thánh Cao Đài và các món đặc sản địa phương.',
+    focus: 'tâm linh, văn hóa Cao Đài, cáp treo núi Bà Đen và ẩm thực Tây Ninh',
+    suitableFor: 'khách đi lễ, gia đình và nhóm muốn chuyến đi gọn trong ngày',
+    price: 1_050_000,
+    duration: '1 ngày',
+    availableSeats: 90,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Chinh phục Núi Bà Đen bằng cáp treo theo gói',
+      'Tham quan Tòa Thánh Cao Đài',
+      'Thưởng thức đặc sản bánh tráng, muối tôm',
+      'Lịch trình 1 ngày thuận tiện từ TP.HCM',
+    ],
+    gallery: [...IMAGES.tayNinh],
+    itinerary: [
+      {
+        title: 'TP.HCM - Núi Bà Đen - Tòa Thánh Cao Đài',
+        description:
+          'Khởi hành từ TP.HCM, tham quan Núi Bà Đen, dùng bữa trưa, ghé Tòa Thánh Cao Đài và mua đặc sản trước khi trở về.',
+        transport: 'Xe du lịch và cáp treo theo gói',
+        activities: ['Núi Bà Đen', 'Tòa Thánh Cao Đài', 'Đặc sản Tây Ninh'],
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Vé cáp treo Núi Bà Đen theo gói',
+        'Vé điểm tham quan theo lịch trình',
+      ],
+      optional: ['Chi phí xe điện hoặc dịch vụ lễ riêng'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch TP.HCM - Tây Ninh + cáp treo theo gói',
+      vehicleTypeEn: 'Ho Chi Minh City - Tay Ninh coach plus package cable car',
+      operator: 'Đối tác tuyến Tây Ninh',
+      operatorEn: 'Tay Ninh route partner',
+      notes: 'Vé cáp treo xác nhận theo hạng vé tại thời điểm đặt.',
+      notesEn: 'Cable car ticket is confirmed by fare class at booking time.',
+    },
+  }),
+  createGeneratedDomesticTour(tayNinhDestination, {
+    tourCode: 'VN-TNN-025',
+    name: 'Tây Ninh Hồ Dầu Tiếng - Ma Thiên Lãnh 2 Ngày 1 Đêm',
+    intro:
+      'Phiên bản khám phá Tây Ninh dành cho khách thích cảnh hồ, núi, không gian cắm trại nhẹ và các cung đường ngoài trung tâm.',
+    focus: 'thiên nhiên, hồ Dầu Tiếng, Ma Thiên Lãnh và trải nghiệm nhóm nhỏ',
+    suitableFor:
+      'nhóm bạn trẻ, team building nhỏ và khách thích lịch trình khám phá',
+    price: 2_250_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 70,
+    tourType: 'Khám Phá',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Ngắm hoàng hôn hồ Dầu Tiếng',
+      'Khám phá Ma Thiên Lãnh theo điều kiện thời tiết',
+      'Bữa tối địa phương hoặc BBQ theo gói',
+      'Lịch trình khác biệt so với tour tâm linh phổ thông',
+    ],
+    gallery: rotateGallery([...IMAGES.tayNinh], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Hồ Dầu Tiếng',
+        description:
+          'Di chuyển đến Tây Ninh, tham quan hồ Dầu Tiếng và nghỉ đêm theo gói homestay/khách sạn.',
+        activities: ['Hồ Dầu Tiếng', 'Hoàng hôn ven hồ', 'Bữa tối địa phương'],
+      },
+      {
+        title: 'Ma Thiên Lãnh - Đặc sản - Trở về',
+        description:
+          'Khám phá Ma Thiên Lãnh theo điều kiện thời tiết, mua đặc sản và trở về TP.HCM.',
+        activities: ['Ma Thiên Lãnh', 'Đặc sản Tây Ninh', 'Trở về TP.HCM'],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé điểm tham quan theo lịch trình'],
+      optional: ['Dịch vụ camping hoặc BBQ nâng cấp'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.PRIVATE_CAR,
+      vehicleType: 'Xe du lịch/xe riêng Tây Ninh',
+      vehicleTypeEn: 'Tay Ninh tour coach or private car',
+      operator: 'Đối tác Tây Ninh ngoại ô',
+      operatorEn: 'Outer Tay Ninh transport partner',
+      notes:
+        'Một số đoạn đường hồ và núi có thể đổi điểm dừng nếu thời tiết xấu.',
+      notesEn: 'Lake and mountain stops may change in bad weather.',
+    },
+  }),
+  createGeneratedDomesticTour(tayNinhDestination, {
+    tourCode: 'VN-TNN-026',
+    name: 'Tây Ninh Bà Đen - Chùa Gò Kén - Đặc Sản 2 Ngày 1 Đêm',
+    intro:
+      'Hành trình Tây Ninh nhẹ nhàng hơn, có thêm thời gian nghỉ, tham quan chùa Gò Kén, thưởng thức đặc sản và mua quà địa phương.',
+    focus: 'tâm linh, văn hóa địa phương và ẩm thực đặc sản Tây Ninh',
+    suitableFor: 'gia đình, đoàn khách trung niên và nhóm muốn lịch trình nhẹ',
+    price: 2_150_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 75,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Tham quan Núi Bà Đen với nhịp chậm hơn',
+      'Ghé chùa Gò Kén hoặc điểm văn hóa phù hợp',
+      'Thưởng thức bánh canh Trảng Bàng, bánh tráng phơi sương',
+      'Có thời gian nghỉ đêm tại Tây Ninh',
+    ],
+    gallery: rotateGallery([...IMAGES.tayNinh], 2),
+    itinerary: [
+      {
+        title: 'TP.HCM - Núi Bà Đen - Nghỉ đêm Tây Ninh',
+        description:
+          'Di chuyển đến Tây Ninh, tham quan Núi Bà Đen và nhận phòng nghỉ ngơi sau bữa tối địa phương.',
+        activities: ['Núi Bà Đen', 'Ẩm thực Tây Ninh', 'Nghỉ đêm'],
+      },
+      {
+        title: 'Chùa Gò Kén - Đặc sản - Trở về',
+        description:
+          'Tham quan chùa Gò Kén hoặc điểm văn hóa địa phương, mua đặc sản và kết thúc hành trình.',
+        activities: ['Chùa Gò Kén', 'Mua đặc sản', 'Trở về TP.HCM'],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé cáp treo hoặc điểm tham quan theo gói đã chọn'],
+      optional: ['Dịch vụ lễ riêng hoặc xe điện nếu phát sinh'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + cáp treo theo gói',
+      vehicleTypeEn: 'Tour coach plus package cable car',
+      operator: 'Đối tác tuyến Tây Ninh',
+      operatorEn: 'Tay Ninh route partner',
+      notes:
+        'Lịch cáp treo phụ thuộc vận hành khu du lịch và hạng vé khách chọn.',
+      notesEn:
+        'Cable car schedule depends on attraction operations and selected ticket class.',
+    },
+  }),
+  createGeneratedDomesticTour(catBaDestination, {
+    tourCode: 'VN-CBA-027',
+    name: 'Cát Bà - Vịnh Lan Hạ - Kayak 3 Ngày 2 Đêm',
+    intro:
+      'Tour Hải Phòng - Cát Bà kết hợp nghỉ đảo, vịnh Lan Hạ, kayak, hải sản và nhịp đi vừa phải từ Hà Nội.',
+    focus: 'biển đảo miền Bắc, kayak vịnh Lan Hạ và nghỉ đêm Cát Bà',
+    suitableFor: 'nhóm bạn, gia đình và khách muốn tour biển đảo gần Hà Nội',
+    price: 3_450_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 80,
+    tourType: 'Khám Phá',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Nghỉ đêm trên đảo Cát Bà',
+      'Đi tàu vịnh Lan Hạ và kayak theo thời tiết',
+      'Thưởng thức hải sản Hải Phòng - Cát Bà',
+      'Có thời gian tự do dạo thị trấn biển',
+    ],
+    gallery: [...IMAGES.catBa],
+    itinerary: [
+      {
+        title: 'Hà Nội - Hải Phòng - Cát Bà',
+        description:
+          'Khởi hành từ Hà Nội, đi Hải Phòng, sang Cát Bà, nhận phòng và tự do dạo biển buổi chiều.',
+        activities: [
+          'Di chuyển Hà Nội - Cát Bà',
+          'Nhận phòng',
+          'Dạo thị trấn Cát Bà',
+        ],
+      },
+      {
+        title: 'Vịnh Lan Hạ - Kayak',
+        description:
+          'Đi tàu trên vịnh Lan Hạ, chèo kayak hoặc tham quan làng chài theo điều kiện thời tiết.',
+        activities: ['Vịnh Lan Hạ', 'Kayak', 'Hải sản địa phương'],
+      },
+      {
+        title: 'Cát Bà - Hải Phòng - Trở về',
+        description: 'Tự do buổi sáng, mua đặc sản Hải Phòng và trở về Hà Nội.',
+        activities: ['Tự do dạo biển', 'Mua đặc sản', 'Trở về Hà Nội'],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé tàu/vịnh Lan Hạ theo lịch trình', 'Kayak theo gói'],
+      optional: ['Nâng hạng tàu hoặc phòng view biển'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe Hà Nội - Hải Phòng + tàu/phà Cát Bà',
+      vehicleTypeEn: 'Hanoi - Hai Phong coach plus Cat Ba ferry/boat',
+      operator: 'Đối tác Cát Bà - Lan Hạ',
+      operatorEn: 'Cat Ba - Lan Ha transport partner',
+      notes: 'Lịch tàu/phà phụ thuộc thời tiết và điều phối bến.',
+      notesEn: 'Ferry/boat schedule depends on weather and pier operations.',
+    },
+  }),
+  createGeneratedDomesticTour(catBaDestination, {
+    tourCode: 'VN-CBA-028',
+    name: 'Hải Phòng Food Tour - Đồ Sơn - Cát Bà 2 Ngày 1 Đêm',
+    intro:
+      'Hành trình kết hợp ẩm thực Hải Phòng, biển Đồ Sơn và nghỉ ngắn tại Cát Bà cho khách muốn trải nghiệm phố cảng đa sắc.',
+    focus: 'ẩm thực phố cảng, biển Đồ Sơn, Cát Bà và hải sản',
+    suitableFor: 'nhóm bạn, gia đình và khách thích ăn uống, check-in nhẹ',
+    price: 2_450_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 85,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Thưởng thức bánh đa cua, nem cua bể hoặc món địa phương',
+      'Ghé Đồ Sơn hoặc điểm biển theo thời tiết',
+      'Nghỉ đêm Cát Bà hoặc Hải Phòng theo gói',
+      'Lịch trình dễ đi cho khách cuối tuần',
+    ],
+    gallery: rotateGallery([...IMAGES.catBa], 1),
+    itinerary: [
+      {
+        title: 'Hà Nội - Hải Phòng Food Tour - Đồ Sơn',
+        description:
+          'Khởi hành đi Hải Phòng, trải nghiệm các món địa phương, ghé Đồ Sơn và nhận phòng nghỉ.',
+        activities: ['Food tour Hải Phòng', 'Đồ Sơn', 'Hải sản địa phương'],
+      },
+      {
+        title: 'Cát Bà hoặc phố cảng - Trở về',
+        description:
+          'Tham quan Cát Bà hoặc điểm phố cảng phù hợp, mua đặc sản và trở về Hà Nội.',
+        activities: ['Cát Bà hoặc phố cảng', 'Mua đặc sản', 'Trở về Hà Nội'],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé điểm tham quan theo lịch trình'],
+      optional: ['Chi phí ăn uống ngoài thực đơn food tour'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.BUS,
+      vehicleType: 'Xe du lịch Hà Nội - Hải Phòng',
+      vehicleTypeEn: 'Hanoi - Hai Phong tour coach',
+      operator: 'Đối tác phố cảng Hải Phòng',
+      operatorEn: 'Hai Phong city partner',
+      notes: 'Điểm ăn uống có thể thay đổi theo giờ mở cửa và lượng khách.',
+      notesEn: 'Food stops may change by opening hours and group size.',
+    },
+  }),
+  createGeneratedDomesticTour(catBaDestination, {
+    tourCode: 'VN-CBA-029',
+    name: 'Cát Bà Trekking Vườn Quốc Gia - Làng Chài 2 Ngày 1 Đêm',
+    intro:
+      'Tour Cát Bà thiên về khám phá, trekking vườn quốc gia, làng chài và không gian biển đảo ít vội hơn.',
+    focus:
+      'trekking nhẹ, thiên nhiên Cát Bà, làng chài và trải nghiệm biển đảo',
+    suitableFor:
+      'khách trẻ, nhóm yêu thiên nhiên và gia đình thích hoạt động ngoài trời',
+    price: 2_850_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 70,
+    tourType: 'Khám Phá',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Trekking vườn quốc gia Cát Bà theo cung phù hợp',
+      'Tham quan làng chài hoặc điểm vịnh theo thời tiết',
+      'Nghỉ đêm trên đảo',
+      'Có hoạt động ngoài trời vừa sức',
+    ],
+    gallery: rotateGallery([...IMAGES.catBa], 2),
+    itinerary: [
+      {
+        title: 'Hà Nội - Cát Bà - Làng chài',
+        description:
+          'Di chuyển đến Cát Bà, tham quan làng chài hoặc điểm vịnh nhẹ và nghỉ đêm trên đảo.',
+        activities: ['Di chuyển đến Cát Bà', 'Làng chài', 'Hải sản địa phương'],
+      },
+      {
+        title: 'Vườn quốc gia Cát Bà - Trở về',
+        description:
+          'Trekking nhẹ trong vườn quốc gia Cát Bà, ăn trưa và trở về Hà Nội.',
+        activities: ['Vườn quốc gia Cát Bà', 'Trekking nhẹ', 'Trở về Hà Nội'],
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé vườn quốc gia Cát Bà', 'Vé tàu/phà theo lịch trình'],
+      optional: ['Kayak hoặc tàu riêng nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + tàu/phà Cát Bà',
+      vehicleTypeEn: 'Tour coach plus Cat Ba ferry/boat',
+      operator: 'Đối tác Cát Bà',
+      operatorEn: 'Cat Ba local partner',
+      notes: 'Trekking điều chỉnh theo thể lực đoàn và điều kiện thời tiết.',
+      notesEn: 'Trekking route adjusts to group fitness and weather.',
+    },
+  }),
+  createGeneratedDomesticTour(mekongDestination, {
+    tourCode: 'VN-MKG-030',
+    name: 'Mỹ Tho - Bến Tre Sông Nước Mekong 1 Ngày',
+    intro:
+      'Tour Mekong trong ngày từ TP.HCM, đưa khách trải nghiệm thuyền sông, vườn trái cây, làng nghề và bữa ăn miệt vườn.',
+    focus: 'sông nước, vườn trái cây, làng nghề và nhịp sống miệt vườn',
+    suitableFor:
+      'khách lần đầu đi miền Tây, gia đình và nhóm muốn tour nhẹ trong ngày',
+    price: 950_000,
+    duration: '1 ngày',
+    availableSeats: 95,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Đi thuyền trên sông Mekong',
+      'Tham quan vườn trái cây và làng nghề',
+      'Bữa trưa miệt vườn',
+      'Lịch trình gọn từ TP.HCM',
+    ],
+    gallery: [...IMAGES.mekong],
+    itinerary: [
+      {
+        title: 'TP.HCM - Mỹ Tho - Bến Tre - TP.HCM',
+        description:
+          'Khởi hành đi Mỹ Tho/Bến Tre, đi thuyền sông, tham quan làng nghề, dùng bữa trưa và trở về TP.HCM.',
+        transport: 'Xe du lịch và thuyền địa phương',
+        activities: ['Thuyền sông Mekong', 'Vườn trái cây', 'Làng nghề'],
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Thuyền sông Mekong',
+        'Vé điểm vườn/làng nghề theo lịch trình',
+      ],
+      optional: ['Đờn ca tài tử riêng hoặc trải nghiệm làm bánh'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + thuyền địa phương',
+      vehicleTypeEn: 'Tour coach plus local boat',
+      operator: 'Đối tác Mekong Mỹ Tho - Bến Tre',
+      operatorEn: 'My Tho - Ben Tre Mekong partner',
+      notes: 'Thuyền địa phương hoạt động theo mực nước và điều phối bến.',
+      notesEn: 'Local boat operates by water level and pier coordination.',
+    },
+  }),
+  createGeneratedDomesticTour(mekongDestination, {
+    tourCode: 'VN-MKG-031',
+    name: 'Cần Thơ - Châu Đốc - Rừng Tràm Trà Sư 3 Ngày 2 Đêm',
+    intro:
+      'Tuyến Mekong 3 ngày kết hợp chợ nổi Cái Răng, Châu Đốc, rừng tràm Trà Sư và văn hóa sông nước miền Tây.',
+    focus: 'chợ nổi, rừng tràm, văn hóa Châu Đốc và ẩm thực miền Tây',
+    suitableFor: 'khách muốn đi miền Tây sâu hơn, gia đình và nhóm bạn',
+    price: 3_250_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 80,
+    tourType: 'Khám Phá',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Tham quan chợ nổi Cái Răng buổi sớm',
+      'Khám phá rừng tràm Trà Sư theo mùa nước',
+      'Trải nghiệm Châu Đốc và đặc sản miền Tây',
+      'Lịch trình 3 ngày đủ nhịp nghỉ',
+    ],
+    gallery: rotateGallery([...IMAGES.mekong], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Cần Thơ',
+        description:
+          'Di chuyển đến Cần Thơ, tham quan điểm miệt vườn và nghỉ đêm tại thành phố.',
+        activities: [
+          'Di chuyển TP.HCM - Cần Thơ',
+          'Miệt vườn',
+          'Ẩm thực Cần Thơ',
+        ],
+      },
+      {
+        title: 'Chợ nổi Cái Răng - Châu Đốc',
+        description:
+          'Đi chợ nổi buổi sớm, sau đó di chuyển về Châu Đốc và tham quan điểm văn hóa địa phương.',
+        activities: ['Chợ nổi Cái Răng', 'Châu Đốc', 'Đặc sản địa phương'],
+      },
+      {
+        title: 'Rừng tràm Trà Sư - Trở về',
+        description:
+          'Khám phá rừng tràm Trà Sư theo điều kiện mùa nước, dùng bữa trưa và trở về TP.HCM.',
+        activities: ['Rừng tràm Trà Sư', 'Ăn trưa miền Tây', 'Trở về TP.HCM'],
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Thuyền chợ nổi Cái Răng',
+        'Vé rừng tràm Trà Sư theo lịch trình',
+      ],
+      optional: ['Thuyền riêng hoặc xe điện trong khu du lịch nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + thuyền chợ nổi/rừng tràm',
+      vehicleTypeEn: 'Tour coach plus floating market and forest boats',
+      operator: 'Đối tác Mekong Cần Thơ - Châu Đốc',
+      operatorEn: 'Can Tho - Chau Doc Mekong partner',
+      notes: 'Chợ nổi đi rất sớm; lịch rừng tràm thay đổi theo mùa nước.',
+      notesEn:
+        'Floating market starts very early; forest route varies by water season.',
+    },
+  }),
+  createGeneratedDomesticTour(mekongDestination, {
+    tourCode: 'VN-MKG-032',
+    name: 'Đồng Tháp Sa Đéc - Làng Hoa - Tràm Chim 2 Ngày 1 Đêm',
+    intro:
+      'Tour Đồng Tháp dành cho khách yêu không gian làng hoa, nhà cổ, ẩm thực miền Tây và cảnh quan Tràm Chim theo mùa.',
+    focus: 'làng hoa Sa Đéc, nhà cổ, Tràm Chim và trải nghiệm Đồng Tháp',
+    suitableFor:
+      'gia đình, nhóm bạn thích chụp ảnh và khách muốn tuyến miền Tây khác biệt',
+    price: 2_350_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 78,
+    tourType: 'Khám Phá',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Check-in làng hoa Sa Đéc',
+      'Tham quan nhà cổ hoặc điểm văn hóa địa phương',
+      'Khám phá Tràm Chim theo mùa',
+      'Ẩm thực Đồng Tháp và đặc sản sen',
+    ],
+    gallery: rotateGallery([...IMAGES.mekong], 2),
+    itinerary: [
+      {
+        title: 'TP.HCM - Sa Đéc - Làng hoa',
+        description:
+          'Di chuyển đến Sa Đéc, tham quan làng hoa, nhà cổ hoặc điểm văn hóa địa phương và nghỉ đêm Đồng Tháp.',
+        activities: ['Làng hoa Sa Đéc', 'Nhà cổ', 'Ẩm thực Đồng Tháp'],
+      },
+      {
+        title: 'Tràm Chim - Đặc sản sen - Trở về',
+        description:
+          'Tham quan Tràm Chim theo mùa, dùng bữa trưa với đặc sản địa phương và trở về TP.HCM.',
+        activities: ['Tràm Chim', 'Đặc sản sen', 'Trở về TP.HCM'],
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Vé làng hoa hoặc điểm văn hóa theo lịch trình',
+        'Vé Tràm Chim theo mùa',
+      ],
+      optional: ['Thuyền riêng trong Tràm Chim nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + thuyền theo điểm tham quan',
+      vehicleTypeEn: 'Tour coach plus attraction boat when scheduled',
+      operator: 'Đối tác Mekong Đồng Tháp',
+      operatorEn: 'Dong Thap Mekong partner',
+      notes: 'Điểm Tràm Chim phụ thuộc mùa nước và lịch khai thác địa phương.',
+      notesEn: 'Tram Chim visit depends on water season and local operations.',
+    },
+  }),
+];
+
+const baseDomesticTourSeeds = [...tours, ...remainingDomesticTours];
+
+function findDestination(slug: string): DomesticTourSeed['destination'] {
+  const match = baseDomesticTourSeeds.find(
+    (item) => item.destination.slug === slug,
+  );
+  if (!match) throw new Error(`Không tìm thấy điểm đến với slug: ${slug}`);
+  return match.destination;
+}
+
+// Tour thật bổ sung cho các điểm đến "hot" — khác biệt theo thời lượng / tuyến /
+// chủ đề / điểm khởi hành (không nhân bản). Hạng dịch vụ vẫn do TourPackage lo.
+const additionalHeroTours: DomesticTourSeed[] = [
+  createGeneratedDomesticTour(findDestination('ha-long'), {
+    tourCode: 'VN-HLG-033',
+    name: 'Hạ Long - Yên Tử - Vịnh Bái Tử Long 3 Ngày 2 Đêm',
+    intro:
+      'Hành trình kết hợp non thiêng Yên Tử và vịnh Bái Tử Long hoang sơ, dành cho khách muốn một Hạ Long khác với tuyến du thuyền quen thuộc.',
+    focus: 'tâm linh Yên Tử, vịnh Bái Tử Long ít khách và cảnh quan biển đảo',
+    suitableFor:
+      'gia đình, khách trung niên và nhóm muốn kết hợp hành hương với nghỉ biển',
+    price: 3_650_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 70,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Hành hương Yên Tử, lên chùa Đồng bằng cáp treo',
+      'Khám phá vịnh Bái Tử Long hoang sơ, ít khách hơn vịnh Hạ Long',
+      'Tham quan làng chài và hang động trên vịnh',
+      'Nghỉ đêm tại Hạ Long, thưởng thức hải sản địa phương',
+    ],
+    gallery: [...IMAGES.haLong],
+    itinerary: [
+      {
+        title: 'Hà Nội - Yên Tử - Hạ Long',
+        description:
+          'Khởi hành đi Yên Tử, lên chùa Đồng bằng cáp treo, sau đó di chuyển ra Hạ Long nhận phòng và nghỉ đêm.',
+        transport: 'Xe du lịch và cáp treo Yên Tử',
+        activities: ['Chùa Đồng Yên Tử', 'Cáp treo Yên Tử', 'Nhận phòng Hạ Long'],
+      },
+      {
+        title: 'Vịnh Bái Tử Long',
+        description:
+          'Lên tàu khám phá vịnh Bái Tử Long, ghé hang động, làng chài và tắm biển tại bãi hoang sơ theo thời tiết.',
+        activities: ['Tàu vịnh Bái Tử Long', 'Hang động và làng chài', 'Tắm biển'],
+      },
+      {
+        title: 'Hạ Long - Hà Nội',
+        description:
+          'Tự do buổi sáng, mua đặc sản Quảng Ninh và trở về Hà Nội, kết thúc hành trình.',
+        activities: ['Tự do mua sắm', 'Mua đặc sản', 'Trở về Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Tour này khác gì tour du thuyền Hạ Long?',
+        answer:
+          'Tour tập trung vào Yên Tử và vịnh Bái Tử Long hoang sơ, nghỉ tại khách sạn trên bờ thay vì ngủ trên du thuyền.',
+      },
+      {
+        question: 'Leo Yên Tử có vất vả không?',
+        answer:
+          'Đã có cáp treo cho phần lớn quãng đường, nhưng vẫn có một số đoạn đi bộ nên khách nên mang giày thoải mái.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé cáp treo Yên Tử theo gói', 'Vé tàu vịnh Bái Tử Long'],
+      optional: ['Phụ thu nâng hạng tàu hoặc phòng view biển'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch Hà Nội - Quảng Ninh + cáp treo + tàu vịnh',
+      vehicleTypeEn: 'Hanoi - Quang Ninh coach plus cable car and bay boat',
+      operator: 'Đối tác tuyến Quảng Ninh',
+      operatorEn: 'Quang Ninh route partner',
+      notes: 'Lịch cáp treo và tàu phụ thuộc vận hành khu du lịch và thời tiết.',
+      notesEn: 'Cable car and boat schedule depend on operations and weather.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('sapa'), {
+    tourCode: 'VN-SPA-034',
+    name: 'Sapa Trekking Lao Chải - Tả Van 2 Ngày 1 Đêm',
+    intro:
+      'Tour Sapa thiên về đi bộ đường dài qua các bản làng và ruộng bậc thang, nghỉ homestay để trải nghiệm sâu đời sống vùng cao.',
+    focus: 'trekking ruộng bậc thang, văn hóa bản địa và lưu trú homestay',
+    suitableFor:
+      'khách trẻ, nhóm bạn thích đi bộ và du khách muốn trải nghiệm bản địa thực sự',
+    price: 2_750_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 55,
+    tourType: 'Khám Phá',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Trekking xuyên bản Lao Chải - Tả Van giữa ruộng bậc thang',
+      'Nghỉ homestay, ăn tối cùng gia đình người bản địa',
+      'Tìm hiểu văn hóa người H’Mông, Dao đỏ',
+      'Hướng dẫn viên bản địa đi cùng suốt cung trek',
+    ],
+    gallery: rotateGallery([...IMAGES.sapa], 1),
+    itinerary: [
+      {
+        title: 'Hà Nội - Sapa - Trek Lao Chải - Tả Van',
+        description:
+          'Di chuyển lên Sapa, bắt đầu cung trek qua bản Lao Chải - Tả Van, băng ruộng bậc thang và nhận homestay nghỉ đêm.',
+        accommodation: 'Homestay bản Tả Van',
+        transport: 'Xe limousine và đi bộ đường dài',
+        activities: ['Trek Lao Chải', 'Tả Van', 'Homestay bản địa'],
+      },
+      {
+        title: 'Tả Van - Giàng Tả Chải - Hà Nội',
+        description:
+          'Tiếp tục đi bộ nhẹ qua Giàng Tả Chải, dùng bữa trưa và trở về Hà Nội buổi tối.',
+        transport: 'Đi bộ và xe limousine',
+        activities: ['Giàng Tả Chải', 'Ẩm thực vùng cao', 'Trở về Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Cung trek dài bao nhiêu và có khó không?',
+        answer:
+          'Khoảng 10-14km chia hai ngày, đường đất ruộng bậc thang vừa sức với người có sức khỏe bình thường, đi giày trek là phù hợp.',
+      },
+      {
+        question: 'Homestay có tiện nghi không?',
+        answer:
+          'Homestay sạch sẽ, có chăn đệm và khu vệ sinh chung hoặc riêng tùy gói, mang trải nghiệm gần gũi đời sống bản địa.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Phí tham quan bản làng theo lịch trình', 'Hướng dẫn viên bản địa'],
+      optional: ['Phụ thu porter mang đồ nếu khách yêu cầu'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.BUS,
+      vehicleType: 'Xe limousine Hà Nội - Sapa',
+      vehicleTypeEn: 'Hanoi - Sapa limousine',
+      operator: 'Đối tác tuyến Sapa',
+      operatorEn: 'Sapa route partner',
+      notes: 'Cung trek điều chỉnh theo thể lực đoàn và điều kiện thời tiết.',
+      notesEn: 'Trekking route adjusts to group fitness and weather.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('sapa'), {
+    tourCode: 'VN-SPA-035',
+    name: 'Sapa Săn Mây & Nghỉ Dưỡng 2 Ngày 1 Đêm',
+    intro:
+      'Phiên bản Sapa nhẹ nhàng cho khách muốn nghỉ dưỡng khách sạn view núi, săn mây và check-in mà không phải đi bộ nhiều.',
+    focus: 'nghỉ dưỡng, săn mây Ô Quy Hồ và các điểm check-in trung tâm Sapa',
+    suitableFor: 'cặp đôi, gia đình có trẻ nhỏ và khách thích nhịp chậm',
+    price: 3_150_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 60,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Nghỉ khách sạn view thung lũng, săn mây buổi sớm',
+      'Check-in đèo Ô Quy Hồ và Cổng Trời',
+      'Thời gian tự do dạo trung tâm, cà phê ngắm núi',
+      'Lịch trình nhẹ, ít di chuyển, phù hợp gia đình',
+    ],
+    gallery: rotateGallery([...IMAGES.sapa], 2),
+    itinerary: [
+      {
+        title: 'Hà Nội - Sapa - Ô Quy Hồ',
+        description:
+          'Di chuyển lên Sapa, nhận phòng khách sạn, chiều tham quan đèo Ô Quy Hồ và Cổng Trời ngắm hoàng hôn.',
+        accommodation: 'Khách sạn Sapa view núi theo gói',
+        transport: 'Xe limousine',
+        activities: ['Đèo Ô Quy Hồ', 'Cổng Trời', 'Nghỉ dưỡng khách sạn'],
+      },
+      {
+        title: 'Săn mây - Tự do - Hà Nội',
+        description:
+          'Dậy sớm săn mây, tự do khám phá trung tâm Sapa, mua đặc sản trước khi trở về Hà Nội.',
+        transport: 'Xe limousine',
+        activities: ['Săn mây buổi sớm', 'Tự do trung tâm Sapa', 'Trở về Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Mùa nào dễ săn mây nhất?',
+        answer:
+          'Khoảng tháng 9 đến tháng 4 thường có biển mây đẹp, tuy nhiên còn phụ thuộc thời tiết từng ngày.',
+      },
+      {
+        question: 'Tour có phải đi bộ nhiều không?',
+        answer:
+          'Không. Đây là tour nghỉ dưỡng, di chuyển chủ yếu bằng xe, phù hợp gia đình có trẻ nhỏ và người lớn tuổi.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé các điểm check-in theo lịch trình'],
+      optional: ['Vé cáp treo Fansipan nếu khách muốn bổ sung'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.BUS,
+      vehicleType: 'Xe limousine Hà Nội - Sapa',
+      vehicleTypeEn: 'Hanoi - Sapa limousine',
+      operator: 'Đối tác tuyến Sapa',
+      operatorEn: 'Sapa route partner',
+      notes: 'Điểm săn mây có thể đổi theo điều kiện thời tiết buổi sáng.',
+      notesEn: 'Cloud-hunting spot may change with morning weather.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('ninh-binh'), {
+    tourCode: 'VN-NBI-036',
+    name: 'Ninh Bình Bái Đính - Tràng An - Tam Cốc 2 Ngày 1 Đêm',
+    intro:
+      'Phiên bản Ninh Bình 2 ngày có nghỉ đêm, thêm chùa Bái Đính và Tam Cốc để khách đi thong thả thay vì gói gọn trong ngày.',
+    focus: 'tâm linh Bái Đính, di sản Tràng An và cảnh quan Tam Cốc',
+    suitableFor:
+      'gia đình, đoàn khách trung niên và nhóm muốn lịch trình thư thả có nghỉ đêm',
+    price: 2_350_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 75,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Tham quan quần thể chùa Bái Đính lớn nhất Việt Nam',
+      'Đi thuyền khám phá Tràng An và hang động',
+      'Ngắm Tam Cốc - “Hạ Long trên cạn” theo mùa lúa',
+      'Nghỉ đêm tại Ninh Bình, thưởng thức dê núi - cơm cháy',
+    ],
+    gallery: rotateGallery([...IMAGES.ninhBinh], 1),
+    itinerary: [
+      {
+        title: 'Hà Nội - Bái Đính - Tràng An',
+        description:
+          'Khởi hành đi Bái Đính tham quan quần thể chùa, chiều đi thuyền Tràng An và nhận phòng nghỉ đêm tại Ninh Bình.',
+        accommodation: 'Khách sạn Ninh Bình theo gói',
+        transport: 'Xe du lịch và thuyền Tràng An',
+        activities: ['Chùa Bái Đính', 'Thuyền Tràng An', 'Nghỉ đêm Ninh Bình'],
+      },
+      {
+        title: 'Tam Cốc - Hang Múa - Hà Nội',
+        description:
+          'Đi thuyền Tam Cốc, leo Hang Múa ngắm toàn cảnh, dùng đặc sản địa phương và trở về Hà Nội.',
+        transport: 'Xe du lịch và thuyền chèo tay',
+        activities: ['Thuyền Tam Cốc', 'Hang Múa', 'Đặc sản dê núi'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Tour có đi bộ nhiều ở Bái Đính không?',
+        answer:
+          'Khuôn viên Bái Đính rất rộng, có xe điện hỗ trợ di chuyển; khách nên mang giày thoải mái.',
+      },
+      {
+        question: 'Đi mùa nào ngắm lúa Tam Cốc đẹp?',
+        answer:
+          'Khoảng cuối tháng 5 đến đầu tháng 6 là mùa lúa chín vàng, cảnh Tam Cốc đẹp nhất trong năm.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé Tràng An', 'Vé Tam Cốc', 'Xe điện Bái Đính theo lịch trình'],
+      optional: ['Vé Hang Múa nếu khách chọn leo'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.BUS,
+      vehicleType: 'Xe du lịch Hà Nội - Ninh Bình',
+      vehicleTypeEn: 'Hanoi - Ninh Binh tour coach',
+      operator: 'Đối tác tuyến Ninh Bình',
+      operatorEn: 'Ninh Binh route partner',
+      notes: 'Lịch thuyền phụ thuộc lượng khách và điều phối bến.',
+      notesEn: 'Boat schedule depends on group size and pier coordination.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('da-nang'), {
+    tourCode: 'VN-DAD-037',
+    name: 'Đà Nẵng - Hội An - Huế 4 Ngày 3 Đêm Liên Tuyến Di Sản',
+    intro:
+      'Hành trình liên tuyến ba vùng di sản miền Trung: Đà Nẵng hiện đại, Hội An cổ kính và Huế cố đô, trong một chuyến đi trọn vẹn.',
+    focus: 'di sản miền Trung, Bà Nà Hills, phố cổ Hội An và cố đô Huế',
+    suitableFor:
+      'gia đình, khách yêu văn hóa và du khách muốn đi trọn miền Trung trong một chuyến',
+    price: 5_950_000,
+    duration: '4 ngày 3 đêm',
+    availableSeats: 80,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'Đà Nẵng',
+    highlights: [
+      'Một ngày vui chơi Bà Nà Hills và Cầu Vàng',
+      'Dạo phố cổ Hội An và không gian đèn lồng buổi tối',
+      'Vượt đèo Hải Vân ra Huế thăm Đại Nội và lăng tẩm',
+      'Trải nghiệm trọn ba di sản trong một hành trình',
+    ],
+    gallery: [...IMAGES.daNang],
+    itinerary: [
+      {
+        title: 'Đà Nẵng - Sơn Trà - Biển Mỹ Khê',
+        description:
+          'Đón khách, tham quan bán đảo Sơn Trà, nhận phòng và tự do tắm biển Mỹ Khê, ngắm Cầu Rồng buổi tối.',
+        accommodation: 'Khách sạn Đà Nẵng theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Bán đảo Sơn Trà', 'Biển Mỹ Khê', 'Cầu Rồng'],
+      },
+      {
+        title: 'Bà Nà Hills - Cầu Vàng',
+        description:
+          'Cả ngày khám phá Bà Nà Hills, Cầu Vàng, làng Pháp và các khu vui chơi, tối về Đà Nẵng nghỉ ngơi.',
+        accommodation: 'Khách sạn Đà Nẵng theo gói',
+        transport: 'Xe du lịch và cáp treo',
+        activities: ['Bà Nà Hills', 'Cầu Vàng', 'Làng Pháp'],
+      },
+      {
+        title: 'Hội An phố cổ',
+        description:
+          'Di chuyển vào Hội An, dạo phố cổ, chùa Cầu, làng nghề và trải nghiệm đèn lồng, nghỉ đêm tại Hội An hoặc Đà Nẵng.',
+        accommodation: 'Khách sạn Hội An/Đà Nẵng theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Phố cổ Hội An', 'Chùa Cầu', 'Đèn lồng buổi tối'],
+      },
+      {
+        title: 'Đèo Hải Vân - Huế - Tiễn khách',
+        description:
+          'Vượt đèo Hải Vân ra Huế thăm Đại Nội và một lăng vua, dùng đặc sản Huế và tiễn khách.',
+        transport: 'Xe du lịch',
+        activities: ['Đèo Hải Vân', 'Đại Nội Huế', 'Lăng vua'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Vé Bà Nà Hills đã bao gồm chưa?',
+        answer:
+          'Tùy gói khách chọn. Gói tiêu chuẩn và nâng cấp được phân biệt rõ vé Bà Nà khi đặt.',
+      },
+      {
+        question: 'Tour có thể đón khách bay từ TP.HCM/Hà Nội không?',
+        answer:
+          'Có. Tour nhận khách tại Đà Nẵng; vé máy bay có thể bổ sung theo gói nếu khách yêu cầu.',
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Vé Đại Nội Huế và một lăng vua theo lịch trình',
+        'Vé tham quan Sơn Trà, Ngũ Hành Sơn',
+      ],
+      optional: ['Vé cáp treo Bà Nà Hills nếu không ghi rõ trong gói đã chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.PRIVATE_CAR,
+      vehicleType: 'Xe du lịch đời mới tuyến Đà Nẵng - Hội An - Huế',
+      vehicleTypeEn: 'Modern coach for Da Nang - Hoi An - Hue route',
+      operator: 'Đối tác miền Trung',
+      operatorEn: 'Central Vietnam partner',
+      notes: 'Đoạn đèo Hải Vân có thể đổi sang hầm nếu thời tiết xấu.',
+      notesEn: 'Hai Van Pass may switch to the tunnel in bad weather.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('da-nang'), {
+    tourCode: 'VN-DAD-038',
+    name: 'Đà Nẵng - Cù Lao Chàm Lặn Ngắm San Hô 1 Ngày',
+    intro:
+      'Tour trong ngày từ Đà Nẵng ra đảo Cù Lao Chàm, lặn ngắm san hô và thưởng thức hải sản, dành cho khách thích biển đảo nhanh gọn.',
+    focus: 'biển đảo Cù Lao Chàm, lặn ngắm san hô và hải sản',
+    suitableFor: 'nhóm bạn, gia đình và khách muốn một ngày biển đảo dễ đi',
+    price: 1_150_000,
+    duration: '1 ngày',
+    availableSeats: 90,
+    tourType: 'Khám Phá',
+    departurePoint: 'Đà Nẵng',
+    highlights: [
+      'Cano cao tốc ra đảo Cù Lao Chàm',
+      'Lặn ngắm san hô tại khu bảo tồn biển',
+      'Tự do tắm biển bãi Chồng, bãi Ông',
+      'Bữa trưa hải sản trên đảo',
+    ],
+    gallery: rotateGallery([...IMAGES.daNang], 2),
+    itinerary: [
+      {
+        title: 'Đà Nẵng - Cù Lao Chàm - Đà Nẵng',
+        description:
+          'Đón khách, ra bến đi cano tới Cù Lao Chàm, lặn ngắm san hô, tắm biển, dùng bữa trưa hải sản và trở về trong chiều.',
+        transport: 'Xe du lịch và cano cao tốc',
+        activities: ['Cano Cù Lao Chàm', 'Lặn ngắm san hô', 'Hải sản trên đảo'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Không biết bơi có lặn ngắm san hô được không?',
+        answer:
+          'Được. Khách được trang bị áo phao và kính lặn, có nhân viên hỗ trợ tại khu vực nông an toàn.',
+      },
+      {
+        question: 'Tour có chạy quanh năm không?',
+        answer:
+          'Cù Lao Chàm phụ thuộc thời tiết biển; mùa biển động cano có thể tạm dừng và sẽ báo trước cho khách.',
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Cano khứ hồi Cù Lao Chàm',
+        'Vé khu bảo tồn biển',
+        'Dụng cụ lặn ngắm san hô',
+      ],
+      optional: ['Lặn bình khí nâng cấp nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + cano cao tốc Cù Lao Chàm',
+      vehicleTypeEn: 'Coach plus speedboat to Cu Lao Cham',
+      operator: 'Đối tác Cù Lao Chàm',
+      operatorEn: 'Cu Lao Cham partner',
+      notes: 'Lịch cano phụ thuộc điều kiện sóng và điều phối bến.',
+      notesEn: 'Speedboat schedule depends on sea conditions and pier control.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('hoi-an'), {
+    tourCode: 'VN-HANQ-039',
+    name: 'Hội An - Thánh Địa Mỹ Sơn - Cù Lao Chàm 3 Ngày 2 Đêm',
+    intro:
+      'Tour Hội An mở rộng tới thánh địa Mỹ Sơn và đảo Cù Lao Chàm, kết hợp di sản Chăm, biển đảo và phố cổ trong một hành trình.',
+    focus: 'di sản Chăm Mỹ Sơn, biển đảo Cù Lao Chàm và phố cổ Hội An',
+    suitableFor: 'cặp đôi, gia đình và khách yêu văn hóa lẫn biển đảo',
+    price: 3_450_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 75,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'Đà Nẵng',
+    highlights: [
+      'Khám phá thánh địa Mỹ Sơn - di sản văn hóa Chăm',
+      'Cano ra Cù Lao Chàm lặn ngắm san hô',
+      'Dạo phố cổ Hội An và không gian đèn lồng',
+      'Trải nghiệm rừng dừa Bảy Mẫu bằng thuyền thúng',
+    ],
+    gallery: [...IMAGES.hoiAn],
+    itinerary: [
+      {
+        title: 'Đà Nẵng - Hội An - Rừng dừa',
+        description:
+          'Đón khách, trải nghiệm rừng dừa Bảy Mẫu, nhận phòng và dạo phố cổ Hội An buổi tối.',
+        accommodation: 'Khách sạn Hội An theo gói',
+        transport: 'Xe du lịch và thuyền thúng',
+        activities: ['Rừng dừa Bảy Mẫu', 'Phố cổ Hội An', 'Đèn lồng buổi tối'],
+      },
+      {
+        title: 'Thánh địa Mỹ Sơn',
+        description:
+          'Tham quan thánh địa Mỹ Sơn buổi sáng, xem trình diễn vũ điệu Chăm, chiều tự do nghỉ ngơi tại Hội An.',
+        accommodation: 'Khách sạn Hội An theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Thánh địa Mỹ Sơn', 'Vũ điệu Chăm', 'Tự do Hội An'],
+      },
+      {
+        title: 'Cù Lao Chàm - Tiễn khách',
+        description:
+          'Cano ra Cù Lao Chàm lặn ngắm san hô và tắm biển, dùng bữa trưa hải sản và tiễn khách.',
+        transport: 'Xe du lịch và cano',
+        activities: ['Cù Lao Chàm', 'Lặn ngắm san hô', 'Hải sản'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Mỹ Sơn cách Hội An bao xa?',
+        answer:
+          'Khoảng 40km, di chuyển xe khoảng một giờ. Nên đi buổi sáng sớm để tránh nắng và đông khách.',
+      },
+      {
+        question: 'Lịch Cù Lao Chàm có thể thay đổi không?',
+        answer:
+          'Có, vì phụ thuộc thời tiết biển. Nếu cano không chạy, đội hỗ trợ sẽ sắp xếp phương án thay thế.',
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Vé thánh địa Mỹ Sơn',
+        'Cano và vé khu bảo tồn Cù Lao Chàm',
+        'Thuyền thúng rừng dừa',
+      ],
+      optional: ['Vé show Ký Ức Hội An nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + cano Cù Lao Chàm',
+      vehicleTypeEn: 'Coach plus Cu Lao Cham speedboat',
+      operator: 'Đối tác Hội An - Quảng Nam',
+      operatorEn: 'Hoi An - Quang Nam partner',
+      notes: 'Lịch Mỹ Sơn và Cù Lao Chàm sắp xếp theo thời tiết từng ngày.',
+      notesEn: 'My Son and Cu Lao Cham timing arranged by daily weather.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('nha-trang'), {
+    tourCode: 'VN-NTR-040',
+    name: 'Nha Trang - Đảo Bình Ba 3 Ngày 2 Đêm',
+    intro:
+      'Tour kết hợp Nha Trang sôi động và đảo Bình Ba hoang sơ - “đảo tôm hùm”, cho khách muốn một tuyến biển đảo khác lạ hơn tour đảo quen thuộc.',
+    focus: 'biển đảo Bình Ba, tôm hùm và các bãi tắm hoang sơ',
+    suitableFor: 'nhóm bạn, gia đình và khách thích biển đảo ít thương mại hóa',
+    price: 3_250_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 70,
+    tourType: 'Khám Phá',
+    departurePoint: 'Nha Trang',
+    highlights: [
+      'Khám phá đảo Bình Ba - thiên đường tôm hùm',
+      'Tắm biển Bãi Chướng, Bãi Nồm hoang sơ',
+      'Lặn ngắm san hô và câu cá cùng ngư dân',
+      'Một ngày dạo phố biển Nha Trang',
+    ],
+    gallery: rotateGallery([...IMAGES.nhaTrang], 1),
+    itinerary: [
+      {
+        title: 'Nha Trang - City tour',
+        description:
+          'Đón khách, tham quan Tháp Bà Ponagar, chợ Đầm và tắm biển trung tâm, tối tự do dạo phố biển.',
+        accommodation: 'Khách sạn Nha Trang theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Tháp Bà Ponagar', 'Chợ Đầm', 'Biển trung tâm'],
+      },
+      {
+        title: 'Đảo Bình Ba',
+        description:
+          'Ra cảng đi tàu tới đảo Bình Ba, tắm biển các bãi hoang sơ, lặn ngắm san hô và thưởng thức tôm hùm.',
+        accommodation: 'Homestay đảo Bình Ba theo gói',
+        transport: 'Xe du lịch và tàu',
+        activities: ['Đảo Bình Ba', 'Lặn ngắm san hô', 'Tôm hùm'],
+      },
+      {
+        title: 'Bình Ba - Nha Trang - Tiễn khách',
+        description:
+          'Tắm biển buổi sáng, trở về đất liền, mua đặc sản và tiễn khách tại Nha Trang.',
+        transport: 'Tàu và xe du lịch',
+        activities: ['Tắm biển buổi sáng', 'Mua đặc sản', 'Tiễn khách'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Đảo Bình Ba có gì khác đảo trong vịnh Nha Trang?',
+        answer:
+          'Bình Ba hoang sơ, ít dịch vụ thương mại, nổi tiếng tôm hùm và các bãi tắm vắng, hợp khách thích yên tĩnh.',
+      },
+      {
+        question: 'Lưu trú trên đảo thế nào?',
+        answer:
+          'Chủ yếu là homestay và nhà nghỉ địa phương, tiện nghi cơ bản nhưng sạch sẽ và gần biển.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé tàu ra đảo Bình Ba', 'Lặn ngắm san hô theo lịch trình'],
+      optional: ['Câu cá hoặc thuê cano riêng nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + tàu ra đảo Bình Ba',
+      vehicleTypeEn: 'Coach plus boat to Binh Ba island',
+      operator: 'Đối tác tuyến Cam Ranh - Bình Ba',
+      operatorEn: 'Cam Ranh - Binh Ba partner',
+      notes: 'Lịch tàu ra đảo phụ thuộc thời tiết biển và điều phối cảng.',
+      notesEn: 'Island boat schedule depends on sea weather and port control.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('da-lat'), {
+    tourCode: 'VN-DLI-041',
+    name: 'Đà Lạt Trekking Langbiang & Săn Mây 3 Ngày 2 Đêm',
+    intro:
+      'Tour Đà Lạt thiên về vận động: chinh phục Langbiang, săn mây và cắm trại, dành cho khách trẻ thích khám phá thiên nhiên.',
+    focus: 'trekking Langbiang, săn mây và trải nghiệm thiên nhiên Đà Lạt',
+    suitableFor: 'khách trẻ, nhóm bạn và người yêu hoạt động ngoài trời',
+    price: 3_150_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 60,
+    tourType: 'Khám Phá',
+    departurePoint: 'Đà Lạt',
+    highlights: [
+      'Trekking chinh phục đỉnh Langbiang',
+      'Săn mây buổi sớm tại đồi thông',
+      'Cắm trại hoặc đốt lửa trại theo gói',
+      'Khám phá thác và rừng thông Đà Lạt',
+    ],
+    gallery: rotateGallery([...IMAGES.daLat], 1),
+    itinerary: [
+      {
+        title: 'Đà Lạt - Đồi thông - Săn mây',
+        description:
+          'Đón khách, nhận phòng, chiều khám phá đồi thông và các điểm săn mây, chuẩn bị cho ngày trekking.',
+        accommodation: 'Khách sạn/homestay Đà Lạt theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Đồi thông', 'Điểm săn mây', 'Cà phê ngắm phố'],
+      },
+      {
+        title: 'Trekking Langbiang',
+        description:
+          'Cả ngày trekking chinh phục Langbiang, ngắm toàn cảnh cao nguyên, picnic trên đường và trở về nghỉ ngơi.',
+        accommodation: 'Khách sạn/homestay Đà Lạt theo gói',
+        transport: 'Xe du lịch và đi bộ đường dài',
+        activities: ['Trekking Langbiang', 'Ngắm toàn cảnh', 'Picnic'],
+      },
+      {
+        title: 'Thác - Tự do - Tiễn khách',
+        description:
+          'Tham quan thác Đà Lạt, tự do mua đặc sản và tiễn khách kết thúc hành trình.',
+        transport: 'Xe du lịch',
+        activities: ['Thác Đà Lạt', 'Mua đặc sản', 'Tiễn khách'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Trekking Langbiang có cần thể lực tốt không?',
+        answer:
+          'Cung leo có dốc nên hợp với người sức khỏe ổn định; có hướng dẫn viên đi cùng và điều chỉnh nhịp theo đoàn.',
+      },
+      {
+        question: 'Cắm trại có an toàn không?',
+        answer:
+          'Có. Khu cắm trại được chọn lọc, có trang bị cơ bản và nhân viên hỗ trợ, tùy gói khách chọn.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé khu du lịch Langbiang', 'Vé tham quan thác theo lịch trình'],
+      optional: ['Dịch vụ cắm trại hoặc lửa trại nâng cấp'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.PRIVATE_CAR,
+      vehicleType: 'Xe du lịch/xe jeep địa hình Đà Lạt',
+      vehicleTypeEn: 'Da Lat tour coach or off-road jeep',
+      operator: 'Đối tác Đà Lạt',
+      operatorEn: 'Da Lat local partner',
+      notes: 'Cung trekking và điểm săn mây điều chỉnh theo thời tiết.',
+      notesEn: 'Trekking route and cloud-hunting spot adjust to weather.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('da-lat'), {
+    tourCode: 'VN-DLI-042',
+    name: 'Đà Lạt Nghỉ Dưỡng & Check-in 2 Ngày 1 Đêm',
+    intro:
+      'Phiên bản Đà Lạt nhẹ nhàng, tập trung vào nghỉ dưỡng, vườn hoa, cà phê và các điểm check-in nổi tiếng, ít di chuyển.',
+    focus: 'nghỉ dưỡng, vườn hoa và các điểm check-in trung tâm Đà Lạt',
+    suitableFor: 'cặp đôi, gia đình và khách muốn chuyến đi thư giãn dễ chịu',
+    price: 2_450_000,
+    duration: '2 ngày 1 đêm',
+    availableSeats: 80,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'Đà Lạt',
+    highlights: [
+      'Check-in các điểm nổi tiếng: Quảng trường Lâm Viên, vườn hoa',
+      'Thưởng thức cà phê và đặc sản Đà Lạt',
+      'Tham quan nông trại dâu hoặc vườn hoa cẩm tú cầu theo mùa',
+      'Lịch trình thư thả, phù hợp gia đình',
+    ],
+    gallery: rotateGallery([...IMAGES.daLat], 2),
+    itinerary: [
+      {
+        title: 'Đà Lạt - Vườn hoa - Check-in',
+        description:
+          'Đón khách, nhận phòng, tham quan vườn hoa thành phố, Quảng trường Lâm Viên và các điểm check-in nổi tiếng.',
+        accommodation: 'Khách sạn Đà Lạt theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Vườn hoa thành phố', 'Quảng trường Lâm Viên', 'Điểm check-in'],
+      },
+      {
+        title: 'Nông trại - Tự do - Tiễn khách',
+        description:
+          'Tham quan nông trại dâu hoặc vườn theo mùa, tự do cà phê, mua đặc sản và tiễn khách.',
+        transport: 'Xe du lịch',
+        activities: ['Nông trại dâu', 'Cà phê Đà Lạt', 'Mua đặc sản'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Tour có phù hợp người lớn tuổi không?',
+        answer:
+          'Rất phù hợp. Lịch trình nhẹ, ít leo trèo, di chuyển chủ yếu bằng xe và nghỉ ngơi thoải mái.',
+      },
+      {
+        question: 'Vườn hoa có theo mùa không?',
+        answer:
+          'Có. Một số vườn theo mùa hoa; nếu trùng mùa, lịch trình sẽ ưu tiên điểm hoa đang đẹp nhất.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé vườn hoa và điểm tham quan theo lịch trình'],
+      optional: ['Vé nông trại hoặc trò chơi ngoài chương trình'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.BUS,
+      vehicleType: 'Xe du lịch Đà Lạt',
+      vehicleTypeEn: 'Da Lat tour coach',
+      operator: 'Đối tác Đà Lạt',
+      operatorEn: 'Da Lat local partner',
+      notes: 'Điểm vườn hoa có thể đổi theo mùa để chọn nơi đang đẹp nhất.',
+      notesEn: 'Flower-garden stops may change by season for the best bloom.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('phu-quoc'), {
+    tourCode: 'VN-PQC-043',
+    name: 'Phú Quốc Hòn Thơm - VinWonders - Safari 4 Ngày 3 Đêm',
+    intro:
+      'Tour Phú Quốc thiên về giải trí và gia đình: cáp treo Hòn Thơm, VinWonders, Safari và nghỉ dưỡng biển trong một hành trình trọn gói.',
+    focus: 'giải trí, công viên chủ đề, cáp treo Hòn Thơm và nghỉ dưỡng biển',
+    suitableFor: 'gia đình có trẻ nhỏ, nhóm bạn và khách thích vui chơi giải trí',
+    price: 6_250_000,
+    duration: '4 ngày 3 đêm',
+    availableSeats: 80,
+    tourType: 'Tour Gia Đình',
+    departurePoint: 'Phú Quốc',
+    highlights: [
+      'Cáp treo Hòn Thơm vượt biển dài bậc nhất thế giới',
+      'Một ngày tại VinWonders và Safari Phú Quốc',
+      'Tắm biển và nghỉ dưỡng resort Nam đảo',
+      'Ngắm hoàng hôn Sunset Town và chợ đêm',
+    ],
+    gallery: [...IMAGES.phuQuoc],
+    itinerary: [
+      {
+        title: 'Phú Quốc - Nhận phòng - Bãi biển',
+        description:
+          'Đón khách tại sân bay, nhận phòng resort, tự do tắm biển và nghỉ ngơi làm quen nhịp chuyến đi.',
+        accommodation: 'Resort Phú Quốc theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Nhận phòng resort', 'Tắm biển', 'Nghỉ dưỡng'],
+      },
+      {
+        title: 'Hòn Thơm - Sunset Town',
+        description:
+          'Đi cáp treo Hòn Thơm, vui chơi bãi biển đảo, chiều về Sunset Town ngắm hoàng hôn và chợ đêm.',
+        accommodation: 'Resort Phú Quốc theo gói',
+        transport: 'Xe du lịch và cáp treo',
+        activities: ['Cáp treo Hòn Thơm', 'Bãi biển đảo', 'Sunset Town'],
+      },
+      {
+        title: 'VinWonders - Safari',
+        description:
+          'Cả ngày vui chơi VinWonders và Safari Phú Quốc với thế giới động vật bán hoang dã và các trò chơi.',
+        accommodation: 'Resort Phú Quốc theo gói',
+        transport: 'Xe du lịch',
+        activities: ['VinWonders', 'Safari Phú Quốc', 'Trò chơi giải trí'],
+      },
+      {
+        title: 'Nam Đảo - Tiễn khách',
+        description:
+          'Tham quan Nam đảo, nhà thùng nước mắm, mua đặc sản và tiễn khách tại sân bay Phú Quốc.',
+        transport: 'Xe du lịch',
+        activities: ['Nam đảo', 'Nhà thùng nước mắm', 'Mua đặc sản'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Vé VinWonders và Safari đã bao gồm chưa?',
+        answer:
+          'Tùy gói khách chọn. Seed phân biệt rõ vé công viên giải trí giữa gói tiêu chuẩn và nâng cấp.',
+      },
+      {
+        question: 'Tour có phù hợp trẻ nhỏ không?',
+        answer:
+          'Rất phù hợp. Đây là tuyến thiên về giải trí gia đình, nhiều hoạt động cho trẻ và thời gian nghỉ dưỡng.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Cáp treo Hòn Thơm theo gói', 'Vé tham quan Nam đảo theo lịch trình'],
+      optional: ['Vé VinWonders, Safari nếu không ghi rõ trong gói đã chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.PRIVATE_CAR,
+      vehicleType: 'Xe du lịch trên đảo Phú Quốc',
+      vehicleTypeEn: 'On-island coach in Phu Quoc',
+      operator: 'Đối tác Phú Quốc',
+      operatorEn: 'Phu Quoc local partner',
+      notes: 'Vé máy bay ra đảo có thể bổ sung theo gói nếu khách yêu cầu.',
+      notesEn: 'Flights to the island can be added per package on request.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('phu-quoc'), {
+    tourCode: 'VN-PQC-044',
+    name: 'Phú Quốc Câu Cá & Lặn Ngắm San Hô 4 Đảo 1 Ngày',
+    intro:
+      'Tour trong ngày khám phá Nam đảo Phú Quốc bằng cano: lặn ngắm san hô, câu cá và tắm biển tại các hòn đảo đẹp nhất.',
+    focus: 'biển đảo Nam Phú Quốc, lặn ngắm san hô và câu cá',
+    suitableFor: 'nhóm bạn, gia đình và khách muốn một ngày biển đảo năng động',
+    price: 1_350_000,
+    duration: '1 ngày',
+    availableSeats: 90,
+    tourType: 'Khám Phá',
+    departurePoint: 'Phú Quốc',
+    highlights: [
+      'Cano khám phá 3-4 hòn đảo Nam Phú Quốc',
+      'Lặn ngắm san hô tại Hòn Móng Tay, Hòn Gầm Ghì',
+      'Câu cá cùng ngư dân và tắm biển',
+      'Bữa trưa hải sản trên cano hoặc trên đảo',
+    ],
+    gallery: rotateGallery([...IMAGES.phuQuoc], 1),
+    itinerary: [
+      {
+        title: 'Phú Quốc - Tour 4 đảo - Phú Quốc',
+        description:
+          'Đón khách ra cảng, lên cano khám phá các hòn đảo Nam đảo, lặn ngắm san hô, câu cá, tắm biển và trở về trong chiều.',
+        transport: 'Xe du lịch và cano',
+        activities: ['Cano 4 đảo', 'Lặn ngắm san hô', 'Câu cá và tắm biển'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Không biết bơi có tham gia được không?',
+        answer:
+          'Được. Khách có áo phao, kính lặn và nhân viên hỗ trợ tại khu vực nông an toàn.',
+      },
+      {
+        question: 'Mang theo gì khi đi tour đảo?',
+        answer:
+          'Nên mang đồ bơi, kem chống nắng, mũ và máy ảnh chống nước nếu muốn lưu lại khoảnh khắc dưới biển.',
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Cano tham quan các đảo',
+        'Dụng cụ lặn ngắm san hô',
+        'Dụng cụ câu cá',
+      ],
+      optional: ['Lặn bình khí hoặc dù bay nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.COMBO,
+      vehicleType: 'Xe du lịch + cano tour 4 đảo',
+      vehicleTypeEn: 'Coach plus 4-island speedboat tour',
+      operator: 'Đối tác Nam đảo Phú Quốc',
+      operatorEn: 'Southern Phu Quoc partner',
+      notes: 'Lịch cano phụ thuộc điều kiện sóng và điều phối bến.',
+      notesEn: 'Speedboat schedule depends on sea conditions and pier control.',
+    },
+  }),
+];
+
+function departureData(
+  basePrice: number,
+  baseSeats: number,
+  boardingPoint: string,
+  transportSeed: DomesticTransportSeed,
+) {
   const offsets = [21, 35, 49, 70];
   return offsets.map((offset, index) => {
     const departureDate = addDays(offset);
@@ -1646,16 +3649,16 @@ function departureData(basePrice: number, baseSeats: number, boardingPoint: stri
       sortOrder: index,
       transport: {
         create: {
-          type: TransportType.BUS,
-          vehicleType: 'Xe du lịch 45 chỗ',
-          vehicleTypeEn: '45-seat tour bus',
-          operator: 'Xe riêng công ty',
-          operatorEn: 'Company vehicle',
+          type: transportSeed.type,
+          vehicleType: transportSeed.vehicleType,
+          vehicleTypeEn: transportSeed.vehicleTypeEn,
+          operator: transportSeed.operator,
+          operatorEn: transportSeed.operatorEn,
           boardingPoint,
           boardingPointEn: boardingPoint,
           boardingTime,
-          notes: 'Xe đón tại điểm tập trung đã thông báo. Quý khách có mặt trước 15 phút.',
-          notesEn: 'Pick-up at the designated meeting point. Please arrive 15 minutes early.',
+          notes: transportSeed.notes,
+          notesEn: transportSeed.notesEn,
         },
       },
     };
@@ -1663,9 +3666,20 @@ function departureData(basePrice: number, baseSeats: number, boardingPoint: stri
 }
 
 export async function seedDomesticTours(prisma: PrismaClient) {
-  const domesticTourSeeds = [...tours, ...remainingDomesticTours];
+  const domesticTourSeeds = [
+    ...baseDomesticTourSeeds,
+    ...additionalHeroTours,
+    ...newDomesticDestinationTours,
+  ];
 
   for (const item of domesticTourSeeds) {
+    const transportSeed =
+      item.tour.transport ??
+      TOUR_TRANSPORTS[item.tour.tourCode] ??
+      DEFAULT_DOMESTIC_TRANSPORT;
+    const ticketPolicy =
+      item.tour.ticketPolicy ?? TOUR_TICKET_POLICIES[item.tour.tourCode];
+
     const destination = await prisma.destination.upsert({
       where: { name: item.destination.name },
       update: {
@@ -1700,6 +3714,7 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         imageUrl: item.tour.imageUrl,
         averageRating: 4.8,
         tourType: item.tour.tourType,
+        primaryTransport: transportSeed.type,
         departurePoint: item.tour.departurePoint,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
@@ -1718,6 +3733,7 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         imageUrl: item.tour.imageUrl,
         averageRating: 4.8,
         tourType: item.tour.tourType,
+        primaryTransport: transportSeed.type,
         departurePoint: item.tour.departurePoint,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
@@ -1734,7 +3750,7 @@ export async function seedDomesticTours(prisma: PrismaClient) {
     ]);
 
     await prisma.$transaction([
-      ...packageData(item.tour.price).map((pkg) =>
+      ...packageData(item.tour.price, ticketPolicy).map((pkg) =>
         prisma.tourPackage.create({
           data: {
             tourId: tour.id,
@@ -1746,6 +3762,7 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         item.tour.price,
         Math.min(item.tour.availableSeats, 40),
         item.tour.departurePoint,
+        transportSeed,
       ).map((departure) =>
         prisma.tourDeparture.create({
           data: {

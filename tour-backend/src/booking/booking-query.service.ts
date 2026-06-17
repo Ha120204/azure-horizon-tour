@@ -128,7 +128,7 @@ export class BookingQueryService {
       discountAmount?: number | Prisma.Decimal | null;
       voucherCode?: string | null;
       departureId?: number | null;
-      tour: { id: number; name: string; tourCode: string; imageUrl?: string | null; duration?: string | null; startDate: Date };
+      tour: { id: number; name: string; tourCode: string; imageUrl?: string | null; duration?: string | null; durationEn?: string | null; startDate: Date };
     },
     cancellationPolicy: CancellationPolicy,
   ) {
@@ -150,6 +150,7 @@ export class BookingQueryService {
       tour: {
         id: booking.tour.id, name: booking.tour.name, tourCode: booking.tour.tourCode,
         imageUrl: booking.tour.imageUrl ?? null, duration: booking.tour.duration ?? null,
+        durationEn: booking.tour.durationEn ?? null,
         startDate: booking.tour.startDate,
       },
     };
@@ -161,7 +162,7 @@ export class BookingQueryService {
     holdExpiresAt?: Date | null;
     totalPrice: number | Prisma.Decimal; departureId?: number | null;
     user: { fullName: string };
-    tour: { id: number; name: string; imageUrl?: string | null; startDate: Date; duration?: string | null };
+    tour: { id: number; name: string; imageUrl?: string | null; startDate: Date; duration?: string | null; durationEn?: string | null };
   }) {
     const departureDate = await this.cancellationService.resolveBookingDepartureDate(booking);
     return {
@@ -175,6 +176,7 @@ export class BookingQueryService {
         id: booking.tour.id, name: booking.tour.name,
         imageUrl: booking.tour.imageUrl ?? null,
         startDate: departureDate, duration: booking.tour.duration ?? null,
+        durationEn: booking.tour.durationEn ?? null,
       },
     };
   }
@@ -261,7 +263,7 @@ export class BookingQueryService {
         unitPriceAtBooking: true, discountAmount: true, voucherCode: true,
         departureId: true, contactInfo: true, passengers: true,
         user: { select: { fullName: true, email: true, phone: true } },
-        tour: { select: { id: true, name: true, tourCode: true, imageUrl: true, duration: true, startDate: true, departurePoint: true } },
+        tour: { select: { id: true, name: true, tourCode: true, imageUrl: true, duration: true, durationEn: true, startDate: true, departurePoint: true } },
         transactions: {
           select: { id: true, gateway: true, transactionRef: true, amount: true, status: true, confirmedSource: true, confirmedAt: true, createdAt: true },
           orderBy: { createdAt: 'desc' }, take: 5,
@@ -328,7 +330,7 @@ export class BookingQueryService {
         holdExpiresAt: true,
         createdAt: true, numberOfPeople: true, totalPrice: true, departureId: true,
         user: { select: { fullName: true } },
-        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true } },
+        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true, durationEn: true } },
       },
     });
     if (!booking) throw new NotFoundException('Booking not found');
@@ -401,7 +403,7 @@ export class BookingQueryService {
         numberOfPeople: true, totalPrice: true, departureId: true,
         contactInfo: true, passengers: true, discountAmount: true, voucherCode: true, createdAt: true,
         user: { select: { fullName: true, email: true } },
-        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true, tourCode: true, departurePoint: true } },
+        tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true, durationEn: true, tourCode: true, departurePoint: true } },
       },
     });
     if (!booking) throw new NotFoundException('Khong tim thay don dat tour');

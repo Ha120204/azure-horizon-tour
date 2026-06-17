@@ -200,10 +200,6 @@ export class BookingService {
         throw new NotFoundException('Tour not found');
       }
 
-      if (tour.startDate < new Date()) {
-        throw new BadRequestException('Tour này đã diễn ra, không thể đặt');
-      }
-
       let selectedDeparture: TourDeparture | null = null;
 
       // seatCount = số ghế thực cần giữ (adult + child, KHÔNG tính infant).
@@ -229,6 +225,12 @@ export class BookingService {
         if (tour.availableSeats < seatCount) {
           throw new BadRequestException('Not enough seats available');
         }
+      }
+
+      // Kiểm tra ngày khởi hành: dùng departure date nếu có, fallback về tour.startDate.
+      const effectiveStartDate = selectedDeparture?.departureDate ?? tour.startDate;
+      if (effectiveStartDate < new Date()) {
+        throw new BadRequestException('Tour has already started and cannot be booked');
       }
 
       // Package là bắt buộc — giá package là giá toàn phần (mô hình Klook/Viator).

@@ -33,6 +33,7 @@ type TicketData = {
         imageUrl?: string | null;
         startDate?: string | null;
         duration?: string | null;
+        durationEn?: string | null;
     } | null;
 };
 
@@ -484,7 +485,7 @@ function SuccessTicketContent() {
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">{sd.duration}</p>
                                         <p className="font-semibold text-sm md:text-base">
-                                            {ticketData.tour?.duration || sd.toBeAnnounced}
+                                            {(lang === 'en' ? ticketData.tour?.durationEn : ticketData.tour?.duration) || ticketData.tour?.duration || sd.toBeAnnounced}
                                         </p>
                                     </div>
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PayOS } from '@payos/node';
 import 'dotenv/config';
@@ -16,7 +16,8 @@ export type PaymentLinkResult = {
 };
 
 @Injectable()
-export class PaymentService {
+export class PaymentService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(PaymentService.name);
   private payos: PayOS;
 
   constructor(private readonly configService: ConfigService) {
@@ -25,6 +26,21 @@ export class PaymentService {
       apiKey: process.env.PAYOS_API_KEY,
       checksumKey: process.env.PAYOS_CHECKSUM_KEY,
     });
+  }
+
+  async onApplicationBootstrap() {
+    const backendUrl = this.configService.get<string>('BACKEND_URL', '');
+    if (!backendUrl || backendUrl.includes('localhost')) {
+      this.logger.warn('[PAYOS] BACKEND_URL is localhost — skipping webhook registration (PayOS cannot reach localhost)');
+      return;
+    }
+    const webhookUrl = `${backendUrl}/booking/payos-webhook`;
+    try {
+      await this.payos.webhooks.confirm(webhookUrl);
+      this.logger.log(`[PAYOS] Webhook registered: ${webhookUrl}`);
+    } catch (err) {
+      this.logger.error(`[PAYOS] Webhook registration failed for ${webhookUrl}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   async createPaymentRequest(orderCode: number, amount: number, description: string): Promise<PaymentLinkResult> {

@@ -604,6 +604,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                         label={t('search.dates')}
                         placeholder={t('search.selectDate')}
                         triggerId="date-picker-trigger"
+                        dropdownPlacement="top"
                     />
                 </div>
             </div>

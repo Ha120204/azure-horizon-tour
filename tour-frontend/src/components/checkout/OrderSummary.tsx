@@ -39,6 +39,7 @@ interface WalletVoucher {
 
 interface OrderSummaryProps {
     tourData: OrderTourData;
+    departureDate?: string | null;
     selectedPackage: OrderPackage | null;
     adultCount: number;
     childCount: number;
@@ -111,6 +112,7 @@ const voucherModalCopy = {
 
 export default function OrderSummary({
     tourData,
+    departureDate,
     selectedPackage,
     adultCount,
     childCount,
@@ -228,7 +230,7 @@ export default function OrderSummary({
                             <h3 className="font-headline font-bold text-base leading-tight mb-2 text-on-surface line-clamp-2">{tourData.name}</h3>
                             <div className="flex items-center gap-1.5 text-on-surface-variant text-xs font-medium mt-2">
                                 <span className="material-symbols-outlined text-[14px]">calendar_month</span>
-                                <span>{t('checkout.departure')}: {formatDate(tourData.startDate)}</span>
+                                <span>{t('checkout.departure')}: {formatDate(departureDate ?? tourData.startDate)}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-on-surface-variant text-xs font-medium mt-1">
                                 <span className="material-symbols-outlined text-[14px]">schedule</span>

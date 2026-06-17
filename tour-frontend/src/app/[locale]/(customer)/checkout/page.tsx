@@ -753,6 +753,7 @@ function CheckoutContent() {
 
                 <OrderSummary
                     tourData={tourData}
+                    departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
                     selectedPackage={selectedPackage}
                     adultCount={adultCount}
                     childCount={childCount}

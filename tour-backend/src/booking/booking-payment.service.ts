@@ -246,7 +246,8 @@ export class BookingPaymentService {
     let paymentInfo: Awaited<ReturnType<typeof this.paymentService.getPaymentInfo>>;
     try {
       paymentInfo = await this.paymentService.getPaymentInfo(orderCode);
-    } catch {
+    } catch (err) {
+      this.logger.error(`[CHECK_PAYMENT] PayOS getPaymentInfo failed for bookingId=${bookingId} orderCode=${orderCode}: ${err instanceof Error ? err.message : String(err)}`);
       return { synced: false, status: 'PAYOS_ERROR' };
     }
 

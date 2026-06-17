@@ -17,6 +17,7 @@ interface EBookedTour {
     imageUrl?: string | null;
     startDate: string;
     duration?: string | null;
+    durationEn?: string | null;
 }
 
 interface QRPaymentData {
@@ -87,7 +88,19 @@ const dict = {
         payErrorTitle: "Lỗi thanh toán",
         payStartError: "Không thể khởi tạo thanh toán PayOS. Vui lòng thử lại.",
         payMethodError: "Không thể cập nhật phương thức thanh toán. Vui lòng thử lại.",
-        payGenericError: "Có lỗi khi xử lý thanh toán. Vui lòng thử lại."
+        payGenericError: "Có lỗi khi xử lý thanh toán. Vui lòng thử lại.",
+        waitingPayment: "Đang chờ xác nhận thanh toán...",
+        downloadQR: "Tải mã QR",
+        copy: "Sao chép",
+        iTransferred: "Tôi đã chuyển khoản",
+        checkingNow: "Đang kiểm tra...",
+        paymentSuccess: "Thanh toán thành công!",
+        redirectingToConfirm: "Đang chuyển đến trang xác nhận...",
+        cancelConfirmTitle: "Xác nhận hủy giao dịch?",
+        cancelConfirmDesc: "Đơn đặt chỗ của bạn hiện đang chờ thanh toán. Nếu bạn rời khỏi trang này, đơn hàng sẽ bị **hủy bỏ hoàn toàn** và chỗ ngồi sẽ được trả về hệ thống. Bạn có chắc chắn muốn quay lại để thay đổi thông tin?",
+        cancelConfirmNo: "Không, tiếp tục thanh toán",
+        cancelConfirmYes: "Xác nhận hủy đơn",
+        loadingPayment: "Đang tải thông tin thanh toán..."
     },
     en: {
         step1: "Fill details",
@@ -132,7 +145,19 @@ const dict = {
         payErrorTitle: "Payment error",
         payStartError: "Could not start PayOS payment. Please try again.",
         payMethodError: "Could not update payment method. Please try again.",
-        payGenericError: "Something went wrong while processing payment. Please try again."
+        payGenericError: "Something went wrong while processing payment. Please try again.",
+        waitingPayment: "Waiting for payment confirmation...",
+        downloadQR: "Download QR",
+        copy: "Copy",
+        iTransferred: "I've Transferred",
+        checkingNow: "Checking...",
+        paymentSuccess: "Payment successful!",
+        redirectingToConfirm: "Redirecting to confirmation page...",
+        cancelConfirmTitle: "Confirm Cancel Transaction?",
+        cancelConfirmDesc: "Your booking is currently awaiting payment. If you leave this page, your order will be **fully cancelled** and your seat will be released. Are you sure you want to go back to change your information?",
+        cancelConfirmNo: "No, Continue Payment",
+        cancelConfirmYes: "Confirm Cancel Booking",
+        loadingPayment: "Loading payment details..."
     }
 };
 
@@ -270,32 +295,40 @@ function PaymentSelectorContent() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // 3. Poll PayOS directly while QR modal is open — webhook won't fire on localhost
+    // 3. Poll PayOS while QR modal is open + manual check
+    const checkPaymentOnce = async (): Promise<boolean> => {
+        if (!booking) return false;
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/check-payment`, {
+                method: 'POST',
+            });
+            const result = await res.json();
+            const data = result.data ?? result;
+            if (res.ok && data?.synced === true) {
+                setQrSuccess(true);
+                setTimeout(() => {
+                    setQrPaymentData(null);
+                    setQrSuccess(false);
+                    router.push(`/${language}/success?bookingId=${bookingCode}`);
+                }, 1500);
+                return true;
+            }
+        } catch {
+            // ignore network errors
+        }
+        return false;
+    };
+
     useEffect(() => {
         if (!qrPaymentData || !booking) return;
 
         const poll = setInterval(async () => {
-            try {
-                const res = await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/check-payment`, {
-                    method: 'POST',
-                });
-                const result = await res.json();
-                const data = result.data ?? result;
-                if (res.ok && data?.synced === true) {
-                    clearInterval(poll);
-                    setQrSuccess(true);
-                    setTimeout(() => {
-                        setQrPaymentData(null);
-                        setQrSuccess(false);
-                        router.push(`/${language}/success?bookingId=${bookingCode}`);
-                    }, 1500);
-                }
-            } catch {
-                // ignore poll errors
-            }
+            const confirmed = await checkPaymentOnce();
+            if (confirmed) clearInterval(poll);
         }, 4000);
 
         return () => clearInterval(poll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [qrPaymentData, booking, bookingCode, language, router]);
 
     // 4. Confirming and proceeding with payment
@@ -633,6 +666,7 @@ function PaymentSelectorContent() {
                     formatPrice={formatPrice}
                     formatTime={formatTime}
                     onClose={() => { setQrPaymentData(null); setQrSuccess(false); }}
+                    onManualCheck={checkPaymentOnce}
                 />
             )}
 
@@ -641,6 +675,7 @@ function PaymentSelectorContent() {
                 onClose={() => setIsCancelConfirmOpen(false)}
                 onConfirm={handleActiveCancel}
                 isSubmitting={isSubmitting}
+                d={d}
             />
         </>
     );
@@ -654,11 +689,23 @@ interface QRPaymentModalProps {
     formatPrice: (n: number) => string;
     formatTime: (s: number) => string;
     onClose: () => void;
+    onManualCheck?: () => Promise<void>;
 }
 
-function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime, onClose }: QRPaymentModalProps) {
+function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime, onClose, onManualCheck }: QRPaymentModalProps) {
     const [copied, setCopied] = useState<string | null>(null);
+    const [isManualChecking, setIsManualChecking] = useState(false);
     const qrRef = useRef<HTMLDivElement>(null);
+
+    const handleManualCheck = async () => {
+        if (!onManualCheck || isManualChecking) return;
+        setIsManualChecking(true);
+        try {
+            await onManualCheck();
+        } finally {
+            setIsManualChecking(false);
+        }
+    };
 
     const copy = (text: string, key: string) => {
         navigator.clipboard.writeText(text);
@@ -714,8 +761,8 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
                             <span className="material-symbols-outlined text-5xl text-emerald-500">check_circle</span>
                         </div>
                         <div className="text-center">
-                            <p className="font-bold text-lg text-on-surface">Thanh toán thành công!</p>
-                            <p className="text-sm text-outline mt-1">Đang chuyển đến trang xác nhận...</p>
+                            <p className="font-bold text-lg text-on-surface">{d.paymentSuccess}</p>
+                            <p className="text-sm text-outline mt-1">{d.redirectingToConfirm}</p>
                         </div>
                         <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
                     </div>
@@ -783,7 +830,7 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
                                 <button
                                     onClick={() => copy(data.accountNumber!, 'account')}
                                     className="text-outline hover:text-primary transition-colors"
-                                    title="Sao chép"
+                                    title={d.copy}
                                 >
                                     <span className="material-symbols-outlined text-base">
                                         {copied === 'account' ? 'check' : 'content_copy'}
@@ -830,26 +877,47 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:-0.15s]" />
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce" />
                         </span>
-                        <span>Đang chờ xác nhận thanh toán...</span>
+                        <span>{d.waitingPayment}</span>
                     </div>
                 )}
 
                 {/* Footer */}
-                <div className="px-7 pb-7 flex gap-3">
-                    <button
-                        onClick={handleDownload}
-                        disabled={isExpired || !data.qrCode}
-                        className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                        <span className="material-symbols-outlined text-base">download</span>
-                        Tải mã QR
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors"
-                    >
-                        {d.qrClose}
-                    </button>
+                <div className="px-7 pb-7 flex flex-col gap-2">
+                    {!isExpired && !isSuccess && onManualCheck && (
+                        <button
+                            onClick={handleManualCheck}
+                            disabled={isManualChecking}
+                            className="w-full py-3 rounded-xl font-bold text-sm bg-primary text-white hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            {isManualChecking ? (
+                                <>
+                                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                    {d.checkingNow}
+                                </>
+                            ) : (
+                                <>
+                                    <span className="material-symbols-outlined text-base">task_alt</span>
+                                    {d.iTransferred}
+                                </>
+                            )}
+                        </button>
+                    )}
+                    <div className="flex gap-3">
+                        <button
+                            onClick={handleDownload}
+                            disabled={isExpired || !data.qrCode}
+                            className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            <span className="material-symbols-outlined text-base">download</span>
+                            {d.downloadQR}
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="flex-1 py-3 border border-slate-200 rounded-xl font-bold text-sm text-on-surface hover:bg-slate-50 transition-colors"
+                        >
+                            {d.qrClose}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -861,37 +929,36 @@ interface ConfirmCancelModalProps {
     onClose: () => void;
     onConfirm: () => void;
     isSubmitting: boolean;
+    d: typeof dict['vi'];
 }
 
-function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting }: ConfirmCancelModalProps) {
+function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting, d }: ConfirmCancelModalProps) {
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-            
-            {/* Modal Box */}
+
             <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full relative z-10 shadow-2xl border border-slate-100 transform transition-all scale-100 flex flex-col items-center text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6 border border-red-100">
                     <span className="material-symbols-outlined text-red-600 text-3xl">warning</span>
                 </div>
-                
+
                 <h3 className="font-headline font-bold text-xl text-on-surface mb-3">
-                    Xác nhận hủy giao dịch?
+                    {d.cancelConfirmTitle}
                 </h3>
-                
+
                 <p className="text-slate-500 text-sm leading-relaxed mb-8">
-                    Đơn đặt chỗ của bạn hiện đang chờ thanh toán. Nếu bạn rời khỏi trang này, đơn hàng sẽ bị **hủy bỏ hoàn toàn** và chỗ ngồi sẽ được trả về hệ thống. Bạn có chắc chắn muốn quay lại để thay đổi thông tin?
+                    {d.cancelConfirmDesc}
                 </p>
-                
+
                 <div className="flex flex-col sm:flex-row gap-3 w-full mt-auto">
                     <button
                         onClick={onClose}
                         disabled={isSubmitting}
                         className="flex-1 px-5 py-3.5 border border-slate-200 hover:bg-slate-50 font-bold text-sm rounded-xl text-on-surface transition-all active:scale-95 disabled:opacity-50"
                     >
-                        Không, tiếp tục thanh toán
+                        {d.cancelConfirmNo}
                     </button>
                     <button
                         onClick={onConfirm}
@@ -903,7 +970,7 @@ function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting }: Confir
                         ) : (
                             <span className="material-symbols-outlined text-base">close</span>
                         )}
-                        Xác nhận hủy đơn
+                        {d.cancelConfirmYes}
                     </button>
                 </div>
             </div>
@@ -911,18 +978,24 @@ function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting }: Confir
     );
 }
 
+function PaymentLoadingFallback() {
+    const { language } = useLocale();
+    const lang = (language === 'vi' || language === 'en') ? language : 'vi';
+    return (
+        <main className="flex-grow flex items-center justify-center pt-28">
+            <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                <span className="text-sm font-bold text-primary">{dict[lang].loadingPayment}</span>
+            </div>
+        </main>
+    );
+}
+
 export default function PaymentSelectorPage() {
     return (
         <div className="bg-slate-50 font-body text-on-surface flex flex-col min-h-screen">
             <Header />
-            <Suspense fallback={
-                <main className="flex-grow flex items-center justify-center pt-28">
-                    <div className="flex flex-col items-center gap-3">
-                        <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                        <span className="text-sm font-bold text-primary">Đang tải thông tin thanh toán...</span>
-                    </div>
-                </main>
-            }>
+            <Suspense fallback={<PaymentLoadingFallback />}>
                 <PaymentSelectorContent />
             </Suspense>
             <Footer />

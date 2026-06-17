@@ -64,6 +64,12 @@ export default function RegisterPage() {
         e.preventDefault();
         if (isSubmitting) return;
         setError('');
+
+        if (!fullName.trim()) {
+            setError(t('auth.fullNameRequired'));
+            return;
+        }
+
         if (!validateEmail(email)) return;
 
         if (!STRONG_PASSWORD_PATTERN.test(password)) {
@@ -81,7 +87,7 @@ export default function RegisterPage() {
             const res = await fetch(`${API_BASE_URL}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, fullName }),
+                body: JSON.stringify({ email, password, fullName: fullName.trim() }),
             });
 
             if (res.ok) {

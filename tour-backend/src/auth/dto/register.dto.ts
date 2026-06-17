@@ -1,4 +1,5 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class RegisterDto {
   @IsEmail()
@@ -13,6 +14,8 @@ export class RegisterDto {
   password: string;
 
   @IsString()
-  @IsNotEmpty()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsNotEmpty({ message: 'Họ và tên không được để trống' })
+  @MaxLength(50, { message: 'Họ và tên không được vượt quá 50 ký tự' })
   fullName: string;
 }

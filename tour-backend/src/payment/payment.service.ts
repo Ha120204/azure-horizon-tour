@@ -28,20 +28,23 @@ export class PaymentService implements OnApplicationBootstrap {
     });
   }
 
-  async onApplicationBootstrap() {
+  onApplicationBootstrap() {
     const backendUrl = this.configService.get<string>('BACKEND_URL', '');
     if (!backendUrl || backendUrl.includes('localhost')) {
       this.logger.warn('[PAYOS] BACKEND_URL is localhost — skipping webhook registration (PayOS cannot reach localhost)');
       return;
     }
     const webhookUrl = `${backendUrl}/booking/payos-webhook`;
-    try {
-      await this.payos.webhooks.confirm(webhookUrl);
-      this.logger.log(`[PAYOS] Webhook auto-registered: ${webhookUrl}`);
-    } catch (err) {
-      // Nếu PayOS từ chối auto-register, đăng ký thủ công tại merchant.payos.vn
-      this.logger.warn(`[PAYOS] Auto-register webhook failed — register manually at merchant.payos.vn: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    // PayOS gọi thử webhook URL ngay khi confirm — phải đợi HTTP server listen xong,
+    // vì onApplicationBootstrap chạy TRƯỚC app.listen().
+    setTimeout(() => {
+      this.payos.webhooks
+        .confirm(webhookUrl)
+        .then(() => this.logger.log(`[PAYOS] Webhook auto-registered: ${webhookUrl}`))
+        .catch((err: unknown) =>
+          this.logger.warn(`[PAYOS] Auto-register webhook failed — register manually at merchant.payos.vn: ${err instanceof Error ? err.message : String(err)}`),
+        );
+    }, 5000);
   }
 
   async createPaymentRequest(orderCode: number, amount: number, description: string): Promise<PaymentLinkResult> {

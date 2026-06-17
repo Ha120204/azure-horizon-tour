@@ -37,9 +37,10 @@ export class PaymentService implements OnApplicationBootstrap {
     const webhookUrl = `${backendUrl}/booking/payos-webhook`;
     try {
       await this.payos.webhooks.confirm(webhookUrl);
-      this.logger.log(`[PAYOS] Webhook registered: ${webhookUrl}`);
+      this.logger.log(`[PAYOS] Webhook auto-registered: ${webhookUrl}`);
     } catch (err) {
-      this.logger.error(`[PAYOS] Webhook registration failed for ${webhookUrl}: ${err instanceof Error ? err.message : String(err)}`);
+      // Nếu PayOS từ chối auto-register, đăng ký thủ công tại merchant.payos.vn
+      this.logger.warn(`[PAYOS] Auto-register webhook failed — register manually at merchant.payos.vn: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

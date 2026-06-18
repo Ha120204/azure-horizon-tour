@@ -20,6 +20,7 @@ import {
   isPaymentStatus,
   isPayosDuplicateError,
   PAYOS_HOLD_MINUTES,
+  PAYOS_MAX_HOLD_MINUTES,
 } from './helpers/booking-helpers';
 import type { CancellationPolicy } from './types';
 
@@ -345,21 +346,22 @@ export class BookingQueryService {
       throw new BadRequestException('Booking nay khong o trang thai cho thanh toan');
 
     const now = new Date();
-    let expiryTime = booking.holdExpiresAt ?? new Date(booking.createdAt.getTime() + PAYOS_HOLD_MINUTES * 60 * 1000);
-    if (expiryTime.getTime() <= now.getTime())
-      throw new BadRequestException('Booking da het han thanh toan. Vui long dat tour moi.');
-    if (booking.paymentMethod !== 'PAYOS') {
-      const departureDate = await this.cancellationService.resolveBookingDepartureDate(booking);
-      expiryTime = calculateBookingHoldExpiresAt({
-        paymentMethod: 'PAYOS',
-        departureDate,
-        now,
-      });
-      await this.prisma.booking.update({
-        where: { id: booking.id },
-        data: { paymentMethod: 'PAYOS', holdExpiresAt: expiryTime },
-      });
-    }
+    const maxHoldDeadline = new Date(
+      booking.createdAt.getTime() + PAYOS_MAX_HOLD_MINUTES * 60 * 1000,
+    );
+    if (now.getTime() >= maxHoldDeadline.getTime())
+      throw new BadRequestException('Da qua thoi gian giu cho toi da cho don nay. Vui long dat tour moi.');
+
+    const departureDate = await this.cancellationService.resolveBookingDepartureDate(booking);
+    // Rolling 15-minute window: mỗi lần khách tạo lại QR → gia hạn giữ ghế thêm 15 phút,
+    // nhưng không vượt quá trần giữ chỗ tuyệt đối (maxHoldDeadline) → chống giữ ghế vô hạn.
+    // Nếu đơn đã bị cron hủy, guard status ở trên đã throw trước, không đến đây.
+    let expiryTime = calculateBookingHoldExpiresAt({ paymentMethod: 'PAYOS', departureDate, now });
+    if (expiryTime.getTime() > maxHoldDeadline.getTime()) expiryTime = maxHoldDeadline;
+    await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: { paymentMethod: 'PAYOS', holdExpiresAt: expiryTime },
+    });
 
     const amountVND = Math.round(booking.totalPrice);
     const description = `AH ${booking.bookingCode}`;

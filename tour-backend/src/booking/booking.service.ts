@@ -772,15 +772,6 @@ export class BookingService {
     }
 
     const now = new Date();
-    if (
-      booking.holdExpiresAt &&
-      booking.holdExpiresAt.getTime() <= now.getTime()
-    ) {
-      throw new BadRequestException(
-        'Booking da het han giu cho. Vui long dat tour moi.',
-      );
-    }
-
     const departure = booking.departureId
       ? await this.prisma.tourDeparture.findUnique({
           where: { id: booking.departureId },

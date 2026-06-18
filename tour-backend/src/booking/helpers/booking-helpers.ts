@@ -142,6 +142,9 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export const PAYOS_HOLD_MINUTES = 15;
+// Trần giữ chỗ tuyệt đối cho PAYOS tính từ lúc tạo đơn: rolling 15 phút mỗi lần tạo lại QR
+// được phép, nhưng tổng thời gian giữ ghế không vượt quá mốc này (chống giữ ghế vô hạn).
+export const PAYOS_MAX_HOLD_MINUTES = 60;
 export const IN_STORE_MAX_HOLD_HOURS = 24;
 export const IN_STORE_OPERATIONAL_CUTOFF_HOURS = 6;
 

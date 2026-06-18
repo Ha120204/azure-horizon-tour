@@ -37,6 +37,7 @@ interface EBooking {
     paymentStatus: string;
     paymentMethod: string;
     createdAt: string;
+    holdExpiresAt: string | null;
     numberOfPeople: number;
     totalPrice: number;
     leadTravelerName: string;
@@ -54,7 +55,6 @@ const dict = {
         payosTitle: "Chuyển khoản Ngân hàng nhanh (PayOS)",
         payosDesc: "Quét mã QR tự động xác nhận giao dịch tức thì qua ứng dụng Ngân hàng.",
         payosTimer: "Thanh toán trong {time}",
-        payosExpired: "Đã quá hạn 15 phút - Vui lòng chọn Thanh toán tại cửa hàng",
         inStoreTitle: "Thanh toán tại văn phòng / cửa hàng",
         inStoreDesc: "Giữ chỗ đặt tối đa 24 giờ. Vui lòng đến chi nhánh văn phòng của chúng tôi để thanh toán trực tiếp.",
         officeLabel: "Văn phòng Azure Horizon:",
@@ -74,7 +74,8 @@ const dict = {
         qrNote: "Nhập {code} làm nội dung chuyển khoản để hệ thống tự động xác nhận. Trạng thái sẽ cập nhật sau khi ngân hàng xử lý.",
         qrClose: "Đóng",
         qrExpired: "Mã QR đã hết hạn",
-        qrChecking: "Đang kiểm tra thanh toán...",
+        regenerateQR: "Tạo lại mã QR",
+        holdExpiredWarning: "Phiên giữ chỗ đã hết — nhấn nút bên dưới để tạo lại mã QR hoặc chọn thanh toán tại cửa hàng.",
         processing: "Đang xử lý...",
         orderSummary: "Tóm tắt đơn hàng",
         orderCode: "Mã đơn hàng",
@@ -111,7 +112,6 @@ const dict = {
         payosTitle: "Fast Bank Transfer (PayOS)",
         payosDesc: "Scan QR code to automatically confirm transaction instantly via your banking app.",
         payosTimer: "Pay within {time}",
-        payosExpired: "Expired 15-minute slot - Please choose In-Store Payment",
         inStoreTitle: "Pay at Office / Store",
         inStoreDesc: "Hold seats for up to 24 hours. Please visit our transaction office to pay in person.",
         officeLabel: "Azure Horizon Office:",
@@ -131,7 +131,8 @@ const dict = {
         qrNote: "Enter {code} as transfer content for automatic confirmation. Status updates after bank processing.",
         qrClose: "Close",
         qrExpired: "QR code expired",
-        qrChecking: "Checking payment status...",
+        regenerateQR: "Generate new QR code",
+        holdExpiredWarning: "Hold period has ended — click the button below to generate a new QR code or choose in-store payment.",
         processing: "Processing...",
         orderSummary: "Order Summary",
         orderCode: "Order Code",
@@ -270,12 +271,13 @@ function PaymentSelectorContent() {
         fetchBooking();
     }, [bookingCode, d.invalidCode]);
 
-    // 2. Countdown timer calculation (15 mins from createdAt)
+    // 2. Countdown timer: dùng holdExpiresAt từ server (rolling window, reset sau mỗi lần tạo lại QR)
     useEffect(() => {
         if (!booking) return;
 
-        const createdTime = new Date(booking.createdAt).getTime();
-        const limitTime = createdTime + 15 * 60 * 1000; // 15 minutes limit
+        const limitTime = booking.holdExpiresAt
+            ? new Date(booking.holdExpiresAt).getTime()
+            : new Date(booking.createdAt).getTime() + 15 * 60 * 1000;
 
         const updateTimer = () => {
             const now = Date.now();
@@ -356,6 +358,10 @@ function PaymentSelectorContent() {
                             amount: data.amount,
                             expiresAt: data.expiresAt,
                         });
+                        // Đồng bộ holdExpiresAt để timer đếm ngược reset theo rolling window mới
+                        if (data.expiresAt) {
+                            setBooking(prev => prev ? { ...prev, holdExpiresAt: data.expiresAt } : prev);
+                        }
                     } else {
                         window.location.href = data.checkoutUrl;
                     }
@@ -416,8 +422,6 @@ function PaymentSelectorContent() {
         );
     }
 
-    const isPayosExpired = timeLeft === 0;
-
     return (
         <>
             <main className="flex-grow pt-28 pb-20 px-4 md:px-8 max-w-screen-xl mx-auto w-full">
@@ -452,11 +456,11 @@ function PaymentSelectorContent() {
                             <div className="space-y-4">
                                 {/* PAYOS Option */}
                                 <div
-                                    onClick={() => !isPayosExpired && setSelectedMethod('PAYOS')}
+                                    onClick={() => setSelectedMethod('PAYOS')}
                                     className={`relative flex flex-col p-5 rounded-xl border-2 transition-all cursor-pointer ${selectedMethod === 'PAYOS'
                                             ? 'option-active'
                                             : 'border-slate-100 hover:border-slate-200'
-                                        } ${isPayosExpired ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
+                                        }`}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-start gap-4">
@@ -474,13 +478,13 @@ function PaymentSelectorContent() {
                                                         <span>{d.payosTimer.replace('{time}', formatTime(timeLeft))}</span>
                                                     </div>
                                                 )}
-
-                                                {isPayosExpired && (
-                                                    <div className="mt-3 inline-flex items-center gap-2 bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-100">
-                                                        <span className="material-symbols-outlined text-sm">error</span>
-                                                        <span>{d.payosExpired}</span>
+                                                {timeLeft === 0 && (
+                                                    <div className="mt-3 flex items-start gap-2 bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-xs border border-slate-200">
+                                                        <span className="material-symbols-outlined text-sm shrink-0 mt-0.5">info</span>
+                                                        <span>{d.holdExpiredWarning}</span>
                                                     </div>
                                                 )}
+
                                             </div>
                                         </div>
                                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${selectedMethod === 'PAYOS' ? 'border-primary bg-primary' : 'border-slate-300'
@@ -571,7 +575,7 @@ function PaymentSelectorContent() {
                             </button>
                             <button
                                 onClick={handleConfirmPayment}
-                                disabled={isSubmitting || (selectedMethod === 'PAYOS' && isPayosExpired)}
+                                disabled={isSubmitting}
                                 className="group relative inline-flex min-w-[250px] items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary px-10 py-3.5 text-sm font-bold text-white shadow-md shadow-primary/20 outline-none transition-[background-color,box-shadow,transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-primary disabled:hover:shadow-md disabled:hover:shadow-primary/20 motion-reduce:transform-none"
                             >
                                 <span
@@ -667,6 +671,7 @@ function PaymentSelectorContent() {
                     formatTime={formatTime}
                     onClose={() => { setQrPaymentData(null); setQrSuccess(false); }}
                     onManualCheck={checkPaymentOnce}
+                    onRegenerate={handleConfirmPayment}
                 />
             )}
 
@@ -690,11 +695,13 @@ interface QRPaymentModalProps {
     formatTime: (s: number) => string;
     onClose: () => void;
     onManualCheck?: () => Promise<void>;
+    onRegenerate?: () => Promise<void>;
 }
 
-function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime, onClose, onManualCheck }: QRPaymentModalProps) {
+function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime, onClose, onManualCheck, onRegenerate }: QRPaymentModalProps) {
     const [copied, setCopied] = useState<string | null>(null);
     const [isManualChecking, setIsManualChecking] = useState(false);
+    const [isRegenerating, setIsRegenerating] = useState(false);
     const qrRef = useRef<HTMLDivElement>(null);
 
     const handleManualCheck = async () => {
@@ -704,6 +711,16 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
             await onManualCheck();
         } finally {
             setIsManualChecking(false);
+        }
+    };
+
+    const handleRegenerate = async () => {
+        if (!onRegenerate || isRegenerating) return;
+        setIsRegenerating(true);
+        try {
+            await onRegenerate();
+        } finally {
+            setIsRegenerating(false);
         }
     };
 
@@ -784,18 +801,26 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
 
                 {/* QR Code */}
                 <div className="flex flex-col items-center px-7 pb-5">
-                    <div ref={qrRef} className={`bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-opacity ${isExpired ? 'opacity-30 grayscale' : ''}`}>
-                        {data.qrCode ? (
-                            <QRCode
-                                value={data.qrCode}
-                                size={220}
-                                bgColor="#ffffff"
-                                fgColor="#000000"
-                                level="M"
-                            />
-                        ) : (
-                            <div className="w-[220px] h-[220px] flex items-center justify-center bg-slate-50 rounded-xl">
-                                <span className="material-symbols-outlined text-5xl text-outline">qr_code_2</span>
+                    <div className="relative">
+                        <div ref={qrRef} className={`bg-white p-4 rounded-2xl border border-slate-200 shadow-sm transition-opacity ${isExpired ? 'opacity-20 grayscale' : ''}`}>
+                            {data.qrCode ? (
+                                <QRCode
+                                    value={data.qrCode}
+                                    size={220}
+                                    bgColor="#ffffff"
+                                    fgColor="#000000"
+                                    level="M"
+                                />
+                            ) : (
+                                <div className="w-[220px] h-[220px] flex items-center justify-center bg-slate-50 rounded-xl">
+                                    <span className="material-symbols-outlined text-5xl text-outline">qr_code_2</span>
+                                </div>
+                            )}
+                        </div>
+                        {isExpired && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl">
+                                <span className="material-symbols-outlined text-4xl text-slate-400">qr_code_off</span>
+                                <span className="text-xs font-bold text-slate-500">{d.qrExpired}</span>
                             </div>
                         )}
                     </div>
@@ -805,12 +830,6 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
                         <div className="mt-3 inline-flex items-center gap-1.5 text-amber-700 text-sm font-bold">
                             <span className="material-symbols-outlined text-sm animate-pulse">timer</span>
                             <span>{d.payosTimer.replace('{time}', formatTime(timeLeft))}</span>
-                        </div>
-                    )}
-                    {isExpired && (
-                        <div className="mt-3 inline-flex items-center gap-1.5 text-red-600 text-sm font-bold">
-                            <span className="material-symbols-outlined text-sm">error</span>
-                            <span>{d.qrExpired}</span>
                         </div>
                     )}
                 </div>
@@ -883,6 +902,25 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
 
                 {/* Footer */}
                 <div className="px-7 pb-7 flex flex-col gap-2">
+                    {isExpired && !isSuccess && onRegenerate && (
+                        <button
+                            onClick={handleRegenerate}
+                            disabled={isRegenerating}
+                            className="w-full py-3 rounded-xl font-bold text-sm bg-primary text-white hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            {isRegenerating ? (
+                                <>
+                                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                    {d.processing}
+                                </>
+                            ) : (
+                                <>
+                                    <span className="material-symbols-outlined text-base">refresh</span>
+                                    {d.regenerateQR}
+                                </>
+                            )}
+                        </button>
+                    )}
                     {!isExpired && !isSuccess && onManualCheck && (
                         <button
                             onClick={handleManualCheck}

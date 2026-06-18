@@ -28,7 +28,7 @@ export function useConcierge() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
     // ID tour của trang đang mở (nếu có) để gửi kèm cho AI làm ngữ cảnh.
     const pathname = usePathname();

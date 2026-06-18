@@ -1,7 +1,7 @@
-import { RefObject } from 'react';
+import { RefObject, useEffect } from 'react';
 
 interface ConciergeInputProps {
-    inputRef: RefObject<HTMLInputElement | null>;
+    inputRef: RefObject<HTMLTextAreaElement | null>;
     inputValue: string;
     setInputValue: (v: string) => void;
     isTyping: boolean;
@@ -23,6 +23,26 @@ export default function ConciergeInput({
     handleStopGeneration,
     t,
 }: ConciergeInputProps) {
+    // Reset chiều cao khi message được gửi đi (inputValue → '')
+    useEffect(() => {
+        if (!inputValue && inputRef.current) {
+            inputRef.current.style.height = 'auto';
+        }
+    }, [inputValue, inputRef]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setInputValue(e.target.value);
+        e.target.style.height = 'auto';
+        e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage();
+        }
+    };
+
     return (
         <div className="absolute bottom-0 left-0 w-full border-t border-slate-100 bg-white p-4">
             <div className="relative mx-auto flex max-w-full flex-col">
@@ -31,16 +51,17 @@ export default function ConciergeInput({
                         e.preventDefault();
                         handleSendMessage();
                     }}
-                    className="flex items-center rounded-full border border-slate-300/80 bg-slate-50 p-1.5 shadow-sm ring-primary/20 transition-all focus-within:bg-white focus-within:ring-2"
+                    className="flex items-end rounded-2xl border border-slate-300/80 bg-slate-50 p-1.5 shadow-sm ring-primary/20 transition-all focus-within:bg-white focus-within:ring-2"
                 >
-                    <input
+                    <textarea
                         ref={inputRef}
                         id="ai-chat-input"
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-body px-4 text-slate-900 placeholder:text-slate-400 outline-none"
+                        className="flex-1 resize-none overflow-hidden bg-transparent border-none focus:ring-0 text-sm font-body px-4 py-2 text-slate-900 placeholder:text-slate-400 outline-none leading-normal"
                         placeholder={t('conciergeApp.inputPlaceholder')}
-                        type="text"
+                        rows={1}
                         value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
+                        onChange={handleChange}
+                        onKeyDown={handleKeyDown}
                         maxLength={1000}
                         disabled={isTyping || isStreaming}
                     />
@@ -49,7 +70,7 @@ export default function ConciergeInput({
                             type="button"
                             onClick={handleStopGeneration}
                             aria-label={t('conciergeApp.stopGeneration')}
-                            className="w-10 h-10 bg-red-500 text-white rounded-full shadow-md flex items-center justify-center hover:bg-red-600 transition-colors"
+                            className="w-10 h-10 flex-shrink-0 bg-red-500 text-white rounded-full shadow-md flex items-center justify-center hover:bg-red-600 transition-colors"
                         >
                             <span
                                 className="material-symbols-outlined text-[18px]"
@@ -64,7 +85,7 @@ export default function ConciergeInput({
                             id="ai-chat-send"
                             disabled={!inputValue.trim() || isTyping || cooldown}
                             aria-label={t('conciergeApp.sendMessage')}
-                            className="w-10 h-10 bg-primary text-white rounded-full shadow-md flex items-center justify-center hover:bg-primary-container transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                            className="w-10 h-10 flex-shrink-0 bg-primary text-white rounded-full shadow-md flex items-center justify-center hover:bg-primary-container transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
                         >
                             <span
                                 className="material-symbols-outlined text-[18px]"

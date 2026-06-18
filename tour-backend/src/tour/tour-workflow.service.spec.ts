@@ -16,7 +16,9 @@ describe('TourWorkflowService', () => {
     },
   };
 
-  const service = new TourWorkflowService(prisma as any, {} as any);
+  const mockEmbedding = { embedTourAsync: jest.fn() } as any;
+  const mockConfig = { get: jest.fn().mockReturnValue(undefined) } as any;
+  const service = new TourWorkflowService(prisma as any, {} as any, mockEmbedding, mockConfig);
 
   const publishableTour = (overrides: Record<string, unknown> = {}) => ({
     id: 1,

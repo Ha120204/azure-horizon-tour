@@ -32,7 +32,8 @@ describe('AiService', () => {
     const configService = {
       get: jest.fn((key: string) => ({ ...baseConfig, ...overrides })[key]),
     } as unknown as ConfigService;
-    return new AiService(configService, mockPrisma, mockBookingCancellationService);
+    const mockEmbeddingService = { semanticSearch: jest.fn().mockResolvedValue([]) } as any;
+    return new AiService(configService, mockPrisma, mockBookingCancellationService, mockEmbeddingService);
   };
 
   beforeEach(() => {

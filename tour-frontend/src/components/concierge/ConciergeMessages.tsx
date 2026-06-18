@@ -17,6 +17,8 @@ interface ConciergeMessagesProps {
     messagesEndRef: RefObject<HTMLDivElement | null>;
     scrollContainerRef: RefObject<HTMLDivElement | null>;
     handleSendMessage: (text?: string) => void;
+    handleTourCardClick: (tourId?: number) => void;
+    handleRetryAfterError: (text: string) => void;
     setIsOpen: (v: boolean) => void;
     t: (key: string) => string;
 }
@@ -32,6 +34,8 @@ export default function ConciergeMessages({
     messagesEndRef,
     scrollContainerRef,
     handleSendMessage,
+    handleTourCardClick,
+    handleRetryAfterError,
     setIsOpen,
     t,
 }: ConciergeMessagesProps) {
@@ -128,7 +132,7 @@ export default function ConciergeMessages({
                                             {msg.tourCard.id ? (
                                                 <Link
                                                     href={`/${language}/tour/${msg.tourCard.id}`}
-                                                    onClick={() => setIsOpen(false)}
+                                                    onClick={() => { handleTourCardClick(msg.tourCard!.id); setIsOpen(false); }}
                                                     className="block w-full text-center bg-primary hover:bg-primary-container text-white py-3 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors"
                                                 >
                                                     {t('conciergeApp.viewTourDetail')}
@@ -167,7 +171,7 @@ export default function ConciergeMessages({
                                         type="button"
                                         onClick={() => {
                                             const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-                                            if (lastUserMsg?.text) handleSendMessage(lastUserMsg.text);
+                                            if (lastUserMsg?.text) handleRetryAfterError(lastUserMsg.text);
                                         }}
                                         disabled={isTyping || cooldown}
                                         className="text-xs font-semibold text-primary underline underline-offset-2 hover:text-primary-container disabled:opacity-50"

@@ -143,6 +143,8 @@
     "domestic": "Trong nước",
     "international": "Nước ngoài",
     "searchPath": "Tìm kiếm",
+    "openSearch": "Tìm chuyến đi của bạn",
+    "collapseSearch": "Thu gọn",
     "departureLabel": "Khởi hành từ",
     "selectDeparture": "Chọn điểm khởi hành",
     "departureHint": "Chọn thành phố xuất phát.",

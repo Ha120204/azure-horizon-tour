@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BookingCancellationService } from '../booking/booking-cancellation.service';
+import { AiEmbeddingService } from './ai-embedding.service';
 
 const LLMGATE_DEFAULT_BASE_URL = 'https://llmgate.app/v1';
 const LLMGATE_LEGACY_BASE_URLS = new Set([
@@ -148,6 +149,7 @@ export class AiService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly bookingCancellationService: BookingCancellationService,
+    private readonly embeddingService: AiEmbeddingService,
   ) {
     this.provider = (
       this.configService.get<string>('AI_PROVIDER') || 'llmgate'
@@ -470,9 +472,29 @@ export class AiService {
     });
 
     if (tours.length === 0) {
-      return {
-        message: 'Không tìm thấy tour nào phù hợp với yêu cầu này.',
-      };
+      // Keyword search trả về rỗng → thử semantic search nếu có đủ văn bản truy vấn.
+      const semanticQuery = [destination, tourType].filter(Boolean).join(' ');
+      if (semanticQuery) {
+        const semanticRows = await this.embeddingService.semanticSearch(semanticQuery, party ?? 1);
+        if (semanticRows.length > 0) {
+          return semanticRows.map((t) => ({
+            id: t.id,
+            name: t.name,
+            destination: t.destinationName || 'Vô định',
+            region: t.region || '',
+            departurePoint: t.departurePoint || '',
+            price: Number(t.price),
+            duration: t.duration,
+            startDate: new Date(t.startDate).toISOString().split('T')[0],
+            availableSeats: Number(t.availableSeats),
+            imageUrl: t.imageUrl,
+            averageRating: Number(t.averageRating),
+            tourType: t.tourType,
+            _semanticMatch: true,
+          }));
+        }
+      }
+      return { message: 'Không tìm th��y tour nào phù hợp với yêu cầu này.' };
     }
 
     return tours.map((t) => ({
@@ -700,6 +722,10 @@ KHI NÀO GỌI TOOL:
 - Khi khách hỏi về việc HỦY một đơn cụ thể ("hủy đơn này được hoàn bao nhiêu", "BKG-… hủy được không"): PHẢI gọi "get_cancellation_policy" với bookingCode đó để lấy số liệu chính xác, KHÔNG tự nhẩm theo trí nhớ.
 - Nếu khách chưa đăng nhập mà hỏi booking, giải thích ngắn gọn rằng cần đăng nhập để kiểm tra đơn cá nhân.
 
+KẾT QUẢ SEMANTIC SEARCH (_semanticMatch: true):
+- Khi "search_tours" trả về danh sách tour có trường "_semanticMatch: true", đây là kết quả tìm kiếm ngữ nghĩa (không khớp từ khóa chính xác mà khớp theo ý nghĩa gần nhất).
+- Hãy trình bày tự nhiên: "Tôi không tìm thấy tour khớp chính xác, nhưng đây là một số tour có thể phù hợp với bạn:" rồi liệt kê như bình thường. Không dùng từ "semantic" hay "vector" với khách.
+
 KHI KHÔNG TÌM THẤY TOUR:
 - TRƯỚC KHI kết luận không có: nếu lần tìm vừa rồi có kèm bộ lọc (tourType/giá/tháng), hãy gọi lại "search_tours" CHỈ với destination để chắc chắn. Chỉ khi tìm chỉ-với-destination vẫn rỗng mới nói chưa có.
 - Nói rõ hiện chưa tìm thấy tour khớp trong hệ thống.
@@ -800,6 +826,18 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     });
   }
 
+  private createChatStream(
+    model: string,
+    messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  ) {
+    return this.llmClient.chat.completions.create({
+      model,
+      messages,
+      stream: true,
+      max_tokens: 1024,
+    });
+  }
+
   private getFunctionToolCall(
     toolCall: OpenAI.Chat.ChatCompletionMessageToolCall,
   ): { name?: string; arguments?: string } | null {
@@ -825,6 +863,29 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     }
   }
 
+  // Trích tín hiệu chất lượng từ kết quả tool để ghi log đo lường.
+  private extractToolQuality(toolName: string | undefined, result: unknown): string {
+    if (!result || typeof result !== 'object') return 'unknown';
+    const r = result as Record<string, unknown>;
+
+    if (toolName === 'search_tours') {
+      if (Array.isArray(result)) return `found=${result.length}`;
+      return 'empty';
+    }
+    if (toolName === 'get_tour_details') {
+      return r.id ? 'found' : 'not_found';
+    }
+    if (toolName === 'check_my_bookings') {
+      if (Array.isArray(result)) return `found=${result.length}`;
+      return 'empty';
+    }
+    if (toolName === 'get_cancellation_policy') {
+      if ('canCancel' in r) return `canCancel=${r.canCancel} refund=${r.refundPercent ?? 0}%`;
+      return 'not_found';
+    }
+    return 'ok';
+  }
+
   private async executeTourTool(
     toolCall: OpenAI.Chat.ChatCompletionMessageToolCall,
     userId: number | null,
@@ -832,62 +893,41 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     const toolName = this.getFunctionToolCall(toolCall)?.name;
     const toolArgs = this.parseToolArguments(toolCall);
 
-    this.logger.log(`[AI] Tool called: ${toolName} args=${JSON.stringify(toolArgs)}`);
-
+    let result: unknown;
     if (toolName === 'search_tours') {
-      return this.executeSearchTours(toolArgs);
-    }
-    if (toolName === 'check_my_bookings') {
-      return this.executeCheckMyBookings(toolArgs, userId);
-    }
-    if (toolName === 'get_tour_details') {
-      return this.executeGetTourDetails(toolArgs);
-    }
-    if (toolName === 'get_cancellation_policy') {
-      return this.executeGetCancellationPolicy(toolArgs, userId);
+      result = await this.executeSearchTours(toolArgs);
+    } else if (toolName === 'check_my_bookings') {
+      result = await this.executeCheckMyBookings(toolArgs, userId);
+    } else if (toolName === 'get_tour_details') {
+      result = await this.executeGetTourDetails(toolArgs);
+    } else if (toolName === 'get_cancellation_policy') {
+      result = await this.executeGetCancellationPolicy(toolArgs, userId);
+    } else {
+      this.logger.warn(`[AI] Unknown tool requested: ${toolName || 'unknown'}`);
+      return { message: `Tool ${toolName || 'unknown'} is not supported.` };
     }
 
-    this.logger.warn(`[AI] Unknown tool requested: ${toolName || 'unknown'}`);
-    return { message: `Tool ${toolName || 'unknown'} is not supported.` };
+    const quality = this.extractToolQuality(toolName, result);
+    this.logger.log(`[AI] tool=${toolName} result=${quality} args=${JSON.stringify(toolArgs)}`);
+    return result;
   }
 
+  // Non-streaming flow: resolve tool calls, then make the final answer call.
   private async runModelChat(
     model: string,
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     userId: number | null,
   ): Promise<string> {
-    const response = await this.executeChatCompletion(model, {
-      messages,
-      tools: TOUR_TOOLS,
-      tool_choice: 'auto',
-      max_tokens: 1024,
-    });
-
-    const choice = response.choices[0];
-    if (!choice) return '';
-
-    const toolCalls = choice.message?.tool_calls || [];
-    if (choice.finish_reason === 'tool_calls' && toolCalls.length > 0) {
-      messages.push(choice.message);
-
-      for (const toolCall of toolCalls) {
-        const fnResult = await this.executeTourTool(toolCall, userId);
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(fnResult),
-        });
-      }
-
-      const finalResponse = await this.executeChatCompletion(model, {
-        messages,
-        max_tokens: 1024,
-      });
-
-      return finalResponse.choices[0]?.message?.content || '';
+    const resolved = await this.resolveToolCallsOnly(model, messages, userId);
+    if (!resolved.needsStream) {
+      return resolved.directResponse;
     }
 
-    return choice.message?.content || '';
+    const finalResponse = await this.executeChatCompletion(model, {
+      messages: resolved.messagesForStream,
+      max_tokens: 1024,
+    });
+    return finalResponse.choices[0]?.message?.content || '';
   }
 
   private async chatWithFallback(
@@ -918,10 +958,24 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
       };
     }
   }
+  // Ownership: phiên của user đã đăng nhập khớp theo userId; phiên ẩn danh chỉ
+  // truy cập được khi anonId (cookie HttpOnly) khớp đúng người đã tạo ra nó.
+  private canAccessSession(
+    session: { userId: number | null; anonId: string | null },
+    userId: number | null | undefined,
+    anonId: string | null | undefined,
+  ): boolean {
+    if (session.userId !== null) {
+      return Boolean(userId) && session.userId === userId;
+    }
+    return Boolean(anonId) && session.anonId === anonId;
+  }
+
   // Shared session setup used by both chat() and chatStream().
   private async setupChatSession(
     sessionId: string | undefined,
     userId: number | null | undefined,
+    anonId: string | null | undefined,
   ): Promise<{ currentSessionId: string; dbHistory: { role: string; content: string }[] }> {
     let currentSessionId = sessionId;
     let dbHistory: { role: string; content: string }[] = [];
@@ -931,16 +985,11 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
         where: { id: currentSessionId },
         include: { messages: { orderBy: { createdAt: 'asc' } } },
       });
-      if (session) {
-        if (userId && session.userId && session.userId !== userId) {
-          currentSessionId = undefined;
-        }
-        if (currentSessionId) {
-          dbHistory = session.messages.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          }));
-        }
+      if (session && this.canAccessSession(session, userId, anonId)) {
+        dbHistory = session.messages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
       } else {
         currentSessionId = undefined;
       }
@@ -948,7 +997,10 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
 
     if (!currentSessionId) {
       const newSession = await this.prisma.chatSession.create({
-        data: { userId: userId || null },
+        data: {
+          userId: userId || null,
+          anonId: userId ? null : anonId || null,
+        },
       });
       currentSessionId = newSession.id;
     }
@@ -1030,14 +1082,33 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     return { needsStream: false, directResponse: choice?.message?.content || '', toolsUsed: [] };
   }
 
-  // Main chat function using the OpenAI-compatible LLMGate flow.
-  async chat(
+  // Số tin nhắn user tối đa mỗi session trước khi yêu cầu mở cuộc trò chuyện mới.
+  // Cấu hình qua env AI_MAX_MESSAGES_PER_SESSION; mặc định 40 (rất đủ để đặt tour).
+  private get maxUserMessagesPerSession(): number {
+    const val = this.configService.get<string>('AI_MAX_MESSAGES_PER_SESSION');
+    const n = val ? parseInt(val, 10) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : 40;
+  }
+
+  // Resolve/create the session, persist the user message, and assemble the LLM
+  // message array. Shared preamble for both chat() and chatStream().
+  private async prepareConversation(
     userMessage: string,
-    sessionId?: string,
-    userId?: number | null,
-    currentTourId?: number | null,
-  ): Promise<{ reply: string; tourCard?: TourCard; sessionId?: string }> {
-    const { currentSessionId, dbHistory } = await this.setupChatSession(sessionId, userId);
+    sessionId: string | undefined,
+    userId: number | null | undefined,
+    currentTourId: number | null | undefined,
+    anonId: string | null | undefined,
+  ): Promise<
+    | { limitExceeded: true; currentSessionId: string }
+    | { limitExceeded: false; currentSessionId: string; messages: OpenAI.Chat.ChatCompletionMessageParam[] }
+  > {
+    const { currentSessionId, dbHistory } = await this.setupChatSession(sessionId, userId, anonId);
+
+    const userMessageCount = dbHistory.filter((m) => m.role === 'user').length;
+    if (userMessageCount >= this.maxUserMessagesPerSession) {
+      this.logger.warn(`[AI] Session ${currentSessionId} hit message cap (${userMessageCount}/${this.maxUserMessagesPerSession})`);
+      return { limitExceeded: true, currentSessionId };
+    }
 
     await this.prisma.chatMessage.create({
       data: { sessionId: currentSessionId, role: 'user', content: userMessage },
@@ -1047,21 +1118,33 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     const currentTour = await this.getCurrentTourContext(currentTourId);
     const messages = this.buildChatMessages(dbHistory, userMessage, currentTour);
 
+    return { limitExceeded: false, currentSessionId, messages };
+  }
+
+  // Main chat function using the OpenAI-compatible LLMGate flow.
+  async chat(
+    userMessage: string,
+    sessionId?: string,
+    userId?: number | null,
+    currentTourId?: number | null,
+    anonId?: string | null,
+  ): Promise<{ reply: string; tourCard?: TourCard; sessionId?: string }> {
+    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId);
+
+    if (prep.limitExceeded) {
+      return {
+        reply: 'Cuộc trò chuyện này đã quá dài. Vui lòng bắt đầu cuộc trò chuyện mới để tiếp tục được tư vấn nhé!',
+        sessionId: prep.currentSessionId,
+      };
+    }
+
+    const { currentSessionId, messages } = prep;
     try {
-      const rawText = await this.runModelChat(
-        this.primaryModel,
-        messages,
-        userId || null,
-      );
+      const rawText = await this.runModelChat(this.primaryModel, messages, userId || null);
       return this.parseAndSaveResponse(rawText, currentSessionId);
     } catch (error: unknown) {
       this.logAiErrorContext('Chat flow', this.primaryModel, error);
-      return this.chatWithFallback(
-        messages,
-        currentSessionId,
-        userId || null,
-        error,
-      );
+      return this.chatWithFallback(messages, currentSessionId, userId || null, error);
     }
   }
   // Streaming chat — yields tokens as they arrive from the LLM.
@@ -1070,27 +1153,29 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     sessionId?: string,
     userId?: number | null,
     currentTourId?: number | null,
+    anonId?: string | null,
   ): AsyncGenerator<
     | { searching: true }
     | { token: string }
     | { done: true; tourCard?: TourCard; sessionId: string; followUps?: string[] }
     | { error: string; errorType: string }
   > {
-    const { currentSessionId, dbHistory } = await this.setupChatSession(sessionId, userId);
+    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId);
 
-    await this.prisma.chatMessage.create({
-      data: { sessionId: currentSessionId, role: 'user', content: userMessage },
-    });
-    await this.touchChatSession(currentSessionId);
+    if (prep.limitExceeded) {
+      yield { token: 'Cuộc trò chuyện này đã quá dài. Vui lòng bắt đầu cuộc trò chuyện mới để tiếp tục được tư vấn nhé!' };
+      yield { done: true, sessionId: prep.currentSessionId };
+      return;
+    }
 
-    const currentTour = await this.getCurrentTourContext(currentTourId);
-    const messages = this.buildChatMessages(dbHistory, userMessage, currentTour);
-
+    const { currentSessionId, messages } = prep;
     let resolveResult!: Awaited<ReturnType<typeof this.resolveToolCallsOnly>>;
+    let resolvedModel = this.primaryModel;
     try {
       resolveResult = await this.resolveToolCallsOnly(this.primaryModel, messages, userId || null);
     } catch (primaryError: unknown) {
       this.logAiErrorContext('Stream tool-resolve primary', this.primaryModel, primaryError);
+      resolvedModel = this.fallbackModel;
       try {
         resolveResult = await this.resolveToolCallsOnly(this.fallbackModel, messages, userId || null);
       } catch (fallbackError: unknown) {
@@ -1111,15 +1196,36 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     // Tool calls resolved — notify client before streaming the final synthesis.
     yield { searching: true };
 
-    const modelForStream = this.primaryModel;
-    try {
-      const stream = await this.llmClient.chat.completions.create({
-        model: modelForStream,
-        messages: resolveResult.messagesForStream,
-        stream: true,
-        max_tokens: 1024,
-      });
+    // Khởi tạo stream với model dự phòng nếu model chính lỗi lúc mở stream.
+    // Nếu resolve đã phải dùng fallback thì model chính coi như đang hỏng → chỉ thử fallback.
+    // Lưu ý: lỗi GIỮA stream (sau khi đã phát token) không thể restart an toàn nên chỉ báo lỗi.
+    const streamModels =
+      resolvedModel === this.fallbackModel
+        ? [this.fallbackModel]
+        : [this.primaryModel, this.fallbackModel];
 
+    let stream: Awaited<ReturnType<typeof this.createChatStream>> | undefined;
+    let createError: unknown;
+    for (const model of streamModels) {
+      try {
+        stream = await this.createChatStream(model, resolveResult.messagesForStream);
+        createError = undefined;
+        break;
+      } catch (err: unknown) {
+        createError = err;
+        this.logAiErrorContext('Stream create', model, err);
+      }
+    }
+
+    if (!stream) {
+      yield {
+        error: this.buildUserFacingErrorMessage(createError),
+        errorType: this.classifyAiError(createError),
+      };
+      return;
+    }
+
+    try {
       let fullText = '';
       let emittedChars = 0;
 
@@ -1140,20 +1246,24 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
       const followUps = this.buildFollowUpSuggestions(resolveResult.toolsUsed);
       yield { done: true, tourCard: result.tourCard, sessionId: currentSessionId, followUps };
     } catch (streamError: unknown) {
-      this.logAiErrorContext('Stream final-answer', modelForStream, streamError);
+      this.logAiErrorContext('Stream final-answer', streamModels[0], streamError);
       yield { error: this.buildUserFacingErrorMessage(streamError), errorType: this.classifyAiError(streamError) };
     }
   }
 
   // Get chat history by sessionId.
-  async getHistory(sessionId: string, userId?: number | null) {
+  async getHistory(
+    sessionId: string,
+    userId?: number | null,
+    anonId?: string | null,
+  ) {
     const session = await this.prisma.chatSession.findUnique({
       where: { id: sessionId },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
 
     if (!session) return { messages: [] };
-    if (session.userId && session.userId !== userId) return { messages: [] };
+    if (!this.canAccessSession(session, userId, anonId)) return { messages: [] };
 
     return {
       sessionId: session.id,
@@ -1200,14 +1310,15 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
   async clearSession(
     sessionId: string,
     userId?: number | null,
+    anonId?: string | null,
   ): Promise<{ success: boolean }> {
     try {
       const session = await this.prisma.chatSession.findUnique({
         where: { id: sessionId },
-        select: { userId: true },
+        select: { userId: true, anonId: true },
       });
       if (!session) return { success: true };
-      if (session.userId && session.userId !== userId) {
+      if (!this.canAccessSession(session, userId, anonId)) {
         return { success: false };
       }
 
@@ -1216,6 +1327,12 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     } catch {
       return { success: false };
     }
+  }
+
+  // Ghi event hành vi từ phía FE (fire-and-forget, không có DB, chỉ cần structured log).
+  // Hiện hỗ trợ: 'tour_card_click' | 'retry_after_error'.
+  logClientEvent(event: { type: string; sessionId?: string; tourId?: number; userId?: number }) {
+    this.logger.log(`[AI:event] type=${event.type} session=${event.sessionId ?? '-'} tour=${event.tourId ?? '-'} user=${event.userId ?? '-'}`);
   }
 }
 

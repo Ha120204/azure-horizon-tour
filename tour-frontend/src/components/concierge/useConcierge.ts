@@ -387,6 +387,25 @@ export function useConcierge() {
         [activeSessionId, loadSessions, resetConversationView],
     );
 
+    // Fire-and-forget event — không block UI, không throw nếu thất bại.
+    const fireEvent = useCallback((type: string, extra?: { tourId?: number }) => {
+        const sessionId = localStorage.getItem('aiSessionId') ?? undefined;
+        void fetchOptionalAuth(`${API_BASE_URL}/ai/event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, sessionId, ...extra }),
+        }).catch(() => undefined);
+    }, []);
+
+    const handleTourCardClick = useCallback((tourId?: number) => {
+        fireEvent('tour_card_click', { tourId });
+    }, [fireEvent]);
+
+    const handleRetryAfterError = useCallback((text: string) => {
+        fireEvent('retry_after_error');
+        void handleSendMessage(text);
+    }, [fireEvent, handleSendMessage]);
+
     return {
         // State
         language,
@@ -420,5 +439,7 @@ export function useConcierge() {
         handleStartNewConversation,
         handleSelectSession,
         handleDeleteSession,
+        handleTourCardClick,
+        handleRetryAfterError,
     };
 }

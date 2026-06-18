@@ -694,7 +694,7 @@ interface QRPaymentModalProps {
     formatPrice: (n: number) => string;
     formatTime: (s: number) => string;
     onClose: () => void;
-    onManualCheck?: () => Promise<void>;
+    onManualCheck?: () => Promise<boolean>;
     onRegenerate?: () => Promise<void>;
 }
 

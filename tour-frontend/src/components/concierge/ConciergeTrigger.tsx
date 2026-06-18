@@ -8,6 +8,7 @@ interface ConciergeTriggerProps {
     isContactDockOpen: boolean;
     setIsContactDockOpen: (v: boolean) => void;
     setIsOpen: (v: boolean) => void;
+    raised?: boolean;
     t: (key: string) => string;
 }
 
@@ -15,6 +16,7 @@ export default function ConciergeTrigger({
     isContactDockOpen,
     setIsContactDockOpen,
     setIsOpen,
+    raised = false,
     t,
 }: ConciergeTriggerProps) {
     const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
@@ -41,7 +43,7 @@ export default function ConciergeTrigger({
     };
 
     return (
-        <div className="fixed bottom-6 right-5 z-40 flex flex-col items-end gap-3 sm:right-6">
+        <div className={`fixed right-5 z-40 flex flex-col items-end gap-3 sm:right-6 ${raised ? 'bottom-24 lg:bottom-6' : 'bottom-6'}`}>
             {isContactDockOpen ? (
                 <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_14px_40px_rgba(15,23,42,0.16)] backdrop-blur animate-fade-in-up">
                     <a

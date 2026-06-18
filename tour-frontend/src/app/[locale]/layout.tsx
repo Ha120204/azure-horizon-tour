@@ -9,9 +9,6 @@ import GlobalToast from '@/components/ui/GlobalToast';
 export const metadata: Metadata = {
   title: "Azure Horizon",
   description: "Premium Tour Booking Platform",
-  icons: {
-    icon: '/favicon.svg',
-  },
 };
 
 export default async function RootLayout({

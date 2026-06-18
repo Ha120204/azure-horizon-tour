@@ -18,10 +18,34 @@ import {
 } from './tour-helpers';
 import { SALE_DEPARTURE_CATEGORIES } from './promotion-rules';
 import { UpdateTourDto } from './dto/update-tour.dto';
+import { AiEmbeddingService } from '../ai/ai-embedding.service';
+import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class TourQueryService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(TourQueryService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly aiEmbedding: AiEmbeddingService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  // Báo Next.js xóa cache của một trang tour ngay lập tức sau khi nội dung thay đổi.
+  private revalidateTourCache(tourId: number): void {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const secret = this.configService.get<string>('REVALIDATION_SECRET');
+    if (!frontendUrl || !secret) return;
+
+    void fetch(`${frontendUrl}/api/revalidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-revalidate-secret': secret },
+      body: JSON.stringify({ tag: `tour-${tourId}` }),
+    }).catch((err: unknown) => {
+      this.logger.warn(`[Revalidate] tour-${tourId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
 
   // ── FindOne ────────────────────────────────────────────────────────────────
 
@@ -110,7 +134,7 @@ export class TourQueryService {
     }
 
     const { destinationId, status, ...rest } = updateTourDto;
-    return this.prisma.tour.update({
+    const updated = await this.prisma.tour.update({
       where: { id },
       data: {
         ...rest,
@@ -155,6 +179,17 @@ export class TourQueryService {
         }),
       },
     });
+
+    // Tái tạo embedding nếu tour đang PUBLISHED và nội dung có thể ảnh hưởng đến search.
+    const isPublished =
+      updated.status === TourStatus.PUBLISHED ||
+      (isAdminRole && status === TourStatus.PUBLISHED);
+    if (isPublished) {
+      this.aiEmbedding.embedTourAsync(id);
+      this.revalidateTourCache(id);
+    }
+
+    return updated;
   }
 
   // ── Remove ────────────────────────────────────────────────────────────────

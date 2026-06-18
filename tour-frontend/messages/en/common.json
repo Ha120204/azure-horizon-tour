@@ -143,6 +143,8 @@
     "domestic": "Domestic",
     "international": "International",
     "searchPath": "Search Path",
+    "openSearch": "Find your trip",
+    "collapseSearch": "Collapse",
     "departureLabel": "Departure",
     "selectDeparture": "Select departure",
     "departureHint": "Select a departure city.",

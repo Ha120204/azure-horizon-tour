@@ -47,7 +47,7 @@ export function TrashTourRow({
                 <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl overflow-hidden bg-surface-container shrink-0 opacity-60">
                         {tour.imageUrl
-                            ? <Image src={tour.imageUrl} alt={tour.name} width={48} height={48} sizes="48px" className="h-full w-full object-cover" />
+                            ? <Image src={tour.imageUrl} alt={tour.name} width={48} height={48} sizes="48px" unoptimized className="h-full w-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center"><span className="material-symbols-outlined text-outline">image</span></div>
                         }
                     </div>

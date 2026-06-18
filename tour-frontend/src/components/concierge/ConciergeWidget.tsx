@@ -15,6 +15,9 @@ export default function ConciergeWidget() {
     const hiddenPaths = ['/admin', '/login', '/register', '/forgot-password', '/reset-password'];
     if (hiddenPaths.some(p => pathname?.includes(p))) return null;
 
+    // Trang chi tiết tour có thanh CTA cố định ở đáy trên mobile → nâng FAB lên tránh đè
+    const isTourDetail = !!pathname && /\/tour\/[^/]+/.test(pathname);
+
     return (
         <>
             {/* FAB + Contact Dock (chỉ hiện khi chat đóng) */}
@@ -23,6 +26,7 @@ export default function ConciergeWidget() {
                     isContactDockOpen={ctx.isContactDockOpen}
                     setIsContactDockOpen={ctx.setIsContactDockOpen}
                     setIsOpen={ctx.setIsOpen}
+                    raised={isTourDetail}
                     t={ctx.t}
                 />
             )}
@@ -87,6 +91,8 @@ export default function ConciergeWidget() {
                         messagesEndRef={ctx.messagesEndRef}
                         scrollContainerRef={ctx.scrollContainerRef}
                         handleSendMessage={ctx.handleSendMessage}
+                        handleTourCardClick={ctx.handleTourCardClick}
+                        handleRetryAfterError={ctx.handleRetryAfterError}
                         setIsOpen={ctx.setIsOpen}
                         t={ctx.t}
                     />

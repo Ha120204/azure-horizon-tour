@@ -5,16 +5,37 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { TourStatus } from '@prisma/client';
+import { Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TourPermissionService } from './tour-permission.service';
+import { AiEmbeddingService } from '../ai/ai-embedding.service';
+import { ConfigService } from '@nestjs/config';
 import { requirePublishableTour, getMinBookableDate } from './tour-helpers';
 
 @Injectable()
 export class TourWorkflowService {
+  private readonly logger = new Logger(TourWorkflowService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tourPermission: TourPermissionService,
+    private readonly aiEmbedding: AiEmbeddingService,
+    private readonly configService: ConfigService,
   ) {}
+
+  private revalidateTourCache(tourId: number): void {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const secret = this.configService.get<string>('REVALIDATION_SECRET');
+    if (!frontendUrl || !secret) return;
+
+    void fetch(`${frontendUrl}/api/revalidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-revalidate-secret': secret },
+      body: JSON.stringify({ tag: `tour-${tourId}` }),
+    }).catch((err: unknown) => {
+      this.logger.warn(`[Revalidate] tour-${tourId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
 
   private findTourForPublishability(id: number) {
     return this.prisma.tour.findUnique({
@@ -156,7 +177,7 @@ export class TourWorkflowService {
     const newStatus =
       action === 'approve' ? TourStatus.PUBLISHED : TourStatus.REJECTED;
 
-    return this.prisma.tour.update({
+    const updated = await this.prisma.tour.update({
       where: { id },
       data: {
         status: newStatus,
@@ -165,6 +186,12 @@ export class TourWorkflowService {
         publishedAt: action === 'approve' ? new Date() : null,
       },
     });
+
+    if (action === 'approve') {
+      this.aiEmbedding.embedTourAsync(id);
+      this.revalidateTourCache(id);
+    }
+    return updated;
   }
 
   async publishTour(id: number, publisherId: number) {
@@ -179,7 +206,7 @@ export class TourWorkflowService {
       requirePackages: true,
     });
 
-    return this.prisma.tour.update({
+    const updated = await this.prisma.tour.update({
       where: { id },
       data: {
         status: TourStatus.PUBLISHED,
@@ -188,6 +215,10 @@ export class TourWorkflowService {
         publishedAt: new Date(),
       },
     });
+
+    this.aiEmbedding.embedTourAsync(id);
+    this.revalidateTourCache(id);
+    return updated;
   }
 
   async getPendingTours() {

@@ -7,9 +7,10 @@ import { TourCronService } from './tour.cron';
 import { TourWorkflowService } from './tour-workflow.service';
 import { TourContentService } from './tour-content.service';
 import { TourQueryService } from './tour-query.service';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
-  imports: [CloudinaryModule],
+  imports: [CloudinaryModule, AiModule],
   controllers: [TourController],
   providers: [TourService, TourCronService, TourPermissionService, TourWorkflowService, TourContentService, TourQueryService],
   exports: [TourPermissionService, TourWorkflowService, TourContentService, TourQueryService],

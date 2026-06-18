@@ -1,60 +1,10 @@
 import createMiddleware from 'next-intl/middleware';
 import { routing } from '@/i18n/routing';
-import { NextRequest, NextResponse } from 'next/server';
 
-const intlMiddleware = createMiddleware(routing);
-
-const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'STAFF']);
-
-// Decode JWT payload without verification — optimistic role check only.
-// Real authorization still happens on the backend for every API call.
-function decodeJwtRole(token: string): string | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-    const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = payloadB64 + '='.repeat((4 - (payloadB64.length % 4)) % 4);
-    const payload = JSON.parse(atob(padded)) as unknown;
-    if (payload && typeof payload === 'object' && 'role' in payload) {
-      return typeof (payload as { role: unknown }).role === 'string'
-        ? (payload as { role: string }).role
-        : null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export default function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Guard admin paths: /admin/... (vi, no prefix) OR /(vi|en)/admin/... (explicit locale)
-  // Skip /admin/login itself to avoid redirect loops.
-  const adminMatch = /^(?:\/(vi|en))?(\/admin(?:\/|$))/.exec(pathname);
-  if (adminMatch) {
-    const isLoginPage =
-      pathname.endsWith('/admin/login') || pathname.includes('/admin/login/');
-
-    if (!isLoginPage) {
-      const locale = adminMatch[1] ?? 'vi';
-      const loginPath = locale === 'vi' ? '/admin/login' : `/${locale}/admin/login`;
-      const homePath = locale === 'vi' ? '/' : `/${locale}`;
-      const token = request.cookies.get('accessToken')?.value;
-
-      if (!token) {
-        return NextResponse.redirect(new URL(loginPath, request.url));
-      }
-
-      const role = decodeJwtRole(token);
-      if (!ADMIN_ROLES.has(role ?? '')) {
-        return NextResponse.redirect(new URL(homePath, request.url));
-      }
-    }
-  }
-
-  return intlMiddleware(request);
-}
+// Auth gating cho /admin được xử lý ở admin layout (client) + backend trên mỗi API call.
+// Không gate ở proxy vì cookie accessToken nằm trên domain backend, không gửi tới domain FE
+// (production khác domain) → proxy không đọc được cookie và sẽ redirect nhầm vô hạn.
+export default createMiddleware(routing);
 
 export const config = {
   // Bắt mọi route ngoại trừ static files (hình ảnh, _next) và các routes API

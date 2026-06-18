@@ -311,6 +311,47 @@ export default function BookingSidebarNew({
                 </div>
             </div>
 
+            {/* ── Mobile sticky bottom CTA (Vietravel-style): luôn truy cập được, không cần cuộn ── */}
+            <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-outline-variant/15 bg-white/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-md">
+                <div className="flex items-center gap-4">
+                    <div className="shrink-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">
+                            {selectedDeparture ? t('tour_detail.totalPerPerson') : t('tour_detail.fromPerPerson')}
+                        </p>
+                        <p className="text-xl font-extrabold leading-none text-primary">
+                            {formatPrice(selectedPackage ? effectivePrice : minPackagePrice)}
+                        </p>
+                    </div>
+                    <div className="flex-1">
+                        {!hasPackages ? (
+                            <button disabled className="w-full py-3.5 bg-surface-container text-outline rounded-xl font-bold text-sm cursor-not-allowed">
+                                {t('tour_detail.notBookableYet')}
+                            </button>
+                        ) : hasDepartures && !selectedDeparture ? (
+                            <button
+                                onClick={() => setIsCalendarOpen(true)}
+                                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 transition-transform active:scale-[0.97] inline-flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">calendar_month</span>
+                                {t('tour_detail.chooseDepartureDate')}
+                            </button>
+                        ) : selectedPackage ? (
+                            <a
+                                href={buildCheckoutUrl()}
+                                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 transition-transform active:scale-[0.97] inline-flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>shopping_bag</span>
+                                {t('tour_detail.bookNow')}
+                            </a>
+                        ) : (
+                            <button disabled className="w-full py-3.5 bg-surface-container text-outline rounded-xl font-bold text-sm cursor-not-allowed">
+                                {t('tour_detail.selectPackageFirst')}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
             <DepartureCalendarModal
                 isOpen={isCalendarOpen}
                 onClose={() => setIsCalendarOpen(false)}

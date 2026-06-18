@@ -4,11 +4,13 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pgvector(map: "vector")]
 }
 
 enum Role {
@@ -161,6 +163,10 @@ model Tour {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // [PHASE 1] Soft Delete
+
+  // Vector embedding cho semantic search (1536 dims, text-embedding-3-small).
+  // Null = chưa được embed; backfill qua POST /ai/embeddings/backfill.
+  embedding Unsupported("vector(1536)")?
 
   bookings       Booking[]
   assistedDrafts AssistedBookingDraft[]
@@ -754,6 +760,10 @@ model ChatSession {
   id     String @id @default(uuid())
   userId Int? // Thuộc về User nào (có thể null nếu khách chưa đăng nhập)
   user   User?  @relation(fields: [userId], references: [id])
+
+  // Định danh khách vãng lai (lưu trong cookie HttpOnly) — chỉ trình duyệt tạo
+  // ra phiên ẩn danh mới được đọc/xóa nó. Null với phiên của user đã đăng nhập.
+  anonId String?
 
   messages  ChatMessage[]
   createdAt DateTime      @default(now())

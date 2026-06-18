@@ -63,6 +63,9 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     const router = useRouter();
     const { t, formatPrice, language } = useLocale();
 
+    // Mobile: thu gọn form để lộ video nền; desktop luôn hiện đầy đủ (md:block)
+    const [isExpanded, setIsExpanded] = useState(false);
+
     const [destination, setDestination] = useState('');
     const [isAllDestinationsSelected, setIsAllDestinationsSelected] = useState(false);
     const [internalTravelScope, setInternalTravelScope] = useState<TravelScope>('DOMESTIC');
@@ -295,6 +298,32 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
     return (
         <div className="relative z-50 w-full max-w-[1440px] mx-auto px-4">
+            {/* Mobile: pill thu gọn — bấm để mở form */}
+            {!isExpanded && (
+                <button
+                    type="button"
+                    onClick={() => setIsExpanded(true)}
+                    className="md:hidden w-full flex items-center gap-3 rounded-full bg-white px-5 py-4 text-left shadow-2xl border border-slate-100 transition-transform duration-200 active:scale-[0.98]"
+                >
+                    <span className="material-symbols-outlined text-primary">search</span>
+                    <span className="flex-1 text-sm font-bold text-slate-800">{t('search.openSearch')}</span>
+                    <span className="material-symbols-outlined text-slate-400">expand_more</span>
+                </button>
+            )}
+
+            <div className={`${isExpanded ? 'block' : 'hidden'} md:block`}>
+            {/* Mobile: nút thu gọn lại */}
+            {isExpanded && (
+                <button
+                    type="button"
+                    onClick={() => setIsExpanded(false)}
+                    className="md:hidden mx-auto mb-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-4 py-1.5 text-xs font-bold text-white backdrop-blur-md"
+                >
+                    <span className="material-symbols-outlined text-[16px]">expand_less</span>
+                    {t('search.collapseSearch')}
+                </button>
+            )}
+
             <div className="mb-3 flex justify-center">
                 <div className="relative grid grid-cols-2 rounded-full bg-white/15 p-1 border border-white/20 backdrop-blur-md shadow-lg shadow-slate-950/10">
                     <span
@@ -670,6 +699,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                 <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${canSearch ? 'group-hover:translate-x-1' : ''} motion-reduce:transform-none`} aria-hidden="true">arrow_forward</span>
             </button>
         </form>
+        </div>
         </div>
     );
 }

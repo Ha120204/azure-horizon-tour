@@ -109,7 +109,7 @@ export default function TourDetailClient({
     const hasReviewStats = reviewStats.totalReviews > 0 && reviewStats.averageRating > 0;
 
     return (
-        <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col">
+        <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col pb-[76px] lg:pb-0">
             <Header />
 
             <main className="flex-grow pt-28 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">

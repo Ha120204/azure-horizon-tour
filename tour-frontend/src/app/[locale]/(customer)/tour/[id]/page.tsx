@@ -12,7 +12,7 @@ interface PageProps {
 async function fetchTour(id: string, locale: string): Promise<Tour | null> {
     try {
         const res = await fetch(`${API_BASE_URL}/tour/${id}?locale=${locale}`, {
-            next: { revalidate: 3600 },
+            next: { revalidate: 3600, tags: [`tour-${id}`] },
         });
         if (!res.ok) return null;
         const json = await res.json();
@@ -60,8 +60,8 @@ export default async function TourDetailPage({ params, searchParams }: PageProps
     // Fetch tour + reviews + rating stats in parallel
     const [tourResult, reviewsResult, ratingStatsResult] = await Promise.allSettled([
         fetchTour(id, locale),
-        fetch(`${API_BASE_URL}/tour/${id}/reviews?limit=2`, { next: { revalidate: 300 } }),
-        fetch(`${API_BASE_URL}/tour/${id}/rating-stats`, { next: { revalidate: 300 } }),
+        fetch(`${API_BASE_URL}/tour/${id}/reviews?limit=2`, { next: { revalidate: 300, tags: [`tour-${id}`] } }),
+        fetch(`${API_BASE_URL}/tour/${id}/rating-stats`, { next: { revalidate: 300, tags: [`tour-${id}`] } }),
     ]);
 
     const tour = tourResult.status === 'fulfilled' ? tourResult.value : null;

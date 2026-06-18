@@ -92,6 +92,7 @@ export function ActiveTourRow({
                                 height={56}
                                 sizes="56px"
                                 loading="lazy"
+                                unoptimized
                                 className="h-full w-full object-cover"
                             />
                         ) : (

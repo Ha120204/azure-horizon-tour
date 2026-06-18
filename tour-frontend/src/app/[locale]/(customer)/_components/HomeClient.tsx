@@ -312,7 +312,7 @@ export default function HomeClient({ initialTours, loadError = false }: HomeClie
       <Header />
 
       {/* ── CINEMATIC VIDEO HERO ── */}
-      <section className="relative z-20 h-screen min-h-[640px] flex flex-col items-center justify-center overflow-visible">
+      <section className="relative z-20 min-h-screen flex flex-col items-center justify-center overflow-visible pt-28 pb-16 lg:pt-0 lg:pb-0">
         <HeroVideoBackground travelScope={travelScope} />
 
         {/* Cinematic gradient overlay */}

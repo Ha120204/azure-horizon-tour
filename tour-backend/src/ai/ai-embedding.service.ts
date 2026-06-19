@@ -4,7 +4,8 @@ import { Prisma } from '@prisma/client';
 import OpenAI from 'openai';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Cosine distance threshold: 0 = identical, 2 = opposite. < 0.65 ≈ similarity > 0.675.
+// Cosine distance threshold (pgvector <=> = 1 − cosine similarity): 0 = identical, 2 = opposite.
+// distance < 0.65 ⇔ cosine similarity > 0.35.
 const SIMILARITY_THRESHOLD = 0.65;
 const EMBEDDING_MODEL_DEFAULT = 'text-embedding-3-small';
 const BATCH_DELAY_MS = 120; // Delay giữa các batch để tránh rate-limit OpenAI Embeddings tier.
@@ -84,6 +85,9 @@ export class AiEmbeddingService {
       .join('. ');
   }
 
+  // Trả về vector embedding; số chiều phụ thuộc model (text-embedding-3-small = 1536 chiều)
+  // và PHẢI khớp với kiểu cột vector(1536) của Tour.embedding. Đổi model embedding sẽ phá
+  // tương thích với dữ liệu vector đã ghi — cần re-embed toàn bộ (backfillPublished).
   private async generateEmbedding(text: string): Promise<number[]> {
     const response = await this.client.embeddings.create({
       model: this.model,

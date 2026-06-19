@@ -344,8 +344,8 @@ export default function HomeClient({ initialTours, loadError = false }: HomeClie
           </span>
 
           <h1 className="home-hero-enter home-hero-d2 text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-headline font-extrabold leading-[1.05] tracking-tight mb-6 drop-shadow-2xl">
-            {t('hero.title1')}&nbsp;<br className="hidden sm:block" />
-            <span className="italic" style={{ color: 'rgba(147,197,253,1)' }}>{t('hero.title2')}</span>.
+            {t('hero.title1')}<br />
+            <span className="italic whitespace-nowrap" style={{ color: 'rgba(147,197,253,1)' }}>{t('hero.title2')}.</span>
           </h1>
 
           <p className="home-hero-enter home-hero-d3 text-base sm:text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed font-light">

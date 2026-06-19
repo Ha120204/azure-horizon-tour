@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
 import { AVATAR_COLORS, CAT, STS } from '../_lib/config';
 import { calcOverdueSLA, fmtResponse, fmtSyncTime, fmtTime, formatSupportMessageLines, getInitials } from '../_lib/helpers';
 import type { Kpi, Ticket, TicketAssignee, TicketSort, TicketView } from '../_lib/types';
@@ -22,6 +25,23 @@ interface SupportTicketListProps {
     onFilterOpen: () => void;
     onSortChange: (sort: TicketSort) => void;
 }
+
+type SupportToolbarSelectOption<T extends string> = {
+    value: T;
+    label: string;
+};
+
+const SORT_OPTIONS: SupportToolbarSelectOption<TicketSort>[] = [
+    { value: 'updated', label: 'Vừa cập nhật' },
+    { value: 'oldest', label: 'Chờ lâu nhất' },
+    { value: 'overdue', label: 'Quá SLA trước' },
+];
+
+const ASSIGNEE_OPTIONS: SupportToolbarSelectOption<TicketAssignee>[] = [
+    { value: 'ALL', label: 'Tất cả phụ trách' },
+    { value: 'ME', label: 'Của tôi' },
+    { value: 'NONE', label: 'Chưa giao' },
+];
 
 export function SupportTicketList({
     tickets,
@@ -126,32 +146,26 @@ export function SupportTicketList({
                         );
                     })}
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px] text-outline" aria-hidden="true">sort</span>
-                            <select
-                                value={sort}
-                                onChange={(e) => onSortChange(e.target.value as TicketSort)}
-                                className="h-8 rounded-xl border border-outline-variant/40 bg-surface px-2 text-xs font-bold text-on-surface-variant outline-none transition hover:border-primary/30 focus-visible:ring-4 focus-visible:ring-primary/10"
-                            >
-                                <option value="updated">Vừa cập nhật</option>
-                                <option value="oldest">Chờ lâu nhất</option>
-                                <option value="overdue">Quá SLA trước</option>
-                            </select>
-                        </label>
-                        <label className="flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px] text-outline" aria-hidden="true">person</span>
-                            <select
-                                value={activeAssignee}
-                                onChange={(e) => onAssigneeChange(e.target.value as TicketAssignee)}
-                                className="h-8 rounded-xl border border-outline-variant/40 bg-surface px-2 text-xs font-bold text-on-surface-variant outline-none transition hover:border-primary/30 focus-visible:ring-4 focus-visible:ring-primary/10"
-                            >
-                                <option value="ALL">Tất cả phụ trách</option>
-                                <option value="ME">Của tôi</option>
-                                <option value="NONE">Chưa giao</option>
-                            </select>
-                        </label>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <SupportToolbarSelect
+                            icon="sort"
+                            value={sort}
+                            options={SORT_OPTIONS}
+                            ariaLabel="Sắp xếp ticket hỗ trợ"
+                            buttonClassName="min-w-[132px]"
+                            menuClassName="min-w-[152px]"
+                            onChange={onSortChange}
+                        />
+                        <SupportToolbarSelect
+                            icon="person"
+                            value={activeAssignee}
+                            options={ASSIGNEE_OPTIONS}
+                            ariaLabel="Lọc ticket theo người phụ trách"
+                            buttonClassName="min-w-[152px]"
+                            menuClassName="min-w-[168px]"
+                            onChange={onAssigneeChange}
+                        />
                     </div>
                     {lastSyncedAt && (
                         <p className="flex items-center gap-1.5 text-[11px] font-semibold text-outline">
@@ -216,6 +230,109 @@ export function SupportTicketList({
                 <Pagination current={currentPage} total={totalPages} onChange={onPageChange} />
             )}
         </section>
+    );
+}
+
+function SupportToolbarSelect<T extends string>({
+    icon,
+    value,
+    options,
+    ariaLabel,
+    onChange,
+    buttonClassName = '',
+    menuClassName = '',
+}: {
+    icon: string;
+    value: T;
+    options: SupportToolbarSelectOption<T>[];
+    ariaLabel: string;
+    onChange: (value: T) => void;
+    buttonClassName?: string;
+    menuClassName?: string;
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef<HTMLDivElement | null>(null);
+    const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleMouseDown = (event: MouseEvent) => {
+            if (!selectRef.current?.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        return () => document.removeEventListener('mousedown', handleMouseDown);
+    }, [isOpen]);
+
+    return (
+        <div ref={selectRef} className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[16px] text-outline" aria-hidden="true">{icon}</span>
+            <div className="relative">
+                <button
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isOpen}
+                    aria-label={ariaLabel}
+                    onClick={() => setIsOpen((open) => !open)}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Escape') setIsOpen(false);
+                        if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setIsOpen(true);
+                        }
+                    }}
+                    className={`flex h-8 items-center justify-between gap-2 rounded-xl border bg-surface px-2.5 text-left text-xs font-bold text-on-surface-variant shadow-sm outline-none transition-all hover:border-primary/35 hover:bg-surface-container-low focus-visible:ring-4 focus-visible:ring-primary/10 ${
+                        isOpen ? 'border-primary/40 bg-primary/5 ring-4 ring-primary/10' : 'border-outline-variant/40'
+                    } ${buttonClassName}`}
+                >
+                    <span className="truncate">{selectedOption?.label}</span>
+                    <span
+                        className={`material-symbols-outlined shrink-0 text-[16px] text-outline transition-transform ${isOpen ? 'rotate-180 text-primary' : ''}`}
+                        aria-hidden="true"
+                    >
+                        expand_more
+                    </span>
+                </button>
+
+                {isOpen && (
+                    <div
+                        role="listbox"
+                        className={`absolute left-0 top-full z-[95] mt-2 w-max min-w-full overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-lowest p-1 shadow-xl shadow-slate-900/10 ${menuClassName}`}
+                    >
+                        <div className="max-h-56 overflow-y-auto">
+                            {options.map((option) => {
+                                const selected = option.value === value;
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={selected}
+                                        onClick={() => {
+                                            onChange(option.value);
+                                            setIsOpen(false);
+                                        }}
+                                        className={`flex h-8 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left text-xs font-bold transition-colors ${
+                                            selected
+                                                ? 'bg-primary text-on-primary shadow-sm'
+                                                : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                                        }`}
+                                    >
+                                        <span className="whitespace-nowrap">{option.label}</span>
+                                        {selected && (
+                                            <span className="material-symbols-outlined text-[15px]" aria-hidden="true">done</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }
 

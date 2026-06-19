@@ -403,6 +403,10 @@ export function generateAssistedDraftCode(): string {
   return `ABD-${d}${m}${y}-${randomString}`;
 }
 
+// PayOS yêu cầu orderCode DUY NHẤT mỗi lần tạo link (không cho tái dùng kể cả khi tạo lại
+// QR cho cùng booking). Lược đồ: ghép bookingId với 6 chữ số hậu tố thời gian (Date.now() % 1e6,
+// padStart 6) → vừa luôn khác nhau, vừa nhúng bookingId ở các chữ số cao để return/webhook giải mã
+// ngược ra booking (xem decode `Math.floor(orderCode / 1000000)`). Số 1000000 phải khớp với padStart(6).
 export function buildPayosOrderCode(bookingId: number): number {
   const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
   return Number(bookingId.toString() + timeSuffix);

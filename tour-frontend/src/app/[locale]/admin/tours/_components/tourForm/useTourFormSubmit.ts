@@ -64,6 +64,19 @@ export function useTourFormSubmit({
 }: TourFormSubmitConfig) {
   const handleSave = async (action: "draft" | "submit") => {
     if (action === "submit" && !validateForReview()) return;
+
+    const invalidMaxSeatsIndex = departures.findIndex(
+      (d) =>
+        Number(d.maxSeats || 0) > 0 &&
+        Number(d.maxSeats) < Number(d.availableSeats || 0),
+    );
+    if (invalidMaxSeatsIndex !== -1) {
+      setGlobalError(
+        `Chuyến #${invalidMaxSeatsIndex + 1}: Tổng số ghế (Max) phải lớn hơn hoặc bằng Số ghế còn.`,
+      );
+      return;
+    }
+
     const editId = initialData?.id;
     if (mode === "edit" && !editId) {
       setGlobalError("Không tìm thấy dữ liệu tour cần chỉnh sửa.");

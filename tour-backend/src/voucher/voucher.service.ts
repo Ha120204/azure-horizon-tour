@@ -91,11 +91,6 @@ export class VoucherService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Voucher service section
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /** Voucher service note. */
   async getAllVouchers() {
     const now = new Date();
     const vouchers = await this.prisma.voucher.findMany({
@@ -170,8 +165,8 @@ export class VoucherService {
   /** Validate voucher code + tính tiền giảm.
    *
    * @param tx - Prisma transaction client tùy chọn. Khi truyền vào, query chạy
-   * Voucher service note.
-   *             validate và increment usedCount.
+   *             trong cùng $transaction của booking để validate + claim usedCount
+   *             atomic, tránh race condition khi nhiều khách dùng cùng mã.
    */
   async validateVoucher(
     code: string,
@@ -365,21 +360,16 @@ export class VoucherService {
   }
 
   /**
-   * Voucher service note.
-   *
-   * Voucher service note.
-   * Voucher service note.
-   * Voucher service note.
-   *
-   * Voucher service note.
+   * Đánh dấu voucher đã dùng NGOÀI transaction (đường dùng cho assisted booking;
+   * luồng trong transaction dùng claimVoucherInTx).
+   * Atomic increment usedCount qua updateMany có điều kiện usedCount < maxUses;
+   * trả về false nếu mã đã hết lượt.
    */
   async markAsUsed(userId: number, voucherCode: string): Promise<boolean> {
     const code = voucherCode.trim().toUpperCase();
     const voucher = await this.prisma.voucher.findUnique({ where: { code } });
     if (!voucher) return false;
 
-    // Voucher service section
-    // Voucher service section
     const result = await this.prisma.voucher.updateMany({
       where: { id: voucher.id, usedCount: { lt: voucher.maxUses } },
       data: { usedCount: { increment: 1 } },
@@ -392,7 +382,6 @@ export class VoucherService {
       return false;
     }
 
-    // Voucher service section
     await this.prisma.userVoucher.updateMany({
       where: { userId, voucherId: voucher.id, isUsed: false },
       data: { isUsed: true },
@@ -401,11 +390,6 @@ export class VoucherService {
     return true;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Voucher service section
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /** Voucher service note. */
   async adminGetStats() {
     const now = new Date();
     const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -415,9 +399,7 @@ export class VoucherService {
         this.prisma.voucher.findMany({
           select: { isActive: true, startsAt: true, expiresAt: true, usedCount: true, maxUses: true },
         }),
-        // Voucher service section
         this.prisma.voucher.aggregate({ _sum: { usedCount: true } }),
-        // Voucher service section
         this.prisma.booking.aggregate({
           where: { deletedAt: null, paymentStatus: 'PAID' },
           _sum: { discountAmount: true },
@@ -443,7 +425,6 @@ export class VoucherService {
     };
   }
 
-  /** Voucher service note. */
   async adminGetAll(query: AdminVoucherQuery) {
     const {
       search,
@@ -473,10 +454,8 @@ export class VoucherService {
       where.discountType = discountType;
     }
 
-    // Voucher service section
     if (status === 'active') {
       where.isActive = true;
-      // Voucher service section
     } else if (status === 'scheduled') {
       where.isActive = true;
       where.startsAt = { gt: now };
@@ -485,7 +464,6 @@ export class VoucherService {
     } else if (status === 'inactive') {
       where.isActive = false;
     }
-    // Voucher service section
 
     const vouchers = await this.prisma.voucher.findMany({
       where,
@@ -493,7 +471,6 @@ export class VoucherService {
       include: { _count: { select: { userVouchers: true } } },
     });
 
-    // Voucher service section
     const data = vouchers.map((v) => {
       const computedStatus = computeVoucherStatus(v, now);
 
@@ -514,7 +491,6 @@ export class VoucherService {
       };
     });
 
-    // Voucher service section
     const filteredData = status
       ? data.filter((v) => {
           if (status === 'expiringSoon') {
@@ -548,7 +524,6 @@ export class VoucherService {
     };
   }
 
-  /** Voucher service note. */
   async adminCreate(dto: CreateVoucherDto) {
     const code = dto.code.trim().toUpperCase();
 
@@ -599,19 +574,16 @@ export class VoucherService {
     });
   }
 
-  /** Voucher service note. */
   async adminUpdate(id: number, dto: UpdateVoucherDto) {
     const voucher = await this.prisma.voucher.findUnique({ where: { id } });
     if (!voucher) throw new NotFoundException('Voucher không tồn tại');
 
-    // Voucher service section
     if (dto.code && dto.code.toUpperCase() !== voucher.code && voucher.usedCount > 0) {
       throw new ForbiddenException('Không thể đổi mã khi voucher đã được sử dụng');
     }
 
     const code = dto.code ? dto.code.trim().toUpperCase() : undefined;
 
-    // Voucher service section
     if (code && code !== voucher.code) {
       const dup = await this.prisma.voucher.findUnique({ where: { code } });
       if (dup) throw new ConflictException(`Mã "${code}" đã tồn tại`);
@@ -694,7 +666,6 @@ export class VoucherService {
     return { count: result.count };
   }
 
-  /** Voucher service note. */
   async adminDelete(id: number) {
     const voucher = await this.prisma.voucher.findUnique({ where: { id } });
     if (!voucher) throw new NotFoundException('Voucher không tồn tại');
@@ -711,7 +682,6 @@ export class VoucherService {
     });
   }
 
-  /** Voucher service note. */
   async adminGetDetail(id: number) {
     const voucher = await this.prisma.voucher.findUnique({
       where: { id },

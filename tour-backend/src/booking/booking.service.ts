@@ -360,6 +360,8 @@ export class BookingService {
 
     const description = `AH ${booking.bookingCode}`;
 
+    // orderCode = bookingId + 6 chữ số hậu tố thời gian → duy nhất mỗi lần tạo link PayOS,
+    // đồng thời nhúng bookingId để return/webhook giải mã ngược (chia 1000000). Xem buildPayosOrderCode().
     const timeSuffix = (Date.now() % 1000000).toString().padStart(6, '0');
     const orderCode = Number(booking.id.toString() + timeSuffix);
 
@@ -424,6 +426,8 @@ export class BookingService {
   async handlePayosReturn(orderCode: number) {
     const paymentInfo = await this.paymentService.getPaymentInfo(orderCode);
 
+    // Bỏ 6 chữ số hậu tố thời gian để khôi phục bookingId (xem buildPayosOrderCode).
+    // Nhánh < 1000000: tương thích ngược với orderCode cũ chưa có hậu tố (chính là bookingId).
     const bookingId =
       orderCode >= 1000000 ? Math.floor(orderCode / 1000000) : orderCode;
 
@@ -561,6 +565,8 @@ export class BookingService {
    * Tìm booking theo ID (orderCode của PayOS)
    */
   async findByOrderCode(orderCode: number) {
+    // Bỏ 6 chữ số hậu tố thời gian để khôi phục bookingId (xem buildPayosOrderCode).
+    // Nhánh < 1000000: tương thích ngược với orderCode cũ chưa có hậu tố.
     const bookingId =
       orderCode >= 1000000 ? Math.floor(orderCode / 1000000) : orderCode;
 
@@ -974,6 +980,8 @@ export class BookingService {
   }
 
   private async _computeQuickStats() {
+    // Ngưỡng cảnh báo "quá hạn" cho widget admin (SLA xử lý nội bộ):
+    // booking PENDING chưa xử lý quá 24h, và yêu cầu hủy CANCEL_REQUESTED chưa duyệt quá 4h.
     const pendingOverdueSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const cancelRequestedOverdueSince = new Date(
       Date.now() - 4 * 60 * 60 * 1000,

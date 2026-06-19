@@ -103,6 +103,9 @@ export function TourDeparturesSection({
             (!dep.departureDate ||
               !isBookableDepartureDate(dep.departureDate) ||
               Number(dep.availableSeats || 0) <= 0);
+          const maxSeatsInvalid =
+            Number(dep.maxSeats || 0) > 0 &&
+            Number(dep.maxSeats) < Number(dep.availableSeats || 0);
 
           return (
             <div
@@ -395,11 +398,21 @@ export function TourDeparturesSection({
                     placeholder="VD: 30"
                     min={0}
                     value={dep.maxSeats}
+                    aria-invalid={maxSeatsInvalid}
                     onChange={(e) =>
                       updateDeparture(idx, { maxSeats: e.target.value })
                     }
-                    className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className={`w-full bg-surface-container-lowest border rounded-xl px-3 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary ${maxSeatsInvalid ? "border-amber-400" : "border-outline-variant/20"}`}
                   />
+                  {maxSeatsInvalid ? (
+                    <p className="mt-1 text-[10px] text-amber-700">
+                      Tổng ghế phải ≥ Số ghế còn ({dep.availableSeats}).
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[10px] text-on-surface-variant/60">
+                      Để trống nếu không cần. Dùng để tính % đã đặt (VD: Max 20, còn 6 → đã đặt 70%).
+                    </p>
+                  )}
                 </div>
 
                 {/* Giá riêng */}

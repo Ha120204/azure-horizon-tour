@@ -36,7 +36,8 @@ export class PaymentService implements OnApplicationBootstrap {
     }
     const webhookUrl = `${backendUrl}/booking/payos-webhook`;
     // PayOS gọi thử webhook URL ngay khi confirm — phải đợi HTTP server listen xong,
-    // vì onApplicationBootstrap chạy TRƯỚC app.listen().
+    // vì onApplicationBootstrap chạy TRƯỚC app.listen(). Trễ ~5s để chắc chắn app.listen()
+    // đã hoàn tất trước khi PayOS gọi thử (không có hook "đã listen" nên dùng mốc thời gian).
     setTimeout(() => {
       this.payos.webhooks
         .confirm(webhookUrl)
@@ -49,6 +50,7 @@ export class PaymentService implements OnApplicationBootstrap {
 
   async createPaymentRequest(orderCode: number, amount: number, description: string): Promise<PaymentLinkResult> {
     const backendUrl = this.configService.get<string>('BACKEND_URL', 'http://localhost:3000');
+    // PayOS giới hạn trường description tối đa 25 ký tự — cắt để tránh lỗi API.
     const normalizedDescription = description.substring(0, 25);
 
     const paymentLink = (await this.payos.paymentRequests.create({

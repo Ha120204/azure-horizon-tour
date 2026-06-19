@@ -79,7 +79,6 @@ export class BookingPaymentService {
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      // 1. Cập nhật booking
       await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -89,7 +88,7 @@ export class BookingPaymentService {
         },
       });
 
-      // 2. Ghi PaymentTransaction với đầy đủ audit trail
+      // 1. Ghi PaymentTransaction với đầy đủ audit trail
       const pendingTransaction = await tx.paymentTransaction.findFirst({
         where: {
           bookingId,
@@ -138,7 +137,7 @@ export class BookingPaymentService {
         });
       }
 
-      // 3. Mark voucher đã dùng — chỉ với assisted booking (regular booking đã claim lúc create())
+      // 2. Mark voucher đã dùng — chỉ với assisted booking (regular booking đã claim lúc create())
       const booking = await tx.booking.findUnique({
         where: { id: bookingId },
         select: { userId: true, voucherCode: true, isAssistedBooking: true },

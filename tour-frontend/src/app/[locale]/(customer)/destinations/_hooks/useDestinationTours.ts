@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter, usePathname } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/http/constants';
@@ -106,6 +106,11 @@ export function useDestinationTours(language: string) {
     // 4b. Dynamic data
     const [allDestinations, setAllDestinations] = useState<DestinationOption[]>([]);
 
+    // Lưu query string mình tự ghi (effect 6d) để phân biệt với điều hướng bên ngoài (header search).
+    // Dùng giá trị thay vì cờ boolean: cờ boolean sẽ kẹt ở true nếu router.replace ghi lại đúng URL cũ (no-op).
+    const lastSelfWrittenQs = useRef<string | null>(null);
+    const hasMounted = useRef(false);
+
     // 5. Phân trang
     const [page, setPage] = useState(initialPage);
     const [totalPages, setTotalPages] = useState(1);
@@ -195,7 +200,53 @@ export function useDestinationTours(language: string) {
         fetchFilterData();
     }, [travelScope, language]);
 
-    // 6c. Đồng bộ bộ lọc đã áp dụng + sort + trang lên URL
+    // 6c. Sync URL → state khi điều hướng từ bên ngoài (ví dụ: header search push sang trang này)
+    // Bỏ qua lần chạy đầu (mount) và các lần URL tự thay đổi do effect 6d ghi xuống.
+    useEffect(() => {
+        if (!hasMounted.current) {
+            hasMounted.current = true;
+            return;
+        }
+        if (searchParams.toString() === lastSelfWrittenQs.current) {
+            return;
+        }
+        const urlDest = searchParams.get('dest') || '';
+        const urlTravelScope = normalizeTravelScope(searchParams.get('travelScope'));
+        const urlDate = searchParams.get('date') || '';
+        const urlBudget = searchParams.get('budget') || '';
+        const urlRating = Number(searchParams.get('rating')) || 0;
+        const urlTypes = (searchParams.get('types') || '').split(',').map((s) => s.trim()).filter(Boolean);
+        const urlDeparture = searchParams.get('departure') || '';
+        const urlSort = searchParams.get('sort') || 'recommended';
+        const parsedPage = parseInt(searchParams.get('page') || '1', 10);
+        const urlPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+        const parsedLimit = parseInt(searchParams.get('limit') || '12', 10);
+        const urlLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : 12;
+
+        setDest(urlDest);
+        setIsAllDestinationsSelected(searchParams.get('allDestinations') === '1' && !urlDest);
+        setTravelScope(urlTravelScope);
+        setDate(urlDate);
+        setSidebarBudget(urlBudget);
+        setSelectedRating(urlRating);
+        setSelectedTypes(urlTypes);
+        setDeparture(urlDeparture);
+        setSortBy(urlSort);
+        setPage(urlPage);
+        setLimit(urlLimit);
+        setAppliedFilters({
+            travelScope: urlTravelScope,
+            dest: urlDest,
+            date: urlDate,
+            sidebarBudget: urlBudget,
+            selectedRating: urlRating,
+            selectedTypes: urlTypes,
+            departure: urlDeparture,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
+
+    // 6d. Đồng bộ bộ lọc đã áp dụng + sort + trang lên URL
     // → back từ trang chi tiết / F5 / chia sẻ link đều giữ nguyên trạng thái lọc
     useEffect(() => {
         const params = new URLSearchParams();
@@ -210,6 +261,7 @@ export function useDestinationTours(language: string) {
         if (page > 1) params.set('page', String(page));
         if (limit !== 12) params.set('limit', String(limit));
         const qs = params.toString();
+        lastSelfWrittenQs.current = qs;
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appliedFilters, sortBy, page, limit]);

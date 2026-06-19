@@ -187,9 +187,9 @@ export default function TourDetailClient({
                         {/* Overview */}
                         <section>
                             <h2 className="text-2xl font-bold font-headline mb-4">{t('tour_detail.overview')}</h2>
-                            <ReactMarkdown className="prose prose-slate max-w-none text-on-surface-variant leading-relaxed text-sm md:text-base">
-                                {tour.description}
-                            </ReactMarkdown>
+                            <div className="prose prose-slate max-w-none text-on-surface-variant leading-relaxed text-sm md:text-base">
+                                <ReactMarkdown>{tour.description}</ReactMarkdown>
+                            </div>
                         </section>
 
                         {/* ── Gói Tour ── */}

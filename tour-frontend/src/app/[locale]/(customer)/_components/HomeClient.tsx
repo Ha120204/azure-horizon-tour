@@ -14,6 +14,13 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import HeroSearch from '@/components/search/HeroSearch';
+import ErrorToast from '@/components/checkout/ErrorToast';
+import TourRatingBadge from '@/components/tour/TourRatingBadge';
+import { useLocale } from '@/context/LocaleContext';
 
 function stripMarkdown(text: string): string {
   return text
@@ -29,13 +36,6 @@ function stripMarkdown(text: string): string {
     .replace(/\n+/g, ' ')
     .trim();
 }
-import { useSearchParams } from 'next/navigation';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import HeroSearch from '@/components/search/HeroSearch';
-import ErrorToast from '@/components/checkout/ErrorToast';
-import TourRatingBadge from '@/components/tour/TourRatingBadge';
-import { useLocale } from '@/context/LocaleContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -72,6 +72,7 @@ export default function Header() {
 
     const searchInputRef = useRef<HTMLInputElement>(null);
     const searchContainerRef = useRef<HTMLDivElement>(null);
+    const searchRequestIdRef = useRef(0);
 
     // Scroll-aware header (transparent only on homepage)
     const isHomepage = pathname === '/';
@@ -170,6 +171,8 @@ export default function Header() {
 
     // Debounce & Gọi API Tìm kiếm thực tế
     useEffect(() => {
+        const controller = new AbortController();
+        const requestId = ++searchRequestIdRef.current;
         const delayDebounceFn = setTimeout(async () => {
             if (searchQuery.trim().length >= 2) {
                 setIsLoading(true);
@@ -178,30 +181,39 @@ export default function Header() {
                         q: searchQuery,
                         locale: language,
                     });
-                    const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        // Backend wraps all responses via TransformInterceptor:
-                        // { statusCode, message, data: { destinations, tours }, timestamp }
-                        const payload = data?.data ?? data;
-                        setSearchResults({
-                            destinations: Array.isArray(payload?.destinations) ? payload.destinations : [],
-                            tours: Array.isArray(payload?.tours) ? payload.tours : [],
-                        });
-                        setIsDropdownOpen(true);
+                    const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`, {
+                        signal: controller.signal,
+                    });
+                    if (requestId === searchRequestIdRef.current) {
+                        if (res.ok) {
+                            const data = await res.json();
+                            // Backend wraps all responses via TransformInterceptor:
+                            // { statusCode, message, data: { destinations, tours }, timestamp }
+                            const payload = data?.data ?? data;
+                            setSearchResults({
+                                destinations: Array.isArray(payload?.destinations) ? payload.destinations : [],
+                                tours: Array.isArray(payload?.tours) ? payload.tours : [],
+                            });
+                            setIsDropdownOpen(true);
+                        }
+                        setIsLoading(false);
                     }
                 } catch (error) {
+                    if (error instanceof DOMException && error.name === 'AbortError') return;
                     console.error("Lỗi khi fetch dữ liệu search:", error);
-                } finally {
-                    setIsLoading(false);
+                    if (requestId === searchRequestIdRef.current) setIsLoading(false);
                 }
             } else {
                 setSearchResults({ destinations: [], tours: [] });
                 setIsDropdownOpen(false);
+                setIsLoading(false);
             }
         }, 300);
 
-        return () => clearTimeout(delayDebounceFn);
+        return () => {
+            clearTimeout(delayDebounceFn);
+            controller.abort();
+        };
     }, [searchQuery, language]);
 
     // Đóng menu mobile khi đổi route (vd: nút back trình duyệt)

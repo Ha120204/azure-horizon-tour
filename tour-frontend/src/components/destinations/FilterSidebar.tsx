@@ -73,6 +73,7 @@ export default function FilterSidebar({
     const [sidebarSuggestions, setSidebarSuggestions] = useState<DestinationOption[]>([]);
     const [isSidebarDestFocused, setIsSidebarDestFocused] = useState(false);
     const sidebarDebounceRef = useRef<NodeJS.Timeout | null>(null);
+    const sidebarAbortRef = useRef<AbortController | null>(null);
     const sidebarDestRef = useRef<HTMLDivElement>(null);
     const [departurePoints, setDeparturePoints] = useState<{ label: string; searchText?: string }[]>([]);
     const [isDepartureOpen, setIsDepartureOpen] = useState(false);
@@ -83,10 +84,13 @@ export default function FilterSidebar({
         setIsAllDestinationsSelected(false);
         setDest(value);
         if (sidebarDebounceRef.current) clearTimeout(sidebarDebounceRef.current);
+        sidebarAbortRef.current?.abort();
         if (value.length < 2) {
             setSidebarSuggestions([]);
             return;
         }
+        const controller = new AbortController();
+        sidebarAbortRef.current = controller;
         sidebarDebounceRef.current = setTimeout(async () => {
             try {
                 const params = new URLSearchParams({
@@ -94,11 +98,15 @@ export default function FilterSidebar({
                     locale: language,
                 });
                 if (travelScope) params.set('travelScope', travelScope);
-                const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`);
+                const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`, {
+                    signal: controller.signal,
+                });
                 const json = await res.json();
                 const data = json.data || json;
                 setSidebarSuggestions(data.destinations || []);
-            } catch { /* ignore */ }
+            } catch (error) {
+                if (error instanceof DOMException && error.name === 'AbortError') return;
+            }
         }, 300);
     }, [setDest, setIsAllDestinationsSelected, travelScope, language]);
 
@@ -380,7 +388,7 @@ export default function FilterSidebar({
                                         <button
                                             type="button"
                                             key={item.id}
-                                            onClick={() => { setDest(display.name); setIsAllDestinationsSelected(false); setIsSidebarDestFocused(false); }}
+                                            onClick={() => { if (sidebarDebounceRef.current) clearTimeout(sidebarDebounceRef.current); sidebarAbortRef.current?.abort(); setSidebarSuggestions([]); setDest(display.name); setIsAllDestinationsSelected(false); setIsSidebarDestFocused(false); }}
                                             className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 rounded-xl text-left cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                                         >
                                             {item.imageUrl ? (

@@ -21,6 +21,8 @@ export function TagChipField({ items, presets, color, canSavePreset = false, onC
     const [savePreset, setSavePreset] = useState(false);
     const [isSavingPreset, setIsSavingPreset] = useState(false);
     const [presetError, setPresetError] = useState('');
+    const [editingIndex, setEditingIndex] = useState<number | null>(null);
+    const [editingValue, setEditingValue] = useState('');
 
     const available = presets.filter(p => !items.includes(p));
     const normalize = (value: string) =>
@@ -76,6 +78,18 @@ export function TagChipField({ items, presets, color, canSavePreset = false, onC
         }
     };
     const removeItem = (val: string) => onChange(items.filter(i => i !== val));
+    const startEdit = (index: number) => { setEditingIndex(index); setEditingValue(items[index]); };
+    const confirmEdit = () => {
+        if (editingIndex === null) return;
+        const v = editingValue.trim();
+        if (v && v !== items[editingIndex]) {
+            const next = [...items];
+            next[editingIndex] = v;
+            onChange(next);
+        }
+        setEditingIndex(null);
+        setEditingValue('');
+    };
     const openCustomForm = () => {
         setCustomValue(query.trim());
         setIsAddingCustom(true);
@@ -110,13 +124,29 @@ export function TagChipField({ items, presets, color, canSavePreset = false, onC
             {/* Selected chips */}
             {items.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                    {items.map(item => (
-                        <span key={item} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${chipCls}`}>
-                            {item}
-                            <button type="button" onClick={() => removeItem(item)} className={`ml-0.5 transition-colors ${btnCls}`}>
-                                <span className="material-symbols-outlined text-[11px]">close</span>
-                            </button>
-                        </span>
+                    {items.map((item, index) => (
+                        editingIndex === index ? (
+                            <span key={item} className="inline-flex items-center gap-1">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={editingValue}
+                                    onChange={e => setEditingValue(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmEdit(); } if (e.key === 'Escape') { setEditingIndex(null); setEditingValue(''); } }}
+                                    onBlur={confirmEdit}
+                                    className="px-2 py-0.5 rounded-lg text-[11px] font-semibold border border-primary/40 bg-primary/5 outline-none focus-visible:ring-1 focus-visible:ring-primary min-w-[120px]"
+                                />
+                            </span>
+                        ) : (
+                            <span key={item} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${chipCls}`}>
+                                <button type="button" onClick={() => startEdit(index)} className="hover:underline text-left" title="Click để sửa">
+                                    {item}
+                                </button>
+                                <button type="button" onClick={() => removeItem(item)} className={`ml-0.5 transition-colors ${btnCls}`}>
+                                    <span className="material-symbols-outlined text-[11px]">close</span>
+                                </button>
+                            </span>
+                        )
                     ))}
                 </div>
             )}

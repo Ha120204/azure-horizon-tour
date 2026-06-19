@@ -107,6 +107,8 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     const destInputRef = useRef<HTMLInputElement>(null);
     const budgetRef = useRef<HTMLDivElement>(null);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
+    const searchAbortRef = useRef<AbortController | null>(null);
+    const searchRequestIdRef = useRef(0);
 
     // ═══ Fetch destinations by trip scope ═══
     useEffect(() => {
@@ -149,6 +151,11 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             setSearchTours([]);
             return;
         }
+        searchAbortRef.current?.abort();
+        const controller = new AbortController();
+        searchAbortRef.current = controller;
+        const requestId = ++searchRequestIdRef.current;
+
         setIsSearching(true);
         try {
             const params = new URLSearchParams({
@@ -156,15 +163,22 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                 travelScope,
                 locale: language,
             });
-            const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`);
-            const json = await res.json();
-            const data = json.data || json;
-            setSearchDestinations(data.destinations || []);
-            setSearchTours(data.tours || []);
+            const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`, {
+                signal: controller.signal,
+            });
+            if (requestId === searchRequestIdRef.current) {
+                if (res.ok) {
+                    const json = await res.json();
+                    const data = json.data || json;
+                    setSearchDestinations(data.destinations || []);
+                    setSearchTours(data.tours || []);
+                }
+                setIsSearching(false);
+            }
         } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') return;
             console.error('Lỗi tìm kiếm:', error);
-        } finally {
-            setIsSearching(false);
+            if (requestId === searchRequestIdRef.current) setIsSearching(false);
         }
     }, [travelScope, language]);
 
@@ -211,17 +225,26 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
     // ═══ Chọn gợi ý ═══
     const handleSelectSuggestion = (name: string) => {
+        // Hủy debounce và request đang bay để tránh re-render thừa
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        searchAbortRef.current?.abort();
         setDestination(name);
         setIsAllDestinationsSelected(false);
         setIsDestFocused(false);
+        setSearchDestinations([]);
+        setSearchTours([]);
+        setIsSearching(false);
         // NOTE: Không clear departure — user được chọn cả 2 filter độc lập
     };
 
     const handleSelectAllDestinations = () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        searchAbortRef.current?.abort();
         setDestination(t('search.allDestinations'));
         setIsAllDestinationsSelected(true);
         setSearchDestinations([]);
         setSearchTours([]);
+        setIsSearching(false);
         setIsDestFocused(false);
         // NOTE: Không clear departure
     };

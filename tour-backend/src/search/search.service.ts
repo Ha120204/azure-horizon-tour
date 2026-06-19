@@ -27,6 +27,52 @@ export function normalizeSearchText(value: string): string {
     .trim();
 }
 
+// Mapping countryCode → tên quốc gia (VI + EN) để tìm kiếm theo tên nước
+// VD: gõ "nhật bản" → tìm thấy Tokyo, Osaka (countryCode: JP)
+const COUNTRY_NAMES: Record<string, string> = {
+  JP: 'Nhật Bản Japan',
+  KR: 'Hàn Quốc Korea',
+  CN: 'Trung Quốc China',
+  TH: 'Thái Lan Thailand',
+  SG: 'Singapore',
+  MY: 'Malaysia',
+  ID: 'Indonesia Bali',
+  PH: 'Philippines',
+  TW: 'Đài Loan Taiwan',
+  HK: 'Hồng Kông Hong Kong',
+  MO: 'Macao Macau',
+  VN: 'Việt Nam Vietnam',
+  FR: 'Pháp France',
+  IT: 'Ý Italy Italia',
+  DE: 'Đức Germany',
+  GB: 'Anh Quốc United Kingdom England Britain',
+  US: 'Mỹ Hoa Kỳ United States America',
+  AU: 'Úc Australia',
+  NZ: 'New Zealand',
+  CH: 'Thụy Sĩ Switzerland',
+  NL: 'Hà Lan Netherlands Holland',
+  BE: 'Bỉ Belgium',
+  ES: 'Tây Ban Nha Spain',
+  PT: 'Bồ Đào Nha Portugal',
+  AT: 'Áo Austria',
+  CZ: 'Séc Czech Czechia',
+  GR: 'Hy Lạp Greece',
+  TR: 'Thổ Nhĩ Kỳ Turkey',
+  RU: 'Nga Russia',
+  AE: 'Dubai UAE Emirates Ả Rập',
+  EG: 'Ai Cập Egypt',
+  IN: 'Ấn Độ India',
+  NP: 'Nepal',
+  KH: 'Campuchia Cambodia Khmer',
+  LA: 'Lào Laos',
+  MM: 'Myanmar Miến Điện',
+  CA: 'Canada',
+  MX: 'Mexico',
+  BR: 'Brazil',
+  ZA: 'Nam Phi South Africa',
+  MA: 'Maroc Morocco',
+};
+
 // Alias map: key = normalized abbreviation, value = thêm vào searchText để full-name search hoạt động
 const CITY_ALIASES: Record<string, string> = {
   'hcm':       'ho chi minh tp ho chi minh sai gon saigon',
@@ -245,6 +291,7 @@ export class SearchService {
       this.prisma.tour.findMany({
         where: {
           deletedAt: null,
+          status: TourStatus.PUBLISHED,
           ...(travelScope ? { destination: { travelScope } } : {}),
         },
         select: {
@@ -260,8 +307,11 @@ export class SearchService {
 
     const destinations = destinationCandidates
       .filter((destination) => {
+        const countryText = destination.countryCode
+          ? (COUNTRY_NAMES[destination.countryCode.toUpperCase()] ?? '')
+          : '';
         const fullText = normalizeSearchText(
-          `${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''}`,
+          `${destination.name} ${destination.nameEn ?? ''} ${destination.region ?? ''} ${destination.regionEn ?? ''} ${countryText}`,
         );
         return matchesQuery(fullText);
       })

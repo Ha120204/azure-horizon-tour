@@ -255,11 +255,6 @@ export function useMarketingManagement() {
     if (isSavingCampaign) return;
     const nextErrors: CampaignErrors = {};
     if (!campaignForm.name.trim()) nextErrors.name = 'Nhập tên chiến dịch để dễ quản lý bản nháp.';
-    if (!campaignForm.subject.trim()) nextErrors.subject = 'Nhập tiêu đề email hiển thị trong hộp thư khách hàng.';
-    if (!campaignForm.body.trim()) nextErrors.body = 'Nhập nội dung chính của email.';
-    if (campaignForm.audience === 'MANUAL_SELECTION' && campaignForm.selectedSubscriberIds.length === 0) {
-      nextErrors.audience = 'Chọn ít nhất một người đăng ký đang nhận tin.';
-    }
     setCampaignErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -363,6 +358,14 @@ export function useMarketingManagement() {
 
   const scheduleCampaign = useCallback(async () => {
     if (!scheduleTarget) return;
+    if (!scheduleTarget.subject?.trim()) {
+      setScheduleError('Chiến dịch chưa có tiêu đề email. Chỉnh sửa bản nháp trước khi lên lịch.');
+      return;
+    }
+    if (!scheduleTarget.body?.trim()) {
+      setScheduleError('Chiến dịch chưa có nội dung email. Chỉnh sửa bản nháp trước khi lên lịch.');
+      return;
+    }
     if (scheduleTarget.audience === 'MANUAL_SELECTION' && (scheduleTarget.selectedSubscriberIds?.length ?? 0) === 0) {
       setScheduleError('Chiến dịch chọn thủ công cần ít nhất một người đăng ký đang nhận tin.');
       return;

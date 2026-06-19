@@ -140,43 +140,63 @@ function CampaignCard({
         </div>
         <div className="flex items-center gap-2">
           {campaign.status === 'DRAFT' && (
-            <button
-              onClick={() => onSchedule(campaign)}
-              className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors"
-              title="Lên lịch gửi"
-              aria-label={`Lên lịch gửi ${campaign.name}`}
-            >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">event_upcoming</span>
-            </button>
+            <div className="relative group/tip">
+              <button
+                onClick={() => onSchedule(campaign)}
+                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors"
+                aria-label={`Lên lịch gửi ${campaign.name}`}
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">event_upcoming</span>
+              </button>
+              <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
+                Lên lịch gửi
+                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+              </span>
+            </div>
           )}
           {campaign.status === 'SCHEDULED' && (
-            <button
-              onClick={() => onCancelCampaign(campaign)}
-              className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 transition-colors"
-              title="Hủy lịch gửi"
-              aria-label={`Hủy lịch gửi ${campaign.name}`}
-            >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">event_busy</span>
-            </button>
+            <div className="relative group/tip">
+              <button
+                onClick={() => onCancelCampaign(campaign)}
+                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 transition-colors"
+                aria-label={`Hủy lịch gửi ${campaign.name}`}
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">event_busy</span>
+              </button>
+              <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
+                Hủy lịch gửi
+                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+              </span>
+            </div>
           )}
           {campaign.status === 'DRAFT' && (
             <>
-              <button
-                onClick={() => onEdit(campaign)}
-                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors"
-                title="Mở bản nháp"
-                aria-label={`Mở bản nháp ${campaign.name}`}
-              >
-                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span>
-              </button>
-              <button
-                onClick={() => onDeleteDraft(campaign.id)}
-                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-colors"
-                title="Xóa bản nháp"
-                aria-label={`Xóa bản nháp ${campaign.name}`}
-              >
-                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
-              </button>
+              <div className="relative group/tip">
+                <button
+                  onClick={() => onEdit(campaign)}
+                  className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors"
+                  aria-label={`Mở bản nháp ${campaign.name}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span>
+                </button>
+                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
+                  Mở bản nháp
+                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+                </span>
+              </div>
+              <div className="relative group/tip">
+                <button
+                  onClick={() => onDeleteDraft(campaign.id)}
+                  className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-colors"
+                  aria-label={`Xóa bản nháp ${campaign.name}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
+                </button>
+                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
+                  Xóa bản nháp
+                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+                </span>
+              </div>
             </>
           )}
         </div>

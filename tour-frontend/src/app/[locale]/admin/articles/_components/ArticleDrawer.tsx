@@ -22,11 +22,17 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
         activeCat, workflowStatus, workflowCopy, workflowHint, canSaveArticle,
         setField, handleImageUpload, handleTitleChange, handleSlugChange, handleResetSlug,
         handleSave, handlePrimaryAction,
+        isDirty,
     } = useArticleForm({ mode, article, userRole, onClose, onSuccess });
+
+    const handleClose = () => {
+        if (isDirty.current && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+        onClose();
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="am-title">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
 
             <div className="relative w-full max-w-[1240px] max-h-[92vh] flex flex-col bg-surface rounded-3xl shadow-2xl overflow-hidden animate-fade-slide-up">
 
@@ -54,7 +60,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                             <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>Nổi bật
                         </span>
                     )}
-                    <button onClick={onClose} aria-label="Đóng"
+                    <button onClick={handleClose} aria-label="Đóng"
                         className="w-9 h-9 flex items-center justify-center rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0">
                         <span className="material-symbols-outlined text-xl">close</span>
                     </button>
@@ -132,7 +138,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                             <span className="material-symbols-outlined text-base">visibility</span>
                             Xem trước
                         </button>
-                        <button type="button" onClick={onClose}
+                        <button type="button" onClick={handleClose}
                             className="px-5 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary">
                             Hủy
                         </button>

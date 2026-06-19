@@ -45,7 +45,19 @@ export function StaffDetailModal({
     onChangeRole,
     onToggleStatus,
 }: StaffDetailModalProps) {
-    const dialogRef = useAccessibleDialog({ onClose, canClose: !isSaving });
+    const isDirty = isEditing && !!user && (
+        editForm.fullName !== (user.fullName ?? '') ||
+        editForm.phone !== (user.phone ?? '') ||
+        editForm.gender !== (user.gender ?? '') ||
+        editForm.dob !== (user.dob ?? '')
+    );
+
+    const handleClose = () => {
+        if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+        onClose();
+    };
+
+    const dialogRef = useAccessibleDialog({ onClose: handleClose, canClose: !isSaving });
 
     return (
         <div
@@ -59,7 +71,7 @@ export function StaffDetailModal({
             aria-describedby={user ? 'detail-description' : undefined}
             aria-busy={isLoading || isSaving}
             onMouseDown={event => {
-                if (event.target === event.currentTarget && !isSaving) onClose();
+                if (event.target === event.currentTarget && !isSaving) handleClose();
             }}
         >
             <div className="pointer-events-none absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
@@ -78,7 +90,7 @@ export function StaffDetailModal({
                             isEditing={isEditing}
                             onStartEditing={onStartEditing}
                             onCancelEditing={onCancelEditing}
-                            onClose={onClose}
+                            onClose={handleClose}
                             canClose={!isSaving}
                         />
                         {!isEditing && <StaffDetailStats user={user} />}

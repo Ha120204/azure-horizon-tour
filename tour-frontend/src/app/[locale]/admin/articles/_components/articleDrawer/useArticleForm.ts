@@ -62,6 +62,7 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
     const [isSlugEdited, setIsSlugEdited] = useState(false);
     const [imgError, setImgError] = useState(false);
     const titleRef = useRef<HTMLInputElement>(null);
+    const hasEdited = useRef(false);
 
     useEffect(() => {
         if (isEdit && article) {
@@ -89,12 +90,13 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
                         _server: getErrorMessage(err, 'Không tải được nội dung chi tiết. Đang hiển thị dữ liệu trong danh sách.'),
                     }));
                 })
-                .finally(() => setIsLoadingContent(false));
+                .finally(() => { setIsLoadingContent(false); hasEdited.current = false; });
         } else {
             setForm(EMPTY_FORM);
             setErrors({});
             setImgError(false);
             setIsSlugEdited(false);
+            hasEdited.current = false;
         }
     }, [isEdit, article?.id, article]);
 
@@ -103,6 +105,7 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
             if (e.key !== 'Escape') return;
             if (isPreviewOpen) { setIsPreviewOpen(false); return; }
             if (isPublishConfirmOpen) { setIsPublishConfirmOpen(false); return; }
+            if (hasEdited.current && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
             onClose();
         };
         window.addEventListener('keydown', h);
@@ -126,6 +129,7 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
     }, [form.content, form.readTime]);
 
     const setField = <K extends keyof ArticleForm>(key: K, value: ArticleForm[K]) => {
+        hasEdited.current = true;
         setForm(p => ({ ...p, [key]: value }));
         if (errors[key]) setErrors(p => ({ ...p, [key]: '' }));
         if (key === 'imageUrl') setImgError(false);
@@ -213,6 +217,7 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
     };
 
     const handleTitleChange = (value: string) => {
+        hasEdited.current = true;
         setForm(prev => ({
             ...prev,
             title: value,
@@ -257,5 +262,6 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
         activeCat, workflowStatus, workflowCopy, workflowHint, canSaveArticle,
         setField, handleImageUpload, handleTitleChange, handleSlugChange, handleResetSlug,
         handleSave, handlePrimaryAction,
+        isDirty: hasEdited,
     };
 }

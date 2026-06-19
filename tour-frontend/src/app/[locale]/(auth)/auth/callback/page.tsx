@@ -26,6 +26,7 @@ function AuthCallbackContent() {
     useEffect(() => {
         const name = searchParams.get('name') || '';
         const avatar = searchParams.get('avatar') || '';
+        const role = searchParams.get('role') || '';
         const error = searchParams.get('error');
         const redirectTarget = getSafeRedirectPath(searchParams.get('redirect'));
 
@@ -43,6 +44,7 @@ function AuthCallbackContent() {
         } else {
             localStorage.removeItem('userAvatar');
         }
+        if (role) localStorage.setItem('userRole', role);
 
         // Phát sự kiện để Header cập nhật trạng thái đăng nhập
         window.dispatchEvent(new Event('auth-change'));

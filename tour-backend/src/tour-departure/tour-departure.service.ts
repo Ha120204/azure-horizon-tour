@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { TransportType } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TourPermissionService } from '../tour/tour-permission.service';
 import { localizeDeparture, normalizeLocale } from '../tour/localization';
@@ -70,10 +71,27 @@ const parseDepartureDate = (value: string) => {
 
 @Injectable()
 export class TourDepartureService {
+  private readonly logger = new Logger(TourDepartureService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tourPermission: TourPermissionService,
+    private readonly configService: ConfigService,
   ) {}
+
+  private revalidateTourCache(tourId: number): void {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const secret = this.configService.get<string>('REVALIDATION_SECRET');
+    if (!frontendUrl || !secret) return;
+
+    void fetch(`${frontendUrl}/api/revalidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-revalidate-secret': secret },
+      body: JSON.stringify({ tag: `tour-${tourId}` }),
+    }).catch((err: unknown) => {
+      this.logger.warn(`[Revalidate] tour-${tourId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
 
   /** Public: only active upcoming departures are bookable. */
   async findByTour(tourId: number, localeInput?: string) {
@@ -138,7 +156,7 @@ export class TourDepartureService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.tourDeparture.updateMany({
         where: {
           tourId,
@@ -217,6 +235,9 @@ export class TourDepartureService {
         orderBy: [{ sortOrder: 'asc' }, { departureDate: 'asc' }],
       });
     });
+
+    this.revalidateTourCache(tourId);
+    return result;
   }
 
   /** Admin: get one departure for checkout validation. */

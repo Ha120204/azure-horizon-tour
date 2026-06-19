@@ -167,21 +167,33 @@ function SubscriberRow({
       <td className="px-5 py-4 text-slate-600 tabular-nums">{formatDate(subscriber.createdAt)}</td>
       <td className="px-5 py-4">
         <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => onToggleActive(subscriber)}
-            disabled={loadingId === subscriber.id}
-            className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors disabled:opacity-60"
-            title={subscriber.isActive ? 'Tạm dừng nhận tin' : 'Bật nhận tin'}
-          >
-            <span className="material-symbols-outlined text-[18px]">{subscriber.isActive ? 'notifications_off' : 'notifications_active'}</span>
-          </button>
-          <button
-            onClick={() => onDelete(subscriber)}
-            className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-colors"
-            title="Xóa người đăng ký"
-          >
-            <span className="material-symbols-outlined text-[18px]">delete</span>
-          </button>
+          <div className="relative group/tip">
+            <button
+              onClick={() => onToggleActive(subscriber)}
+              disabled={loadingId === subscriber.id}
+              className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors disabled:opacity-60"
+              aria-label={subscriber.isActive ? 'Tạm dừng nhận tin' : 'Bật nhận tin'}
+            >
+              <span className="material-symbols-outlined text-[18px]">{subscriber.isActive ? 'notifications_off' : 'notifications_active'}</span>
+            </button>
+            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
+              {subscriber.isActive ? 'Tạm dừng nhận tin' : 'Bật nhận tin'}
+              <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+            </span>
+          </div>
+          <div className="relative group/tip">
+            <button
+              onClick={() => onDelete(subscriber)}
+              className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-colors"
+              aria-label="Xóa người đăng ký"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
+              Xóa người đăng ký
+              <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+            </span>
+          </div>
         </div>
       </td>
     </tr>

@@ -106,6 +106,18 @@ export function AssistedBookingWorkspace({
     submitDraftActionDialog, confirmDeleteDraft,
   } = useAssistedBookingWorkspace({ onChanged, showToast });
 
+  const isDirty = editingDraft
+    ? (form.customerName !== (editingDraft.customerName ?? '') ||
+       form.customerEmail !== (editingDraft.customerEmail ?? '') ||
+       form.tourId !== String(editingDraft.tourId ?? ''))
+    : Boolean(form.customerName || form.customerEmail || form.customerPhone || form.tourId);
+
+  const handleCloseDrawer = () => {
+    if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+    setIsDrawerOpen(false);
+    resetDraftForm();
+  };
+
   const draftListId = 'assisted-booking-drafts';
   const draftInputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100';
   const draftErrorInputClass = 'border-red-300 bg-red-50/40 focus:border-red-500 focus:ring-red-100';
@@ -207,7 +219,7 @@ export function AssistedBookingWorkspace({
       />
 
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:p-6" onMouseDown={() => { setIsDrawerOpen(false); resetDraftForm(); }}>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:p-6" onMouseDown={handleCloseDrawer}>
           <aside
             className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] bg-slate-50 shadow-2xl ring-1 ring-white/50"
             onMouseDown={e => e.stopPropagation()}
@@ -224,7 +236,7 @@ export function AssistedBookingWorkspace({
                     <p className="mt-1 max-w-xl text-sm font-medium text-slate-500">{editingDraft ? `Đang chỉnh ${editingDraft.draftCode}. Cập nhật thông tin rồi lưu lại hoặc ${completionActionText} khi đã đủ dữ liệu.` : `Tạo bản nháp từ thông tin tư vấn, kiểm tra tạm tính rồi ${completionActionText} khi đã sẵn sàng.`}</p>
                   </div>
                 </div>
-                <button onClick={() => { setIsDrawerOpen(false); resetDraftForm(); }} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900">
+                <button onClick={handleCloseDrawer} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900">
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
@@ -761,7 +773,7 @@ export function AssistedBookingWorkspace({
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:px-8">
-              <button onClick={() => { setIsDrawerOpen(false); resetDraftForm(); }} className="min-h-11 rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50">
+              <button onClick={handleCloseDrawer} className="min-h-11 rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50">
                 Hủy
               </button>
               <button disabled={isSaving} onClick={() => createDraft(false)} className="min-h-11 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-bold text-blue-800 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60">

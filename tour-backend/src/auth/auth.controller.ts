@@ -266,6 +266,14 @@ export class AuthController {
       callbackUrl.searchParams.set('avatar', user['avatarUrl'] as string);
     }
 
+    // Admin/Staff/SuperAdmin → redirect thẳng vào dashboard tương ứng
+    const role = user['role'] as string;
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'STAFF') {
+      const adminPath = role === 'SUPER_ADMIN' ? '/admin/super' : '/admin';
+      callbackUrl.searchParams.set('redirect', adminPath);
+      callbackUrl.searchParams.set('role', role);
+    }
+
     res.redirect(callbackUrl.toString());
   }
 }

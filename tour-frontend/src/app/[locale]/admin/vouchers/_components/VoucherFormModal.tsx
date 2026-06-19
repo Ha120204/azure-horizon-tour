@@ -57,8 +57,19 @@ export default function VoucherFormModal({
   const codeLocked = isEdit && (initialData?.usedCount ?? 0) > 0;
   const expiresMinDate = form.startsAt ? addDaysToYMD(form.startsAt, 1) : todayYMD;
 
+  const isDirty = isEdit
+    ? (form.code !== (initialData?.code ?? '') ||
+       form.label !== (initialData?.label ?? '') ||
+       form.description !== (initialData?.description ?? ''))
+    : Boolean(form.code || form.label || form.description || (form.discountValue !== '' && form.discountValue !== 0));
+
+  const handleClose = () => {
+    if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+    onClose();
+  };
+
   return (
-    <Modal open onClose={onClose} size="md" labelledBy="voucher-form-title">
+    <Modal open onClose={handleClose} size="md" labelledBy="voucher-form-title">
         <div className="flex items-center justify-between px-7 py-5 border-b border-outline-variant/10 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -75,7 +86,7 @@ export default function VoucherFormModal({
               </p>
             </div>
           </div>
-          <IconButton icon="close" onClick={onClose} aria-label="Đóng" />
+          <IconButton icon="close" onClick={handleClose} aria-label="Đóng" />
         </div>
 
         <ModalBody className="px-7 py-6 space-y-6">
@@ -409,7 +420,7 @@ export default function VoucherFormModal({
 
         <div className="px-7 py-5 border-t border-outline-variant/10 flex justify-end gap-3 shrink-0 bg-surface-container-lowest/40">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-6 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors focus-visible:ring-2 focus-visible:ring-primary outline-none"
           >
             Hủy

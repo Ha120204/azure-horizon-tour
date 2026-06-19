@@ -46,7 +46,19 @@ export function CustomerDetailModal({
     onSaveInfo,
     onToggleStatus,
 }: CustomerDetailModalProps) {
-    const dialogRef = useAccessibleDialog({ onClose, canClose: !isSaving });
+    const isDirty = isEditing && !!user && (
+        editForm.fullName !== (user.fullName ?? '') ||
+        editForm.phone !== (user.phone ?? '') ||
+        editForm.gender !== (user.gender ?? '') ||
+        editForm.dob !== (user.dob ?? '')
+    );
+
+    const handleClose = () => {
+        if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+        onClose();
+    };
+
+    const dialogRef = useAccessibleDialog({ onClose: handleClose, canClose: !isSaving });
 
     return (
         <div
@@ -58,7 +70,7 @@ export function CustomerDetailModal({
             aria-modal="true"
             aria-labelledby="customer-detail-title"
         >
-            <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" onClick={isSaving ? undefined : onClose} />
+            <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" onClick={isSaving ? undefined : handleClose} />
 
             <section className="relative flex max-h-[92vh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-outline-variant/15 bg-surface-container-lowest shadow-2xl animate-fade-slide-up">
                 {isLoading && !user ? (
@@ -73,7 +85,7 @@ export function CustomerDetailModal({
                             canManage={canManage}
                             onStartEditing={onStartEditing}
                             onCancelEditing={onCancelEditing}
-                            onClose={onClose}
+                            onClose={handleClose}
                         />
 
                         <div className="flex-1 overflow-y-auto px-5 py-5">

@@ -74,7 +74,7 @@ export const CUSTOMER_SEGMENT_OPTIONS = [
 export const formatCurrencyInput = (value: string) =>
   value.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
-export const parseCurrencyInput = (value: string) => Number(value.replace(/\./g, '')) || 0;
+export const parseCurrencyInput = (value: string) => Number(value.replace(/[^\d]/g, '')) || 0;
 
 export const normalizePercentageInput = (value: string) => {
   const digits = value.replace(/\D/g, '');

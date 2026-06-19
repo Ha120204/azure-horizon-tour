@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { campaignTypeConfig } from '../_lib/config';
@@ -55,6 +55,17 @@ export function CampaignComposerDialog({
   const [recipientQuery, setRecipientQuery] = useState('');
   const [recipientCandidates, setRecipientCandidates] = useState<Subscriber[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+  const initialFormRef = useRef({ name: campaignForm.name, subject: campaignForm.subject, body: campaignForm.body });
+
+  const isDirty =
+    campaignForm.name !== initialFormRef.current.name ||
+    campaignForm.subject !== initialFormRef.current.subject ||
+    campaignForm.body !== initialFormRef.current.body;
+
+  const handleClose = () => {
+    if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+    onClose();
+  };
   const selectedRecipientIds = campaignForm.selectedSubscriberIds;
   const selectedRecipientEmails = campaignForm.selectedSubscriberEmails;
   const selectedRecipientSet = useMemo(() => new Set(selectedRecipientIds), [selectedRecipientIds]);
@@ -160,7 +171,7 @@ export function CampaignComposerDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button className="absolute inset-0 bg-slate-950/55" onClick={onClose} aria-label="Đóng trình soạn" />
+      <button className="absolute inset-0 bg-slate-950/55" onClick={handleClose} aria-label="Đóng trình soạn" />
       <div className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
           <div>
@@ -168,7 +179,7 @@ export function CampaignComposerDialog({
             <h2 className="text-2xl font-extrabold text-slate-950">{isEditing ? 'Chỉnh sửa bản nháp chiến dịch' : 'Tạo bản nháp chiến dịch'}</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="h-10 w-10 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900"
             aria-label="Đóng"
           >
@@ -454,7 +465,7 @@ export function CampaignComposerDialog({
           </p>
           <div className="flex items-center gap-3">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="h-10 rounded-xl px-4 text-sm font-bold text-slate-600 hover:bg-slate-100"
             >
               Hủy

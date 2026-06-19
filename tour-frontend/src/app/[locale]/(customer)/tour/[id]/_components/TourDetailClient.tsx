@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -186,9 +187,9 @@ export default function TourDetailClient({
                         {/* Overview */}
                         <section>
                             <h2 className="text-2xl font-bold font-headline mb-4">{t('tour_detail.overview')}</h2>
-                            <div className="prose prose-slate max-w-none text-on-surface-variant leading-relaxed space-y-4 text-sm md:text-base whitespace-pre-line">
+                            <ReactMarkdown className="prose prose-slate max-w-none text-on-surface-variant leading-relaxed text-sm md:text-base">
                                 {tour.description}
-                            </div>
+                            </ReactMarkdown>
                         </section>
 
                         {/* ── Gói Tour ── */}

@@ -27,6 +27,7 @@ export default function ReviewTourModal({ tour, action, onConfirm, onClose }: Re
             await onConfirm(action, note.trim() || undefined);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Có lỗi xảy ra');
+        } finally {
             setIsLoading(false);
         }
     };

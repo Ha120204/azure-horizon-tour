@@ -75,8 +75,6 @@ export default function CancelBookingModal({
   const [banksList, setBanksList] = useState<{ shortName: string, name: string, logo: string }[]>([]);
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -159,8 +157,11 @@ export default function CancelBookingModal({
     }
 
     if (isPaid && refundPreview.refundAmount > 0) {
-      if (!isVerified) {
-        setError('Vui lòng xác thực tài khoản ngân hàng trước khi gửi yêu cầu.');
+      if (!bankName.trim()) { setError('Vui lòng chọn ngân hàng nhận tiền hoàn.'); return; }
+      if (!accountNumber.trim()) { setError('Vui lòng nhập số tài khoản.'); return; }
+      if (!accountName.trim()) { setError('Vui lòng nhập tên chủ tài khoản.'); return; }
+      if (!/^[A-Z\s]+$/.test(accountName.trim())) {
+        setError('Tên chủ tài khoản phải viết hoa toàn bộ và không dấu (ví dụ: NGUYEN VAN A).');
         return;
       }
     }
@@ -387,8 +388,6 @@ export default function CancelBookingModal({
                                 setBankName(bank.shortName);
                                 setIsDropdownOpen(false);
                                 setSearchQuery('');
-                                setIsVerified(false);
-                                setAccountName('');
                               }}
                             >
                               <div className="w-8 h-8 rounded-full border border-slate-200 bg-white shrink-0 flex items-center justify-center p-1">
@@ -406,71 +405,44 @@ export default function CancelBookingModal({
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                  <div>
-                    <label htmlFor={accountNumberId} className="mb-1.5 block text-xs font-bold text-blue-900">
-                      Số tài khoản nhận hoàn
-                    </label>
-                    <input
-                      id={accountNumberId}
-                      type="text"
-                      placeholder="Số tài khoản"
-                      value={accountNumber}
-                      aria-required="true"
-                      required
-                      onChange={(e) => {
-                        setAccountNumber(e.target.value.replace(/[^0-9]/g, ''));
-                        setIsVerified(false);
-                        setAccountName('');
-                      }}
-                      className="w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
-                    />
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!bankName.trim() || !accountNumber.trim()) {
-                          setError('Vui lòng nhập Ngân hàng và Số tài khoản');
-                          return;
-                        }
-                        setError('');
-                        setIsVerifying(true);
-                        // Giả lập API Napas (delay 1.5s)
-                        await new Promise(r => setTimeout(r, 1500));
-                        setIsVerifying(false);
-                        setIsVerified(true);
-                        setAccountName('ĐÀO THÀNH HÀ'); // Giả lập dữ liệu trả về
-                      }}
-                      disabled={isVerifying || isVerified || !bankName || !accountNumber}
-                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all border ${
-                        isVerified 
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200 cursor-default' 
-                          : 'bg-blue-600 text-white hover:bg-blue-700 border-transparent active:scale-[0.98]'
-                      } disabled:opacity-60 disabled:cursor-not-allowed`}
-                    >
-                      {isVerifying ? (
-                        <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Đang kiểm tra...</>
-                      ) : isVerified ? (
-                        <><span className="material-symbols-outlined text-base">check_circle</span> Hợp lệ</>
-                      ) : (
-                        <><span className="material-symbols-outlined text-base">search</span> Kiểm tra</>
-                      )}
-                    </button>
-                  </div>
+                <div>
+                  <label htmlFor={accountNumberId} className="mb-1.5 block text-xs font-bold text-blue-900">
+                    Số tài khoản nhận hoàn <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id={accountNumberId}
+                    type="text"
+                    placeholder="Số tài khoản"
+                    value={accountNumber}
+                    aria-required="true"
+                    required
+                    onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                    className="w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                  />
                 </div>
                 <div>
                   <label htmlFor={accountNameId} className="mb-1.5 block text-xs font-bold text-blue-900">
-                    Tên chủ tài khoản
+                    Tên chủ tài khoản <span className="text-red-500">*</span>
                   </label>
                   <input
                     id={accountNameId}
                     type="text"
-                    placeholder="Tên chủ tài khoản (Tự động điền)"
+                    placeholder="NGUYEN VAN A"
                     value={accountName}
-                    readOnly
-                    className="w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none bg-slate-50 cursor-not-allowed uppercase font-bold"
+                    aria-required="true"
+                    required
+                    onChange={(e) => {
+                      const normalized = e.target.value
+                        .replace(/[đĐ]/g, 'D')
+                        .normalize('NFD')
+                        .replace(/[̀-ͯ]/g, '')
+                        .toUpperCase()
+                        .replace(/[^A-Z\s]/g, '');
+                      setAccountName(normalized);
+                    }}
+                    className="w-full border border-blue-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all uppercase"
                   />
+                  <p className="mt-1 text-xs text-slate-400">Viết hoa toàn bộ, không dấu — đúng như in trên thẻ ngân hàng</p>
                 </div>
               </div>
             </div>

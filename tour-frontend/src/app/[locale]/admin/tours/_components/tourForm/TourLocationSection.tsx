@@ -32,6 +32,10 @@ interface TourLocationSectionProps {
   setDeparturePointQuery: (v: string) => void;
   isDeparturePointListOpen: boolean;
   setIsDeparturePointListOpen: (v: boolean) => void;
+  showNewDeparture: boolean;
+  setShowNewDeparture: (v: boolean) => void;
+  newDepartureName: string;
+  setNewDepartureName: (v: string) => void;
   durationMode: string;
   customDuration: string;
   setCustomDuration: (v: string) => void;
@@ -45,6 +49,7 @@ interface TourLocationSectionProps {
   handleCreateDestination: () => void;
   selectDeparturePoint: (point: string) => void;
   clearDeparturePoint: () => void;
+  confirmNewDeparturePoint: (name: string) => void;
   handleDurationSelect: (duration: string) => void;
   onClearDurationError: () => void;
 }
@@ -79,6 +84,10 @@ export function TourLocationSection({
   setDeparturePointQuery,
   isDeparturePointListOpen,
   setIsDeparturePointListOpen,
+  showNewDeparture,
+  setShowNewDeparture,
+  newDepartureName,
+  setNewDepartureName,
   durationMode,
   customDuration,
   setCustomDuration,
@@ -92,14 +101,20 @@ export function TourLocationSection({
   handleCreateDestination,
   selectDeparturePoint,
   clearDeparturePoint,
+  confirmNewDeparturePoint,
   handleDurationSelect,
   onClearDurationError,
 }: TourLocationSectionProps) {
   const newDestInputRef = useRef<HTMLInputElement>(null);
+  const newDepartureInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (showNewDest) newDestInputRef.current?.focus();
   }, [showNewDest]);
+
+  useEffect(() => {
+    if (showNewDeparture) newDepartureInputRef.current?.focus();
+  }, [showNewDeparture]);
 
   const englishFieldClass = showEnglishFields ? "" : "hidden";
 
@@ -542,6 +557,61 @@ export function TourLocationSection({
             <span className="material-symbols-outlined text-[11px]">info</span>
             Hiển thị trên trang chi tiết tour cho khách hàng
           </p>
+          {!showNewDeparture ? (
+            <button
+              type="button"
+              onClick={() => {
+                setNewDepartureName(departurePointQuery.trim());
+                setShowNewDeparture(true);
+              }}
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[15px]">add_circle</span>
+              Tạo điểm khởi hành mới nếu chưa có
+            </button>
+          ) : (
+            <div className="mt-2 border border-primary/30 bg-primary/5 rounded-xl p-4">
+              <p className="text-xs font-bold text-primary mb-3 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[15px]">add_location_alt</span>
+                Thêm điểm khởi hành mới
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-base pointer-events-none">
+                    flight_takeoff
+                  </span>
+                  <input
+                    ref={newDepartureInputRef}
+                    type="text"
+                    value={newDepartureName}
+                    onChange={(e) => setNewDepartureName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); confirmNewDeparturePoint(newDepartureName); }
+                      if (e.key === "Escape") { setShowNewDeparture(false); setNewDepartureName(""); }
+                    }}
+                    placeholder="Ví dụ: Cà Mau, Bình Dương…"
+                    className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl pl-10 pr-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary outline-none transition-colors"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => confirmNewDeparturePoint(newDepartureName)}
+                  disabled={!newDepartureName.trim()}
+                  className="px-4 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center gap-1.5 shrink-0"
+                >
+                  <span className="material-symbols-outlined text-base">check</span>
+                  Thêm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowNewDeparture(false); setNewDepartureName(""); }}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+                >
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              </div>
+            </div>
+          )}
           <input
             type="text"
             value={form.departurePointEn}

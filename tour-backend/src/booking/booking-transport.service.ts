@@ -1,16 +1,48 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 
 export class AssignBookingTransportDto {
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   outboundTicketCodes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   outboundSeatNumbers?: string[];
+
+  @IsOptional()
+  @IsString()
   outboundPnrCode?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   returnTicketCodes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   returnSeatNumbers?: string[];
+
+  @IsOptional()
+  @IsString()
   returnPnrCode?: string;
+
+  @IsOptional()
+  @IsString()
   vehiclePlate?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   seatNumbers?: string[];
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 

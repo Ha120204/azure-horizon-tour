@@ -132,6 +132,8 @@ export function useTourForm({
   const [departurePointQuery, setDeparturePointQuery] = useState("");
   const [isDeparturePointListOpen, setIsDeparturePointListOpen] =
     useState(false);
+  const [showNewDeparture, setShowNewDeparture] = useState(false);
+  const [newDepartureName, setNewDepartureName] = useState("");
   const [durationMode, setDurationMode] = useState<"preset" | "custom">(
     "preset",
   );
@@ -196,6 +198,14 @@ export function useTourForm({
     handleChange("departurePoint", "");
     setDeparturePointQuery("");
     setIsDeparturePointListOpen(true);
+  };
+
+  const confirmNewDeparturePoint = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    selectDeparturePoint(trimmed);
+    setShowNewDeparture(false);
+    setNewDepartureName("");
   };
 
   const handleDurationSelect = (val: string) => {
@@ -357,6 +367,10 @@ export function useTourForm({
     setDeparturePointQuery,
     isDeparturePointListOpen,
     setIsDeparturePointListOpen,
+    showNewDeparture,
+    setShowNewDeparture,
+    newDepartureName,
+    setNewDepartureName,
     durationMode,
     setDurationMode,
     customDuration,
@@ -392,6 +406,7 @@ export function useTourForm({
     // Handlers — departure point
     selectDeparturePoint,
     clearDeparturePoint,
+    confirmNewDeparturePoint,
 
     // Handlers — image
     handleImageChange,

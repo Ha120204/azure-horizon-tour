@@ -823,6 +823,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     return this.llmClient.chat.completions.create({
       model,
       stream: false,
+      reasoning_effort: 'medium',
       ...payload,
     });
   }
@@ -835,6 +836,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
       model,
       messages,
       stream: true,
+      reasoning_effort: 'medium',
       max_tokens: 1024,
     });
   }

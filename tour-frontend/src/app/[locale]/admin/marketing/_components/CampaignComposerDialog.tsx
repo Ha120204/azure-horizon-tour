@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 import { campaignTypeConfig } from '../_lib/config';
 import type {
   AudienceType,
@@ -56,6 +57,7 @@ export function CampaignComposerDialog({
   const [recipientCandidates, setRecipientCandidates] = useState<Subscriber[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
   const initialFormRef = useRef({ name: campaignForm.name, subject: campaignForm.subject, body: campaignForm.body });
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
 
   const isDirty =
     campaignForm.name !== initialFormRef.current.name ||
@@ -63,7 +65,10 @@ export function CampaignComposerDialog({
     campaignForm.body !== initialFormRef.current.body;
 
   const handleClose = () => {
-    if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+    if (isDirty) {
+      setShowConfirmClose(true);
+      return;
+    }
     onClose();
   };
   const selectedRecipientIds = campaignForm.selectedSubscriberIds;
@@ -479,6 +484,16 @@ export function CampaignComposerDialog({
           </div>
         </div>
       </div>
+
+      {showConfirmClose && (
+        <UnsavedChangesDialog
+          onContinue={() => setShowConfirmClose(false)}
+          onLeave={() => {
+            setShowConfirmClose(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

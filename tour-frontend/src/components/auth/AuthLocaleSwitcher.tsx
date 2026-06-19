@@ -11,6 +11,8 @@ export default function AuthLocaleSwitcher() {
     const toggle = (next: 'vi' | 'en') => {
         if (next === language) return;
         router.replace(pathname as Parameters<typeof router.replace>[0], { locale: next });
+        // Ép fetch lại từ server, nếu không Client Router Cache trả messages của locale cũ.
+        router.refresh();
     };
 
     return (

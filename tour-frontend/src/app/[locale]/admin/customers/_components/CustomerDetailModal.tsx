@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Image from 'next/image';
 import { useAccessibleDialog } from '../../staffs/_hooks/useAccessibleDialog';
 import { bookingStatusStyle, statusConfig } from '../_lib/config';
@@ -5,6 +6,7 @@ import { formatCurrency, formatDate, formatRelativeDate, getAvatarGradient, getI
 import type { CustomerEditForm, User } from '../_lib/types';
 import { CustomerSelect, type CustomerSelectOption } from './CustomerSelect';
 import { DetailInfoCard } from './DetailInfoCard';
+import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 
 const GENDER_OPTIONS: CustomerSelectOption[] = [
     { value: '', label: 'Chưa cập nhật', description: 'Chưa có thông tin giới tính', icon: 'wc' },
@@ -46,6 +48,8 @@ export function CustomerDetailModal({
     onSaveInfo,
     onToggleStatus,
 }: CustomerDetailModalProps) {
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
+
     const isDirty = isEditing && !!user && (
         editForm.fullName !== (user.fullName ?? '') ||
         editForm.phone !== (user.phone ?? '') ||
@@ -54,7 +58,10 @@ export function CustomerDetailModal({
     );
 
     const handleClose = () => {
-        if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+        if (isDirty) {
+            setShowConfirmClose(true);
+            return;
+        }
         onClose();
     };
 
@@ -105,6 +112,16 @@ export function CustomerDetailModal({
                     </>
                 ) : null}
             </section>
+
+            {showConfirmClose && (
+                <UnsavedChangesDialog
+                    onContinue={() => setShowConfirmClose(false)}
+                    onLeave={() => {
+                        setShowConfirmClose(false);
+                        onClose();
+                    }}
+                />
+            )}
         </div>
     );
 }

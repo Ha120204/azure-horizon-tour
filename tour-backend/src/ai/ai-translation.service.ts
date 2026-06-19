@@ -225,7 +225,7 @@ export class AiTranslationService {
     model: string,
     payload: Omit<OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, 'model'>,
   ) {
-    return this.llmClient.chat.completions.create({ model, stream: false, ...payload });
+    return this.llmClient.chat.completions.create({ model, stream: false, reasoning_effort: 'medium', ...payload });
   }
 
   private truncateForTranslation(value: unknown, maxLength = 1200): string {

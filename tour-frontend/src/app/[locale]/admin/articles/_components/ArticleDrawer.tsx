@@ -6,6 +6,7 @@ import { ArticleMetaPanel } from './articleDrawer/ArticleMetaPanel';
 import { ArticleEditorPanel } from './articleDrawer/ArticleEditorPanel';
 import { ArticlePreviewDialog } from './articleDrawer/ArticlePreviewDialog';
 import { ArticlePublishConfirmDialog } from './articleDrawer/ArticlePublishConfirmDialog';
+import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 
 // Re-export Article so consumers can import it from this file directly
 export type { Article } from './articleDrawer/types';
@@ -23,10 +24,14 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
         setField, handleImageUpload, handleTitleChange, handleSlugChange, handleResetSlug,
         handleSave, handlePrimaryAction,
         isDirty,
+        showConfirmClose, setShowConfirmClose,
     } = useArticleForm({ mode, article, userRole, onClose, onSuccess });
 
     const handleClose = () => {
-        if (isDirty.current && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+        if (isDirty.current) {
+            setShowConfirmClose(true);
+            return;
+        }
         onClose();
     };
 
@@ -190,6 +195,15 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
                     onConfirm={() => {
                         setIsPublishConfirmOpen(false);
                         void handleSave('publish');
+                    }}
+                />
+            )}
+            {showConfirmClose && (
+                <UnsavedChangesDialog
+                    onContinue={() => setShowConfirmClose(false)}
+                    onLeave={() => {
+                        setShowConfirmClose(false);
+                        onClose();
                     }}
                 />
             )}

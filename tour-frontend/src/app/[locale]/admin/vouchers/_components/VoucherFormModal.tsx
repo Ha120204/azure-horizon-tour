@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DatePickerDropdown from '@/components/search/DatePickerDropdown';
 import Modal, { ModalBody } from '@/components/ui/Modal';
 import IconButton from '@/components/ui/IconButton';
+import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 import {
   useVoucherForm,
   addDaysToYMD,
@@ -34,6 +35,7 @@ export default function VoucherFormModal({
 }: VoucherFormModalProps) {
   const isEdit = mode === 'edit';
   const firstInputRef = useRef<HTMLInputElement>(null);
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
 
   const {
     form,
@@ -64,7 +66,10 @@ export default function VoucherFormModal({
     : Boolean(form.code || form.label || form.description || (form.discountValue !== '' && form.discountValue !== 0));
 
   const handleClose = () => {
-    if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+    if (isDirty) {
+      setShowConfirmClose(true);
+      return;
+    }
     onClose();
   };
 
@@ -443,6 +448,16 @@ export default function VoucherFormModal({
             )}
           </button>
         </div>
+
+        {showConfirmClose && (
+          <UnsavedChangesDialog
+            onContinue={() => setShowConfirmClose(false)}
+            onLeave={() => {
+              setShowConfirmClose(false);
+              onClose();
+            }}
+          />
+        )}
     </Modal>
   );
 }

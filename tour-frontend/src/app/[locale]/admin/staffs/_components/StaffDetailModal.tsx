@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import { roleConfig, statusConfig } from '../_lib/config';
 import { formatDate, getInitials } from '../_lib/helpers';
 import type { StaffEditForm, User } from '../_lib/types';
 import { StaffSelect } from './StaffSelect';
 import { useAccessibleDialog } from '../_hooks/useAccessibleDialog';
+import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 
 const genderOptions = [
     { value: '', label: 'Chọn giới tính' },
@@ -45,6 +47,8 @@ export function StaffDetailModal({
     onChangeRole,
     onToggleStatus,
 }: StaffDetailModalProps) {
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
+
     const isDirty = isEditing && !!user && (
         editForm.fullName !== (user.fullName ?? '') ||
         editForm.phone !== (user.phone ?? '') ||
@@ -53,7 +57,10 @@ export function StaffDetailModal({
     );
 
     const handleClose = () => {
-        if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+        if (isDirty) {
+            setShowConfirmClose(true);
+            return;
+        }
         onClose();
     };
 
@@ -117,6 +124,16 @@ export function StaffDetailModal({
                     </>
                 )}
             </div>
+
+            {showConfirmClose && (
+                <UnsavedChangesDialog
+                    onContinue={() => setShowConfirmClose(false)}
+                    onLeave={() => {
+                        setShowConfirmClose(false);
+                        onClose();
+                    }}
+                />
+            )}
         </div>
     );
 }

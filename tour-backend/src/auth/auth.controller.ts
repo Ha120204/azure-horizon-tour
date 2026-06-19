@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -218,7 +219,7 @@ export class AuthController {
    * Passport xử lý tự động — không cần body.
    */
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleOAuthGuard)
   googleAuth() {}
 
   /**
@@ -266,12 +267,17 @@ export class AuthController {
       callbackUrl.searchParams.set('avatar', user['avatarUrl'] as string);
     }
 
-    // Admin/Staff/SuperAdmin → redirect thẳng vào dashboard tương ứng
+    // Lưu role để trang khách hiện nút "đi tới quản trị" trong dropdown
     const role = user['role'] as string;
-    if (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'STAFF') {
+    callbackUrl.searchParams.set('role', role);
+
+    // Chỉ đẩy thẳng vào dashboard khi bấm Google TỪ trang quản trị (state='admin')
+    // và tài khoản đúng là admin/staff. Bấm ở trang khách → ở lại trang khách.
+    const from = req.query.state;
+    const isAdminRole = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'STAFF';
+    if (from === 'admin' && isAdminRole) {
       const adminPath = role === 'SUPER_ADMIN' ? '/admin/super' : '/admin';
       callbackUrl.searchParams.set('redirect', adminPath);
-      callbackUrl.searchParams.set('role', role);
     }
 
     res.redirect(callbackUrl.toString());

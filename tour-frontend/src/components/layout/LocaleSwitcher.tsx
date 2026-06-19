@@ -52,6 +52,11 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
         const href = queryStr ? `${pathname}?${queryStr}` : pathname;
         
         router.replace(href as Parameters<typeof router.replace>[0], { locale: tempLang });
+
+        // Đổi locale chỉ là soft-navigation: Next.js giữ lại layout [locale] dùng chung và
+        // có thể trả bản RSC cũ từ Client Router Cache → messages của next-intl không đổi cho
+        // tới khi reload. refresh() ép fetch lại route hiện tại từ server để lấy đúng ngôn ngữ.
+        router.refresh();
     };
 
     if (!isOpen) return null;

@@ -69,10 +69,18 @@ export default function AdminLoginPage() {
         }
     }, [isCheckingAuth]);
 
+    useEffect(() => {
+        const handlePageShow = (e: PageTransitionEvent) => {
+            if (e.persisted) setIsGoogleLoading(false);
+        };
+        window.addEventListener('pageshow', handlePageShow);
+        return () => window.removeEventListener('pageshow', handlePageShow);
+    }, []);
+
     const handleGoogleLogin = () => {
         if (isGoogleLoading || isLoading) return;
         setIsGoogleLoading(true);
-        window.location.href = `${API_BASE_URL}/auth/google`;
+        window.location.href = `${API_BASE_URL}/auth/google?from=admin`;
     };
 
     const handleLogin = async (e: React.FormEvent) => {

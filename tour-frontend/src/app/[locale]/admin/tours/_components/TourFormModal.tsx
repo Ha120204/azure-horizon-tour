@@ -108,6 +108,11 @@ export default function TourFormModal({
     handleCreateDestination,
     selectDeparturePoint,
     clearDeparturePoint,
+    showNewDeparture,
+    setShowNewDeparture,
+    newDepartureName,
+    setNewDepartureName,
+    confirmNewDeparturePoint,
     handleImageChange,
     updateDeparture,
     updateDepartureCategory,
@@ -440,6 +445,11 @@ export default function TourFormModal({
                 handleCreateDestination={handleCreateDestination}
                 selectDeparturePoint={selectDeparturePoint}
                 clearDeparturePoint={clearDeparturePoint}
+                showNewDeparture={showNewDeparture}
+                setShowNewDeparture={setShowNewDeparture}
+                newDepartureName={newDepartureName}
+                setNewDepartureName={setNewDepartureName}
+                confirmNewDeparturePoint={confirmNewDeparturePoint}
                 handleDurationSelect={handleDurationSelect}
                 onClearDurationError={() =>
                   setErrors((p) => ({ ...p, duration: undefined }))

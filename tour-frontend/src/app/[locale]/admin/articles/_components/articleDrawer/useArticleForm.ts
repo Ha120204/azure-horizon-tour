@@ -61,6 +61,7 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
     const [isPublishConfirmOpen, setIsPublishConfirmOpen] = useState(false);
     const [isSlugEdited, setIsSlugEdited] = useState(false);
     const [imgError, setImgError] = useState(false);
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
     const titleRef = useRef<HTMLInputElement>(null);
     const hasEdited = useRef(false);
 
@@ -105,14 +106,15 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
             if (e.key !== 'Escape') return;
             if (isPreviewOpen) { setIsPreviewOpen(false); return; }
             if (isPublishConfirmOpen) { setIsPublishConfirmOpen(false); return; }
-            if (hasEdited.current && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+            if (showConfirmClose) { setShowConfirmClose(false); return; }
+            if (hasEdited.current) { setShowConfirmClose(true); return; }
             onClose();
         };
         window.addEventListener('keydown', h);
         document.body.style.overflow = 'hidden';
         setTimeout(() => titleRef.current?.focus(), 200);
         return () => { window.removeEventListener('keydown', h); document.body.style.overflow = ''; };
-    }, [isPreviewOpen, isPublishConfirmOpen, onClose]);
+    }, [isPreviewOpen, isPublishConfirmOpen, showConfirmClose, onClose]);
 
     useEffect(() => {
         if (!form.content || form.content === '<p><br></p>') {
@@ -263,5 +265,6 @@ export function useArticleForm({ mode, article, userRole = '', onClose, onSucces
         setField, handleImageUpload, handleTitleChange, handleSlugChange, handleResetSlug,
         handleSave, handlePrimaryAction,
         isDirty: hasEdited,
+        showConfirmClose, setShowConfirmClose,
     };
 }

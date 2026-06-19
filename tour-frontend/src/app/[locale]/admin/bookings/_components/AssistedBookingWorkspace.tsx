@@ -1,9 +1,11 @@
 ﻿'use client';
 
+import { useState } from 'react';
 import {
   getPassengerMaxDate,
   getPassengerMinDate,
 } from '@/lib/booking/passengerDetails';
+import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 import {
   CONFIRMATION_CHANNEL_OPTIONS,
   PASSENGER_PRICING,
@@ -106,6 +108,8 @@ export function AssistedBookingWorkspace({
     submitDraftActionDialog, confirmDeleteDraft,
   } = useAssistedBookingWorkspace({ onChanged, showToast });
 
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
+
   const isDirty = editingDraft
     ? (form.customerName !== (editingDraft.customerName ?? '') ||
        form.customerEmail !== (editingDraft.customerEmail ?? '') ||
@@ -113,7 +117,16 @@ export function AssistedBookingWorkspace({
     : Boolean(form.customerName || form.customerEmail || form.customerPhone || form.tourId);
 
   const handleCloseDrawer = () => {
-    if (isDirty && !window.confirm('Bạn có chắc muốn thoát? Dữ liệu đã nhập sẽ bị mất.')) return;
+    if (isDirty) {
+      setShowConfirmClose(true);
+      return;
+    }
+    setIsDrawerOpen(false);
+    resetDraftForm();
+  };
+
+  const confirmLeaveDrawer = () => {
+    setShowConfirmClose(false);
     setIsDrawerOpen(false);
     resetDraftForm();
   };
@@ -785,6 +798,13 @@ export function AssistedBookingWorkspace({
             </div>
           </aside>
         </div>
+      )}
+
+      {showConfirmClose && (
+        <UnsavedChangesDialog
+          onContinue={() => setShowConfirmClose(false)}
+          onLeave={confirmLeaveDrawer}
+        />
       )}
     </section>
   );

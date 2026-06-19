@@ -286,7 +286,7 @@ export default function PassengerSection({
                                     onChange={(value) => setLeadTraveler({ ...leadTraveler, identityType: value, identityNo: '' })}
                                 />
                                 <input
-                                    className={`flex-1 bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${leadIdentityError ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
+                                    className={`min-w-0 flex-1 bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${leadIdentityError ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
                                     type="text"
                                     placeholder={(leadTraveler.identityType || 'CCCD') === 'CCCD' ? t('checkout.enterCitizenId') : t('checkout.enterPassport')}
                                     value={leadTraveler.identityNo || ''}
@@ -609,7 +609,7 @@ export default function PassengerSection({
                                             onChange={(value) => setTempFormData({ ...tempFormData, identityType: value, identityNo: '' })}
                                         />
                                         <input
-                                            className={`flex-1 bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${
+                                            className={`min-w-0 flex-1 bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${
                                                 tempIdentityError ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'
                                             }`}
                                             type="text"

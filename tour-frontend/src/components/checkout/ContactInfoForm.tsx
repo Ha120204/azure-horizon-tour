@@ -123,7 +123,7 @@ export default function ContactInfoForm({
                                     if (isBookForMyself) setLeadTraveler(prev => ({ ...prev, identityType: newType, identityNo: '' }));
                                 }}
                             />
-                            <div className="flex-1">
+                            <div className="min-w-0 flex-1">
                                 <input
                                     className={`w-full bg-surface-container-low border-none rounded-lg p-3 md:p-4 focus:ring-1 outline-none ${identityError ? 'ring-1 ring-error/60 bg-error/5 focus:ring-error' : 'focus:ring-primary'}`}
                                     type="text"

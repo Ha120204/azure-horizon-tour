@@ -77,7 +77,7 @@ export function CustomerDetailModal({
             aria-modal="true"
             aria-labelledby="customer-detail-title"
         >
-            <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" onClick={isSaving ? undefined : handleClose} />
+            <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]" aria-hidden="true" />
 
             <section className="relative flex max-h-[92vh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border border-outline-variant/15 bg-surface-container-lowest shadow-2xl animate-fade-slide-up">
                 {isLoading && !user ? (

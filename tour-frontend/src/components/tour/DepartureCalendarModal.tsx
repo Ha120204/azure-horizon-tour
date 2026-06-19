@@ -100,11 +100,11 @@ export default function DepartureCalendarModal({
         const isSelected = selectedDeparture?.id === departure?.id;
         const isSoldOut = departure?.availableSeats === 0;
         const isRunningLow = Boolean(departure && departure.availableSeats > 0 && departure.availableSeats <= LOW_SEAT_THRESHOLD);
+        // Luôn hiển thị số ghế còn lại để người dùng thấy "còn bao nhiêu ghế",
+        // nhất là trên màn hình điện thoại hẹp (text dạng "12 ghế" gọn hơn "Có sẵn chỗ").
         const statusText = isSoldOut
             ? t('tour_detail.soldOut')
-            : isRunningLow
-                ? t('tour_detail.seatsLeft', { seats: departure.availableSeats })
-                : t('tour_detail.availableSeats');
+            : t('tour_detail.seatsLeft', { seats: departure?.availableSeats ?? 0 });
         const statusToneClass = isSoldOut
             ? 'bg-red-50 text-red-600 border-red-100'
             : isRunningLow
@@ -140,7 +140,7 @@ export default function DepartureCalendarModal({
                             <span className={`w-1.5 h-1.5 rounded-full mt-1.5 mr-0.5 ${statusDotClass}`}></span>
                         </div>
                         <div className="w-full text-left mt-auto">
-                            <p className={`inline-flex max-w-full rounded-md border px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold leading-tight ${statusToneClass}`}>
+                            <p className={`inline-flex max-w-full rounded-md border px-1 py-0.5 sm:px-1.5 text-[9px] sm:text-[10px] font-bold leading-tight ${statusToneClass}`}>
                                 <span className="truncate">{statusText}</span>
                             </p>
                         </div>
@@ -183,9 +183,9 @@ export default function DepartureCalendarModal({
                 </div>
 
                 {/* Calendar Grid */}
-                <div className="px-6 pb-6 overflow-y-auto">
+                <div className="px-3 sm:px-6 pb-6 overflow-y-auto">
                     {/* Days of week */}
-                    <div className="grid grid-cols-7 gap-2 sm:gap-3 mb-2">
+                    <div className="grid grid-cols-7 gap-1.5 sm:gap-3 mb-2">
                         {dayNames.map((day, i) => (
                             <div key={day} className={`text-center text-xs font-bold uppercase tracking-wider py-2 ${i === 6 ? 'text-red-500' : 'text-outline'}`}>
                                 {day}
@@ -194,7 +194,7 @@ export default function DepartureCalendarModal({
                     </div>
                     
                     {/* Dates */}
-                    <div className="grid grid-cols-7 gap-2 sm:gap-3">
+                    <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
                         {cells}
                     </div>
 

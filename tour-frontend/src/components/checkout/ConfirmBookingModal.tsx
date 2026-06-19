@@ -87,8 +87,8 @@ export default function ConfirmBookingModal({
 
     return (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-[3px] sm:p-4">
-            <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[1.75rem] border border-white/80 bg-surface-container-lowest shadow-[0_28px_80px_rgba(15,23,42,0.28)] animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-200">
-                <div className="flex items-start gap-4 border-b border-outline-variant/10 px-5 py-5 sm:px-7">
+            <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] border border-white/80 bg-surface-container-lowest shadow-[0_28px_80px_rgba(15,23,42,0.28)] animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-200">
+                <div className="flex shrink-0 items-start gap-4 border-b border-outline-variant/10 px-5 py-5 sm:px-7">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/10">
                         <span className="material-symbols-outlined text-[22px]">verified_user</span>
                     </div>
@@ -110,7 +110,7 @@ export default function ConfirmBookingModal({
                     </button>
                 </div>
 
-                <div className="max-h-[calc(92vh-96px)] overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
                     <div className="space-y-5">
                         <section className="rounded-3xl border border-outline-variant/20 bg-surface-container-low/50 p-5">
                             <h4 className="mb-4 flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-[0.14em] text-primary">

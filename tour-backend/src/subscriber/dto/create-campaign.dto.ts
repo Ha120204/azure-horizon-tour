@@ -34,20 +34,22 @@ export class CreateCampaignDto {
   @IsIn(CAMPAIGN_TYPES)
   type?: CampaignType;
 
+  // Bản nháp được phép để trống tiêu đề/nội dung; ràng buộc bắt buộc chỉ áp dụng
+  // khi lên lịch gửi (xem subscriber.service.scheduleCampaign).
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Tiêu đề email là bắt buộc' })
   @MaxLength(CAMPAIGN_SUBJECT_MAX)
-  subject: string;
+  subject?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(CAMPAIGN_PREVIEW_MAX)
   previewText?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Nội dung email là bắt buộc' })
   @MaxLength(CAMPAIGN_BODY_MAX)
-  body: string;
+  body?: string;
 
   @IsIn(CAMPAIGN_AUDIENCES, { message: 'Đối tượng nhận không hợp lệ' })
   audience: CampaignAudience;

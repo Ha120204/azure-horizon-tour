@@ -37,7 +37,7 @@ export default function ArticleDrawer({ mode, article, userRole = '', onClose, o
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="am-title">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-hidden="true" />
 
             <div className="relative w-full max-w-[1240px] max-h-[92vh] flex flex-col bg-surface rounded-3xl shadow-2xl overflow-hidden animate-fade-slide-up">
 

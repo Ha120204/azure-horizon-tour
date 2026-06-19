@@ -213,9 +213,9 @@ export class SubscriberService {
       data: {
         campaignName: dto.campaignName,
         type: dto.type,
-        subject: dto.subject,
+        subject: dto.subject ?? '',
         previewText: dto.previewText,
-        body: dto.body,
+        body: dto.body ?? '',
         audience: dto.audience,
         audienceFilter,
         recipientIds,
@@ -283,6 +283,9 @@ export class SubscriberService {
     if (!campaign) throw new NotFoundException('Không tìm thấy bản nháp chiến dịch');
     if (campaign.status !== 'DRAFT') {
       throw new ConflictException('Chỉ có thể lên lịch chiến dịch ở dạng bản nháp');
+    }
+    if (!campaign.subject?.trim() || !campaign.body?.trim()) {
+      throw new BadRequestException('Vui lòng nhập tiêu đề và nội dung email trước khi lên lịch gửi');
     }
     if (campaign.audience === 'MANUAL_SELECTION' && this.normalizeRecipientIds(campaign.recipientIds).length === 0) {
       throw new BadRequestException('Vui lòng chọn ít nhất một người đăng ký để gửi');

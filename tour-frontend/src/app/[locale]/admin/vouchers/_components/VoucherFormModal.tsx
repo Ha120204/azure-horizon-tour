@@ -74,7 +74,7 @@ export default function VoucherFormModal({
   };
 
   return (
-    <Modal open onClose={handleClose} size="md" labelledBy="voucher-form-title">
+    <Modal open onClose={handleClose} closeOnBackdrop={false} size="md" labelledBy="voucher-form-title">
         <div className="flex items-center justify-between px-7 py-5 border-b border-outline-variant/10 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">

@@ -176,7 +176,7 @@ export function CampaignComposerDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button className="absolute inset-0 bg-slate-950/55" onClick={handleClose} aria-label="Đóng trình soạn" />
+      <div className="absolute inset-0 bg-slate-950/55" aria-hidden="true" />
       <div className="relative flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
           <div>

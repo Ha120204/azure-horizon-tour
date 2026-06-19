@@ -59,7 +59,9 @@
   font-family: "Material Symbols Outlined";
   font-style: normal;
   font-weight: 100 700;
-  font-display: swap;
+  /* block (không swap): ẩn icon trong lúc font tải thay vì hiện tên ligature thô
+     (vd "progress_activity") — tránh chữ dài nhấp nháy/xoay khi reload cứng. */
+  font-display: block;
   src: url("/fonts/material-symbols-outlined.woff2") format("woff2");
 }
 

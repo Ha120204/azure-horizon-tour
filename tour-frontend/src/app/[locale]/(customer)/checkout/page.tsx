@@ -155,6 +155,16 @@ function CheckoutContent() {
         setTimeout(() => setErrorMsg(''), 4000);
     };
 
+    // Backend trả message tiếng Anh cho các lỗi nghiệp vụ booking; map sang đúng
+    // ngôn ngữ đang chọn để tránh lẫn lộn Anh-Việt trên giao diện.
+    const translateBookingError = (raw?: string): string => {
+        if (!raw) return t('checkout.errors.tryAgain');
+        const normalized = raw.toLowerCase();
+        if (normalized.includes('not enough seats')) return t('checkout.errors.notEnoughSeats');
+        if (normalized.includes('invalid departure')) return t('checkout.errors.invalidDeparture');
+        return raw;
+    };
+
     const handleOpenConfirmModal = () => {
         if (!contactInfo.fullName || !contactInfo.email || !contactInfo.phone || !contactInfo.identityNo) {
             showError(t('checkout.errors.fillContact'));
@@ -689,7 +699,7 @@ function CheckoutContent() {
                 const bookingCode = data.booking?.bookingCode || data.bookingCode;
                 router.push(`/${language}/payment?bookingCode=${bookingCode}`);
             } else {
-                showError(t('checkout.errors.paymentInit') + ": " + (payload.message || data.message || t('checkout.errors.tryAgain')));
+                showError(t('checkout.errors.paymentInit') + ": " + translateBookingError(payload.message || data.message));
                 setIsPaymentLoading(false);
             }
 

@@ -94,7 +94,9 @@
       "serverFail": "Không thể kết nối đến máy chủ.",
       "paymentCancelledHome": "Thanh toán không thành công. Đơn đặt tour của bạn đã được lưu ở trạng thái \"Chờ thanh toán\". Bạn có thể vào \"Lịch sử đặt tour\" để tiến hành thanh toán lại.",
       "passengerFormIncomplete": "Vui lòng hoàn thành hoặc hủy bỏ thông tin hành khách đang nhập dở.",
-      "leadIdentityRequired": "Vui lòng nhập giấy tờ tùy thân cho Hành khách 1!"
+      "leadIdentityRequired": "Vui lòng nhập giấy tờ tùy thân cho Hành khách 1!",
+      "notEnoughSeats": "Lịch khởi hành này không còn đủ chỗ trống.",
+      "invalidDeparture": "Lịch khởi hành không hợp lệ."
     },
     "voucherTitle": "Mã giảm giá",
     "enterVoucher": "Nhập mã voucher",

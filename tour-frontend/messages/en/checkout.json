@@ -94,7 +94,9 @@
       "serverFail": "Failed to connect to the server.",
       "paymentCancelledHome": "Payment was unsuccessful. Your booking has been saved in 'Pending Payment' status. You can go to 'My Bookings' to complete the payment.",
       "passengerFormIncomplete": "Please complete or cancel the passenger form that is currently in progress.",
-      "leadIdentityRequired": "Please enter the identity document for Passenger 1!"
+      "leadIdentityRequired": "Please enter the identity document for Passenger 1!",
+      "notEnoughSeats": "This departure no longer has enough available seats.",
+      "invalidDeparture": "Invalid departure schedule."
     },
     "voucherTitle": "Voucher Code",
     "enterVoucher": "Enter voucher code",

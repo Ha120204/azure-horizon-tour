@@ -232,10 +232,9 @@ export function AssistedBookingWorkspace({
       />
 
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:p-6" onMouseDown={handleCloseDrawer}>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:p-6">
           <aside
             className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] bg-slate-50 shadow-2xl ring-1 ring-white/50"
-            onMouseDown={e => e.stopPropagation()}
           >
             <div className="border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
               <div className="flex items-start justify-between gap-4">

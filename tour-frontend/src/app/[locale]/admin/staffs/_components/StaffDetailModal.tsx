@@ -77,9 +77,6 @@ export function StaffDetailModal({
             aria-labelledby="detail-title"
             aria-describedby={user ? 'detail-description' : undefined}
             aria-busy={isLoading || isSaving}
-            onMouseDown={event => {
-                if (event.target === event.currentTarget && !isSaving) handleClose();
-            }}
         >
             <div className="pointer-events-none absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
 

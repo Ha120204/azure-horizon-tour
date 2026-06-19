@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useLocale } from '@/context/LocaleContext';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { useSearchParams } from 'next/navigation';
+import { setLocaleCookie } from '@/lib/i18n/setLocaleCookie';
 
 interface LocaleSwitcherProps {
     isOpen: boolean;
@@ -46,11 +47,13 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
     const handleConfirm = () => {
         setCurrency(tempCur);
         onClose();
-        
+
+        setLocaleCookie(tempLang);
+
         // Điều hướng sang locale mới, GỮI NGUYÊN các query params (?tourId=...)
         const queryStr = searchParams.toString();
         const href = queryStr ? `${pathname}?${queryStr}` : pathname;
-        
+
         router.replace(href as Parameters<typeof router.replace>[0], { locale: tempLang });
 
         // Đổi locale chỉ là soft-navigation: Next.js giữ lại layout [locale] dùng chung và

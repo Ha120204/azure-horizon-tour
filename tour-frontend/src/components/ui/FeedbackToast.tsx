@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 type FeedbackToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -44,10 +44,18 @@ export default function FeedbackToast({
 }: FeedbackToastProps) {
     const tone = toastTone[type];
 
+    // Giữ onClose trong ref để timer chỉ đặt một lần theo duration; nếu phụ thuộc
+    // trực tiếp onClose, mỗi lần toast khác stack vào sẽ tạo onClose mới và reset
+    // timer khiến toast không tự biến mất.
+    const onCloseRef = useRef(onClose);
     useEffect(() => {
-        const timeoutId = window.setTimeout(onClose, duration);
+        onCloseRef.current = onClose;
+    }, [onClose]);
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => onCloseRef.current(), duration);
         return () => window.clearTimeout(timeoutId);
-    }, [duration, onClose]);
+    }, [duration]);
 
     if (!message && !title) return null;
 

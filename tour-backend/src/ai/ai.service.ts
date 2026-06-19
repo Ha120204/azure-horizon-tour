@@ -1229,17 +1229,29 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     try {
       let fullText = '';
       let emittedChars = 0;
+      const CARD_MARKER = '<<<TOUR_CARD>>>';
+      const HOLD_BACK = CARD_MARKER.length - 1; // 14 chars — đủ để phát hiện marker bị vỡ chunk
 
       for await (const chunk of stream) {
         const token = chunk.choices[0]?.delta?.content || '';
         if (!token) continue;
         fullText += token;
 
-        const cardStart = fullText.indexOf('<<<TOUR_CARD>>>');
-        const safeUpTo = cardStart === -1 ? fullText.length : cardStart;
-        if (safeUpTo > emittedChars) {
-          yield { token: fullText.slice(emittedChars, safeUpTo) };
-          emittedChars = safeUpTo;
+        const cardStart = fullText.indexOf(CARD_MARKER);
+        if (cardStart !== -1) {
+          // Marker đầy đủ — emit đến trước marker rồi dừng
+          if (cardStart > emittedChars) {
+            yield { token: fullText.slice(emittedChars, cardStart) };
+            emittedChars = cardStart;
+          }
+        } else {
+          // Chưa thấy marker đầy đủ — giữ lại HOLD_BACK ký tự cuối
+          // phòng trường hợp chúng là phần đầu của marker bị vỡ chunk
+          const safeUpTo = Math.max(emittedChars, fullText.length - HOLD_BACK);
+          if (safeUpTo > emittedChars) {
+            yield { token: fullText.slice(emittedChars, safeUpTo) };
+            emittedChars = safeUpTo;
+          }
         }
       }
 

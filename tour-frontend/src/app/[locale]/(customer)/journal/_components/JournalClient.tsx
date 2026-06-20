@@ -62,7 +62,7 @@ export default function JournalClient({ initialArticles, initialFeatured, initia
         <>
             <Header />
 
-            <main className="max-w-[1440px] mx-auto min-h-screen bg-slate-50 pb-24 font-sans pt-24">
+            <main className="max-w-[1440px] mx-auto min-h-screen bg-slate-50 pb-24 font-sans pt-24 overflow-x-clip">
                 {/* ── Editorial Hero Header ── */}
                 <header className="relative overflow-hidden pt-16 pb-0 text-center"
                     style={{ background: 'linear-gradient(160deg, #f8f7f4 0%, #eef2ff 55%, #f1f5fb 100%)' }}>
@@ -84,7 +84,7 @@ export default function JournalClient({ initialArticles, initialFeatured, initia
                         </div>
 
                         {/* Main title */}
-                        <h1 className="text-[4rem] md:text-[5.5rem] font-extrabold tracking-tighter text-slate-900 leading-[0.9] animate-fade-in-up">
+                        <h1 className="text-[2.75rem] sm:text-[4rem] md:text-[5.5rem] font-extrabold tracking-tighter text-slate-900 leading-[0.9] break-words animate-fade-in-up">
                             {t('journal.title').replace('.', '')}<span className="text-blue-600">.</span>
                         </h1>
 

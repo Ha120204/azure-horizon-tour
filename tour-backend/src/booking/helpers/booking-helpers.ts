@@ -154,10 +154,14 @@ export function calculateBookingHoldExpiresAt({
   paymentMethod,
   departureDate,
   now = new Date(),
+  holdMinutes = PAYOS_HOLD_MINUTES,
 }: {
   paymentMethod: HoldPaymentMethod;
   departureDate: Date;
   now?: Date;
+  // Cửa sổ giữ chỗ PAYOS (phút) — cấu hình tại Cài đặt hệ thống (booking_hold_minutes).
+  // IN_STORE dùng trần giờ riêng nên không chịu ảnh hưởng tham số này.
+  holdMinutes?: number;
 }): Date {
   if (departureDate.getTime() <= now.getTime()) {
     throw new BadRequestException('Tour da khoi hanh hoac khong con nhan dat cho.');
@@ -166,7 +170,7 @@ export function calculateBookingHoldExpiresAt({
   const methodHoldMs =
     paymentMethod === 'IN_STORE'
       ? IN_STORE_MAX_HOLD_HOURS * 60 * 60 * 1000
-      : PAYOS_HOLD_MINUTES * 60 * 1000;
+      : holdMinutes * 60 * 1000;
   const maxByMethod = new Date(now.getTime() + methodHoldMs);
 
   if (paymentMethod === 'PAYOS') {

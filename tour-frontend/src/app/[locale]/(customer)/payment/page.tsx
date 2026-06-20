@@ -63,7 +63,8 @@ const dict = {
         hoursValue: "Thứ 2 - Thứ 6 (08:00 - 18:00)",
         phoneLabel: "Điện thoại hỗ trợ:",
         inStoreWarning: "Hệ thống sẽ giữ chỗ đặt tour của bạn trong 24 giờ kể từ thời điểm đăng ký. Đơn đặt sẽ tự động hủy nếu quá thời hạn trên mà chưa nhận được xác nhận thanh toán tại cửa hàng.",
-        cancelBtn: "Hủy giao dịch",
+        editBtn: "Quay lại sửa thông tin",
+        cancelBtn: "Hủy đơn",
         payosBtn: "Thanh toán bằng mã QR",
         inStoreBtn: "Xác nhận đặt giữ chỗ",
         qrModalTitle: "Thanh toán chuyển khoản",
@@ -97,10 +98,14 @@ const dict = {
         checkingNow: "Đang kiểm tra...",
         paymentSuccess: "Thanh toán thành công!",
         redirectingToConfirm: "Đang chuyển đến trang xác nhận...",
-        cancelConfirmTitle: "Xác nhận hủy giao dịch?",
-        cancelConfirmDesc: "Đơn đặt chỗ của bạn hiện đang chờ thanh toán. Nếu bạn rời khỏi trang này, đơn hàng sẽ bị **hủy bỏ hoàn toàn** và chỗ ngồi sẽ được trả về hệ thống. Bạn có chắc chắn muốn quay lại để thay đổi thông tin?",
+        editConfirmTitle: "Quay lại chỉnh sửa thông tin?",
+        editConfirmDesc: "Đơn giữ chỗ hiện tại sẽ được hủy và chỗ ngồi mở lại. Thông tin bạn đã nhập vẫn được giữ để chỉnh sửa, sau đó bạn đặt lại và thanh toán.",
+        editConfirmNo: "Không, tiếp tục thanh toán",
+        editConfirmYes: "Quay lại chỉnh sửa",
+        cancelConfirmTitle: "Hủy đơn đặt chỗ?",
+        cancelConfirmDesc: "Đơn đặt chỗ của bạn sẽ bị hủy hoàn toàn và chỗ ngồi được trả về hệ thống. Bạn sẽ được đưa về trang chủ. Bạn có chắc chắn muốn hủy?",
         cancelConfirmNo: "Không, tiếp tục thanh toán",
-        cancelConfirmYes: "Xác nhận hủy đơn",
+        cancelConfirmYes: "Hủy đơn",
         loadingPayment: "Đang tải thông tin thanh toán..."
     },
     en: {
@@ -120,7 +125,8 @@ const dict = {
         hoursValue: "Monday - Friday (08:00 - 18:00)",
         phoneLabel: "Support Phone:",
         inStoreWarning: "The system will hold your tour reservation for 24 hours. The booking will automatically cancel after this deadline if store payment confirmation is not received.",
-        cancelBtn: "Cancel Transaction",
+        editBtn: "Back to edit details",
+        cancelBtn: "Cancel booking",
         payosBtn: "Pay with QR Code",
         inStoreBtn: "Confirm Reservation",
         qrModalTitle: "Bank Transfer Payment",
@@ -154,10 +160,14 @@ const dict = {
         checkingNow: "Checking...",
         paymentSuccess: "Payment successful!",
         redirectingToConfirm: "Redirecting to confirmation page...",
-        cancelConfirmTitle: "Confirm Cancel Transaction?",
-        cancelConfirmDesc: "Your booking is currently awaiting payment. If you leave this page, your order will be **fully cancelled** and your seat will be released. Are you sure you want to go back to change your information?",
+        editConfirmTitle: "Go back to edit details?",
+        editConfirmDesc: "Your current held order will be cancelled and the seats released. The details you entered are kept so you can edit them, then book again and pay.",
+        editConfirmNo: "No, Continue Payment",
+        editConfirmYes: "Go back to edit",
+        cancelConfirmTitle: "Cancel this booking?",
+        cancelConfirmDesc: "Your booking will be fully cancelled and the seats released back to the system. You will be taken to the homepage. Are you sure you want to cancel?",
         cancelConfirmNo: "No, Continue Payment",
-        cancelConfirmYes: "Confirm Cancel Booking",
+        cancelConfirmYes: "Cancel booking",
         loadingPayment: "Loading payment details..."
     }
 };
@@ -188,16 +198,18 @@ function PaymentSelectorContent() {
         }
     }, []);
 
+    const [isEditConfirmOpen, setIsEditConfirmOpen] = useState(false);
     const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
 
-    // Chặn nút Back của trình duyệt (popstate)
+    // Chặn nút Back của trình duyệt (popstate) → coi như "quay lại sửa thông tin"
+    // (luồng ít phá hủy nhất, đưa khách về checkout với dữ liệu được giữ nguyên).
     useEffect(() => {
         if (typeof window !== 'undefined') {
             window.history.pushState(null, '', window.location.href);
 
             const handlePopState = (e: PopStateEvent) => {
                 e.preventDefault();
-                setIsCancelConfirmOpen(true);
+                setIsEditConfirmOpen(true);
                 window.history.pushState(null, '', window.location.href);
             };
 
@@ -208,33 +220,48 @@ function PaymentSelectorContent() {
         }
     }, []);
 
-    // Xử lý hủy đơn chủ động (giải phóng ghế trống và chuyển trang về checkout)
-    const handleActiveCancel = async () => {
+    // Hủy đơn giữ chỗ hiện tại (giải phóng ghế). Đơn PENDING chưa thanh toán bị hủy
+    // ngay phía backend, ghế được trả lại.
+    const cancelHeldBooking = async (reason: string) => {
+        if (!booking) return;
+        await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/cancel-request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason }),
+        });
+    };
+
+    // "Quay lại sửa thông tin": hủy hold rồi về checkout. Dữ liệu đã nhập vẫn còn
+    // trong sessionStorage nên khách chỉ cần chỉnh và đặt lại.
+    const handleEditBack = async () => {
         if (!booking) {
             router.push(`/${language}/destinations`);
             return;
         }
+        const depQuery = booking.departureId ? `&departureId=${booking.departureId}` : '';
         try {
             setIsSubmitting(true);
-            await fetchWithAuth(`${API_BASE_URL}/booking/${booking.id}/cancel-request`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ reason: 'Khách hàng chủ động hủy để sửa thông tin' })
-            });
-
-            // Điều hướng khách hàng quay lại checkout kèm theo tourId & departureId
-            const depQuery = booking.departureId ? `&departureId=${booking.departureId}` : '';
-            router.push(`/${language}/checkout?tourId=${booking.tour.id}${depQuery}`);
+            await cancelHeldBooking('Khách quay lại sửa thông tin');
         } catch (error) {
-            console.error('Lỗi khi hủy đơn chủ động:', error);
-            // Dù lỗi mạng vẫn cho khách về checkout để họ không bị kẹt
-            const depQuery = booking.departureId ? `&departureId=${booking.departureId}` : '';
+            console.error('Lỗi khi quay lại sửa thông tin:', error);
+        } finally {
+            setIsSubmitting(false);
+            setIsEditConfirmOpen(false);
             router.push(`/${language}/checkout?tourId=${booking.tour.id}${depQuery}`);
+        }
+    };
+
+    // "Hủy đơn": hủy hold rồi về trang chủ.
+    const handleCancelOrder = async () => {
+        try {
+            setIsSubmitting(true);
+            await cancelHeldBooking('Khách hủy đơn');
+        } catch (error) {
+            console.error('Lỗi khi hủy đơn:', error);
         } finally {
             setIsSubmitting(false);
             setIsCancelConfirmOpen(false);
+            router.push(`/${language}`);
         }
     };
 
@@ -560,19 +587,28 @@ function PaymentSelectorContent() {
                         </div>
 
                         {/* CTA Action button */}
-                        <div className="flex items-center justify-end gap-4">
-                            <button
-                                onClick={() => setIsCancelConfirmOpen(true)}
-                                className="group inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-on-surface-variant shadow-sm outline-none transition-[background-color,border-color,box-shadow,transform,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-on-surface hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none"
-                            >
-                                <span
-                                    className="material-symbols-outlined text-[17px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-rotate-6 motion-reduce:transform-none"
-                                    aria-hidden="true"
+                        <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsEditConfirmOpen(true)}
+                                    className="group inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-bold text-on-surface-variant shadow-sm outline-none transition-[background-color,border-color,box-shadow,transform,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:text-on-surface hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none"
                                 >
-                                    close
-                                </span>
-                                <span>{d.cancelBtn}</span>
-                            </button>
+                                    <span
+                                        className="material-symbols-outlined text-[17px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-0.5 motion-reduce:transform-none"
+                                        aria-hidden="true"
+                                    >
+                                        arrow_back
+                                    </span>
+                                    <span>{d.editBtn}</span>
+                                </button>
+                                <button
+                                    onClick={() => setIsCancelConfirmOpen(true)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-bold text-red-600 outline-none transition-colors hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 active:scale-[0.98]"
+                                >
+                                    <span className="material-symbols-outlined text-[17px]" aria-hidden="true">close</span>
+                                    <span>{d.cancelBtn}</span>
+                                </button>
+                            </div>
                             <button
                                 onClick={handleConfirmPayment}
                                 disabled={isSubmitting}
@@ -675,12 +711,30 @@ function PaymentSelectorContent() {
                 />
             )}
 
-            <ConfirmCancelModal
+            <ConfirmDialog
+                isOpen={isEditConfirmOpen}
+                onClose={() => setIsEditConfirmOpen(false)}
+                onConfirm={handleEditBack}
+                isSubmitting={isSubmitting}
+                tone="primary"
+                icon="edit"
+                title={d.editConfirmTitle}
+                desc={d.editConfirmDesc}
+                cancelLabel={d.editConfirmNo}
+                confirmLabel={d.editConfirmYes}
+            />
+
+            <ConfirmDialog
                 isOpen={isCancelConfirmOpen}
                 onClose={() => setIsCancelConfirmOpen(false)}
-                onConfirm={handleActiveCancel}
+                onConfirm={handleCancelOrder}
                 isSubmitting={isSubmitting}
-                d={d}
+                tone="danger"
+                icon="warning"
+                title={d.cancelConfirmTitle}
+                desc={d.cancelConfirmDesc}
+                cancelLabel={d.cancelConfirmNo}
+                confirmLabel={d.cancelConfirmYes}
             />
         </>
     );
@@ -962,32 +1016,44 @@ function QRPaymentModal({ data, timeLeft, isSuccess, d, formatPrice, formatTime,
     );
 }
 
-interface ConfirmCancelModalProps {
+interface ConfirmDialogProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
     isSubmitting: boolean;
-    d: typeof dict['vi'];
+    tone: 'danger' | 'primary';
+    icon: string;
+    title: string;
+    desc: string;
+    cancelLabel: string;
+    confirmLabel: string;
 }
 
-function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting, d }: ConfirmCancelModalProps) {
+function ConfirmDialog({ isOpen, onClose, onConfirm, isSubmitting, tone, icon, title, desc, cancelLabel, confirmLabel }: ConfirmDialogProps) {
     if (!isOpen) return null;
+
+    const iconWrapClass = tone === 'danger'
+        ? 'bg-red-50 border-red-100 text-red-600'
+        : 'bg-primary/10 border-primary/15 text-primary';
+    const confirmBtnClass = tone === 'danger'
+        ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
+        : 'bg-primary hover:bg-primary-container shadow-primary/20';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
             <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full relative z-10 shadow-2xl border border-slate-100 transform transition-all scale-100 flex flex-col items-center text-center animate-fade-in-up">
-                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6 border border-red-100">
-                    <span className="material-symbols-outlined text-red-600 text-3xl">warning</span>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 border ${iconWrapClass}`}>
+                    <span className="material-symbols-outlined text-3xl">{icon}</span>
                 </div>
 
                 <h3 className="font-headline font-bold text-xl text-on-surface mb-3">
-                    {d.cancelConfirmTitle}
+                    {title}
                 </h3>
 
                 <p className="text-slate-500 text-sm leading-relaxed mb-8">
-                    {d.cancelConfirmDesc}
+                    {desc}
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-3 w-full mt-auto">
@@ -996,19 +1062,17 @@ function ConfirmCancelModal({ isOpen, onClose, onConfirm, isSubmitting, d }: Con
                         disabled={isSubmitting}
                         className="flex-1 px-5 py-3.5 border border-slate-200 hover:bg-slate-50 font-bold text-sm rounded-xl text-on-surface transition-all active:scale-95 disabled:opacity-50"
                     >
-                        {d.cancelConfirmNo}
+                        {cancelLabel}
                     </button>
                     <button
                         onClick={onConfirm}
                         disabled={isSubmitting}
-                        className="flex-1 px-5 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-red-600/20 disabled:opacity-50"
+                        className={`flex-1 px-5 py-3.5 text-white font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg disabled:opacity-50 ${confirmBtnClass}`}
                     >
-                        {isSubmitting ? (
+                        {isSubmitting && (
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                            <span className="material-symbols-outlined text-base">close</span>
                         )}
-                        {d.cancelConfirmYes}
+                        {confirmLabel}
                     </button>
                 </div>
             </div>

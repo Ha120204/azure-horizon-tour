@@ -13,13 +13,13 @@ import { Readable } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentService } from '../payment/payment.service';
 import { BookingCancellationService } from './booking-cancellation.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   calculateBookingHoldExpiresAt,
   getErrorMessage,
   isBookingStatus,
   isPaymentStatus,
   isPayosDuplicateError,
-  PAYOS_HOLD_MINUTES,
   PAYOS_MAX_HOLD_MINUTES,
 } from './helpers/booking-helpers';
 import type { CancellationPolicy } from './types';
@@ -38,6 +38,7 @@ export class BookingQueryService {
     private readonly paymentService: PaymentService,
     private readonly httpService: HttpService,
     private readonly cancellationService: BookingCancellationService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   private getCustomerVoucherStatus(booking: {
@@ -346,17 +347,20 @@ export class BookingQueryService {
       throw new BadRequestException('Booking nay khong o trang thai cho thanh toan');
 
     const now = new Date();
+    const { holdMinutes } = await this.settingsService.getBookingPolicy();
+    // Trần giữ chỗ tuyệt đối phải ≥ cửa sổ cấu hình, nếu không một cửa sổ đã vượt trần.
+    const ceilingMinutes = Math.max(PAYOS_MAX_HOLD_MINUTES, holdMinutes);
     const maxHoldDeadline = new Date(
-      booking.createdAt.getTime() + PAYOS_MAX_HOLD_MINUTES * 60 * 1000,
+      booking.createdAt.getTime() + ceilingMinutes * 60 * 1000,
     );
     if (now.getTime() >= maxHoldDeadline.getTime())
       throw new BadRequestException('Da qua thoi gian giu cho toi da cho don nay. Vui long dat tour moi.');
 
     const departureDate = await this.cancellationService.resolveBookingDepartureDate(booking);
-    // Rolling 15-minute window: mỗi lần khách tạo lại QR → gia hạn giữ ghế thêm 15 phút,
+    // Rolling window: mỗi lần khách tạo lại QR → gia hạn giữ ghế thêm `holdMinutes`,
     // nhưng không vượt quá trần giữ chỗ tuyệt đối (maxHoldDeadline) → chống giữ ghế vô hạn.
     // Nếu đơn đã bị cron hủy, guard status ở trên đã throw trước, không đến đây.
-    let expiryTime = calculateBookingHoldExpiresAt({ paymentMethod: 'PAYOS', departureDate, now });
+    let expiryTime = calculateBookingHoldExpiresAt({ paymentMethod: 'PAYOS', departureDate, now, holdMinutes });
     if (expiryTime.getTime() > maxHoldDeadline.getTime()) expiryTime = maxHoldDeadline;
     await this.prisma.booking.update({
       where: { id: booking.id },
@@ -481,7 +485,8 @@ export class BookingQueryService {
       throw new BadRequestException('Booking nay khong o trang thai cho thanh toan');
 
     const now = new Date();
-    let expiryTime = booking.holdExpiresAt ?? new Date(booking.createdAt.getTime() + PAYOS_HOLD_MINUTES * 60 * 1000);
+    const { holdMinutes } = await this.settingsService.getBookingPolicy();
+    let expiryTime = booking.holdExpiresAt ?? new Date(booking.createdAt.getTime() + holdMinutes * 60 * 1000);
     if (expiryTime.getTime() <= now.getTime())
       throw new BadRequestException('Booking da het han thanh toan. Vui long dat tour moi.');
     if (booking.paymentMethod !== 'PAYOS') {
@@ -490,6 +495,7 @@ export class BookingQueryService {
         paymentMethod: 'PAYOS',
         departureDate,
         now,
+        holdMinutes,
       });
       await this.prisma.booking.update({
         where: { id: booking.id },

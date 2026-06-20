@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter, usePathname } from '@/i18n/routing';
 import { API_BASE_URL } from '@/lib/http/constants';
@@ -106,11 +106,6 @@ export function useDestinationTours(language: string) {
     // 4b. Dynamic data
     const [allDestinations, setAllDestinations] = useState<DestinationOption[]>([]);
 
-    // Lưu query string mình tự ghi (effect 6d) để phân biệt với điều hướng bên ngoài (header search).
-    // Dùng giá trị thay vì cờ boolean: cờ boolean sẽ kẹt ở true nếu router.replace ghi lại đúng URL cũ (no-op).
-    const lastSelfWrittenQs = useRef<string | null>(null);
-    const hasMounted = useRef(false);
-
     // 5. Phân trang
     const [page, setPage] = useState(initialPage);
     const [totalPages, setTotalPages] = useState(1);
@@ -200,16 +195,12 @@ export function useDestinationTours(language: string) {
         fetchFilterData();
     }, [travelScope, language]);
 
-    // 6c. Sync URL → state khi điều hướng từ bên ngoài (ví dụ: header search push sang trang này)
-    // Bỏ qua lần chạy đầu (mount) và các lần URL tự thay đổi do effect 6d ghi xuống.
+    // 6c. Sync URL → state khi điều hướng từ bên ngoài (ví dụ: Header search push sang trang này).
+    // So trực tiếp giá trị URL với bộ lọc ĐANG áp dụng:
+    //  - Khác nhau → điều hướng từ ngoài vào → đồng bộ + refetch.
+    //  - Trùng nhau (do effect 6d tự ghi URL) → bỏ qua → không lặp vô hạn.
+    // Cách này thay cho guard so-khớp-chuỗi cũ vốn dễ bỏ sót khi đang ở sẵn trang này.
     useEffect(() => {
-        if (!hasMounted.current) {
-            hasMounted.current = true;
-            return;
-        }
-        if (searchParams.toString() === lastSelfWrittenQs.current) {
-            return;
-        }
         const urlDest = searchParams.get('dest') || '';
         const urlTravelScope = normalizeTravelScope(searchParams.get('travelScope'));
         const urlDate = searchParams.get('date') || '';
@@ -222,6 +213,20 @@ export function useDestinationTours(language: string) {
         const urlPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
         const parsedLimit = parseInt(searchParams.get('limit') || '12', 10);
         const urlLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : 12;
+
+        const sameAsApplied =
+            urlDest === appliedFilters.dest &&
+            urlTravelScope === appliedFilters.travelScope &&
+            urlDate === appliedFilters.date &&
+            urlBudget === appliedFilters.sidebarBudget &&
+            urlRating === appliedFilters.selectedRating &&
+            urlDeparture === appliedFilters.departure &&
+            urlTypes.length === appliedFilters.selectedTypes.length &&
+            urlTypes.every((type) => appliedFilters.selectedTypes.includes(type)) &&
+            urlSort === sortBy &&
+            urlPage === page &&
+            urlLimit === limit;
+        if (sameAsApplied) return;
 
         setDest(urlDest);
         setIsAllDestinationsSelected(searchParams.get('allDestinations') === '1' && !urlDest);
@@ -244,7 +249,7 @@ export function useDestinationTours(language: string) {
             departure: urlDeparture,
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]);
+    }, [searchParams, appliedFilters, sortBy, page, limit]);
 
     // 6d. Đồng bộ bộ lọc đã áp dụng + sort + trang lên URL
     // → back từ trang chi tiết / F5 / chia sẻ link đều giữ nguyên trạng thái lọc
@@ -261,7 +266,6 @@ export function useDestinationTours(language: string) {
         if (page > 1) params.set('page', String(page));
         if (limit !== 12) params.set('limit', String(limit));
         const qs = params.toString();
-        lastSelfWrittenQs.current = qs;
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appliedFilters, sortBy, page, limit]);

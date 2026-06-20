@@ -335,18 +335,32 @@ export default function BookingSidebarNew({
                                 <span className="material-symbols-outlined text-[18px]">calendar_month</span>
                                 {t('tour_detail.chooseDepartureDate')}
                             </button>
-                        ) : selectedPackage ? (
-                            <a
-                                href={buildCheckoutUrl()}
-                                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 transition-transform active:scale-[0.97] inline-flex items-center justify-center gap-2"
-                            >
-                                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>shopping_bag</span>
-                                {t('tour_detail.bookNow')}
-                            </a>
                         ) : (
-                            <button disabled className="w-full py-3.5 bg-surface-container text-outline rounded-xl font-bold text-sm cursor-not-allowed">
-                                {t('tour_detail.selectPackageFirst')}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {/* Đã chọn lịch — vẫn cho đổi sang lịch khác bằng nút icon bên cạnh */}
+                                {hasDepartures && selectedDeparture && (
+                                    <button
+                                        onClick={() => setIsCalendarOpen(true)}
+                                        aria-label={t('tour_detail.selectDeparture')}
+                                        className="shrink-0 h-[46px] w-[46px] rounded-xl border-2 border-primary/30 bg-white text-primary flex items-center justify-center transition-transform active:scale-[0.95]"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">edit_calendar</span>
+                                    </button>
+                                )}
+                                {selectedPackage ? (
+                                    <a
+                                        href={buildCheckoutUrl()}
+                                        className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary-container text-white font-bold text-sm shadow-lg shadow-primary/20 transition-transform active:scale-[0.97] inline-flex items-center justify-center gap-2"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>shopping_bag</span>
+                                        {t('tour_detail.bookNow')}
+                                    </a>
+                                ) : (
+                                    <button disabled className="flex-1 py-3.5 bg-surface-container text-outline rounded-xl font-bold text-sm cursor-not-allowed">
+                                        {t('tour_detail.selectPackageFirst')}
+                                    </button>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

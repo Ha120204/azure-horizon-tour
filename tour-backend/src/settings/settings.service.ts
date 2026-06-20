@@ -148,6 +148,12 @@ export interface PublicSettings {
   company_description: string;
 }
 
+export interface BookingPolicy {
+  holdMinutes: number;
+  maxPeople: number;
+  minPeople: number;
+}
+
 type SystemHealthStatus = 'ok' | 'warning' | 'error';
 
 export interface SystemHealthItem {
@@ -167,6 +173,10 @@ export interface SystemHealth {
 @Injectable()
 export class SettingsService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
+
+  // Cache ngắn cho chính sách đặt tour — đọc ở mỗi lần tạo booking nên tránh
+  // query DB liên tục. Tự hết hạn sau 60s và bị xoá ngay khi settings được sửa.
+  private bookingPolicyCache: { value: BookingPolicy; expiresAt: number } | null = null;
 
   private hasAllEnv(keys: string[]) {
     return keys.every(key => Boolean(process.env[key]?.trim()));
@@ -388,6 +398,38 @@ export class SettingsService implements OnModuleInit {
     };
   }
 
+  /**
+   * Chính sách đặt tour đang áp dụng (đọc từ settings, có cache 60s).
+   * Dùng bởi luồng booking để giới hạn số khách và thời gian giữ chỗ.
+   */
+  async getBookingPolicy(): Promise<BookingPolicy> {
+    if (this.bookingPolicyCache && Date.now() < this.bookingPolicyCache.expiresAt) {
+      return this.bookingPolicyCache.value;
+    }
+
+    const flat = await this.getFlat();
+    const clamp = (raw: string | undefined, def: SettingDefinition, fallback: number) => {
+      const n = Number(raw);
+      if (!Number.isInteger(n)) return fallback;
+      const min = def.min ?? Number.NEGATIVE_INFINITY;
+      const max = def.max ?? Number.POSITIVE_INFINITY;
+      return Math.min(Math.max(n, min), max);
+    };
+
+    const holdMinutes = clamp(flat.booking_hold_minutes, SETTING_DEFINITIONS.booking_hold_minutes, 15);
+    const maxPeople = clamp(flat.booking_max_people, SETTING_DEFINITIONS.booking_max_people, 20);
+    const minPeople = clamp(flat.booking_min_people, SETTING_DEFINITIONS.booking_min_people, 1);
+
+    const value: BookingPolicy = {
+      holdMinutes,
+      maxPeople,
+      // An toàn: min không bao giờ vượt max dù settings bị lệch.
+      minPeople: Math.min(minPeople, maxPeople),
+    };
+    this.bookingPolicyCache = { value, expiresAt: Date.now() + 60_000 };
+    return value;
+  }
+
   getMeta() {
     return Object.fromEntries(
       Object.entries(SETTING_DEFINITIONS).map(([key, def]) => [
@@ -497,6 +539,8 @@ export class SettingsService implements OnModuleInit {
         },
       });
     });
+
+    this.bookingPolicyCache = null;
 
     return { message: 'Cập nhật cài đặt thành công', updated: changes.length, changes };
   }

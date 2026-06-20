@@ -20,6 +20,7 @@ import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingQueryService } from './booking-query.service';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   asPassengerInputs,
   assertVoucherAllowedForDeparture,
@@ -81,7 +82,25 @@ export class BookingService {
     private readonly cancellationService: BookingCancellationService,
     private readonly queryService: BookingQueryService,
     private readonly adminNotifications: AdminNotificationService,
+    private readonly settingsService: SettingsService,
   ) {}
+
+  // Báo Next.js xóa cache trang tour ngay khi số ghế thay đổi (giữ chỗ / hoàn chỗ),
+  // để trang public hiển thị đúng số chỗ còn lại thay vì số cũ bị cache (ISR 1 giờ).
+  // Cùng cơ chế với TourQueryService.revalidateTourCache.
+  private revalidateTourCache(tourId: number): void {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const secret = this.configService.get<string>('REVALIDATION_SECRET');
+    if (!frontendUrl || !secret) return;
+
+    void fetch(`${frontendUrl}/api/revalidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-revalidate-secret': secret },
+      body: JSON.stringify({ tag: `tour-${tourId}` }),
+    }).catch((err: unknown) => {
+      this.logger.warn(`[Revalidate] tour-${tourId} failed: ${getErrorMessage(err)}`);
+    });
+  }
 
   async createAssistedDraft(
     actorUserId: number,
@@ -187,6 +206,20 @@ export class BookingService {
     const finalUserId = Number(userId);
     if (!Number.isInteger(finalUserId) || finalUserId <= 0) {
       throw new UnauthorizedException('Bạn cần đăng nhập để đặt tour');
+    }
+
+    // Chính sách đặt tour (số khách & thời gian giữ chỗ) lấy từ Cài đặt hệ thống.
+    // Đọc ngoài transaction để không giữ kết nối lâu hơn cần thiết.
+    const policy = await this.settingsService.getBookingPolicy();
+    if (dto.numberOfPeople < policy.minPeople) {
+      throw new BadRequestException(
+        `Số khách tối thiểu cho một lượt đặt là ${policy.minPeople}`,
+      );
+    }
+    if (dto.numberOfPeople > policy.maxPeople) {
+      throw new BadRequestException(
+        `Số khách tối đa cho một lượt đặt là ${policy.maxPeople}`,
+      );
     }
 
     // ============== INTERACTIVE TRANSACTION ==============
@@ -320,6 +353,7 @@ export class BookingService {
       const holdExpiresAt = calculateBookingHoldExpiresAt({
         paymentMethod,
         departureDate,
+        holdMinutes: policy.holdMinutes,
       });
       const newBooking = await tx.booking.create({
         data: {
@@ -342,6 +376,10 @@ export class BookingService {
 
       return newBooking;
     });
+
+    // Ghế vừa bị giữ trong transaction — bust cache trang tour để khách khác
+    // thấy ngay số chỗ còn lại đã giảm (giảm cả xác suất gặp race "hết chỗ").
+    this.revalidateTourCache(booking.tourId);
 
     if (booking.paymentMethod === 'IN_STORE') {
       await this.prisma.paymentTransaction.create({
@@ -622,6 +660,9 @@ export class BookingService {
         await this.voucherService.releaseVoucherInTx(tx, voucherCode, userId);
       }
     });
+
+    // Ghế vừa được hoàn — bust cache để trang tour hiển thị lại đúng số chỗ trống.
+    this.revalidateTourCache(tourId);
   }
 
   /**
@@ -791,10 +832,12 @@ export class BookingService {
           select: { departureDate: true },
         })
       : null;
+    const { holdMinutes } = await this.settingsService.getBookingPolicy();
     const holdExpiresAt = calculateBookingHoldExpiresAt({
       paymentMethod,
       departureDate: departure?.departureDate ?? booking.tour.startDate,
       now,
+      holdMinutes,
     });
 
     const updated = await this.prisma.booking.update({

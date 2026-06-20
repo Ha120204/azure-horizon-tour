@@ -15,6 +15,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { VoucherService } from '../voucher/voucher.service';
 import { MailService } from '../mail/mail.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   PaymentService,
   type PaymentLinkResult,
@@ -110,6 +111,7 @@ export class AssistedDraftService {
     private readonly voucherService: VoucherService,
     private readonly mailService: MailService,
     private readonly paymentService: PaymentService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   // ─── Private helpers ───────────────────────────────────────────────────────
@@ -1042,9 +1044,11 @@ export class AssistedDraftService {
             select: { departureDate: true },
           })
         : null;
+      const { holdMinutes } = await this.settingsService.getBookingPolicy();
       const holdExpiresAt = calculateBookingHoldExpiresAt({
         paymentMethod: 'PAYOS',
         departureDate: departure?.departureDate ?? quote.tour.startDate,
+        holdMinutes,
       });
       const booking = await tx.booking.create({
         data: {

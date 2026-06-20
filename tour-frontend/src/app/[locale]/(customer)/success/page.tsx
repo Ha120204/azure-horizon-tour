@@ -240,6 +240,14 @@ function SuccessTicketContent() {
     const lang = (language === 'vi' || language === 'en') ? language : 'vi';
     const sd = successDict[lang];
 
+    // Đặt chỗ đã hoàn tất tại đây → dọn dữ liệu nháp checkout (được giữ tới giờ để
+    // khách còn quay lại sửa từ trang thanh toán nếu chưa trả tiền).
+    useEffect(() => {
+        ['checkout_contactInfo', 'checkout_leadTraveler', 'checkout_passengers',
+            'checkout_isBookForMyself', 'checkout_appliedVoucher', 'checkout_voucherCode',
+            'checkout_tourId'].forEach((key) => sessionStorage.removeItem(key));
+    }, []);
+
     useEffect(() => {
         if (!bookingId) {
             setLoading(false);

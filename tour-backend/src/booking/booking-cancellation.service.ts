@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { BookingStatus, PaymentStatus, Prisma } from '@prisma/client';
 import moment from 'moment';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,7 +23,24 @@ export class BookingCancellationService {
     private readonly mailService: MailService,
     private readonly paymentService: PaymentService,
     private readonly adminNotifications: AdminNotificationService,
+    private readonly configService: ConfigService,
   ) {}
+
+  // Báo Next.js xóa cache trang tour khi ghế được hoàn (hủy đơn), để trang public
+  // hiển thị lại đúng số chỗ trống. Cùng cơ chế với TourQueryService/BookingService.
+  private revalidateTourCache(tourId: number): void {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const secret = this.configService.get<string>('REVALIDATION_SECRET');
+    if (!frontendUrl || !secret) return;
+
+    void fetch(`${frontendUrl}/api/revalidate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-revalidate-secret': secret },
+      body: JSON.stringify({ tag: `tour-${tourId}` }),
+    }).catch((err: unknown) => {
+      this.logger.warn(`[Revalidate] tour-${tourId} failed: ${getErrorMessage(err)}`);
+    });
+  }
 
   // ─── Policy calculation ────────────────────────────────────────────────────
 
@@ -135,6 +153,8 @@ export class BookingCancellationService {
         });
       });
 
+      this.revalidateTourCache(booking.tourId);
+
       try {
         await this.paymentService.cancelPaymentLink(bookingId, 'Khach hang chu dong huy don');
       } catch {
@@ -226,6 +246,8 @@ export class BookingCancellationService {
         });
       }
     });
+
+    this.revalidateTourCache(booking.tourId);
 
     try {
       if (booking.user?.email) {

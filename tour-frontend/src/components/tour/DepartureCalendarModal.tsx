@@ -100,11 +100,14 @@ export default function DepartureCalendarModal({
         const isSelected = selectedDeparture?.id === departure?.id;
         const isSoldOut = departure?.availableSeats === 0;
         const isRunningLow = Boolean(departure && departure.availableSeats > 0 && departure.availableSeats <= LOW_SEAT_THRESHOLD);
-        // Luôn hiển thị số ghế còn lại để người dùng thấy "còn bao nhiêu ghế",
-        // nhất là trên màn hình điện thoại hẹp (text dạng "12 ghế" gọn hơn "Có sẵn chỗ").
-        const statusText = isSoldOut
+        // Hiển thị số ghế còn lại. Trên điện thoại (7 cột rất hẹp) chỉ hiện số ghế /
+        // "Hết" để khỏi bị cắt chữ; từ sm trở lên hiện đầy đủ "X ghế" / "Hết chỗ".
+        const statusTextFull = isSoldOut
             ? t('tour_detail.soldOut')
             : t('tour_detail.seatsLeft', { seats: departure?.availableSeats ?? 0 });
+        const statusTextShort = isSoldOut
+            ? t('tour_detail.soldOutShort')
+            : String(departure?.availableSeats ?? 0);
         const statusToneClass = isSoldOut
             ? 'bg-red-50 text-red-600 border-red-100'
             : isRunningLow
@@ -117,7 +120,7 @@ export default function DepartureCalendarModal({
                 : 'bg-emerald-400';
 
         cells.push(
-            <div key={`day-${day}`} className="relative h-20 sm:h-24">
+            <div key={`day-${day}`} className="relative h-16 sm:h-24">
                 {departure && !isPast ? (
                     <button
                         onClick={() => {
@@ -127,7 +130,7 @@ export default function DepartureCalendarModal({
                             }
                         }}
                         disabled={departure.availableSeats === 0}
-                        className={`w-full h-full p-1.5 sm:p-2 rounded-xl border-2 transition-all flex flex-col items-start justify-between ${
+                        className={`w-full h-full p-1 sm:p-2 rounded-xl border-2 transition-all flex flex-col items-center justify-between ${
                             isSelected
                                 ? 'border-primary bg-primary/5 shadow-md'
                                 : departure.availableSeats === 0
@@ -135,19 +138,18 @@ export default function DepartureCalendarModal({
                                 : 'border-outline-variant/30 hover:border-primary/40 hover:bg-surface-container-lowest bg-white cursor-pointer'
                         }`}
                     >
-                        <div className="w-full flex justify-between items-start">
-                            <span className={`text-sm sm:text-base font-bold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{day}</span>
-                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 mr-0.5 ${statusDotClass}`}></span>
+                        <div className="flex items-center gap-1">
+                            <span className={`text-base sm:text-base font-bold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{day}</span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass}`}></span>
                         </div>
-                        <div className="w-full text-left mt-auto">
-                            <p className={`inline-flex max-w-full rounded-md border px-1 py-0.5 sm:px-1.5 text-[9px] sm:text-[10px] font-bold leading-tight ${statusToneClass}`}>
-                                <span className="truncate">{statusText}</span>
-                            </p>
-                        </div>
+                        <p className={`flex w-full items-center justify-center rounded-md border px-0.5 py-0.5 sm:px-1.5 text-[11px] sm:text-[10px] font-bold leading-tight ${statusToneClass}`}>
+                            <span className="sm:hidden">{statusTextShort}</span>
+                            <span className="hidden sm:inline truncate">{statusTextFull}</span>
+                        </p>
                     </button>
                 ) : (
-                    <div className="w-full h-full p-2 rounded-xl border border-outline-variant/10 bg-surface-container-lowest/30 flex flex-col opacity-40 cursor-not-allowed">
-                        <span className="text-sm font-medium text-outline">{day}</span>
+                    <div className="w-full h-full p-1 sm:p-2 rounded-xl border border-outline-variant/10 bg-surface-container-lowest/30 flex items-start justify-center sm:justify-start opacity-40 cursor-not-allowed">
+                        <span className="text-base sm:text-sm font-medium text-outline">{day}</span>
                     </div>
                 )}
             </div>
@@ -183,18 +185,18 @@ export default function DepartureCalendarModal({
                 </div>
 
                 {/* Calendar Grid */}
-                <div className="px-3 sm:px-6 pb-6 overflow-y-auto">
+                <div className="px-2 sm:px-6 pb-6 overflow-y-auto">
                     {/* Days of week */}
-                    <div className="grid grid-cols-7 gap-1.5 sm:gap-3 mb-2">
+                    <div className="grid grid-cols-7 gap-1 sm:gap-3 mb-2">
                         {dayNames.map((day, i) => (
-                            <div key={day} className={`text-center text-xs font-bold uppercase tracking-wider py-2 ${i === 6 ? 'text-red-500' : 'text-outline'}`}>
+                            <div key={day} className={`text-center text-[11px] sm:text-xs font-bold uppercase tracking-wider py-2 ${i === 6 ? 'text-red-500' : 'text-outline'}`}>
                                 {day}
                             </div>
                         ))}
                     </div>
-                    
+
                     {/* Dates */}
-                    <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
+                    <div className="grid grid-cols-7 gap-1 sm:gap-3">
                         {cells}
                     </div>
 

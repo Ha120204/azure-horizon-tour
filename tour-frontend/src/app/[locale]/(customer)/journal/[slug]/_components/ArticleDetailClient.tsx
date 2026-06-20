@@ -60,7 +60,7 @@ export default function ArticleDetailClient({ article }: ArticleDetailClientProp
         <>
             <Header />
 
-            <main className="min-h-screen bg-slate-50 pt-24">
+            <main className="min-h-screen bg-slate-50 pt-24 overflow-x-clip">
                 {/* Hero Image */}
                 <section className="relative h-[50vh] md:h-[70vh] overflow-hidden">
                     <Image

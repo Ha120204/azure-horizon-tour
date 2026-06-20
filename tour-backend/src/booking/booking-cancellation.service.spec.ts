@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { PaymentService } from '../payment/payment.service';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
+import { ConfigService } from '@nestjs/config';
 
 function createServiceHarness() {
   const txBookingUpdate = jest.fn().mockResolvedValue({});
@@ -68,11 +69,16 @@ function createServiceHarness() {
     createSafe: jest.fn().mockResolvedValue({}),
   } as unknown as AdminNotificationService;
 
+  const configService = {
+    get: jest.fn().mockReturnValue(undefined),
+  } as unknown as ConfigService;
+
   const service = new BookingCancellationService(
     prisma,
     mailService,
     paymentService,
     adminNotifications,
+    configService,
   );
 
   return {

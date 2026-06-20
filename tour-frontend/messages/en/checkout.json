@@ -16,7 +16,7 @@
     "confirmTitle": "Confirm Booking Information",
     "confirmDesc": "Please double-check the information below before proceeding to payment:",
     "warningTitle": "Important Note",
-    "warningDesc": "Booking information cannot be changed after payment has been processed. Please ensure that all passenger details match their official identity documents.",
+    "warningDesc": "Booking information cannot be changed after payment is completed. Please ensure that all passenger details match their official identity documents.",
     "confirmAndPay": "Confirm Booking",
     "loginPromoText": "Log in to receive offers and manage your bookings more easily.",
     "loginNow": "Log in now",
@@ -100,8 +100,8 @@
     },
     "soldOut": {
       "title": "Sorry, these seats just sold out",
-      "descZero": "The last seat was booked by another customer while you were checking out. You have not been charged — please choose another departure date.",
-      "descRemaining": "This departure only has {seats} seat(s) left, which is not enough for your party. You have not been charged — please choose another date or reduce the number of travelers.",
+      "descZero": "The last seat was booked by another customer while you were checking out. Please choose another departure date.",
+      "descRemaining": "Another customer just booked seats on this departure, so only {seats} seat(s) remain — not enough for your party. Please choose another date or reduce the number of travelers.",
       "chooseOther": "View other departures",
       "close": "Close"
     },

@@ -710,15 +710,9 @@ function CheckoutContent() {
             const data = payload.data || payload;
 
             if (response.ok) {
-                // Clear sessionStorage checkout states
-                sessionStorage.removeItem('checkout_contactInfo');
-                sessionStorage.removeItem('checkout_leadTraveler');
-                sessionStorage.removeItem('checkout_passengers');
-                sessionStorage.removeItem('checkout_isBookForMyself');
-                sessionStorage.removeItem('checkout_appliedVoucher');
-                sessionStorage.removeItem('checkout_voucherCode');
-                sessionStorage.removeItem('checkout_tourId');
-
+                // Giữ lại dữ liệu checkout trong sessionStorage để khách có thể quay lại
+                // từ trang thanh toán và chỉnh sửa. Chỉ xóa khi thanh toán thành công
+                // (xử lý ở trang /success).
                 const bookingCode = data.booking?.bookingCode || data.bookingCode;
                 router.push(`/${language}/payment?bookingCode=${bookingCode}`);
             } else if (payload.errorCode === 'SEATS_UNAVAILABLE') {

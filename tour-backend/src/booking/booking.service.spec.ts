@@ -11,6 +11,7 @@ import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingQueryService } from './booking-query.service';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 describe('BookingService', () => {
@@ -30,7 +31,7 @@ describe('BookingService', () => {
         BookingService,
         { provide: PrismaService, useValue: prisma },
         { provide: PaymentService, useValue: paymentService },
-        { provide: ConfigService, useValue: mockValue },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
         { provide: HttpService, useValue: mockValue },
         { provide: VoucherService, useValue: mockValue },
         { provide: MailService, useValue: mockValue },
@@ -38,6 +39,12 @@ describe('BookingService', () => {
         { provide: BookingCancellationService, useValue: mockValue },
         { provide: BookingQueryService, useValue: mockValue },
         { provide: AdminNotificationService, useValue: mockValue },
+        {
+          provide: SettingsService,
+          useValue: {
+            getBookingPolicy: jest.fn().mockResolvedValue({ holdMinutes: 15, maxPeople: 20, minPeople: 1 }),
+          },
+        },
       ],
     }).compile();
 

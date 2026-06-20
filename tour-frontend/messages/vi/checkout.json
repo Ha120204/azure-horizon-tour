@@ -16,7 +16,7 @@
     "confirmTitle": "Xác nhận thông tin đặt chỗ",
     "confirmDesc": "Vui lòng kiểm tra kỹ các thông tin dưới đây trước khi tiến hành thanh toán:",
     "warningTitle": "Lưu ý quan trọng",
-    "warningDesc": "Thông tin đặt chỗ sẽ không thể thay đổi sau khi tiến hành thanh toán. Vui lòng đảm bảo các thông tin của hành khách khớp đúng với giấy tờ tuỳ thân thực tế.",
+    "warningDesc": "Thông tin đặt chỗ sẽ không thể thay đổi sau khi thanh toán thành công. Vui lòng đảm bảo các thông tin của hành khách khớp đúng với giấy tờ tuỳ thân thực tế.",
     "confirmAndPay": "Xác nhận đặt tour",
     "loginPromoText": "Đăng nhập để nhận các ưu đãi và quản lý đơn hàng dễ dàng hơn.",
     "loginNow": "Đăng nhập ngay",
@@ -100,8 +100,8 @@
     },
     "soldOut": {
       "title": "Rất tiếc, chỗ vừa hết",
-      "descZero": "Chỗ cuối cùng vừa được một khách khác đặt khi bạn đang hoàn tất. Bạn chưa bị trừ tiền — vui lòng chọn lịch khởi hành khác.",
-      "descRemaining": "Lịch khởi hành này chỉ còn {seats} chỗ trống, không đủ cho số khách bạn đã chọn. Bạn chưa bị trừ tiền — vui lòng chọn lịch khác hoặc giảm số khách.",
+      "descZero": "Chỗ cuối cùng vừa được một khách khác đặt khi bạn đang hoàn tất. Vui lòng chọn lịch khởi hành khác.",
+      "descRemaining": "Vừa có khách khác đặt mất chỗ ở lịch khởi hành này, hiện chỉ còn {seats} chỗ trống — không đủ cho số khách bạn đã chọn. Vui lòng chọn lịch khác hoặc giảm số khách.",
       "chooseOther": "Xem lịch khởi hành khác",
       "close": "Đóng"
     },

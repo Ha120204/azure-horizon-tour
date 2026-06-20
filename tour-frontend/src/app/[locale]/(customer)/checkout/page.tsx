@@ -12,6 +12,7 @@ import PassengerSection from '@/components/checkout/PassengerSection';
 import OrderSummary from '@/components/checkout/OrderSummary';
 import { API_BASE_URL } from '@/lib/http/constants';
 import ConfirmBookingModal from '@/components/checkout/ConfirmBookingModal';
+import SoldOutModal from '@/components/checkout/SoldOutModal';
 import { buildLocalizedLoginPath } from '@/lib/auth/authRedirect';
 import { clearClientUserStorage, fetchAuthProfile } from '@/lib/auth/authSession';
 import type { PassengerType } from '@/lib/booking/passengerDetails';
@@ -135,6 +136,7 @@ function CheckoutContent() {
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [soldOut, setSoldOut] = useState<{ availableSeats: number } | null>(null);
     const paymentMethod = 'PAYOS';
 
     // Toast Alert State
@@ -153,6 +155,27 @@ function CheckoutContent() {
     const showError = (msg: string) => {
         setErrorMsg(msg);
         setTimeout(() => setErrorMsg(''), 4000);
+    };
+
+    // Sau khi hết chỗ (race condition), tải lại tour để số chỗ trên màn hình
+    // phản ánh đúng tồn kho thật — làm bằng chứng trực quan cho người dùng.
+    const refreshTourAvailability = async () => {
+        if (!tourIdStr) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/tour/${tourIdStr}?locale=${language}`);
+            if (!res.ok) return;
+            const payload = await res.json();
+            const tourInfo = payload.data || payload;
+            setTourData(tourInfo);
+            if (selectedDeparture && tourInfo.departures) {
+                const dep = tourInfo.departures.find(
+                    (d: CheckoutDeparture) => d.id === selectedDeparture.id,
+                );
+                if (dep) setSelectedDeparture(dep);
+            }
+        } catch {
+            // Im lặng — modal đã thông báo cho người dùng
+        }
     };
 
     // Backend trả message tiếng Anh cho các lỗi nghiệp vụ booking; map sang đúng
@@ -698,6 +721,12 @@ function CheckoutContent() {
 
                 const bookingCode = data.booking?.bookingCode || data.bookingCode;
                 router.push(`/${language}/payment?bookingCode=${bookingCode}`);
+            } else if (payload.errorCode === 'SEATS_UNAVAILABLE') {
+                // Hết chỗ ngay lúc đặt: hiện modal chặn + cập nhật lại tồn kho,
+                // không dùng toast tự-tắt (user dễ tưởng lỗi hệ thống và bấm lại).
+                setSoldOut({ availableSeats: Number(payload.availableSeats) || 0 });
+                void refreshTourAvailability();
+                setIsPaymentLoading(false);
             } else {
                 showError(t('checkout.errors.paymentInit') + ": " + translateBookingError(payload.message || data.message));
                 setIsPaymentLoading(false);
@@ -812,6 +841,17 @@ function CheckoutContent() {
                 subtotal={subtotal}
                 discountAmount={discountAmount}
                 totalPrice={totalPrice}
+                t={t}
+            />
+
+            <SoldOutModal
+                isOpen={!!soldOut}
+                availableSeats={soldOut?.availableSeats ?? 0}
+                onChooseOther={() => {
+                    setSoldOut(null);
+                    router.push(`/${language}/tour/${tourIdStr}`);
+                }}
+                onClose={() => setSoldOut(null)}
                 t={t}
             />
         </main>

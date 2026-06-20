@@ -33,6 +33,7 @@ import {
   normalizePassengers,
   PAYOS_HOLD_MINUTES,
   reserveSeatsAtomically,
+  SeatsUnavailableException,
   validatePassengerAgeVsType,
 } from './helpers/booking-helpers';
 
@@ -219,11 +220,17 @@ export class BookingService {
           throw new BadRequestException('Invalid departure');
         }
         if (selectedDeparture.availableSeats < seatCount) {
-          throw new BadRequestException('Not enough seats for this departure');
+          throw new SeatsUnavailableException(
+            'Not enough seats for this departure',
+            selectedDeparture.availableSeats,
+          );
         }
       } else {
         if (tour.availableSeats < seatCount) {
-          throw new BadRequestException('Not enough seats available');
+          throw new SeatsUnavailableException(
+            'Not enough seats available',
+            tour.availableSeats,
+          );
         }
       }
 

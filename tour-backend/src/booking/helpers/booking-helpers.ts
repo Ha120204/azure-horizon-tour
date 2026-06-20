@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { TourDeparture, Prisma } from '@prisma/client';
 import type { PassengerInput, PayosError } from '../types';
 
@@ -209,6 +209,15 @@ export function assertVoucherAllowedForDeparture(
 
 // ─── Seat reservation helpers ────────────────────────────────────────────────
 
+// 409 Conflict cho trường hợp hết chỗ ngay lúc đặt (race condition).
+// Trả errorCode máy-đọc-được + số chỗ còn lại để frontend hiển thị modal chặn
+// và refresh tồn kho, thay vì để client đoán theo chuỗi message.
+export class SeatsUnavailableException extends ConflictException {
+  constructor(message: string, availableSeats: number) {
+    super({ message, errorCode: 'SEATS_UNAVAILABLE', availableSeats });
+  }
+}
+
 type SeatReservationTx = Pick<Prisma.TransactionClient, 'tour' | 'tourDeparture'>;
 
 type SeatReservationInput = {
@@ -239,7 +248,14 @@ export async function reserveSeatsAtomically(
     });
 
     if (departureReservation.count === 0) {
-      throw new BadRequestException('Not enough seats for this departure');
+      const current = await tx.tourDeparture.findUnique({
+        where: { id: departureId },
+        select: { availableSeats: true },
+      });
+      throw new SeatsUnavailableException(
+        'Not enough seats for this departure',
+        current?.availableSeats ?? 0,
+      );
     }
   }
 
@@ -255,7 +271,14 @@ export async function reserveSeatsAtomically(
   });
 
   if (tourReservation.count === 0) {
-    throw new BadRequestException('Not enough seats available');
+    const current = await tx.tour.findUnique({
+      where: { id: tourId },
+      select: { availableSeats: true },
+    });
+    throw new SeatsUnavailableException(
+      'Not enough seats available',
+      current?.availableSeats ?? 0,
+    );
   }
 }
 

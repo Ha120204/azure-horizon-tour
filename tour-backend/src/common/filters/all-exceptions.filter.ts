@@ -29,6 +29,9 @@ type ErrorShape = {
   statusCode: number;
   message: string | string[];
   error: string;
+  // Các field bổ sung mà exception cố ý đính kèm (vd: errorCode, availableSeats
+  // của SeatsUnavailableException) — giữ nguyên để client phản ứng chính xác.
+  extra?: Record<string, unknown>;
 };
 
 const ERROR_NAME_BY_STATUS: Record<number, string> = {
@@ -54,12 +57,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const { statusCode, message, error } = this.resolve(exception, request);
+    const { statusCode, message, error, extra } = this.resolve(exception, request);
 
     response.status(statusCode).json({
       statusCode,
       message,
       error,
+      ...extra,
       timestamp: new Date().toISOString(),
     });
   }
@@ -109,7 +113,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
       const error =
         typeof res.error === 'string' ? res.error : fallbackName;
-      return { statusCode, message, error };
+      const { message: _m, error: _e, statusCode: _s, ...rest } = res;
+      const extra = Object.keys(rest).length ? rest : undefined;
+      return { statusCode, message, error, extra };
     }
 
     return { statusCode, message: exception.message, error: fallbackName };

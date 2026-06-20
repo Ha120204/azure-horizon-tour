@@ -98,6 +98,13 @@
       "notEnoughSeats": "This departure no longer has enough available seats.",
       "invalidDeparture": "Invalid departure schedule."
     },
+    "soldOut": {
+      "title": "Sorry, these seats just sold out",
+      "descZero": "The last seat was booked by another customer while you were checking out. You have not been charged — please choose another departure date.",
+      "descRemaining": "This departure only has {seats} seat(s) left, which is not enough for your party. You have not been charged — please choose another date or reduce the number of travelers.",
+      "chooseOther": "View other departures",
+      "close": "Close"
+    },
     "voucherTitle": "Voucher Code",
     "enterVoucher": "Enter voucher code",
     "apply": "Apply",

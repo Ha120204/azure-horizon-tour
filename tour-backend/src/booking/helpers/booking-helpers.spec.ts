@@ -4,6 +4,7 @@ import {
   IN_STORE_OPERATIONAL_CUTOFF_HOURS,
   releaseSeats,
   reserveSeatsAtomically,
+  SeatsUnavailableException,
 } from './booking-helpers';
 import type { Prisma } from '@prisma/client';
 
@@ -17,13 +18,17 @@ function createSeatReservationTx({
   const tourUpdate = jest.fn().mockResolvedValue({});
   const tourUpdateMany = jest.fn().mockResolvedValue({ count: tourCount });
   const departureUpdateMany = jest.fn().mockResolvedValue({ count: departureCount });
+  const tourFindUnique = jest.fn().mockResolvedValue({ availableSeats: 0 });
+  const departureFindUnique = jest.fn().mockResolvedValue({ availableSeats: 0 });
   const tx = {
     tour: {
       update: tourUpdate,
       updateMany: tourUpdateMany,
+      findUnique: tourFindUnique,
     },
     tourDeparture: {
       updateMany: departureUpdateMany,
+      findUnique: departureFindUnique,
     },
   } as unknown as Pick<Prisma.TransactionClient, 'tour' | 'tourDeparture'>;
 
@@ -161,7 +166,7 @@ describe('reserveSeatsAtomically', () => {
 
     await expect(
       reserveSeatsAtomically(tx, { tourId: 10, departureId: 20, seats: 2 }),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrow(SeatsUnavailableException);
 
     expect(departureUpdateMany).toHaveBeenCalled();
     expect(tourUpdateMany).not.toHaveBeenCalled();
@@ -172,7 +177,7 @@ describe('reserveSeatsAtomically', () => {
 
     await expect(
       reserveSeatsAtomically(tx, { tourId: 10, seats: 2 }),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrow(SeatsUnavailableException);
 
     expect(tourUpdateMany).toHaveBeenCalled();
   });

@@ -98,6 +98,13 @@
       "notEnoughSeats": "Lịch khởi hành này không còn đủ chỗ trống.",
       "invalidDeparture": "Lịch khởi hành không hợp lệ."
     },
+    "soldOut": {
+      "title": "Rất tiếc, chỗ vừa hết",
+      "descZero": "Chỗ cuối cùng vừa được một khách khác đặt khi bạn đang hoàn tất. Bạn chưa bị trừ tiền — vui lòng chọn lịch khởi hành khác.",
+      "descRemaining": "Lịch khởi hành này chỉ còn {seats} chỗ trống, không đủ cho số khách bạn đã chọn. Bạn chưa bị trừ tiền — vui lòng chọn lịch khác hoặc giảm số khách.",
+      "chooseOther": "Xem lịch khởi hành khác",
+      "close": "Đóng"
+    },
     "voucherTitle": "Mã giảm giá",
     "enterVoucher": "Nhập mã voucher",
     "apply": "Áp dụng",

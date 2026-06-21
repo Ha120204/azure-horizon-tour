@@ -178,21 +178,27 @@ export function ActiveTourRow({
                     <div className="flex flex-col items-center gap-1">
                         <button
                             type="button"
+                            role="switch"
                             onClick={() => onToggleFeatured(tour)}
                             disabled={isTogglingFeatured}
-                            aria-pressed={tour.isFeatured ?? false}
+                            aria-checked={tour.isFeatured ?? false}
                             aria-label={tour.isFeatured ? `Tắt nổi bật tour ${tour.name}` : `Bật nổi bật tour ${tour.name}`}
                             title={tour.isFeatured ? 'Đang nổi bật trên trang chủ — bấm để tắt' : 'Bấm để đưa lên mục nổi bật trang chủ'}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors disabled:opacity-50 ${tour.isFeatured
-                                ? 'bg-amber-500/15 text-amber-700 border-amber-300/50 hover:bg-amber-500/25'
-                                : 'bg-surface-container text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-high'}`}
+                            className="inline-flex items-center gap-1.5 disabled:opacity-50"
                         >
-                            {isTogglingFeatured ? (
-                                <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
-                            ) : (
-                                <span className="material-symbols-outlined text-[14px]" style={tour.isFeatured ? { fontVariationSettings: "'FILL' 1" } : undefined}>star</span>
+                            <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${tour.isFeatured ? 'bg-amber-500' : 'bg-outline-variant/50'}`}>
+                                <span className={`inline-flex h-4 w-4 transform items-center justify-center rounded-full bg-white shadow transition-transform ${tour.isFeatured ? 'translate-x-[18px]' : 'translate-x-0.5'}`}>
+                                    {isTogglingFeatured && (
+                                        <span className="material-symbols-outlined text-[12px] text-amber-600 animate-spin">progress_activity</span>
+                                    )}
+                                </span>
+                            </span>
+                            {tour.isFeatured && (
+                                <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-amber-700">
+                                    <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                                    Nổi bật
+                                </span>
                             )}
-                            {tour.isFeatured ? 'Nổi bật' : 'Tắt'}
                         </button>
                         {!tour.isFeatured && isFeaturedSuggested && (
                             <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600" title="Đang bán chạy / đánh giá tốt — nên cân nhắc bật nổi bật">

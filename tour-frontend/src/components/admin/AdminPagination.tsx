@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface AdminPaginationProps {
   currentPage: number;
@@ -69,19 +69,14 @@ export default function AdminPagination({
     <nav className="space-y-3" aria-label={`Phân trang ${itemLabel}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col items-start gap-2 text-sm text-on-surface-variant min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:items-center min-[420px]:gap-3">
-          <label className="inline-flex items-center gap-2">
+          <div className="inline-flex items-center gap-2">
             <span className="font-medium">Dòng mỗi trang</span>
-            <select
+            <PageSizeSelect
               value={pageSize}
-              onChange={event => onPageSizeChange(Number(event.target.value))}
-              className="h-9 rounded-lg border border-outline-variant/20 bg-surface px-2.5 text-sm font-semibold text-on-surface outline-none transition-colors hover:bg-surface-container focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label="Chọn số dòng mỗi trang"
-            >
-              {pageSizeChoices.map(size => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
-          </label>
+              options={pageSizeChoices}
+              onChange={onPageSizeChange}
+            />
+          </div>
 
           <span className="inline-flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[16px]" aria-hidden="true">table_rows</span>
@@ -193,6 +188,122 @@ export default function AdminPagination({
         </div>
       )}
     </nav>
+  );
+}
+
+function PageSizeSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: number;
+  options: number[];
+  onChange: (size: number) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<{ left: number; top: number; width: number } | null>(null);
+  const selectRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  const positionMenu = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    setMenuStyle({
+      left: rect.left,
+      top: rect.bottom + 8,
+      width: Math.max(rect.width, 64),
+    });
+  }, []);
+
+  const openMenu = () => {
+    positionMenu();
+    setIsOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (!selectRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleReposition = () => positionMenu();
+
+    document.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+    };
+  }, [isOpen, positionMenu]);
+
+  return (
+    <div ref={selectRef} className="relative inline-flex">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label="Chọn số dòng mỗi trang"
+        onClick={() => {
+          if (isOpen) setIsOpen(false);
+          else openMenu();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setIsOpen(false);
+          if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openMenu();
+          }
+        }}
+        className={`flex h-9 min-w-[64px] items-center justify-between gap-2 rounded-lg border bg-surface px-3 text-left text-sm font-bold text-on-surface shadow-sm outline-none transition-all hover:border-primary/35 hover:bg-surface-container focus-visible:ring-2 focus-visible:ring-primary ${
+          isOpen ? 'border-primary/45 bg-primary/5 ring-2 ring-primary/15' : 'border-outline-variant/20'
+        }`}
+      >
+        <span className="tabular-nums">{value}</span>
+        <span
+          className={`material-symbols-outlined shrink-0 text-[17px] text-outline transition-transform ${isOpen ? 'rotate-180 text-primary' : ''}`}
+          aria-hidden="true"
+        >
+          expand_more
+        </span>
+      </button>
+
+      {isOpen && menuStyle && (
+        <div
+          role="listbox"
+          style={{ left: menuStyle.left, top: menuStyle.top, width: menuStyle.width }}
+          className="fixed z-[120] overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-lowest p-1 shadow-xl shadow-slate-900/10"
+        >
+          {options.map(size => {
+            const selected = size === value;
+            return (
+              <button
+                key={size}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  if (!selected) onChange(size);
+                  setIsOpen(false);
+                }}
+                className={`flex h-8 w-full items-center justify-center rounded-lg px-2 text-sm font-bold tabular-nums transition-colors ${
+                  selected
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                }`}
+              >
+                {size}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -100,14 +100,20 @@ export default function DepartureCalendarModal({
         const isSelected = selectedDeparture?.id === departure?.id;
         const isSoldOut = departure?.availableSeats === 0;
         const isRunningLow = Boolean(departure && departure.availableSeats > 0 && departure.availableSeats <= LOW_SEAT_THRESHOLD);
-        // Hiển thị số ghế còn lại. Trên điện thoại (7 cột rất hẹp) chỉ hiện số ghế /
-        // "Hết" để khỏi bị cắt chữ; từ sm trở lên hiện đầy đủ "X ghế" / "Hết chỗ".
+        // Chỉ lộ số ghế cụ thể khi sắp hết (1–10) để tạo cảm giác gấp; còn nhiều
+        // (>10) chỉ hiển thị "Có sẵn chỗ", không khoe số tồn kho. 0 ghế → "Hết chỗ".
+        // Bản short dùng cho điện thoại (7 cột rất hẹp) để khỏi bị cắt chữ.
+        const seats = departure?.availableSeats ?? 0;
         const statusTextFull = isSoldOut
             ? t('tour_detail.soldOut')
-            : t('tour_detail.seatsLeft', { seats: departure?.availableSeats ?? 0 });
+            : isRunningLow
+                ? t('tour_detail.seatsLeft', { seats })
+                : t('tour_detail.availableSeats');
         const statusTextShort = isSoldOut
             ? t('tour_detail.soldOutShort')
-            : String(departure?.availableSeats ?? 0);
+            : isRunningLow
+                ? String(seats)
+                : t('tour_detail.available');
         const statusToneClass = isSoldOut
             ? 'bg-red-50 text-red-600 border-red-100'
             : isRunningLow
@@ -185,7 +191,7 @@ export default function DepartureCalendarModal({
                 </div>
 
                 {/* Calendar Grid */}
-                <div className="px-2 sm:px-6 pb-6 overflow-y-auto">
+                <div className="flex-1 min-h-0 px-2 sm:px-6 pb-4 overflow-y-auto">
                     {/* Days of week */}
                     <div className="grid grid-cols-7 gap-1 sm:gap-3 mb-2">
                         {dayNames.map((day, i) => (
@@ -199,9 +205,11 @@ export default function DepartureCalendarModal({
                     <div className="grid grid-cols-7 gap-1 sm:gap-3">
                         {cells}
                     </div>
+                </div>
 
-                    {/* Legend */}
-                    <div className="mt-6 flex flex-wrap items-center gap-4 text-[11px] font-medium text-on-surface-variant justify-center bg-surface-container-lowest py-3 rounded-2xl border border-outline-variant/10">
+                {/* Legend — ghim ngoài vùng cuộn để luôn hiển thị, kể cả tháng có 6 hàng */}
+                <div className="px-2 sm:px-6 pt-3 pb-6 shrink-0">
+                    <div className="flex flex-wrap items-center gap-4 text-[11px] font-medium text-on-surface-variant justify-center bg-surface-container-lowest py-3 rounded-2xl border border-outline-variant/10">
                         <div className="flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-emerald-400"></span> {t('tour_detail.available')}
                         </div>

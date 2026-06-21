@@ -267,7 +267,7 @@ export default function ReviewsClient({ tourId, tourName, initialReviews, initia
                                     <button
                                         key={opt}
                                         onClick={() => { setSortOption(opt); setIsSortOpen(false); }}
-                                        className={`w-full text-left px-5 py-3 text-sm transition-colors hover:bg-surface-container-lowest ${sortOption === opt ? 'font-bold text-primary bg-primary/5' : 'text-on-surface'}`}
+                                        className={`w-full text-left px-5 py-3 text-sm transition-colors hover:bg-primary/5 hover:text-primary ${sortOption === opt ? 'font-bold text-primary bg-primary/5' : 'text-on-surface'}`}
                                     >
                                         {opt === 'newest' ? t('reviews.newest') : opt === 'highest' ? t('reviews.highest') : t('reviews.lowest')}
                                     </button>

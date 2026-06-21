@@ -165,7 +165,7 @@ export class ReviewService {
     if (sortBy === 'rating_desc') orderByClause = { rating: 'desc' };
     else if (sortBy === 'rating_asc') orderByClause = { rating: 'asc' };
 
-    const [reviews, totalCount, aggregations, groupByRatings] =
+    const [reviews, totalCount, totalReviewsAll, aggregations, groupByRatings] =
       await Promise.all([
         this.prisma.review.findMany({
           where: whereClause,
@@ -176,7 +176,10 @@ export class ReviewService {
             user: { select: { fullName: true, avatarUrl: true } },
           },
         }),
+        // Đếm theo whereClause (đã lọc) → dùng cho phân trang
         this.prisma.review.count({ where: whereClause }),
+        // Đếm toàn bộ review của tour → dùng cho thống kê tổng (không đổi theo filter)
+        this.prisma.review.count({ where: { tourId, isHidden: false } }),
         this.prisma.review.aggregate({
           where: { tourId, isHidden: false },
           _avg: { rating: true },
@@ -206,7 +209,7 @@ export class ReviewService {
       },
       stats: {
         averageRating: Number((aggregations._avg.rating || 0).toFixed(1)),
-        totalReviews: totalCount,
+        totalReviews: totalReviewsAll,
         breakdown,
       },
     };

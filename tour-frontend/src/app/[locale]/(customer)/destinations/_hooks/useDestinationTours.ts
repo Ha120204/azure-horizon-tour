@@ -248,8 +248,12 @@ export function useDestinationTours(language: string) {
             selectedTypes: urlTypes,
             departure: urlDeparture,
         });
+        // CHỈ phụ thuộc searchParams: effect này chỉ được phản ứng khi URL đổi từ
+        // BÊN NGOÀI (vd: Header push sang). Nếu thêm appliedFilters/sortBy/page/limit
+        // vào deps, effect sẽ chạy ngay khi bấm áp dụng bộ lọc — trước khi effect 6d kịp
+        // ghi URL — rồi tưởng nhầm là điều hướng ngoài và revert bộ lọc vừa chọn (race).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams, appliedFilters, sortBy, page, limit]);
+    }, [searchParams]);
 
     // 6d. Đồng bộ bộ lọc đã áp dụng + sort + trang lên URL
     // → back từ trang chi tiết / F5 / chia sẻ link đều giữ nguyên trạng thái lọc

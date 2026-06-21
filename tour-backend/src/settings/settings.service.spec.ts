@@ -1,4 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 
 const CURRENT_SETTINGS = [
@@ -30,11 +29,11 @@ function makePrisma() {
 
 describe('SettingsService', () => {
   describe('updateMany — role-based access control', () => {
-    it('throws ForbiddenException when ADMIN edits booking settings', async () => {
+    it('allows ADMIN to edit booking settings', async () => {
       const service = new SettingsService(makePrisma() as never);
       await expect(
         service.updateMany({ booking_hold_minutes: '20' }, 1, 'ADMIN'),
-      ).rejects.toThrow(ForbiddenException);
+      ).resolves.toMatchObject({ updated: 1 });
     });
 
     it('allows ADMIN to edit company settings', async () => {

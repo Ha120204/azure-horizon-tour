@@ -134,6 +134,8 @@ export default function AdminToursPage() {
                     isStaff={tour.isStaff}
                     isAdmin={tour.canWrite}
                     submittingTourId={tour.isSubmitting}
+                    togglingFeaturedId={tour.togglingFeaturedId}
+                    onToggleFeatured={tour.toggleFeatured}
                     onToggleSelectAll={tour.toggleSelectAll}
                     onToggleSelect={tour.toggleSelectOne}
                     canSelectTour={tour.canSelectTour}

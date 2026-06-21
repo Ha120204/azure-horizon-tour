@@ -76,4 +76,8 @@ export class FilterTourDto {
   @IsOptional()
   @IsString()
   startDateTo?: string; // ISO date string: lọc tour có startDate <= giá trị này
+
+  @IsOptional()
+  @IsString()
+  featured?: string; // 'true' → chỉ lấy tour nổi bật (dùng cho trang chủ)
 }

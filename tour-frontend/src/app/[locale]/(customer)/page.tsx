@@ -52,33 +52,54 @@ export const revalidate = 300;
 
 // ─── Data Fetching ────────────────────────────────────────────────────────────
 
+const FEATURED_LIMIT = 6;
+
 interface FeaturedToursResult {
   tours: TourSummary[];
   hasError: boolean;
 }
 
-async function fetchFeaturedTours(locale: string): Promise<FeaturedToursResult> {
+async function fetchTours(query: string): Promise<TourSummary[] | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/tour?locale=${locale}&limit=6`, {
+    const res = await fetch(`${API_BASE_URL}/tour?${query}`, {
       // next.revalidate kế thừa từ `export const revalidate` ở module level,
       // nhưng ghi tường minh ở đây để rõ ý định.
       next: { revalidate: 300 },
     });
-
     if (!res.ok) {
-      console.error(`[Homepage] fetchFeaturedTours failed: ${res.status}`);
-      return { tours: [], hasError: true };
+      console.error(`[Homepage] fetchTours failed (${query}): ${res.status}`);
+      return null;
     }
-
     const payload = await res.json();
     // Backend trả về { data: TourSummary[], meta: {...} } qua TransformInterceptor
-    const tours = Array.isArray(payload?.data) ? (payload.data as TourSummary[]) : [];
-    return { tours, hasError: false };
+    return Array.isArray(payload?.data) ? (payload.data as TourSummary[]) : [];
   } catch (error) {
     // Không crash trang khi backend down — phân biệt lỗi với danh sách rỗng
-    console.error('[Homepage] fetchFeaturedTours error:', error);
-    return { tours: [], hasError: true };
+    console.error(`[Homepage] fetchTours error (${query}):`, error);
+    return null;
   }
+}
+
+/**
+ * Ưu tiên tour được admin đánh dấu nổi bật; nếu chưa đủ 6 thì lấp bằng tour mới
+ * nhất (loại trùng) để mục nổi bật không bao giờ trống.
+ */
+async function fetchFeaturedTours(locale: string): Promise<FeaturedToursResult> {
+  const featured = await fetchTours(
+    `locale=${locale}&featured=true&limit=${FEATURED_LIMIT}`,
+  );
+  if (featured === null) return { tours: [], hasError: true };
+
+  if (featured.length >= FEATURED_LIMIT) {
+    return { tours: featured, hasError: false };
+  }
+
+  const latest = await fetchTours(`locale=${locale}&limit=${FEATURED_LIMIT}`);
+  if (latest === null) return { tours: featured, hasError: false };
+
+  const seen = new Set(featured.map((t) => t.id));
+  const merged = [...featured, ...latest.filter((t) => !seen.has(t.id))];
+  return { tours: merged.slice(0, FEATURED_LIMIT), hasError: false };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────

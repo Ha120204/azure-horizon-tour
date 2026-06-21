@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AVATAR_COLORS, CAT, STS } from '../_lib/config';
 import {
@@ -29,6 +29,8 @@ interface SupportConversationPanelProps {
     onSetInternal?: (v: boolean) => void;
     drawer?: boolean;
 }
+
+const STATUS_SELECT_OPTIONS: TicketStatus[] = ['NEW', 'IN_PROGRESS', 'RESOLVED'];
 
 export function SupportConversationPanel({
     selected,
@@ -90,17 +92,12 @@ export function SupportConversationPanel({
                             </div>
                         </div>
                     </div>
-                    <select
-                        aria-label={`Cập nhật trạng thái ticket #${selected.id}`}
+                    <TicketStatusSelect
+                        ticketId={selected.id}
                         value={selected.status}
-                        onChange={(event) => onStatusChange(selected.id, event.target.value as TicketStatus)}
                         disabled={statusUpdatingId === selected.id}
-                        className="h-9 rounded-xl border border-outline-variant/40 bg-surface px-3 text-xs font-black text-on-surface outline-none transition focus-visible:border-primary/40 focus-visible:ring-4 focus-visible:ring-primary/10 disabled:cursor-wait disabled:opacity-60"
-                    >
-                        <option value="NEW">Mới</option>
-                        <option value="IN_PROGRESS">Đang xử lý</option>
-                        <option value="RESOLVED">Đã giải quyết</option>
-                    </select>
+                        onChange={(status) => onStatusChange(selected.id, status)}
+                    />
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
@@ -215,6 +212,109 @@ export function SupportConversationPanel({
                 />
             )}
         </section>
+    );
+}
+
+function TicketStatusSelect({
+    ticketId,
+    value,
+    disabled,
+    onChange,
+}: {
+    ticketId: number;
+    value: TicketStatus;
+    disabled: boolean;
+    onChange: (status: TicketStatus) => void;
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef<HTMLDivElement | null>(null);
+    const selectedStatus = STS[value];
+    const isExpanded = isOpen && !disabled;
+
+    useEffect(() => {
+        if (!isExpanded) return;
+
+        const handleMouseDown = (event: MouseEvent) => {
+            if (!selectRef.current?.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        return () => document.removeEventListener('mousedown', handleMouseDown);
+    }, [isExpanded]);
+
+    return (
+        <div ref={selectRef} className="relative shrink-0">
+            <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={isExpanded}
+                aria-label={`Cập nhật trạng thái ticket #${ticketId}`}
+                disabled={disabled}
+                onClick={() => setIsOpen((open) => !open)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') setIsOpen(false);
+                    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setIsOpen(true);
+                    }
+                }}
+                className={`flex h-9 min-w-[128px] items-center justify-between gap-2 rounded-xl border bg-surface px-3 text-left text-xs font-black text-on-surface shadow-sm outline-none transition-all hover:border-primary/35 hover:bg-surface-container-low focus-visible:ring-4 focus-visible:ring-primary/10 disabled:cursor-wait disabled:opacity-60 ${
+                    isExpanded ? 'border-primary/40 bg-primary/5 ring-4 ring-primary/10' : 'border-outline-variant/40'
+                }`}
+            >
+                <span className="flex min-w-0 items-center gap-2">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${selectedStatus.dot}`} aria-hidden="true" />
+                    <span className="truncate">{selectedStatus.label}</span>
+                </span>
+                <span
+                    className={`material-symbols-outlined shrink-0 text-[16px] text-outline transition-transform ${isExpanded ? 'rotate-180 text-primary' : ''} ${disabled ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                >
+                    {disabled ? 'progress_activity' : 'expand_more'}
+                </span>
+            </button>
+
+            {isExpanded && (
+                <div
+                    role="listbox"
+                    className="absolute right-0 top-full z-[100] mt-2 min-w-[168px] overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-lowest p-1 shadow-xl shadow-slate-900/10"
+                >
+                    <div className="max-h-56 overflow-y-auto">
+                        {STATUS_SELECT_OPTIONS.map((status) => {
+                            const option = STS[status];
+                            const selected = status === value;
+                            return (
+                                <button
+                                    key={status}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={selected}
+                                    onClick={() => {
+                                        if (!selected) onChange(status);
+                                        setIsOpen(false);
+                                    }}
+                                    className={`flex h-9 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left text-xs font-bold transition-colors ${
+                                        selected
+                                            ? 'bg-primary/10 text-primary ring-1 ring-primary/15'
+                                            : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                                    }`}
+                                >
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        <span className={`h-2 w-2 shrink-0 rounded-full ${option.dot}`} aria-hidden="true" />
+                                        <span className="whitespace-nowrap">{option.label}</span>
+                                    </span>
+                                    {selected && (
+                                        <span className="material-symbols-outlined text-[15px]" aria-hidden="true">done</span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 

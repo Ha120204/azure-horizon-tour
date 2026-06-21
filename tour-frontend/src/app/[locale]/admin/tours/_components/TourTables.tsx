@@ -1,8 +1,10 @@
 'use client';
 
+import { useMemo } from 'react';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { ActiveTourRow } from './ActiveTourRow';
 import { TrashTourRow } from './TrashTourRow';
+import { getSuggestedFeaturedIds } from '../_lib/helpers';
 import type { Meta, Tour, TourReviewAction, TrashedTour } from '../_lib/types';
 
 interface ActiveToursTableProps {
@@ -18,6 +20,8 @@ interface ActiveToursTableProps {
     isStaff: boolean;
     isAdmin: boolean;
     submittingTourId: number | null;
+    togglingFeaturedId: number | null;
+    onToggleFeatured: (tour: Tour) => void;
     onToggleSelectAll: () => void;
     onToggleSelect: (id: number) => void;
     canSelectTour: (tour: Tour) => boolean;
@@ -45,6 +49,8 @@ export function ActiveToursTable({
     isStaff,
     isAdmin,
     submittingTourId,
+    togglingFeaturedId,
+    onToggleFeatured,
     onToggleSelectAll,
     onToggleSelect,
     canSelectTour,
@@ -59,6 +65,7 @@ export function ActiveToursTable({
     onRetry,
 }: ActiveToursTableProps) {
     const hasSelectableTours = tours.some(canSelectTour);
+    const suggestedFeaturedIds = useMemo(() => getSuggestedFeaturedIds(tours), [tours]);
 
     return (
         <div id="tours-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
@@ -89,20 +96,21 @@ export function ActiveToursTable({
                             <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Ghế</th>
                             <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Rating</th>
                             <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider">Trạng Thái</th>
+                            <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-center">Nổi Bật</th>
                             <th className="py-3.5 px-5 font-semibold text-xs text-on-surface-variant uppercase tracking-wider text-right">Thao Tác</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/10">
                         {isLoading ? (
                             <tr>
-                                <td colSpan={11} className="py-20 text-center">
+                                <td colSpan={12} className="py-20 text-center">
                                     <span className="material-symbols-outlined text-4xl text-primary animate-spin" aria-hidden="true">progress_activity</span>
                                     <p className="text-on-surface-variant text-sm mt-3">Đang tải dữ liệu…</p>
                                 </td>
                             </tr>
                         ) : isError ? (
                             <tr>
-                                <td colSpan={11} className="py-20 text-center">
+                                <td colSpan={12} className="py-20 text-center">
                                     <span className="material-symbols-outlined text-4xl text-error mb-2 block" aria-hidden="true">wifi_off</span>
                                     <p className="font-bold text-on-surface">Không tải được dữ liệu</p>
                                     <p className="text-on-surface-variant text-sm mt-1">Đã xảy ra lỗi khi tải danh sách tour.</p>
@@ -120,7 +128,7 @@ export function ActiveToursTable({
                             </tr>
                         ) : tours.length === 0 ? (
                             <tr>
-                                <td colSpan={11} className="py-20 text-center">
+                                <td colSpan={12} className="py-20 text-center">
                                     <span className="material-symbols-outlined text-4xl text-outline mb-2 block" aria-hidden="true">travel_explore</span>
                                     <p className="font-bold text-on-surface">Không tìm thấy tour nào</p>
                                     <p className="text-on-surface-variant text-sm mt-1">Thử thay đổi bộ lọc hoặc {isStaff ? 'tạo bản nháp mới' : 'tạo tour mới'}.</p>
@@ -139,6 +147,9 @@ export function ActiveToursTable({
                                     isStaff={isStaff}
                                     isAdmin={isAdmin}
                                     submittingTourId={submittingTourId}
+                                    togglingFeaturedId={togglingFeaturedId}
+                                    isFeaturedSuggested={suggestedFeaturedIds.has(tour.id)}
+                                    onToggleFeatured={onToggleFeatured}
                                     canSelectTour={canSelectTour}
                                     onToggleSelect={onToggleSelect}
                                     onOpenDetail={onOpenDetail}

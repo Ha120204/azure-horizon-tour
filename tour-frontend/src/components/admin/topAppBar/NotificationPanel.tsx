@@ -83,7 +83,7 @@ export default function NotificationPanel({
             </div>
 
             {/* ── Tabs ── */}
-            <div className="flex items-center gap-1 px-4 pt-2 pb-0 border-b border-slate-100 bg-white flex-shrink-0">
+            <div className="flex items-center gap-0.5 px-3 pt-2 pb-0 border-b border-slate-100 bg-white flex-shrink-0 overflow-x-auto hide-scrollbar">
                 {visibleTabs.map(tab => {
                     const count = tabUnread(tab.types);
                     const isActive = activeTab === tab.key;
@@ -91,7 +91,7 @@ export default function NotificationPanel({
                         <button
                             key={tab.key}
                             onClick={() => setActiveTab(tab.key)}
-                            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-all -mb-px ${
+                            className={`flex flex-shrink-0 items-center gap-1.5 px-2.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-all -mb-px ${
                                 isActive
                                     ? 'border-blue-600 text-blue-600'
                                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200'

@@ -1,6 +1,6 @@
 import type { Setting, SettingMeta } from './types';
 
-const ADMIN_EDITABLE_GROUPS = new Set(['company']);
+const ADMIN_EDITABLE_GROUPS = new Set(['company', 'booking']);
 
 export const canEditGroup = (role: string, group: string) => {
     if (role === 'SUPER_ADMIN') return true;

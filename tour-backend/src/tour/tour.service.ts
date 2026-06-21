@@ -81,6 +81,7 @@ export class TourService {
         tourType: createTourDto.tourType?.trim() || 'Luxury Retreat',
         departurePoint: createTourDto.departurePoint?.trim() || null,
         departurePointEn: createTourDto.departurePointEn?.trim() || null,
+        isFeatured: createTourDto.isFeatured ?? false,
         status: finalStatus,
         publishedAt: finalStatus === TourStatus.PUBLISHED ? new Date() : null,
         ...(creatorId && { createdBy: { connect: { id: creatorId } } }),
@@ -111,6 +112,7 @@ export class TourService {
       status,
       startDateFrom,
       startDateTo,
+      featured,
       page = '1',
       limit = '10',
     } = query;
@@ -147,6 +149,10 @@ export class TourService {
 
     if (destinationId) {
       appendAndFilter(where, { destinationId: parseInt(destinationId, 10) });
+    }
+
+    if (featured === 'true') {
+      where.isFeatured = true;
     }
 
     if (dest) {

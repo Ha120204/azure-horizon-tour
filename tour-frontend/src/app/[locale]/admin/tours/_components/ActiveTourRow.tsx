@@ -17,6 +17,9 @@ interface ActiveTourRowProps {
     isStaff: boolean;
     isAdmin: boolean;
     submittingTourId: number | null;
+    togglingFeaturedId: number | null;
+    isFeaturedSuggested: boolean;
+    onToggleFeatured: (tour: Tour) => void;
     canSelectTour: (tour: Tour) => boolean;
     onToggleSelect: (id: number) => void;
     onOpenDetail: (tour: Tour) => void;
@@ -37,6 +40,9 @@ export function ActiveTourRow({
     isStaff,
     isAdmin,
     submittingTourId,
+    togglingFeaturedId,
+    isFeaturedSuggested,
+    onToggleFeatured,
     canSelectTour,
     onToggleSelect,
     onOpenDetail,
@@ -56,6 +62,8 @@ export function ActiveTourRow({
     const canSelect = canSelectTour(tour);
     const bulkSelectHint = canSelect ? `Chọn tour ${tour.name}` : 'Bạn không có quyền chọn tour này';
     const stt = (page - 1) * pageSize + rowIndex + 1;
+    const canToggleFeatured = isAdmin && tour.status === 'PUBLISHED';
+    const isTogglingFeatured = togglingFeaturedId === tour.id;
 
     return (
         <tr className={`hover:bg-surface-container-low/40 transition-colors group ${isChecked ? 'bg-primary/5' : ''}`}>
@@ -164,6 +172,38 @@ export function ActiveTourRow({
                         </p>
                     )}
                 </div>
+            </td>
+            <td className="py-3 px-5 text-center whitespace-nowrap">
+                {canToggleFeatured ? (
+                    <div className="flex flex-col items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => onToggleFeatured(tour)}
+                            disabled={isTogglingFeatured}
+                            aria-pressed={tour.isFeatured ?? false}
+                            aria-label={tour.isFeatured ? `Tắt nổi bật tour ${tour.name}` : `Bật nổi bật tour ${tour.name}`}
+                            title={tour.isFeatured ? 'Đang nổi bật trên trang chủ — bấm để tắt' : 'Bấm để đưa lên mục nổi bật trang chủ'}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors disabled:opacity-50 ${tour.isFeatured
+                                ? 'bg-amber-500/15 text-amber-700 border-amber-300/50 hover:bg-amber-500/25'
+                                : 'bg-surface-container text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-high'}`}
+                        >
+                            {isTogglingFeatured ? (
+                                <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                            ) : (
+                                <span className="material-symbols-outlined text-[14px]" style={tour.isFeatured ? { fontVariationSettings: "'FILL' 1" } : undefined}>star</span>
+                            )}
+                            {tour.isFeatured ? 'Nổi bật' : 'Tắt'}
+                        </button>
+                        {!tour.isFeatured && isFeaturedSuggested && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600" title="Đang bán chạy / đánh giá tốt — nên cân nhắc bật nổi bật">
+                                <span className="material-symbols-outlined text-[12px]">local_fire_department</span>
+                                Gợi ý
+                            </span>
+                        )}
+                    </div>
+                ) : (
+                    <span className="text-xs text-on-surface-variant">—</span>
+                )}
             </td>
             <td className="py-3 px-5 text-right whitespace-nowrap">
                 <div className="flex justify-end gap-1">

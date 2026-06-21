@@ -146,6 +146,7 @@ model Tour {
   availableSeats   Int
   imageUrl         String?
   averageRating    Float         @default(0)
+  isFeatured       Boolean       @default(false) // Tour nổi bật hiện trên trang chủ
   tourType         String        @default("Luxury Retreat")
   primaryTransport TransportType @default(SELF_ARRANGED)
   departurePoint   String? // Điểm khởi hành mặc định (VD: "TP. Hồ Chí Minh")

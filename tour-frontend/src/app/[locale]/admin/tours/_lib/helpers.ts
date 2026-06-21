@@ -22,6 +22,33 @@ export const getTourStatusBadge = (status: TourStatus): { label: string; cls: st
     }
 };
 
+// ── Gợi ý tour nên đặt nổi bật ──────────────────────────────────────────────
+// Điểm = số chỗ đã đặt (ưu tiên độ phổ biến) + rating Bayesian (tránh tour 1
+// review 5★ thắng tour nhiều review điểm cao). Prior: trung bình 4.0★, trọng số 5.
+const RATING_PRIOR_MEAN = 4.0;
+const RATING_PRIOR_WEIGHT = 5;
+
+export const getFeaturedSuggestionScore = (tour: Tour): number => {
+    const booked = tour.bookedSeats ?? 0;
+    const reviews = tour.reviewCount ?? 0;
+    const rating = tour.averageRating ?? 0;
+    const bayesianRating =
+        (RATING_PRIOR_WEIGHT * RATING_PRIOR_MEAN + reviews * rating) /
+        (RATING_PRIOR_WEIGHT + reviews);
+    return booked + bayesianRating * 10;
+};
+
+// Trả về id của tối đa `max` tour PUBLISHED chưa nổi bật nhưng có điểm cao nhất —
+// dùng để hiện badge gợi ý "nên bật nổi bật".
+export const getSuggestedFeaturedIds = (tours: Tour[], max = 3): Set<number> => {
+    const hasSignal = (t: Tour) => (t.bookedSeats ?? 0) > 0 || (t.reviewCount ?? 0) > 0;
+    const candidates = tours
+        .filter(t => t.status === 'PUBLISHED' && !t.isFeatured && hasSignal(t))
+        .sort((a, b) => getFeaturedSuggestionScore(b) - getFeaturedSuggestionScore(a))
+        .slice(0, max);
+    return new Set(candidates.map(t => t.id));
+};
+
 const normalizeLooseText = (value?: string | null): string =>
     (value ?? '')
         .normalize('NFD')

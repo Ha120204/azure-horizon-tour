@@ -85,7 +85,7 @@ const SETTING_DEFINITIONS: Record<string, SettingDefinition> = {
   booking_min_people: { key: 'booking_min_people', type: 'integer', min: 1, max: 99, required: true },
 };
 
-const ADMIN_EDITABLE_GROUPS = new Set(['company']);
+const ADMIN_EDITABLE_GROUPS = new Set(['company', 'booking']);
 
 const SETTING_GROUP: Record<string, string> = Object.fromEntries(
   DEFAULT_SETTINGS.map(s => [s.key, s.group]),

@@ -29,6 +29,8 @@ export interface Tour {
   tourType: string;
   tourCode?: string;
   averageRating: number;
+  reviewCount?: number;
+  isFeatured?: boolean;
   startDate: string;
   endDate?: string;
   departurePoint?: string;

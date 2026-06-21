@@ -36,6 +36,7 @@ export function useTourManagement() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [activeTab, setActiveTab] = useState<TourTab>('active');
+    const [togglingFeaturedId, setTogglingFeaturedId] = useState<number | null>(null);
 
     const [tourStats, setTourStats] = useState<TourStats>(EMPTY_TOUR_STATS);
 
@@ -80,6 +81,26 @@ export function useTourManagement() {
     }, [search, filterDest, filterStatus, filterDateFrom, filterDateTo, sortBy, page, pageSize, showToast]);
 
     useEffect(() => { fetchTours(); }, [fetchTours]);
+
+    const toggleFeatured = useCallback(async (tour: Tour) => {
+        const next = !tour.isFeatured;
+        setTogglingFeaturedId(tour.id);
+        setTours(prev => prev.map(t => t.id === tour.id ? { ...t, isFeatured: next } : t));
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/tour/${tour.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isFeatured: next }),
+            });
+            if (!res.ok) throw new Error();
+            showToast(next ? 'Đã bật nổi bật cho tour.' : 'Đã tắt nổi bật.');
+        } catch {
+            setTours(prev => prev.map(t => t.id === tour.id ? { ...t, isFeatured: !next } : t));
+            showToast('Không thể cập nhật trạng thái nổi bật.', 'error');
+        } finally {
+            setTogglingFeaturedId(null);
+        }
+    }, [showToast]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -309,6 +330,9 @@ export function useTourManagement() {
         isStaff,
         isAdmin,
         canWrite,
+        // Featured toggle
+        toggleFeatured,
+        togglingFeaturedId,
         // Stats
         pendingCount: tourStats.pending,
         draftCount: tourStats.draft,

@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDate,
   IsEnum,
   IsInt,
@@ -7,7 +8,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsFutureDate } from '../../common/validators/is-future-date.validator';
 import { TourStatus } from '@prisma/client';
 
@@ -81,4 +82,12 @@ export class CreateTourDto {
   @IsOptional()
   @IsEnum(TourStatus)
   status?: TourStatus;
+
+  // Endpoint dùng multipart nên boolean có thể tới dạng chuỗi 'true'/'false'.
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value === 'true' : value,
+  )
+  @IsBoolean()
+  isFeatured?: boolean;
 }

@@ -11,6 +11,7 @@ import {
   Request,
   NotFoundException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SupportService } from './support.service';
@@ -34,6 +35,7 @@ type AuthUser = {
   sub?: number | string;
   fullName?: string;
   name?: string;
+  role?: string;
 };
 
 type AuthenticatedRequest = {
@@ -131,8 +133,19 @@ export class SupportController {
     @Body() dto: AssignTicketDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    const staffId = dto.staffId ?? getRequiredAuthUserId(req);
-    return this.supportService.assignTicket(id, staffId);
+    const actorId = getRequiredAuthUserId(req);
+    const actorName = getAuthDisplayName(req, 'Nhân viên');
+    const staffId = dto.staffId ?? actorId;
+
+    // Chỉ ADMIN/SUPER_ADMIN được phân công cho người khác; STAFF chỉ tự nhận ticket.
+    if (staffId !== actorId) {
+      const role = req.user?.role;
+      if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+        throw new ForbiddenException('Bạn không có quyền phân công ticket cho nhân viên khác');
+      }
+    }
+
+    return this.supportService.assignTicket(id, staffId, actorId, actorName);
   }
 
   // POST /support/tickets/:id/reply  (staff reply)

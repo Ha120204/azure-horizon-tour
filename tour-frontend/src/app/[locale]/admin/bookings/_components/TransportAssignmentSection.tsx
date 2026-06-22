@@ -49,9 +49,21 @@ const EMPTY_FORM: TransportForm = {
   notes: '',
 };
 
+type TransportMode = 'FLIGHT' | 'VEHICLE';
+
+// Suy luận tab mặc định từ dữ liệu đã gán: nếu chỉ có thông tin xe thì mở tab Xe.
+function inferMode(a: BookingTransportAssignment | null | undefined): TransportMode {
+  if (!a) return 'FLIGHT';
+  const hasVehicle = Boolean(a.vehiclePlate) || a.seatNumbers.length > 0;
+  const hasFlight =
+    a.outboundTicketCodes.length > 0 || Boolean(a.outboundPnrCode) || a.returnTicketCodes.length > 0;
+  return hasVehicle && !hasFlight ? 'VEHICLE' : 'FLIGHT';
+}
+
 export function TransportAssignmentSection({ bookingId, initial }: { bookingId: number; initial: BookingTransportAssignment | null | undefined }) {
   const [assignment, setAssignment] = useState<BookingTransportAssignment | null>(initial ?? null);
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<TransportMode>(inferMode(initial));
   const [form, setForm] = useState<TransportForm>(initial ? assignmentToForm(initial) : EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -62,6 +74,7 @@ export function TransportAssignmentSection({ bookingId, initial }: { bookingId: 
 
   const handleOpen = () => {
     setForm(assignment ? assignmentToForm(assignment) : EMPTY_FORM);
+    setMode(inferMode(assignment));
     setError('');
     setSuccess('');
     setOpen(true);
@@ -191,6 +204,25 @@ export function TransportAssignmentSection({ bookingId, initial }: { bookingId: 
             </div>
           )}
 
+          {/* Chọn loại phương tiện */}
+          <div className="flex gap-2">
+            {([['FLIGHT', 'Máy bay', 'flight'], ['VEHICLE', 'Xe khách', 'directions_bus']] as const).map(([value, label, icon]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMode(value)}
+                aria-pressed={mode === value}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${mode === value ? 'border-primary bg-primary text-white' : 'border-outline-variant/20 bg-surface text-on-surface-variant hover:border-primary/40'}`}
+              >
+                <span className="material-symbols-outlined text-[16px]">{icon}</span>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Máy bay: Chiều đi + Chiều về */}
+          {mode === 'FLIGHT' && (
+          <>
           {/* Chiều đi */}
           <div>
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 mb-3">
@@ -235,8 +267,12 @@ export function TransportAssignmentSection({ bookingId, initial }: { bookingId: 
             </div>
           </div>
 
+          </>
+          )}
+
           {/* Xe */}
-          <div className="border-t border-outline-variant/10 pt-4">
+          {mode === 'VEHICLE' && (
+          <div>
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3">
               <span className="material-symbols-outlined text-[14px]">directions_bus</span>
               Xe khách / ô tô
@@ -252,6 +288,7 @@ export function TransportAssignmentSection({ bookingId, initial }: { bookingId: 
               </div>
             </div>
           </div>
+          )}
 
           {/* Ghi chú */}
           <div className="border-t border-outline-variant/10 pt-4">

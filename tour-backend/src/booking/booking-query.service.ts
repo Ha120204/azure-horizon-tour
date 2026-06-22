@@ -41,6 +41,12 @@ export class BookingQueryService {
     private readonly settingsService: SettingsService,
   ) {}
 
+  /** Điểm tập trung = địa chỉ văn phòng cấu hình ở Cài đặt (company_address). */
+  private async getMeetingPoint(): Promise<string | null> {
+    const { company_address } = await this.settingsService.getPublic();
+    return company_address?.trim() || null;
+  }
+
   private getCustomerVoucherStatus(booking: {
     status: BookingStatus;
     paymentStatus: PaymentStatus;
@@ -222,6 +228,7 @@ export class BookingQueryService {
                 select: {
                   boardingPoint: true,
                   boardingTime: true,
+                  gatheringTime: true,
                   departureTime: true,
                 },
               },
@@ -232,6 +239,7 @@ export class BookingQueryService {
       departures.map((departure) => [departure.id, departure]),
     );
 
+    const meetingPoint = await this.getMeetingPoint();
     return bookings.map((b) => {
       const departure = b.departureId
         ? departureMap.get(b.departureId)
@@ -240,11 +248,11 @@ export class BookingQueryService {
         ...b,
         departureDate: departure?.departureDate ?? b.tour.startDate,
         meetingTime:
+          departure?.transport?.gatheringTime ??
           departure?.transport?.boardingTime ??
           departure?.transport?.departureTime ??
           null,
-        pickupLocation:
-          departure?.transport?.boardingPoint ?? b.tour.departurePoint ?? null,
+        pickupLocation: departure?.transport?.boardingPoint?.trim() || meetingPoint,
         voucherStatus: this.getCustomerVoucherStatus(b),
         refundStatus: this.getCustomerRefundStatus(b),
         totalPrice: Number(b.totalPrice),
@@ -295,6 +303,7 @@ export class BookingQueryService {
                 arrivalAirport: true,
                 boardingPoint: true,
                 boardingTime: true,
+                gatheringTime: true,
                 departureTime: true,
                 arrivalTime: true,
                 vehicleType: true,
@@ -305,15 +314,16 @@ export class BookingQueryService {
           },
         })
       : null;
+    const meetingPoint = await this.getMeetingPoint();
     return {
       ...base,
       departureDate: departure?.departureDate ?? booking.tour.startDate,
       meetingTime:
+        departure?.transport?.gatheringTime ??
         departure?.transport?.boardingTime ??
         departure?.transport?.departureTime ??
         null,
-      pickupLocation:
-        departure?.transport?.boardingPoint ?? booking.tour.departurePoint ?? null,
+      pickupLocation: departure?.transport?.boardingPoint?.trim() || meetingPoint,
       departureTransport: departure?.transport ?? null,
       contactInfo: booking.contactInfo ?? null,
       passengers: booking.passengers ?? null,
@@ -439,6 +449,7 @@ export class BookingQueryService {
                 arrivalAirport: true,
                 boardingPoint: true,
                 boardingTime: true,
+                gatheringTime: true,
                 departureTime: true,
                 arrivalTime: true,
                 vehicleType: true,
@@ -450,15 +461,16 @@ export class BookingQueryService {
         })
       : null;
 
+    const meetingPoint = await this.getMeetingPoint();
     return {
       ...booking,
       departureDate: departure?.departureDate ?? booking.tour.startDate,
       meetingTime:
+        departure?.transport?.gatheringTime ??
         departure?.transport?.boardingTime ??
         departure?.transport?.departureTime ??
         null,
-      pickupLocation:
-        departure?.transport?.boardingPoint ?? booking.tour.departurePoint ?? null,
+      pickupLocation: departure?.transport?.boardingPoint?.trim() || meetingPoint,
       departureTransport: departure?.transport ?? null,
     };
   }

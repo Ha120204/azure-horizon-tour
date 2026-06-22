@@ -63,7 +63,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
     const router = useRouter();
     const { t, formatPrice, language } = useLocale();
 
-    // Mobile: thu gọn form để lộ video nền; desktop luôn hiện đầy đủ (md:block)
+    // Mobile/tablet: thu gọn form để lộ video nền; chỉ mở grid ngang khi đủ rộng (xl:block)
     const [isExpanded, setIsExpanded] = useState(false);
 
     const [destination, setDestination] = useState('');
@@ -326,7 +326,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                 <button
                     type="button"
                     onClick={() => setIsExpanded(true)}
-                    className="md:hidden w-full flex items-center gap-3 rounded-full bg-white px-5 py-4 text-left shadow-2xl border border-slate-100 transition-transform duration-200 active:scale-[0.98]"
+                    className="xl:hidden w-full flex items-center gap-3 rounded-full bg-white px-5 py-4 text-left shadow-2xl border border-slate-100 transition-transform duration-200 active:scale-[0.98]"
                 >
                     <span className="material-symbols-outlined text-primary">search</span>
                     <span className="flex-1 text-sm font-bold text-slate-800">{t('search.openSearch')}</span>
@@ -334,13 +334,13 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                 </button>
             )}
 
-            <div className={`${isExpanded ? 'block' : 'hidden'} md:block`}>
+            <div className={`${isExpanded ? 'block' : 'hidden'} xl:block`}>
             {/* Mobile: nút thu gọn lại */}
             {isExpanded && (
                 <button
                     type="button"
                     onClick={() => setIsExpanded(false)}
-                    className="md:hidden mx-auto mb-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-4 py-1.5 text-xs font-bold text-white backdrop-blur-md"
+                    className="xl:hidden mx-auto mb-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-4 py-1.5 text-xs font-bold text-white backdrop-blur-md"
                 >
                     <span className="material-symbols-outlined text-[16px]">expand_less</span>
                     {t('search.collapseSearch')}
@@ -378,10 +378,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             </div>
         <form
             onSubmit={handleSearch}
-            className="bg-white rounded-[2rem] md:rounded-full shadow-2xl flex flex-col md:grid md:grid-cols-[250px_1px_250px_1px_210px_1px_270px_auto] items-center p-3 border border-slate-100 w-full md:w-fit md:mx-auto"
+            className="bg-white rounded-[2rem] xl:rounded-full shadow-2xl flex flex-col xl:grid xl:grid-cols-[250px_1px_250px_1px_210px_1px_270px_auto] items-center p-3 border border-slate-100 w-full xl:w-fit xl:mx-auto"
         >
             {/* 0. Điểm khởi hành */}
-            <div ref={departureRef} className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { departureInputRef.current?.focus(); setIsDepartureOpen(true); }}>
+            <div ref={departureRef} className="flex items-center gap-3 px-5 py-3 xl:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { departureInputRef.current?.focus(); setIsDepartureOpen(true); }}>
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 motion-reduce:transform-none">flight_takeoff</span>
                 <div className="flex flex-col min-w-0 flex-1">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">
@@ -432,7 +432,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
                 {/* Departure dropdown */}
                 {isDepartureOpen && (
                     <div
-                        className="absolute bottom-[calc(100%+12px)] left-0 w-full md:w-[320px] z-[100] animate-fade-in-up"
+                        className="absolute bottom-[calc(100%+12px)] left-0 w-full xl:w-[320px] z-[100] animate-fade-in-up"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl shadow-slate-950/20 ring-1 ring-slate-900/5">
@@ -518,10 +518,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             </div>
 
             {/* Divider col-span in grid: tự render là 1px column */}
-            <div className="hidden md:block w-px h-12 bg-slate-200"></div>
+            <div className="hidden xl:block w-px h-12 bg-slate-200"></div>
 
             {/* 1. Destination */}
-            <div ref={destRef} className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative min-w-0 motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { destInputRef.current?.focus(); setIsDestFocused(true); }}>
+            <div ref={destRef} className="flex items-center gap-3 px-5 py-3 xl:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative min-w-0 motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { destInputRef.current?.focus(); setIsDestFocused(true); }}>
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] text-[18px] flex-shrink-0 motion-reduce:transform-none">location_on</span>
 
                 <div className="flex flex-col flex-1 min-w-0">
@@ -643,10 +643,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
 
             {/* Divider */}
-            <div className="hidden md:block w-px h-12 bg-slate-200"></div>
+            <div className="hidden xl:block w-px h-12 bg-slate-200"></div>
 
             {/* 2. Dates */}
-            <div className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { const btn = document.getElementById('date-picker-trigger'); btn?.click(); }}>
+            <div className="flex items-center gap-3 px-5 py-3 xl:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group motion-reduce:transform-none motion-reduce:transition-none" onClick={() => { const btn = document.getElementById('date-picker-trigger'); btn?.click(); }}>
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] text-[18px] flex-shrink-0 motion-reduce:transform-none">calendar_today</span>
                 <div className="flex flex-col flex-1 min-w-0">
                     <DatePickerDropdown
@@ -662,10 +662,10 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             </div>
 
             {/* Divider */}
-            <div className="hidden md:block w-px h-12 bg-slate-200"></div>
+            <div className="hidden xl:block w-px h-12 bg-slate-200"></div>
 
             {/* 3. Budget (CUSTOM DROPDOWN) */}
-            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex items-center gap-3 px-5 py-3 md:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none">
+            <div ref={budgetRef} onClick={() => setIsBudgetOpen(!isBudgetOpen)} className="flex items-center gap-3 px-5 py-3 xl:py-2 w-full rounded-full transition-[background-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg hover:shadow-slate-900/5 cursor-pointer group relative motion-reduce:transform-none motion-reduce:transition-none">
                 <span className="material-symbols-outlined text-primary group-hover:scale-110 group-hover:-translate-y-0.5 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 motion-reduce:transform-none">account_balance_wallet</span>
                 <div className="flex flex-col flex-1 min-w-0">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{t('search.budget')}</label>
@@ -688,7 +688,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
 
                 {/* Hộp thả xuống của Budget */}
                 {isBudgetOpen && (
-                    <div className="absolute bottom-[calc(100%+12px)] left-0 w-full md:w-[260px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] animate-fade-in-up">
+                    <div className="absolute bottom-[calc(100%+12px)] left-0 w-full xl:w-[260px] bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-[100] animate-fade-in-up">
                         {BUDGET_OPTIONS.map((opt, idx) => (
                             <div
                                 key={idx}
@@ -712,7 +712,7 @@ export default function HeroSearch({ travelScope: controlledTravelScope, onTrave
             <button
                 type="submit"
                 disabled={!canSearch}
-                className={`group w-full md:w-auto md:min-w-[170px] mt-2 md:mt-0 inline-flex items-center justify-center gap-2 rounded-full px-10 py-4 font-bold tracking-wide transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] whitespace-nowrap shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
+                className={`group w-full xl:w-auto xl:min-w-[170px] mt-2 xl:mt-0 inline-flex items-center justify-center gap-2 rounded-full px-10 py-4 font-bold tracking-wide transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] whitespace-nowrap shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2
                     ${canSearch
                         ? 'bg-primary text-white hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] shadow-primary/20 motion-reduce:transform-none'
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'

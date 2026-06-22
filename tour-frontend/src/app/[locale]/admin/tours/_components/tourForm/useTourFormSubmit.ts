@@ -237,6 +237,7 @@ export function useTourFormSubmit({
               operator: t.operator || undefined,
               boardingPoint: t.boardingPoint || undefined,
               boardingTime: t.boardingTime || undefined,
+              gatheringTime: t.gatheringTime || undefined,
               notes: t.notes || undefined,
             };
             return fetchWithAuth(transportUrl, {

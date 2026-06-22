@@ -45,6 +45,7 @@ export interface UpsertDepartureTransportDto {
   boardingPoint?: string;
   boardingPointEn?: string;
   boardingTime?: string;
+  gatheringTime?: string;
   // Ghi chú
   notes?: string;
   notesEn?: string;
@@ -313,6 +314,7 @@ export class TourDepartureService {
       boardingPoint: dto.boardingPoint ?? null,
       boardingPointEn: dto.boardingPointEn ?? null,
       boardingTime: dto.boardingTime ? new Date(dto.boardingTime) : null,
+      gatheringTime: dto.gatheringTime ? new Date(dto.gatheringTime) : null,
       notes: dto.notes ?? null,
       notesEn: dto.notesEn ?? null,
     };

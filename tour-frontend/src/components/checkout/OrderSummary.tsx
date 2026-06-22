@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useLocale } from '@/context/LocaleContext';
 import { getLocalizedVoucher } from '@/lib/i18n/vouchers';
+import TransportSummaryCard from '@/components/tour/TransportSummaryCard';
+import type { TourDepartureTransport } from '@/types';
 
 interface AppliedVoucher {
     code: string;
@@ -40,6 +43,7 @@ interface WalletVoucher {
 interface OrderSummaryProps {
     tourData: OrderTourData;
     departureDate?: string | null;
+    transport?: TourDepartureTransport | null;
     selectedPackage: OrderPackage | null;
     adultCount: number;
     childCount: number;
@@ -65,6 +69,8 @@ interface OrderSummaryProps {
     // Payment
     isPaymentLoading: boolean;
     onPayment: () => void;
+    agreedToTerms: boolean;
+    setAgreedToTerms: (agreed: boolean) => void;
     t: (key: string, params?: Record<string, string | number | Date>) => string;
     formatPrice: (price: number) => string;
 }
@@ -113,6 +119,7 @@ const voucherModalCopy = {
 export default function OrderSummary({
     tourData,
     departureDate,
+    transport,
     selectedPackage,
     adultCount,
     childCount,
@@ -136,11 +143,15 @@ export default function OrderSummary({
     saleVoucherMessage = '',
     isPaymentLoading,
     onPayment,
+    agreedToTerms,
+    setAgreedToTerms,
     t,
     formatPrice,
 }: OrderSummaryProps) {
     const { language, formatDate } = useLocale();
     const voucherText = language === 'vi' ? voucherModalCopy.vi : voucherModalCopy.en;
+    const [showTransport, setShowTransport] = useState(true);
+    const hasTransport = Boolean(transport && transport.type !== 'SELF_ARRANGED');
 
     const voucherGroups = useMemo(() => {
         const applicable: VoucherListItem[] = [];
@@ -249,6 +260,31 @@ export default function OrderSummary({
                                 <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-0.5">Gói Dịch Vụ</p>
                                 <p className="font-semibold text-amber-900 text-sm">{selectedPackage.name}</p>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Transport Info (thu gọn được) */}
+                    {hasTransport && transport && (
+                        <div className="pt-4 border-t border-dashed border-outline-variant/40">
+                            <button
+                                type="button"
+                                onClick={() => setShowTransport(prev => !prev)}
+                                aria-expanded={showTransport}
+                                className="flex w-full items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"
+                            >
+                                <span className="flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-sm text-primary">directions_bus</span>
+                                    {language === 'vi' ? 'Thông tin di chuyển' : 'Transport details'}
+                                </span>
+                                <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${showTransport ? 'rotate-180' : ''}`}>
+                                    expand_more
+                                </span>
+                            </button>
+                            {showTransport && (
+                                <div className="mt-3">
+                                    <TransportSummaryCard transport={transport} language={language} />
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -397,11 +433,27 @@ export default function OrderSummary({
                         </div>
                     </div>
 
+                    {/* Consent checkbox */}
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={agreedToTerms}
+                            onChange={(e) => setAgreedToTerms(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-outline-variant accent-primary cursor-pointer"
+                        />
+                        <span className="text-xs leading-relaxed text-on-surface-variant">
+                            {t('checkout.agreeIntro')}{' '}
+                            <Link href="/terms" target="_blank" className="font-semibold text-primary hover:underline">{t('checkout.termsLink')}</Link>
+                            {' '}{t('checkout.agreeConnector')}{' '}
+                            <Link href="/refund-policy" target="_blank" className="font-semibold text-primary hover:underline">{t('checkout.refundLink')}</Link>.
+                        </span>
+                    </label>
+
                     {/* Pay Button */}
                     <button
                         onClick={onPayment}
-                        disabled={isPaymentLoading}
-                        className={`group flex min-h-[56px] w-full items-center justify-center gap-3 rounded-xl bg-primary px-5 py-4 text-base font-bold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none ${isPaymentLoading ? 'cursor-not-allowed opacity-60 hover:translate-y-0 hover:bg-primary hover:shadow-lg active:scale-100' : ''}`}
+                        disabled={isPaymentLoading || !agreedToTerms}
+                        className={`group flex min-h-[56px] w-full items-center justify-center gap-3 rounded-xl bg-primary px-5 py-4 text-base font-bold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none ${isPaymentLoading || !agreedToTerms ? 'cursor-not-allowed opacity-60 hover:translate-y-0 hover:bg-primary hover:shadow-lg active:scale-100' : ''}`}
                     >
                         <span>{isPaymentLoading ? t('checkout.redirecting') : t('checkout.secureCheckout')}</span>
                         <span className="material-symbols-outlined text-xl transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5 motion-reduce:transform-none">{isPaymentLoading ? 'hourglass_empty' : 'lock'}</span>

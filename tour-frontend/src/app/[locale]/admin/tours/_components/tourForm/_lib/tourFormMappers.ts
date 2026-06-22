@@ -77,6 +77,9 @@ export const mapDeparturesToForm = (departures: ExistingTourDeparture[]): TourDe
             boardingTime: t.boardingTime
               ? new Date(t.boardingTime).toISOString().slice(0, 16)
               : "",
+            gatheringTime: t.gatheringTime
+              ? new Date(t.gatheringTime).toISOString().slice(0, 16)
+              : "",
             notes: t.notes ?? "",
           }
         : null;

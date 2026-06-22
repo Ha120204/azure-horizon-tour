@@ -26,6 +26,7 @@ import type {
     Kpi,
     ReplyResponse,
     StatsResponse,
+    StaffOption,
     Ticket,
     TicketAssignee,
     TicketCategory,
@@ -72,6 +73,8 @@ export default function SupportPage() {
         return s === 'oldest' || s === 'overdue' ? s : 'updated';
     });
     const [replyIsInternal, setReplyIsInternal] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
 
     const selectedTicketId = selected?.id;
     const selectedTicketStatus = selected?.status;
@@ -80,6 +83,30 @@ export default function SupportPage() {
         const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => window.clearTimeout(timer);
     }, [search]);
+
+    useEffect(() => {
+        const role = localStorage.getItem('userRole') ?? '';
+        const admin = role === 'ADMIN' || role === 'SUPER_ADMIN';
+        setIsAdmin(admin);
+        if (!admin) return;
+
+        const loadStaff = async () => {
+            try {
+                const res = await fetchWithAuth(`${API_BASE_URL}/user?role=STAFF,ADMIN,SUPER_ADMIN&limit=100`);
+                if (!res.ok) return;
+                const json = await res.json();
+                const list = (json.data ?? []) as Array<{ id: number; fullName: string; status?: string }>;
+                setStaffOptions(
+                    list
+                        .filter((u) => u.status !== 'Deactivated')
+                        .map((u) => ({ id: u.id, fullName: u.fullName })),
+                );
+            } catch {
+                // Danh sách nhân viên là phụ trợ; thiếu thì admin vẫn tự nhận được ticket.
+            }
+        };
+        void loadStaff();
+    }, []);
 
     useEffect(() => {
         const params = new URLSearchParams();
@@ -242,21 +269,21 @@ export default function SupportPage() {
         }
     };
 
-    const handleAssign = async (id: number) => {
+    const handleAssign = async (id: number, staffId?: number) => {
         setActionError('');
         setActionNotice('');
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${id}/assign`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
+                body: JSON.stringify(staffId != null ? { staffId } : {}),
             });
-            if (!res.ok) throw new Error(await readApiError(res, 'Không thể nhận ticket'));
-            setActionNotice('Đã nhận ticket về cho bạn.');
+            if (!res.ok) throw new Error(await readApiError(res, 'Không thể phân công ticket'));
+            setActionNotice(staffId != null ? 'Đã phân công ticket.' : 'Đã nhận ticket về cho bạn.');
             await fetchSelectedDetail(id);
             void fetchTickets({ silent: true });
         } catch (error) {
-            setActionError(error instanceof Error ? error.message : 'Không thể nhận ticket');
+            setActionError(error instanceof Error ? error.message : 'Không thể phân công ticket');
         }
     };
 
@@ -352,8 +379,10 @@ export default function SupportPage() {
         onStatusChange: (id: number, status: TicketStatus) => void handleStatusChange(id, status),
         onReplyChange: setReply,
         onSendReply: () => void handleSendReply(),
-        onAssign: (id: number) => void handleAssign(id),
+        onAssign: (id: number, staffId?: number) => void handleAssign(id, staffId),
         onSetInternal: setReplyIsInternal,
+        isAdmin,
+        staffOptions,
     };
 
     return (

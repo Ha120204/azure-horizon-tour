@@ -31,6 +31,7 @@ export interface DepartureTransport {
   operator: string;
   boardingPoint: string;
   boardingTime: string;
+  gatheringTime: string;
   // Notes
   notes: string;
 }
@@ -187,6 +188,7 @@ export interface ExistingTourDeparture {
     boardingPoint?: string | null;
     boardingPointEn?: string | null;
     boardingTime?: string | Date | null;
+    gatheringTime?: string | Date | null;
     notes?: string | null;
     notesEn?: string | null;
   } | null;

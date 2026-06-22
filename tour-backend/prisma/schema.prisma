@@ -368,7 +368,11 @@ model TourDepartureTransport {
   operatorEn      String?
   boardingPoint   String? // Địa chỉ đón khách
   boardingPointEn String?
-  boardingTime    DateTime?
+  boardingTime    DateTime? // Giờ khởi hành xe (xe) / giờ cất cánh dùng departureTime (bay)
+
+  // ── Giờ tập trung ────────────────────────────────────────────────────────
+  // Giờ khách cần có mặt, tách riêng để sớm hơn giờ xe chạy / giờ bay.
+  gatheringTime DateTime?
 
   notes   String? @db.Text
   notesEn String? @db.Text

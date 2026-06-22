@@ -111,6 +111,21 @@ export default function Footer() {
                                     {language === 'vi' ? 'Tài khoản' : 'My Account'}
                                 </Link>
                             </li>
+                            <li>
+                                <Link className="hover:text-primary transition-colors inline-block" href="/refund-policy">
+                                    {language === 'vi' ? 'Chính sách hủy & hoàn tiền' : 'Cancellation & Refund Policy'}
+                                </Link>
+                            </li>
+                            <li>
+                                <Link className="hover:text-primary transition-colors inline-block" href="/privacy">
+                                    {language === 'vi' ? 'Chính sách bảo mật' : 'Privacy Policy'}
+                                </Link>
+                            </li>
+                            <li>
+                                <Link className="hover:text-primary transition-colors inline-block" href="/terms">
+                                    {language === 'vi' ? 'Điều khoản sử dụng' : 'Terms of Use'}
+                                </Link>
+                            </li>
                         </ul>
                     </div>
 

@@ -13,6 +13,8 @@ export class UpdateTicketStatusDto {
 
 export class AssignTicketDto {
   @IsOptional()
+  @IsInt()
+  @Type(() => Number)
   staffId?: number;
 }
 

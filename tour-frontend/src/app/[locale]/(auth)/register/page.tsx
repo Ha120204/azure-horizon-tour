@@ -29,6 +29,7 @@ export default function RegisterPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [emailError, setEmailError] = useState('');
     const [error, setError] = useState('');
+    const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const router = useRouter();
@@ -82,6 +83,11 @@ export default function RegisterPage() {
             return;
         }
 
+        if (!agreedToTerms) {
+            setError(t('auth.agreeRequired'));
+            return;
+        }
+
         try {
             setIsSubmitting(true);
             const res = await fetch(`${API_BASE_URL}/auth/register`, {
@@ -129,6 +135,10 @@ export default function RegisterPage() {
                     disabled={isSubmitting}
                     onClick={handleGoogleRegister}
                 />
+
+                <p className="mt-3 text-center text-xs leading-relaxed text-[var(--auth-muted)]">
+                    {t('auth.googleConsent')}
+                </p>
 
                 <div className="my-6 flex items-center gap-3">
                     <hr className="flex-1 border-[var(--auth-input-border)]" />
@@ -232,6 +242,22 @@ export default function RegisterPage() {
                             ) : null
                         }
                     />
+
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={agreedToTerms}
+                            onChange={(e) => setAgreedToTerms(e.target.checked)}
+                            disabled={isSubmitting}
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded accent-primary cursor-pointer"
+                        />
+                        <span className="text-xs leading-relaxed text-[var(--auth-muted)]">
+                            {t('auth.agreeIntro')}{' '}
+                            <Link href="/terms" target="_blank" className={`${authStyles.linkText} hover:underline`}>{t('auth.termsLink')}</Link>
+                            {' '}{t('auth.agreeConnector')}{' '}
+                            <Link href="/privacy" target="_blank" className={`${authStyles.linkText} hover:underline`}>{t('auth.privacyLink')}</Link>.
+                        </span>
+                    </label>
 
                     <AuthSubmitButton
                         isLoading={isSubmitting}

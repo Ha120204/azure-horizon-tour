@@ -288,6 +288,14 @@ export function BookingDetailView({
   const telHref = toTelHref(contactPhone);
   const zaloPhone = toZaloPhone(contactPhone);
   const adminNote = booking.adminNote?.trim();
+  const customerRequests = Array.isArray(booking.passengers)
+    ? booking.passengers
+        .map(p => ({
+          name: typeof p?.fullName === 'string' ? p.fullName.trim() : '',
+          note: typeof p?.notes === 'string' ? p.notes.trim() : '',
+        }))
+        .filter(p => p.note.length > 0)
+    : [];
   const bookingTimeline = getBookingTimeline(booking, visibleTransactions, latestPaymentRequest);
   const successfulPayment = visibleTransactions.find(tx => tx.status === 'SUCCESS');
   const failedPayment = visibleTransactions.find(tx => tx.status === 'FAILED');
@@ -461,6 +469,27 @@ export function BookingDetailView({
                     </p>
                   )}
                 </div>
+              </div>
+            </section>
+          )}
+
+          {/* Yêu cầu đặc biệt từ khách */}
+          {customerRequests.length > 0 && (
+            <section>
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-500 text-[14px]">priority_high</span>
+                Yêu cầu đặc biệt từ khách
+              </h3>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+                {customerRequests.map((r, i) => (
+                  <p key={i} className="text-sm leading-relaxed text-amber-900">
+                    {r.name && <span className="font-semibold">{r.name}: </span>}
+                    <span className="whitespace-pre-line">{r.note}</span>
+                  </p>
+                ))}
+                <p className="pt-1 text-[11px] text-amber-700/80">
+                  Lưu ý khi sắp xếp chỗ ngồi / phương tiện cho khách.
+                </p>
               </div>
             </section>
           )}

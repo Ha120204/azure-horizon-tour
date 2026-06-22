@@ -61,6 +61,11 @@ export interface Ticket {
     auditLogs?: AuditEvent[];
 }
 
+export interface StaffOption {
+    id: number;
+    fullName: string;
+}
+
 export interface Kpi {
     total: number;
     new: number;

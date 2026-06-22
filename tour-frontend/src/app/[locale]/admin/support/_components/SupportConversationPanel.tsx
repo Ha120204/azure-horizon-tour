@@ -13,7 +13,7 @@ import {
     resolveBookingStatus,
     resolvePaymentStatus,
 } from '../_lib/helpers';
-import type { AuditEvent, Reply, Ticket, TicketStatus } from '../_lib/types';
+import type { AuditEvent, Reply, StaffOption, Ticket, TicketStatus } from '../_lib/types';
 
 interface SupportConversationPanelProps {
     selected: Ticket | null;
@@ -25,8 +25,10 @@ interface SupportConversationPanelProps {
     onStatusChange: (id: number, status: TicketStatus) => void;
     onReplyChange: (value: string) => void;
     onSendReply: () => void;
-    onAssign: (id: number) => void;
+    onAssign: (id: number, staffId?: number) => void;
     onSetInternal?: (v: boolean) => void;
+    isAdmin?: boolean;
+    staffOptions?: StaffOption[];
     drawer?: boolean;
 }
 
@@ -44,6 +46,8 @@ export function SupportConversationPanel({
     onSendReply,
     onAssign,
     onSetInternal,
+    isAdmin = false,
+    staffOptions = [],
     drawer = false,
 }: SupportConversationPanelProps) {
     const threadRef = useRef<HTMLDivElement>(null);
@@ -122,16 +126,26 @@ export function SupportConversationPanel({
                                 </span>
                             )}
                         </div>
-                        {selected.assignedStaffId == null && selected.status !== 'RESOLVED' && (
-                            <button
-                                type="button"
-                                onClick={() => onAssign(selected.id)}
-                                disabled={statusUpdatingId === selected.id}
-                                className="inline-flex items-center gap-1 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-black text-primary transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-wait disabled:opacity-50"
-                            >
-                                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">person_add</span>
-                                Nhận ticket
-                            </button>
+                        {selected.status !== 'RESOLVED' && (
+                            isAdmin ? (
+                                <AssignStaffSelect
+                                    ticketId={selected.id}
+                                    value={selected.assignedStaffId ?? null}
+                                    options={staffOptions}
+                                    disabled={statusUpdatingId === selected.id}
+                                    onChange={(staffId) => onAssign(selected.id, staffId)}
+                                />
+                            ) : selected.assignedStaffId == null ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onAssign(selected.id)}
+                                    disabled={statusUpdatingId === selected.id}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-black text-primary transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15 disabled:cursor-wait disabled:opacity-50"
+                                >
+                                    <span className="material-symbols-outlined text-[14px]" aria-hidden="true">person_add</span>
+                                    Nhận ticket
+                                </button>
+                            ) : null
                         )}
                     </div>
                     <BookingSummary
@@ -318,6 +332,105 @@ function TicketStatusSelect({
     );
 }
 
+function AssignStaffSelect({
+    ticketId,
+    value,
+    options,
+    disabled,
+    onChange,
+}: {
+    ticketId: number;
+    value: number | null;
+    options: StaffOption[];
+    disabled: boolean;
+    onChange: (staffId: number) => void;
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectRef = useRef<HTMLDivElement | null>(null);
+    const isExpanded = isOpen && !disabled;
+    const currentName = options.find((option) => option.id === value)?.fullName;
+    const label = value != null ? (currentName ?? 'Đã phân công') : 'Phân công';
+
+    useEffect(() => {
+        if (!isExpanded) return;
+
+        const handleMouseDown = (event: MouseEvent) => {
+            if (!selectRef.current?.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        return () => document.removeEventListener('mousedown', handleMouseDown);
+    }, [isExpanded]);
+
+    return (
+        <div ref={selectRef} className="relative shrink-0">
+            <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={isExpanded}
+                aria-label={`Phân công ticket #${ticketId}`}
+                disabled={disabled}
+                onClick={() => setIsOpen((open) => !open)}
+                className={`flex h-8 min-w-[132px] items-center justify-between gap-2 rounded-xl border bg-surface px-3 text-left text-xs font-black text-primary shadow-sm outline-none transition-all hover:border-primary/35 hover:bg-primary/5 focus-visible:ring-4 focus-visible:ring-primary/10 disabled:cursor-wait disabled:opacity-60 ${
+                    isExpanded ? 'border-primary/40 bg-primary/5 ring-4 ring-primary/10' : 'border-primary/30'
+                }`}
+            >
+                <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[14px]" aria-hidden="true">person_add</span>
+                    <span className="truncate">{label}</span>
+                </span>
+                <span
+                    className={`material-symbols-outlined shrink-0 text-[16px] text-primary/70 transition-transform ${isExpanded ? 'rotate-180' : ''} ${disabled ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                >
+                    {disabled ? 'progress_activity' : 'expand_more'}
+                </span>
+            </button>
+
+            {isExpanded && (
+                <div
+                    role="listbox"
+                    className="absolute right-0 top-full z-[100] mt-2 min-w-[200px] overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-lowest p-1 shadow-xl shadow-slate-900/10"
+                >
+                    <div className="max-h-64 overflow-y-auto">
+                        {options.length === 0 ? (
+                            <p className="px-2.5 py-3 text-xs font-semibold text-outline">Không có nhân viên.</p>
+                        ) : (
+                            options.map((option) => {
+                                const selected = option.id === value;
+                                return (
+                                    <button
+                                        key={option.id}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={selected}
+                                        onClick={() => {
+                                            if (!selected) onChange(option.id);
+                                            setIsOpen(false);
+                                        }}
+                                        className={`flex h-9 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left text-xs font-bold transition-colors ${
+                                            selected
+                                                ? 'bg-primary/10 text-primary ring-1 ring-primary/15'
+                                                : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                                        }`}
+                                    >
+                                        <span className="min-w-0 truncate">{option.fullName}</span>
+                                        {selected && (
+                                            <span className="material-symbols-outlined text-[15px]" aria-hidden="true">done</span>
+                                        )}
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 function BookingSummary({
     selected,
     linkedBooking,
@@ -418,9 +531,14 @@ const STATUS_LABEL: Record<string, string> = {
 
 function AuditEventItem({ event }: { event: AuditEvent }) {
     const meta = (event.meta ?? {}) as Record<string, string>;
-    const label = event.eventType === 'ASSIGNED'
-        ? `${event.actorName} đã nhận ticket`
-        : `${event.actorName} đã chuyển sang ${STATUS_LABEL[meta.to] ?? meta.to ?? ''}`;
+    let label: string;
+    if (event.eventType === 'ASSIGNED') {
+        label = meta.staffName && meta.staffName !== event.actorName
+            ? `${event.actorName} đã phân công cho ${meta.staffName}`
+            : `${event.actorName} đã nhận ticket`;
+    } else {
+        label = `${event.actorName} đã chuyển sang ${STATUS_LABEL[meta.to] ?? meta.to ?? ''}`;
+    }
     return (
         <div className="flex items-center gap-2 text-[11px] font-semibold text-outline">
             <span className="h-px flex-1 bg-outline-variant/30" />

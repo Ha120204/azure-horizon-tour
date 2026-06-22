@@ -16,6 +16,7 @@ import SoldOutModal from '@/components/checkout/SoldOutModal';
 import { buildLocalizedLoginPath } from '@/lib/auth/authRedirect';
 import { clearClientUserStorage, fetchAuthProfile } from '@/lib/auth/authSession';
 import type { PassengerType } from '@/lib/booking/passengerDetails';
+import type { TourDepartureTransport } from '@/types';
 import { getPassengerNameError, validatePassengerIdentityNo } from '@/lib/booking/passengerDetails';
 import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
 
@@ -42,6 +43,7 @@ interface CheckoutDeparture {
     note?: string | null;
     flashSaleEndsAt?: string | null;
     departureDate?: string | null;  // dùng để tính tuổi chính xác tại thời điểm khởi hành
+    transport?: TourDepartureTransport | null;
 }
 
 interface CheckoutTourData {
@@ -136,6 +138,7 @@ function CheckoutContent() {
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [soldOut, setSoldOut] = useState<{ availableSeats: number } | null>(null);
     const paymentMethod = 'PAYOS';
 
@@ -189,6 +192,11 @@ function CheckoutContent() {
     };
 
     const handleOpenConfirmModal = () => {
+        if (!agreedToTerms) {
+            showError(t('checkout.errors.agreeRequired'));
+            return;
+        }
+
         if (!contactInfo.fullName || !contactInfo.email || !contactInfo.phone || !contactInfo.identityNo) {
             showError(t('checkout.errors.fillContact'));
             return;
@@ -787,6 +795,7 @@ function CheckoutContent() {
                 <OrderSummary
                     tourData={tourData}
                     departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
+                    transport={selectedDeparture?.transport ?? null}
                     selectedPackage={selectedPackage}
                     adultCount={adultCount}
                     childCount={childCount}
@@ -810,6 +819,8 @@ function CheckoutContent() {
                     saleVoucherMessage={saleVoucherMessage}
                     isPaymentLoading={isPaymentLoading}
                     onPayment={handleOpenConfirmModal}
+                    agreedToTerms={agreedToTerms}
+                    setAgreedToTerms={setAgreedToTerms}
                     t={t}
                     formatPrice={formatPrice}
                 />

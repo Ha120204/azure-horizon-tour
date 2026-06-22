@@ -59,6 +59,7 @@ export const EMPTY_TRANSPORT: DepartureTransport = {
   operator: "",
   boardingPoint: "",
   boardingTime: "",
+  gatheringTime: "",
   notes: "",
 };
 
@@ -324,6 +325,17 @@ function VehicleFields({
           onChange={(value) => onChange({ boardingTime: value })}
         />
       </div>
+      <div>
+        <label className={fieldLabel}>Giờ tập trung</label>
+        <FlightDateTimeField
+          value={transport.gatheringTime}
+          minDate={minDate}
+          onChange={(value) => onChange({ gatheringTime: value })}
+        />
+        <p className="mt-1 text-[11px] text-on-surface-variant">
+          Giờ khách cần có mặt (thường trước giờ xe chạy 15–30 phút). Bỏ trống sẽ lấy theo giờ khởi hành xe.
+        </p>
+      </div>
     </div>
   );
 }
@@ -388,6 +400,19 @@ export default function DepartureTransportForm({
             minDate={minDate}
             onChange={onChange}
           />
+          {transport.type === "FLIGHT" && (
+            <div className="rounded-xl border border-outline-variant/15 bg-surface-container-lowest/60 p-3">
+              <label className={fieldLabel}>Giờ tập trung (tại sân bay)</label>
+              <FlightDateTimeField
+                value={transport.gatheringTime}
+                minDate={minDate}
+                onChange={(value) => onChange({ gatheringTime: value })}
+              />
+              <p className="mt-1 text-[11px] text-on-surface-variant">
+                Giờ khách cần có mặt để làm thủ tục (thường trước giờ bay 2–3 tiếng). Bỏ trống sẽ lấy theo giờ cất cánh.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

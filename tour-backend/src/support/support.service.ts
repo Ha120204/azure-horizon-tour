@@ -352,12 +352,14 @@ export class SupportService {
   }
 
   // ─── [ADMIN/STAFF] Assign staff vào ticket ───────────────────────────────────
-  async assignTicket(id: number, staffId: number) {
-    const staff = await this.prisma.user.findUnique({
-      where: { id: staffId },
-      select: { fullName: true },
+  // actorId/actorName = người thao tác; staffId = người được phân công.
+  // Self-claim: actorId === staffId. Admin phân công cho người khác: actorId !== staffId.
+  async assignTicket(id: number, staffId: number, actorId: number, actorName: string) {
+    const staff = await this.prisma.user.findFirst({
+      where: { id: staffId, role: { in: ['STAFF', 'ADMIN', 'SUPER_ADMIN'] } },
+      select: { fullName: true, role: true },
     });
-    const actorName = staff?.fullName ?? `Staff #${staffId}`;
+    if (!staff) throw new NotFoundException('Nhân viên không tồn tại');
 
     const [ticket] = await Promise.all([
       this.prisma.supportTicket.update({
@@ -365,9 +367,29 @@ export class SupportService {
         data: { assignedStaffId: staffId, status: 'IN_PROGRESS' },
       }),
       this.prisma.supportAuditLog.create({
-        data: { ticketId: id, actorName, eventType: 'ASSIGNED', meta: { staffId } },
+        data: {
+          ticketId: id,
+          actorName,
+          eventType: 'ASSIGNED',
+          meta: { staffId, staffName: staff.fullName },
+        },
       }),
     ]);
+
+    if (actorId !== staffId) {
+      await this.adminNotifications.createSafe({
+        type: 'support_assigned',
+        resourceType: 'SupportTicket',
+        resourceId: ticket.id,
+        title: 'Bạn được phân công ticket hỗ trợ',
+        body: `${actorName} đã phân công ticket #${ticket.id} cho ${staff.fullName}.`,
+        href: `/admin/support?status=${ticket.status}`,
+        severity: 'warning',
+        targetRoles: [staff.role as 'SUPER_ADMIN' | 'ADMIN' | 'STAFF'],
+        metadata: { ticketId: ticket.id, assignedStaffId: staffId },
+      });
+    }
+
     return ticket;
   }
 

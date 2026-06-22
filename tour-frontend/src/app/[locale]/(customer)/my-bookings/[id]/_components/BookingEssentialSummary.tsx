@@ -100,7 +100,7 @@ export function BookingEssentialSummary({ booking, departureDate }: Props) {
                         </span>
                         <div className="min-w-0">
                             <p className="text-xs font-semibold text-outline">
-                                {isVietnamese ? 'Điểm tập trung hoặc đón khách' : 'Meeting or pickup point'}
+                                {isVietnamese ? 'Điểm tập trung' : 'Meeting point'}
                             </p>
                             <p className={`mt-1 break-words text-sm font-extrabold leading-snug ${pickupLocation ? 'text-on-surface' : 'text-outline'}`}>
                                 {pickupLocation || (isVietnamese ? 'Sẽ được cập nhật trước ngày khởi hành' : 'Will be confirmed before departure')}

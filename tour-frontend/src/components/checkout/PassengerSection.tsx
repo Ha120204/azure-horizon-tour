@@ -313,7 +313,8 @@ export default function PassengerSection({
                         </div>
 
                         <div className="md:col-span-2">
-                            <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.specialReq')}</label>
+                            <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-1">{t('checkout.specialReq')}</label>
+                            <p className="mb-2 text-[11px] leading-relaxed text-on-surface-variant/70">{t('checkout.specialReqHint')}</p>
                             <textarea
                                 className="w-full bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm resize-none"
                                 placeholder={t('checkout.specialReqPlaceholder')}
@@ -321,6 +322,10 @@ export default function PassengerSection({
                                 value={leadTraveler.notes}
                                 onChange={(e) => setLeadTraveler({ ...leadTraveler, notes: e.target.value })}
                             ></textarea>
+                            <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-relaxed text-on-surface-variant/60">
+                                <span className="material-symbols-outlined text-[13px] mt-px">info</span>
+                                {t('checkout.specialReqNote')}
+                            </p>
                         </div>
                     </div>
                 </div>

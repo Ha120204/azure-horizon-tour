@@ -79,6 +79,13 @@ export interface BookingTransportAssignment {
   assignedAt: string;
 }
 
+export interface BookingPassenger {
+  type?: string | null;
+  fullName?: string | null;
+  notes?: string | null;
+  [key: string]: unknown;
+}
+
 export interface Booking {
   id: number;
   bookingCode: string;
@@ -110,6 +117,7 @@ export interface Booking {
   transactions?: PaymentTransaction[];
   supportTickets?: { id: number; status: string; category: string; subject?: string | null; createdAt: string }[];
   transportAssignment?: BookingTransportAssignment | null;
+  passengers?: BookingPassenger[] | null;
 }
 
 export interface Stats {

@@ -92,11 +92,14 @@ export function useTourManagement() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isFeatured: next }),
             });
-            if (!res.ok) throw new Error();
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || 'Không thể cập nhật trạng thái nổi bật.');
+            }
             showToast(next ? 'Đã bật nổi bật cho tour.' : 'Đã tắt nổi bật.');
-        } catch {
+        } catch (e) {
             setTours(prev => prev.map(t => t.id === tour.id ? { ...t, isFeatured: !next } : t));
-            showToast('Không thể cập nhật trạng thái nổi bật.', 'error');
+            showToast(e instanceof Error ? e.message : 'Không thể cập nhật trạng thái nổi bật.', 'error');
         } finally {
             setTogglingFeaturedId(null);
         }

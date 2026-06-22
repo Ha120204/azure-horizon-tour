@@ -22,6 +22,9 @@ import { AiEmbeddingService } from '../ai/ai-embedding.service';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 
+// Số tour nổi bật tối đa — khớp với số slot hiển thị trên trang chủ.
+const FEATURED_TOUR_LIMIT = 6;
+
 @Injectable()
 export class TourQueryService {
   private readonly logger = new Logger(TourQueryService.name);
@@ -131,6 +134,18 @@ export class TourQueryService {
         throw new ForbiddenException(
           'Chỉ có thể chỉnh sửa tour ở trạng thái Bản nháp hoặc Bị từ chối',
         );
+    }
+
+    // Giới hạn số tour nổi bật khớp với số slot trên trang chủ.
+    if (updateTourDto.isFeatured === true && !tour.isFeatured) {
+      const featuredCount = await this.prisma.tour.count({
+        where: { isFeatured: true, deletedAt: null },
+      });
+      if (featuredCount >= FEATURED_TOUR_LIMIT) {
+        throw new BadRequestException(
+          `Chỉ được phép tối đa ${FEATURED_TOUR_LIMIT} tour nổi bật. Hãy tắt bớt một tour trước khi bật tour mới.`,
+        );
+      }
     }
 
     const { destinationId, status, ...rest } = updateTourDto;

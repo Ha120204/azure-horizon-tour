@@ -1,20 +1,14 @@
 'use client';
 import Image from 'next/image';
 import { useLocale } from '@/context/LocaleContext';
-import { usePathname, useRouter } from '@/i18n/routing';
-import { setLocaleCookie } from '@/lib/i18n/setLocaleCookie';
+import { changeLocale } from '@/lib/i18n/setLocaleCookie';
 
 export default function AuthLocaleSwitcher() {
     const { language } = useLocale();
-    const router = useRouter();
-    const pathname = usePathname();
 
     const toggle = (next: 'vi' | 'en') => {
         if (next === language) return;
-        setLocaleCookie(next);
-        router.replace(pathname as Parameters<typeof router.replace>[0], { locale: next });
-        // Ép fetch lại từ server, nếu không Client Router Cache trả messages của locale cũ.
-        router.refresh();
+        changeLocale(next);
     };
 
     return (

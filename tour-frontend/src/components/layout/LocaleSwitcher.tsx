@@ -3,9 +3,7 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import { useLocale } from '@/context/LocaleContext';
-import { usePathname, useRouter } from '@/i18n/routing';
-import { useSearchParams } from 'next/navigation';
-import { setLocaleCookie } from '@/lib/i18n/setLocaleCookie';
+import { changeLocale } from '@/lib/i18n/setLocaleCookie';
 
 interface LocaleSwitcherProps {
     isOpen: boolean;
@@ -14,9 +12,6 @@ interface LocaleSwitcherProps {
 
 export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps) {
     const { language, currency, setCurrency } = useLocale();
-    const router = useRouter();
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
 
     // State tạm để người dùng chọn trước khi bấm Confirm
     const [tempLang, setTempLang] = useState(language);
@@ -47,19 +42,7 @@ export default function LocaleSwitcher({ isOpen, onClose }: LocaleSwitcherProps)
     const handleConfirm = () => {
         setCurrency(tempCur);
         onClose();
-
-        setLocaleCookie(tempLang);
-
-        // Điều hướng sang locale mới, GỮI NGUYÊN các query params (?tourId=...)
-        const queryStr = searchParams.toString();
-        const href = queryStr ? `${pathname}?${queryStr}` : pathname;
-
-        router.replace(href as Parameters<typeof router.replace>[0], { locale: tempLang });
-
-        // Đổi locale chỉ là soft-navigation: Next.js giữ lại layout [locale] dùng chung và
-        // có thể trả bản RSC cũ từ Client Router Cache → messages của next-intl không đổi cho
-        // tới khi reload. refresh() ép fetch lại route hiện tại từ server để lấy đúng ngôn ngữ.
-        router.refresh();
+        changeLocale(tempLang);
     };
 
     if (!isOpen) return null;

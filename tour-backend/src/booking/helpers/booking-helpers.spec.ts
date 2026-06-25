@@ -89,17 +89,11 @@ describe('releaseSeats', () => {
     expect(departureUpdateMany).not.toHaveBeenCalled();
   });
 
-  it('restores both tour aggregate seats and selected departure seats', async () => {
+  it('restores only departure seats when booking has a departure', async () => {
     const { tx, tourUpdate, departureUpdateMany } = createSeatReservationTx({});
 
     await releaseSeats(tx, { tourId: 10, departureId: 20, seats: 2 });
 
-    expect(tourUpdate).toHaveBeenCalledWith({
-      where: { id: 10 },
-      data: {
-        availableSeats: { increment: 2 },
-      },
-    });
     expect(departureUpdateMany).toHaveBeenCalledWith({
       where: {
         id: 20,
@@ -109,6 +103,7 @@ describe('releaseSeats', () => {
         availableSeats: { increment: 2 },
       },
     });
+    expect(tourUpdate).not.toHaveBeenCalled();
   });
 });
 
@@ -131,7 +126,7 @@ describe('reserveSeatsAtomically', () => {
     });
   });
 
-  it('decrements departure seats before tour aggregate seats', async () => {
+  it('decrements only departure seats when a departure is selected', async () => {
     const { tx, tourUpdateMany, departureUpdateMany } = createSeatReservationTx({});
 
     await reserveSeatsAtomically(tx, { tourId: 10, departureId: 20, seats: 2 });
@@ -147,18 +142,7 @@ describe('reserveSeatsAtomically', () => {
         availableSeats: { decrement: 2 },
       },
     });
-    expect(tourUpdateMany).toHaveBeenCalledWith({
-      where: {
-        id: 10,
-        deletedAt: null,
-        availableSeats: { gte: 2 },
-      },
-      data: {
-        availableSeats: { decrement: 2 },
-      },
-    });
-    expect(departureUpdateMany.mock.invocationCallOrder[0])
-      .toBeLessThan(tourUpdateMany.mock.invocationCallOrder[0]);
+    expect(tourUpdateMany).not.toHaveBeenCalled();
   });
 
   it('rejects when the selected departure no longer has enough seats', async () => {

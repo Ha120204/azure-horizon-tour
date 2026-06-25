@@ -658,13 +658,16 @@ export class BookingService {
       });
       if (result.count === 0) return; // Đã xử lý rồi, bỏ qua để tránh double-restore
 
-      await tx.tour.update({
-        where: { id: tourId },
-        data: { availableSeats: { increment: numberOfPeople } },
-      });
+      // Tour có chuyến: chỉ hoàn ghế cho chuyến, không cộng vào tour tổng
+      // (đối xứng với reserveSeatsAtomically / releaseSeats).
       if (departureId) {
         await tx.tourDeparture.updateMany({
           where: { id: departureId },
+          data: { availableSeats: { increment: numberOfPeople } },
+        });
+      } else {
+        await tx.tour.update({
+          where: { id: tourId },
           data: { availableSeats: { increment: numberOfPeople } },
         });
       }

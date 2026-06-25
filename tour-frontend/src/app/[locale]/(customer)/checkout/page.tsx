@@ -457,24 +457,26 @@ function CheckoutContent() {
                         if (resUser.ok) {
                             const payload = await resUser.json();
                             const uData = payload.data || payload;
-                            
-                            const savedContact = sessionStorage.getItem('checkout_contactInfo');
-                            if (!savedContact) {
-                                setContactInfo({ 
-                                    fullName: uData.fullName || '', 
-                                    email: uData.email || '', 
-                                    phone: uData.phone || '',
-                                    identityType: uData.identityType || 'CCCD',
-                                    identityNo: uData.identityNo || '',
-                                    dob: uData.dob || '',
-                                    gender: uData.gender || ''
-                                });
-                            }
-                            
-                            const savedLead = sessionStorage.getItem('checkout_leadTraveler');
-                            if (!savedLead) {
-                                setLeadTraveler(prev => ({ 
-                                    ...prev, 
+
+                            // Merge sessionStorage + profile: ưu tiên giá trị đã điền trong session,
+                            // fallback về profile nếu field rỗng (tránh stale session block phone/identity).
+                            const savedContactRaw = sessionStorage.getItem('checkout_contactInfo');
+                            const sc = savedContactRaw ? (() => { try { return JSON.parse(savedContactRaw); } catch { return null; } })() : null;
+                            setContactInfo({
+                                fullName: sc?.fullName || uData.fullName || '',
+                                email: sc?.email || uData.email || '',
+                                phone: sc?.phone || uData.phone || '',
+                                identityType: sc?.identityType || uData.identityType || 'CCCD',
+                                identityNo: sc?.identityNo || uData.identityNo || '',
+                                dob: sc?.dob || uData.dob || '',
+                                gender: sc?.gender || uData.gender || '',
+                            });
+
+                            const savedLeadRaw = sessionStorage.getItem('checkout_leadTraveler');
+                            const sl = savedLeadRaw ? (() => { try { return JSON.parse(savedLeadRaw); } catch { return null; } })() : null;
+                            if (!sl) {
+                                setLeadTraveler(prev => ({
+                                    ...prev,
                                     fullName: uData.fullName || '',
                                     dob: uData.dob || '',
                                     gender: uData.gender || '',

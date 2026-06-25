@@ -255,6 +255,8 @@ export async function reserveSeatsAtomically(
     throw new BadRequestException('Number of seats must be at least 1');
   }
 
+  // Tour có chuyến khởi hành: tồn kho ghế chỉ tính theo chuyến.
+  // Bộ đếm tour.availableSeats (cấp tour tổng) chỉ dùng cho tour không có chuyến.
   if (departureId) {
     const departureReservation = await tx.tourDeparture.updateMany({
       where: {
@@ -278,6 +280,7 @@ export async function reserveSeatsAtomically(
         current?.availableSeats ?? 0,
       );
     }
+    return;
   }
 
   const tourReservation = await tx.tour.updateMany({
@@ -319,20 +322,23 @@ export async function releaseSeats(
     throw new BadRequestException('Number of seats must be at least 1');
   }
 
+  // Đối xứng với reserveSeatsAtomically: tour có chuyến chỉ hoàn ghế cho chuyến,
+  // không cộng lại vào bộ đếm tour tổng.
+  if (departureId) {
+    await tx.tourDeparture.updateMany({
+      where: {
+        id: departureId,
+        tourId,
+      },
+      data: {
+        availableSeats: { increment: seats },
+      },
+    });
+    return;
+  }
+
   await tx.tour.update({
     where: { id: tourId },
-    data: {
-      availableSeats: { increment: seats },
-    },
-  });
-
-  if (!departureId) return;
-
-  await tx.tourDeparture.updateMany({
-    where: {
-      id: departureId,
-      tourId,
-    },
     data: {
       availableSeats: { increment: seats },
     },

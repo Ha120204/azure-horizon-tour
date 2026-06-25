@@ -115,7 +115,7 @@ const baseBooking = {
 };
 
 describe('BookingCancellationService seat release', () => {
-  it('restores tour and departure seats when customer cancels a pending booking', async () => {
+  it('restores only departure seats when customer cancels a pending booking', async () => {
     const {
       service,
       bookingFindUnique,
@@ -130,12 +130,6 @@ describe('BookingCancellationService seat release', () => {
 
     await service.requestCancellation(1, 7, 'Change of plan');
 
-    expect(txTourUpdate).toHaveBeenCalledWith({
-      where: { id: 10 },
-      data: {
-        availableSeats: { increment: 2 },
-      },
-    });
     expect(txTourDepartureUpdateMany).toHaveBeenCalledWith({
       where: {
         id: 20,
@@ -145,9 +139,10 @@ describe('BookingCancellationService seat release', () => {
         availableSeats: { increment: 2 },
       },
     });
+    expect(txTourUpdate).not.toHaveBeenCalled();
   });
 
-  it('restores tour and departure seats when admin approves a cancellation request', async () => {
+  it('restores only departure seats when admin approves a cancellation request', async () => {
     const {
       service,
       bookingFindUnique,
@@ -164,12 +159,6 @@ describe('BookingCancellationService seat release', () => {
 
     await service.approveCancellation(1, 'Approved');
 
-    expect(txTourUpdate).toHaveBeenCalledWith({
-      where: { id: 10 },
-      data: {
-        availableSeats: { increment: 2 },
-      },
-    });
     expect(txTourDepartureUpdateMany).toHaveBeenCalledWith({
       where: {
         id: 20,
@@ -179,6 +168,7 @@ describe('BookingCancellationService seat release', () => {
         availableSeats: { increment: 2 },
       },
     });
+    expect(txTourUpdate).not.toHaveBeenCalled();
     expect(paymentTransactionCreate).not.toHaveBeenCalled();
   });
 });

@@ -392,9 +392,13 @@ NGỮ CẢNH TRANG HIỆN TẠI:
     return `Bạn là "Azure Horizon AI Concierge" - trợ lý tư vấn du lịch của nền tảng đặt tour Azure Horizon.
 Hôm nay là ${today}. Khi khách nhắc tới "tháng tới", "cuối năm", "hè này" hay bất kỳ mốc thời gian tương đối nào, hãy tính theo ngày này.${currentTourSection}
 
+QUY TẮC NGÔN NGỮ — ƯU TIÊN CAO NHẤT, GHI ĐÈ MỌI QUY TẮC KHÁC:
+- Trả lời bằng ĐÚNG ngôn ngữ của tin nhắn GẦN NHẤT của khách: khách viết tiếng Anh → trả lời HOÀN TOÀN bằng tiếng Anh; viết tiếng Việt → trả lời bằng tiếng Việt. Áp dụng kể cả khi khách đổi ngôn ngữ giữa chừng.
+- TUYỆT ĐỐI BỎ QUA ngôn ngữ của system prompt này VÀ của KẾT QUẢ TOOL (ví dụ message nội bộ "Không tìm thấy tour nào phù hợp...", nhãn bộ lọc "ngân sách"/"thời gian" — đều bằng tiếng Việt). Đó CHỈ là dữ liệu, KHÔNG quyết định ngôn ngữ trả lời. Hãy tự dịch sang ngôn ngữ của khách (ví dụ khách hỏi tiếng Anh thì viết "I couldn't find any matching tours...").
+- Nếu tin nhắn của khách không đủ để xác định ngôn ngữ (chỉ có tên địa danh/số/mã booking), dùng ngôn ngữ giao diện: ${uiLangLabel}.
+
 PHONG CÁCH TƯ VẤN:
 - Trả lời như một nhân viên tư vấn du lịch có kinh nghiệm: tự nhiên, ấm áp, chủ động gợi mở, không máy móc.
-- NGÔN NGỮ: Trả lời CÙNG ngôn ngữ với tin nhắn GẦN NHẤT của khách (khách viết tiếng Việt → trả lời tiếng Việt; viết tiếng Anh → trả lời tiếng Anh), kể cả khi khách đổi ngôn ngữ giữa chừng cuộc trò chuyện. Nếu tin nhắn không xác định rõ ngôn ngữ (chỉ có tên địa danh/số/mã booking), dùng ngôn ngữ giao diện hiện tại: ${uiLangLabel}.
 - Câu trả lời nên ngắn vừa đủ, dễ quét, có bullet khi đưa nhiều lựa chọn.
 - Không ép khách cung cấp quá nhiều dữ liệu trước khi tư vấn. Hãy giúp họ tiến từng bước.
 
@@ -903,6 +907,16 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
             emittedChars = safeUpTo;
           }
         }
+      }
+
+      // Flush phần text bị giữ lại (HOLD_BACK) ở cuối stream. Không có bước này thì
+      // ~14 ký tự cuối của câu trả lời không bao giờ được gửi → câu bị cụt chữ.
+      // Nếu có TOUR_CARD thì chỉ flush tới trước marker (phần card không stream dạng text).
+      const finalCardStart = fullText.indexOf(CARD_MARKER);
+      const flushEnd = finalCardStart !== -1 ? finalCardStart : fullText.length;
+      if (flushEnd > emittedChars) {
+        yield { token: fullText.slice(emittedChars, flushEnd) };
+        emittedChars = flushEnd;
       }
 
       const result = await this.parseAndSaveResponse(fullText, currentSessionId);

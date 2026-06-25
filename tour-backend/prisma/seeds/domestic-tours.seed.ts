@@ -3701,6 +3701,15 @@ export async function seedDomesticTours(prisma: PrismaClient) {
       },
     });
 
+    // Mô hình hub: điểm khởi hành là thành phố trung tâm khách xuất phát, KHÔNG trùng
+    // điểm đến. Công ty đặt tại Hà Nội → Miền Bắc & Miền Trung khởi hành từ Hà Nội;
+    // Miền Nam từ TP.HCM (đã có sẵn tuyến phía Nam). Tránh dữ liệu "đi Đà Nẵng, khởi
+    // hành từ Đà Nẵng" và để bộ lọc theo điểm khởi hành (HN/HCM) hoạt động đúng.
+    const departureHub =
+      item.destination.region === 'Miền Nam'
+        ? { vi: 'TP.HCM', en: 'Ho Chi Minh City' }
+        : { vi: 'Hà Nội', en: 'Hanoi' };
+
     const tour = await prisma.tour.upsert({
       where: { tourCode: item.tour.tourCode },
       update: {
@@ -3715,7 +3724,8 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         averageRating: 4.8,
         tourType: item.tour.tourType,
         primaryTransport: transportSeed.type,
-        departurePoint: item.tour.departurePoint,
+        departurePoint: departureHub.vi,
+        departurePointEn: departureHub.en,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
         deletedAt: null,
@@ -3734,7 +3744,8 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         averageRating: 4.8,
         tourType: item.tour.tourType,
         primaryTransport: transportSeed.type,
-        departurePoint: item.tour.departurePoint,
+        departurePoint: departureHub.vi,
+        departurePointEn: departureHub.en,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
       },

@@ -66,7 +66,7 @@ function getDateInputValue(offsetDays: number) {
 export function useBookingManagement() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get('search') ?? '';
-  const initialStatus = searchParams.get('status') ?? '';
+  const initialStatus = searchParams.get('status') ?? 'ACTIVE';
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [stats, setStats] = useState<Stats>(initialStats);
@@ -326,7 +326,7 @@ export function useBookingManagement() {
   const resetFilters = useCallback(() => {
     setSearch('');
     setDebouncedSearch('');
-    setStatusFilter('');
+    setStatusFilter('ACTIVE');
     setPaymentFilter('');
     setPaymentMethodFilter('');
     setNeedsReconciliation(false);
@@ -342,7 +342,7 @@ export function useBookingManagement() {
   const applySavedView = useCallback((view: BookingSavedViewKey) => {
     setSearch('');
     setDebouncedSearch('');
-    setStatusFilter('');
+    setStatusFilter('ACTIVE');
     setPaymentFilter('');
     setPaymentMethodFilter('');
     setNeedsReconciliation(false);
@@ -517,20 +517,20 @@ export function useBookingManagement() {
     setStatsDateTo(getTodayDateInputValue());
   }, []);
 
-  const hasFilter = !!(search || statusFilter || paymentFilter || paymentMethodFilter || needsReconciliation || needsCustomerCall || needsPassengerInfo || dateFrom || dateTo || departureFrom || departureTo);
+  const hasFilter = !!(search || (statusFilter && statusFilter !== 'ACTIVE') || paymentFilter || paymentMethodFilter || needsReconciliation || needsCustomerCall || needsPassengerInfo || dateFrom || dateTo || departureFrom || departureTo);
   const activeSavedView: BookingSavedViewKey | null = (() => {
     const noSearch = !search && !debouncedSearch;
     const noCreatedDate = !dateFrom && !dateTo;
     const noPaymentMethod = !paymentMethodFilter;
     const noSpecialFlags = !needsReconciliation && !needsCustomerCall && !needsPassengerInfo;
     const noDeparture = !departureFrom && !departureTo;
-    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && !statusFilter && !paymentFilter) return 'all';
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'ACTIVE' && !paymentFilter) return 'all';
     if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'PENDING' && !paymentFilter) return 'pending';
-    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && !statusFilter && paymentFilter === 'UNPAID') return 'unpaid';
-    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && !statusFilter && !paymentFilter && departureFrom === getDateInputValue(0) && departureTo === getDateInputValue(7)) return 'upcoming';
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'ACTIVE' && paymentFilter === 'UNPAID') return 'unpaid';
+    if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && statusFilter === 'ACTIVE' && !paymentFilter && departureFrom === getDateInputValue(0) && departureTo === getDateInputValue(7)) return 'upcoming';
     if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'CANCELLED' && !paymentFilter) return 'cancelled';
-    if (noSearch && noCreatedDate && noPaymentMethod && needsCustomerCall && !needsReconciliation && !needsPassengerInfo && noDeparture && !statusFilter && !paymentFilter) return 'needsCall';
-    if (noSearch && noCreatedDate && noPaymentMethod && needsPassengerInfo && !needsReconciliation && !needsCustomerCall && noDeparture && !statusFilter && !paymentFilter) return 'needsPassengerInfo';
+    if (noSearch && noCreatedDate && noPaymentMethod && needsCustomerCall && !needsReconciliation && !needsPassengerInfo && noDeparture && statusFilter === 'ACTIVE' && !paymentFilter) return 'needsCall';
+    if (noSearch && noCreatedDate && noPaymentMethod && needsPassengerInfo && !needsReconciliation && !needsCustomerCall && noDeparture && statusFilter === 'ACTIVE' && !paymentFilter) return 'needsPassengerInfo';
     return null;
   })();
 

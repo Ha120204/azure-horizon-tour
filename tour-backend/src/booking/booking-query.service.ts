@@ -588,8 +588,12 @@ export class BookingQueryService {
 
     if (status && status !== 'ALL') {
       const normalizedStatus = status.toUpperCase();
-      if (!isBookingStatus(normalizedStatus)) throw new BadRequestException('Invalid booking status');
-      where.status = normalizedStatus as BookingStatus;
+      if (normalizedStatus === 'ACTIVE') {
+        where.status = { notIn: ['CANCELLED'] };
+      } else {
+        if (!isBookingStatus(normalizedStatus)) throw new BadRequestException('Invalid booking status');
+        where.status = normalizedStatus as BookingStatus;
+      }
     }
     if (paymentStatus && paymentStatus !== 'ALL') {
       const normalizedPaymentStatus = paymentStatus.toUpperCase();

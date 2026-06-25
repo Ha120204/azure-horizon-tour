@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { BookingController } from './booking.controller';
+import { BookingAdminController } from './booking-admin.controller';
+import { BookingPaymentController } from './booking-payment.controller';
 import { PaymentModule } from '../payment/payment.module';
 import { HttpModule } from '@nestjs/axios';
 import { VoucherModule } from '../voucher/voucher.module';
@@ -10,13 +12,15 @@ import { BookingCronService } from './booking-cron.service';
 import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingQueryService } from './booking-query.service';
+import { BookingStatsService } from './booking-stats.service';
+import { BookingPassengerService } from './booking-passenger.service';
 import { BookingPaymentService } from './booking-payment.service';
 import { BookingTransportService } from './booking-transport.service';
 
 @Module({
   imports: [PaymentModule, HttpModule, VoucherModule, MailModule, SettingsModule],
-  controllers: [BookingController],
-  providers: [BookingService, BookingCronService, AssistedDraftService, BookingCancellationService, BookingQueryService, BookingPaymentService, BookingTransportService],
+  controllers: [BookingController, BookingAdminController, BookingPaymentController],
+  providers: [BookingService, BookingCronService, AssistedDraftService, BookingCancellationService, BookingQueryService, BookingStatsService, BookingPassengerService, BookingPaymentService, BookingTransportService],
   exports: [BookingService, AssistedDraftService, BookingCancellationService, BookingQueryService, BookingPaymentService, BookingTransportService],
 })
 export class BookingModule {}

@@ -126,7 +126,8 @@ function BookingFilterSelect({
 }
 
 const STATUS_FILTER_OPTIONS: BookingFilterSelectOption[] = [
-  { value: '', label: 'Tất cả trạng thái', description: 'Không giới hạn trạng thái đơn', icon: 'filter_list' },
+  { value: 'ACTIVE', label: 'Đang hoạt động', description: 'Ẩn đơn đã hủy — mặc định', icon: 'filter_alt' },
+  { value: '', label: 'Tất cả trạng thái', description: 'Bao gồm cả đơn đã hủy', icon: 'filter_list' },
   { value: 'PENDING', label: STATUS_CFG.PENDING.label, description: 'Đơn mới, cần xử lý', icon: STATUS_CFG.PENDING.icon },
   { value: 'CONFIRMED', label: STATUS_CFG.CONFIRMED.label, description: 'Đơn đã xác nhận thành công', icon: STATUS_CFG.CONFIRMED.icon },
   { value: 'CANCEL_REQUESTED', label: STATUS_CFG.CANCEL_REQUESTED.label, description: 'Khách đã gửi yêu cầu hủy', icon: STATUS_CFG.CANCEL_REQUESTED.icon },

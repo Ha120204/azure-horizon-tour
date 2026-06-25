@@ -10,6 +10,8 @@ import { MailService } from '../mail/mail.service';
 import { AssistedDraftService } from './assisted-draft.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingQueryService } from './booking-query.service';
+import { BookingStatsService } from './booking-stats.service';
+import { BookingPassengerService } from './booking-passenger.service';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
@@ -38,6 +40,8 @@ describe('BookingService', () => {
         { provide: AssistedDraftService, useValue: mockValue },
         { provide: BookingCancellationService, useValue: mockValue },
         { provide: BookingQueryService, useValue: mockValue },
+        { provide: BookingStatsService, useValue: mockValue },
+        { provide: BookingPassengerService, useValue: mockValue },
         { provide: AdminNotificationService, useValue: mockValue },
         {
           provide: SettingsService,

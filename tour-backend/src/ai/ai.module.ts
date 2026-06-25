@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AiService } from './ai.service';
+import { AiToolService } from './ai-tool.service';
 import { AiTranslationService } from './ai-translation.service';
 import { AiEmbeddingService } from './ai-embedding.service';
 import { AiController } from './ai.controller';
@@ -14,7 +15,7 @@ import { BookingModule } from '../booking/booking.module';
     }),
   ],
   controllers: [AiController],
-  providers: [AiService, AiTranslationService, AiEmbeddingService],
+  providers: [AiService, AiToolService, AiTranslationService, AiEmbeddingService],
   exports: [AiService, AiTranslationService, AiEmbeddingService],
 })
 export class AiModule {}

@@ -1,10 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
-import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { BookingCancellationService } from '../booking/booking-cancellation.service';
-import { AiEmbeddingService } from './ai-embedding.service';
+import { AiToolService } from './ai-tool.service';
 
 const LLMGATE_DEFAULT_BASE_URL = 'https://llmgate.app/v1';
 const LLMGATE_LEGACY_BASE_URLS = new Set([
@@ -19,11 +17,6 @@ function getErrorMessage(error: unknown): string {
 type TourCard = { id?: number; name?: string; price?: string; image?: string };
 
 interface AiError { message?: string; status?: number; code?: number }
-
-interface SearchToursArgs { destination?: string; departurePoint?: string; minPrice?: number; maxPrice?: number; tourType?: string; startMonth?: number; partySize?: number }
-interface GetTourDetailsArgs { tourId?: number }
-interface CheckMyBookingsArgs { status?: string; bookingCode?: string }
-interface GetCancellationPolicyArgs { bookingCode?: string }
 
 // Tool definitions in OpenAI-compatible format for LLMGate.
 const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
@@ -148,8 +141,7 @@ export class AiService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
-    private readonly bookingCancellationService: BookingCancellationService,
-    private readonly embeddingService: AiEmbeddingService,
+    private readonly aiToolService: AiToolService,
   ) {
     this.provider = (
       this.configService.get<string>('AI_PROVIDER') || 'llmgate'
@@ -357,23 +349,6 @@ export class AiService {
       sessionId,
     };
   }
-  // Tách chuỗi điểm đến/tên tour thành các token có nghĩa để khớp linh hoạt.
-  private static readonly SEARCH_STOP_WORDS = new Set([
-    'tour', 'ngay', 'ngày', 'dem', 'đêm', 'va', 'và', 'cac', 'các', 'di', 'đi',
-  ]);
-  private toSearchTerms(input: string): string[] {
-    const tokens = input
-      .split(/[\s\-–—_,/]+/)
-      .map((token) => token.trim())
-      .filter(
-        (token) =>
-          token.length >= 2 &&
-          !/^\d+$/.test(token) &&
-          !AiService.SEARCH_STOP_WORDS.has(token.toLowerCase()),
-      );
-    return tokens.length > 0 ? tokens : [input.trim()];
-  }
-
   // Lấy ngữ cảnh tour của trang khách đang mở (id + tên) để nhúng vào system prompt.
   private async getCurrentTourContext(
     tourId?: number | null,
@@ -390,278 +365,6 @@ export class AiService {
     }
   }
 
-  // Tool: search tours in the database.
-  private async executeSearchTours(args: Record<string, unknown>) {
-    const { destination, departurePoint, minPrice, maxPrice, tourType, startMonth, partySize } =
-      args as SearchToursArgs;
-    const party = partySize ? Number(partySize) : null;
-
-    const whereClause: Prisma.TourWhereInput = {
-      // partySize: chỉ trả tour còn đủ ghế cho cả nhóm (mặc định chỉ cần còn ghế).
-      availableSeats: party ? { gte: party } : { gt: 0 },
-      status: 'PUBLISHED',
-      deletedAt: null,
-    };
-
-    const andConditions: Prisma.TourWhereInput[] = [];
-
-    if (destination) {
-      // Mỗi token phải khớp ít nhất một trường (AND giữa các token, OR giữa các trường)
-      // → gõ gần đúng tên tour, sai dấu gạch hay thiếu/thừa chữ vẫn tìm ra.
-      andConditions.push(
-        ...this.toSearchTerms(destination).map((term) => ({
-          OR: [
-            { name: { contains: term, mode: 'insensitive' as const } },
-            { destination: { name: { contains: term, mode: 'insensitive' as const } } },
-            { destination: { region: { contains: term, mode: 'insensitive' as const } } },
-          ],
-        })),
-      );
-    }
-
-    if (departurePoint) {
-      // Lọc theo điểm khởi hành mặc định của tour (Tour.departurePoint).
-      andConditions.push(
-        ...this.toSearchTerms(departurePoint).map((term) => ({
-          departurePoint: { contains: term, mode: 'insensitive' as const },
-        })),
-      );
-    }
-
-    if (andConditions.length > 0) {
-      whereClause.AND = andConditions;
-    }
-
-    if (minPrice || maxPrice) {
-      whereClause.price = {
-        ...(minPrice ? { gte: Number(minPrice) } : {}),
-        ...(maxPrice ? { lte: Number(maxPrice) } : {}),
-      };
-    }
-
-    if (tourType) {
-      whereClause.tourType = { contains: String(tourType), mode: 'insensitive' };
-    }
-
-    if (startMonth) {
-      const month = Number(startMonth);
-      const now = new Date();
-      const year = now.getMonth() + 1 > month ? now.getFullYear() + 1 : now.getFullYear();
-      const range = { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) };
-      // Ưu tiên khớp theo NGÀY KHỞI HÀNH cụ thể (TourDeparture còn đủ ghế),
-      // fallback về Tour.startDate cho tour chưa tạo lịch khởi hành chi tiết.
-      whereClause.OR = [
-        {
-          departures: {
-            some: {
-              isActive: true,
-              departureDate: range,
-              availableSeats: party ? { gte: party } : { gt: 0 },
-            },
-          },
-        },
-        { startDate: range },
-      ];
-    }
-
-    const tours = await this.prisma.tour.findMany({
-      where: whereClause,
-      include: { destination: true },
-      take: 5,
-      orderBy: { price: 'asc' },
-    });
-
-    if (tours.length === 0) {
-      // Keyword search trả về rỗng → thử semantic search nếu có đủ văn bản truy vấn.
-      const semanticQuery = [destination, tourType].filter(Boolean).join(' ');
-      if (semanticQuery) {
-        const semanticRows = await this.embeddingService.semanticSearch(semanticQuery, party ?? 1);
-        if (semanticRows.length > 0) {
-          return semanticRows.map((t) => ({
-            id: t.id,
-            name: t.name,
-            destination: t.destinationName || 'Vô định',
-            region: t.region || '',
-            departurePoint: t.departurePoint || '',
-            price: Number(t.price),
-            duration: t.duration,
-            startDate: new Date(t.startDate).toISOString().split('T')[0],
-            availableSeats: Number(t.availableSeats),
-            imageUrl: t.imageUrl,
-            averageRating: Number(t.averageRating),
-            tourType: t.tourType,
-            _semanticMatch: true,
-          }));
-        }
-      }
-      return { message: 'Không tìm th��y tour nào phù hợp với yêu cầu này.' };
-    }
-
-    return tours.map((t) => ({
-      id: t.id,
-      name: t.name,
-      destination: t.destination?.name || 'Vô định',
-      region: t.destination?.region || '',
-      departurePoint: t.departurePoint || '',
-      price: t.price,
-      duration: t.duration,
-      startDate: t.startDate.toISOString().split('T')[0],
-      availableSeats: t.availableSeats,
-      imageUrl: t.imageUrl,
-      averageRating: t.averageRating,
-      tourType: t.tourType,
-    }));
-  }
-  // Tool: get tour details by ID.
-  private async executeGetTourDetails(args: Record<string, unknown>) {
-    const { tourId } = args as GetTourDetailsArgs;
-    if (!tourId) return { message: 'Thiếu Tour ID.' };
-
-    const tour = await this.prisma.tour.findFirst({
-      where: { id: Number(tourId), deletedAt: null },
-      include: {
-        destination: true,
-        itinerary: { orderBy: { dayNumber: 'asc' }, take: 5 },
-        packages: {
-          where: { isActive: true },
-          orderBy: { sortOrder: 'asc' },
-          take: 3,
-        },
-        faqs: { orderBy: { sortOrder: 'asc' }, take: 5 },
-        highlights: { orderBy: { sortOrder: 'asc' }, take: 5 },
-      },
-    });
-
-    if (!tour) return { message: `Không tìm thấy tour với ID ${tourId}.` };
-
-    return {
-      id: tour.id,
-      name: tour.name,
-      destination: tour.destination?.name,
-      price: tour.price,
-      duration: tour.duration,
-      startDate: tour.startDate.toISOString().split('T')[0],
-      availableSeats: tour.availableSeats,
-      imageUrl: tour.imageUrl,
-      averageRating: tour.averageRating,
-      description: tour.description?.substring(0, 300) + '...',
-      itinerary: tour.itinerary.map((d) => ({
-        day: d.dayNumber,
-        title: d.title,
-      })),
-      packages: tour.packages.map((p) => ({
-        name: p.name,
-        price: p.price,
-        badge: p.badge,
-      })),
-      highlights: tour.highlights.map((h) => h.content),
-      faqs: tour.faqs.map((f) => ({
-        q: f.question,
-        a: f.answer.substring(0, 150),
-      })),
-    };
-  }
-  // Tool: check current user bookings.
-  private async executeCheckMyBookings(args: Record<string, unknown>, userId: number | null) {
-    if (!userId) {
-      return {
-        message:
-          'Khách hàng chưa đăng nhập. Vui lòng nhắc họ đăng nhập để kiểm tra đơn đặt tour cá nhân.',
-      };
-    }
-
-    const { status: statusFilter, bookingCode } = args as CheckMyBookingsArgs;
-    const whereClause: Prisma.BookingWhereInput = { userId };
-    if (statusFilter && statusFilter !== 'ALL') {
-      whereClause.status = statusFilter as Prisma.BookingWhereInput['status'];
-    }
-
-    const trimmedCode = bookingCode?.trim();
-    if (trimmedCode) {
-      whereClause.bookingCode = { contains: trimmedCode, mode: 'insensitive' };
-    }
-
-    const bookings = await this.prisma.booking.findMany({
-      where: whereClause,
-      include: { tour: true },
-      orderBy: { createdAt: 'desc' },
-      take: trimmedCode ? 5 : 8,
-    });
-
-    if (bookings.length === 0) {
-      return {
-        message: trimmedCode
-          ? `Không tìm thấy booking mã "${trimmedCode}" trong tài khoản của bạn.`
-          : 'Không tìm thấy chuyến đi nào của bạn trong hệ thống.',
-      };
-    }
-
-    return bookings.map((b) => ({
-      bookingCode: b.bookingCode,
-      tourName: b.tour.name,
-      departureDate: b.tour.startDate.toISOString().split('T')[0],
-      numberOfPeople: b.numberOfPeople,
-      totalPrice: b.totalPrice,
-      status: b.status,
-      paymentStatus: b.paymentStatus,
-    }));
-  }
-  // Tool: tính chính sách hủy cho một booking cụ thể của khách đang đăng nhập (đọc-only).
-  private async executeGetCancellationPolicy(
-    args: Record<string, unknown>,
-    userId: number | null,
-  ) {
-    if (!userId) {
-      return {
-        message:
-          'Khách hàng chưa đăng nhập. Vui lòng nhắc họ đăng nhập để kiểm tra chính sách hủy đơn cá nhân.',
-      };
-    }
-
-    const { bookingCode } = args as GetCancellationPolicyArgs;
-    const trimmedCode = bookingCode?.trim();
-    if (!trimmedCode) {
-      return { message: 'Vui lòng cung cấp mã booking để kiểm tra chính sách hủy.' };
-    }
-
-    const booking = await this.prisma.booking.findFirst({
-      where: {
-        userId,
-        bookingCode: { contains: trimmedCode, mode: 'insensitive' },
-        deletedAt: null,
-      },
-      select: {
-        bookingCode: true,
-        status: true,
-        paymentStatus: true,
-        totalPrice: true,
-        createdAt: true,
-        departureId: true,
-        tour: { select: { name: true, startDate: true } },
-      },
-    });
-
-    if (!booking) {
-      return {
-        message: `Không tìm thấy booking mã "${trimmedCode}" trong tài khoản của bạn.`,
-      };
-    }
-
-    const policy =
-      await this.bookingCancellationService.getCancellationPolicyForBooking(booking);
-
-    return {
-      bookingCode: booking.bookingCode,
-      tourName: booking.tour.name,
-      status: booking.status,
-      canCancel: policy.canCancel,
-      cancelUnavailableReason: policy.cancelUnavailableReason,
-      refundPercent: policy.refundPercent,
-      estimatedRefundAmount: policy.estimatedRefundAmount,
-      refundNote: policy.refundNote,
-      daysUntilDeparture: policy.daysUntilDeparture,
-    };
-  }
   // System prompt.
   private buildSystemPrompt(currentTour?: { id: number; name: string } | null): string {
     const today = new Date().toLocaleDateString('vi-VN', {
@@ -841,80 +544,6 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     });
   }
 
-  private getFunctionToolCall(
-    toolCall: OpenAI.Chat.ChatCompletionMessageToolCall,
-  ): { name?: string; arguments?: string } | null {
-    if (toolCall.type !== 'function' || !('function' in toolCall)) {
-      return null;
-    }
-    return toolCall.function;
-  }
-
-  private parseToolArguments(
-    toolCall: OpenAI.Chat.ChatCompletionMessageToolCall,
-  ): Record<string, unknown> {
-    const functionCall = this.getFunctionToolCall(toolCall);
-    const rawArguments = functionCall?.arguments || '{}';
-    try {
-      const parsed: unknown = JSON.parse(rawArguments);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : {};
-    } catch {
-      this.logger.warn(`[AI] Invalid tool arguments for ${functionCall?.name || 'unknown'}`);
-      return {};
-    }
-  }
-
-  // Trích tín hiệu chất lượng từ kết quả tool để ghi log đo lường.
-  private extractToolQuality(toolName: string | undefined, result: unknown): string {
-    if (!result || typeof result !== 'object') return 'unknown';
-    const r = result as Record<string, unknown>;
-
-    if (toolName === 'search_tours') {
-      if (Array.isArray(result)) return `found=${result.length}`;
-      return 'empty';
-    }
-    if (toolName === 'get_tour_details') {
-      return r.id ? 'found' : 'not_found';
-    }
-    if (toolName === 'check_my_bookings') {
-      if (Array.isArray(result)) return `found=${result.length}`;
-      return 'empty';
-    }
-    if (toolName === 'get_cancellation_policy') {
-      if ('canCancel' in r) return `canCancel=${r.canCancel} refund=${r.refundPercent ?? 0}%`;
-      return 'not_found';
-    }
-    return 'ok';
-  }
-
-  private async executeTourTool(
-    toolCall: OpenAI.Chat.ChatCompletionMessageToolCall,
-    userId: number | null,
-  ) {
-    const toolName = this.getFunctionToolCall(toolCall)?.name;
-    const toolArgs = this.parseToolArguments(toolCall);
-
-    let result: unknown;
-    if (toolName === 'search_tours') {
-      result = await this.executeSearchTours(toolArgs);
-    } else if (toolName === 'check_my_bookings') {
-      result = await this.executeCheckMyBookings(toolArgs, userId);
-    } else if (toolName === 'get_tour_details') {
-      result = await this.executeGetTourDetails(toolArgs);
-    } else if (toolName === 'get_cancellation_policy') {
-      result = await this.executeGetCancellationPolicy(toolArgs, userId);
-    } else {
-      this.logger.warn(`[AI] Unknown tool requested: ${toolName || 'unknown'}`);
-      return { message: `Tool ${toolName || 'unknown'} is not supported.` };
-    }
-
-    const quality = this.extractToolQuality(toolName, result);
-    this.logger.log(`[AI] tool=${toolName} result=${quality} args=${JSON.stringify(toolArgs)}`);
-    return result;
-  }
-
   // Non-streaming flow: resolve tool calls, then make the final answer call.
   private async runModelChat(
     model: string,
@@ -1068,11 +697,11 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
 
     if (choice?.finish_reason === 'tool_calls' && toolCalls.length > 0) {
       const toolsUsed = toolCalls
-        .map((tc) => this.getFunctionToolCall(tc)?.name)
+        .map((tc) => this.aiToolService.getFunctionToolCall(tc)?.name)
         .filter((n): n is string => Boolean(n));
       const updatedMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages, choice.message];
       for (const toolCall of toolCalls) {
-        const fnResult = await this.executeTourTool(toolCall, userId);
+        const fnResult = await this.aiToolService.executeTourTool(toolCall, userId);
         updatedMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,

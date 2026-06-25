@@ -562,6 +562,7 @@ export function BookingSavedViews({ activeView, stats, onViewChange }: BookingSa
     { key: 'upcoming', label: 'Sắp khởi hành', icon: 'event_upcoming', tone: 'text-blue-700' },
     { key: 'cancelled', label: 'Đã hủy', icon: 'cancel', count: stats.cancelled, tone: 'text-red-700' },
     { key: 'needsCall', label: 'Cần gọi khách', icon: 'phone_in_talk', tone: 'text-emerald-700' },
+    { key: 'needsPassengerInfo', label: 'Thiếu thông tin HK', icon: 'badge', tone: 'text-orange-700' },
   ];
 
   return (

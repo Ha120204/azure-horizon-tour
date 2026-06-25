@@ -16,6 +16,7 @@ export function BookingActionBar({
   booking,
   isAdmin,
   canWrite,
+  canRecordPayment,
   showInStoreForm,
   showReconcileForm,
   onShowInStoreForm,
@@ -30,6 +31,7 @@ export function BookingActionBar({
   booking: Booking;
   isAdmin: boolean;
   canWrite: boolean;
+  canRecordPayment?: boolean;
   showInStoreForm: boolean;
   showReconcileForm: boolean;
   onShowInStoreForm: () => void;
@@ -43,6 +45,8 @@ export function BookingActionBar({
 }) {
   const isPending = booking.status === 'PENDING';
   const isUnpaidOrProcessing = booking.paymentStatus === 'UNPAID' || booking.paymentStatus === 'PROCESSING';
+  // STAFF có thể ghi nhận thanh toán tại quầy; fallback về canWrite nếu prop không truyền.
+  const effectiveCanRecordPayment = canRecordPayment ?? canWrite;
   const latestPaymentRequest = booking.paymentMethod === 'PAYOS' && booking.paymentStatus !== 'PAID'
     ? booking.notifications?.[0]
     : undefined;
@@ -195,7 +199,7 @@ export function BookingActionBar({
             Copy thanh toán
           </button>
         )}
-        {canResendPaymentRequest && canWrite && (
+        {canResendPaymentRequest && effectiveCanRecordPayment && (
           <>
             <button
               type="button"
@@ -225,7 +229,7 @@ export function BookingActionBar({
             Xem lịch sử thanh toán
           </button>
         )}
-        {(booking.status === 'CANCELLED' || booking.paymentStatus === 'FAILED') && canWrite && (
+        {(booking.status === 'CANCELLED' || booking.paymentStatus === 'FAILED') && effectiveCanRecordPayment && (
           <button
             type="button"
             onClick={handleCreateAgain}
@@ -254,8 +258,8 @@ export function BookingActionBar({
           </div>
           <button onClick={onClose} className="px-5 py-2 rounded-xl text-sm font-semibold text-on-surface-variant border border-outline-variant/20 hover:bg-surface-container transition-colors outline-none">Đóng</button>
         </div>
-      ) : isPending && isUnpaidOrProcessing && canWrite ? (
-        /* ── CASE: PENDING + chờ thanh toán (chỉ người có quyền ghi) ── */
+      ) : isPending && isUnpaidOrProcessing && effectiveCanRecordPayment ? (
+        /* ── CASE: PENDING + chờ thanh toán (ADMIN hoặc STAFF có thể ghi nhận) ── */
         <BookingEditForm
           booking={booking}
           isAdmin={isAdmin}

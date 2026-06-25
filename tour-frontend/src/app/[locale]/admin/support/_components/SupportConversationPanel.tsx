@@ -148,6 +148,16 @@ export function SupportConversationPanel({
                             ) : null
                         )}
                     </div>
+                    {selected.rating != null && (
+                        <div className="col-span-2 flex items-center gap-2">
+                            <p className="font-bold text-outline">Đánh giá</p>
+                            <span className="text-sm tracking-tight text-amber-400" aria-label={`${selected.rating} trên 5 sao`}>
+                                {'★'.repeat(selected.rating)}
+                                <span className="text-outline/30">{'★'.repeat(5 - selected.rating)}</span>
+                            </span>
+                            <span className="text-[11px] font-black text-amber-600">{selected.rating}/5</span>
+                        </div>
+                    )}
                     <BookingSummary
                         selected={selected}
                         linkedBooking={linkedBooking}

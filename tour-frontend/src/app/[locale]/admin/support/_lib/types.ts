@@ -56,6 +56,7 @@ export interface Ticket {
     assignedStaffName?: string | null;
     linkedBooking?: LinkedBooking | null;
     bookingMatchStatus?: 'NO_REFERENCE' | 'MATCHED' | 'NOT_FOUND';
+    rating?: number | null;
     createdAt: string;
     replies: Reply[];
     auditLogs?: AuditEvent[];

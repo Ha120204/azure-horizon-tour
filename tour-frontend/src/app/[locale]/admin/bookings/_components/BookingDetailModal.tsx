@@ -11,18 +11,24 @@ export function BookingDetailModal({
   booking,
   isAdmin,
   canWrite,
+  canRecordPayment,
   onClose,
   onConfirmSuccess,
   onCopyPaymentRequest,
   onResendPaymentRequest,
+  onPassengersUpdated,
+  showToast,
 }: {
   booking: Booking;
   isAdmin: boolean;
   canWrite: boolean;
+  canRecordPayment?: boolean;
   onClose: () => void;
   onConfirmSuccess: (updated: Booking, source?: BookingConfirmSource) => void | Promise<void>;
   onCopyPaymentRequest?: (booking: Booking) => void | Promise<void>;
   onResendPaymentRequest?: (booking: Booking, forceEmail?: boolean) => void | Promise<void>;
+  onPassengersUpdated?: () => void | Promise<void>;
+  showToast?: (msg: string, ok?: boolean) => void;
 }) {
   // Kept here: Escape key needs to know which form is open to close it instead of the modal
   const [showInStoreForm, setShowInStoreForm] = useState(false);
@@ -47,11 +53,12 @@ export function BookingDetailModal({
       <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={hasOpenForm ? undefined : onClose} />
 
       <div className="relative bg-surface rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] min-h-0 flex flex-col overflow-hidden overscroll-contain animate-fade-slide-up">
-        <BookingDetailView booking={booking} onClose={onClose} />
+        <BookingDetailView booking={booking} onClose={onClose} canWrite={canWrite} canRecordPayment={canRecordPayment ?? canWrite} onPassengersUpdated={onPassengersUpdated} showToast={showToast} />
         <BookingActionBar
           booking={booking}
           isAdmin={isAdmin}
           canWrite={canWrite}
+          canRecordPayment={canRecordPayment ?? canWrite}
           showInStoreForm={showInStoreForm}
           showReconcileForm={showReconcileForm}
           onShowInStoreForm={() => setShowInStoreForm(true)}

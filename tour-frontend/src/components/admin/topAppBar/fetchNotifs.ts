@@ -13,6 +13,8 @@ const NOTIF_TYPES = new Set<Notif['type']>([
     'review_good',
     'review_bad',
     'customer_new',
+    'passenger_info_missing',
+    'staff_assist_requested',
 ]);
 
 // ── API utilities ─────────────────────────────────────────────────────────────

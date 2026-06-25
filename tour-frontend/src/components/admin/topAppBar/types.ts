@@ -26,7 +26,9 @@ export type NotifType =
     | 'support_in_progress'
     | 'review_good'
     | 'review_bad'
-    | 'customer_new';
+    | 'customer_new'
+    | 'passenger_info_missing'
+    | 'staff_assist_requested';
 
 export interface Notif {
     id: string;

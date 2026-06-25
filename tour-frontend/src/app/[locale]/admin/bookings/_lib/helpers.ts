@@ -1,3 +1,4 @@
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import { PASSENGER_PRICING, passengerTypeOrder } from './config';
 import type { AssistedDraftForm, Booking, DraftPassenger, PassengerType, PaymentTransaction, TourDepartureOption, TourOption } from './types';
 
@@ -221,6 +222,15 @@ export const hasLoadedBookingOptions = (tour?: TourOption) =>
 // ─── Booking contact & payment helpers ──────────────────────────────────────
 
 export const toTelHref = (phone?: string | null) => phone?.replace(/[^\d+]/g, '') ?? '';
+
+// Desktop không có app tel: → copy số + toast để vẫn có phản hồi rõ ràng
+export const copyPhone = (phone?: string | null) => {
+  if (!phone || !navigator.clipboard) return;
+  navigator.clipboard
+    .writeText(phone)
+    .then(() => toastEmitter.success('Đã sao chép số điện thoại'))
+    .catch(() => {});
+};
 
 export const toZaloPhone = (phone?: string | null) => {
   const digits = phone?.replace(/\D/g, '') ?? '';

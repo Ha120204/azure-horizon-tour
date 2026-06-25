@@ -38,6 +38,16 @@ export type PassengerInput = {
   [key: string]: Prisma.JsonValue | undefined;
 };
 
+export type PassengerReminderChannel = 'EMAIL' | 'ZALO' | 'CALL';
+
+// Một lần nhắc bổ sung thông tin hành khách (lưu trong Booking.passengerReminders).
+export type PassengerReminderEntry = {
+  channel: PassengerReminderChannel;
+  at: string; // ISO timestamp
+  byId: number | null; // staff thực hiện (null nếu do cron/AUTO)
+  source: 'AUTO' | 'MANUAL';
+};
+
 export type AssistedQuoteDto = {
   customerId?: number | null;
   tourId: number;

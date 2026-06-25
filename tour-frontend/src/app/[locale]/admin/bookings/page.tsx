@@ -97,6 +97,7 @@ export default function BookingManagementPage() {
           hasFilter={booking.hasFilter}
           statusFilter={booking.statusFilter}
           canWrite={booking.canWrite}
+          canRecordPayment={booking.canRecordPayment}
           meta={booking.meta}
           pageSize={booking.pageSize}
           onOpenBooking={booking.setSelectedBooking}
@@ -116,10 +117,13 @@ export default function BookingManagementPage() {
           booking={booking.selectedBooking}
           isAdmin={booking.isAdmin}
           canWrite={booking.canWrite}
+          canRecordPayment={booking.canRecordPayment}
           onClose={() => booking.setSelectedBooking(null)}
           onConfirmSuccess={booking.handleConfirmSuccess}
           onCopyPaymentRequest={booking.copyPaymentRequest}
           onResendPaymentRequest={booking.resendPaymentRequest}
+          onPassengersUpdated={booking.refreshDetail}
+          showToast={booking.showToast}
         />
       )}
 

@@ -16,6 +16,7 @@ import { useLocale } from '@/context/LocaleContext';
 import { ETicketPDF } from './_components/ETicketPDF';
 
 type TicketData = {
+    id?: number;
     bookingCode: string;
     status: string;
     paymentStatus: string;
@@ -24,6 +25,9 @@ type TicketData = {
     holdExpiresAt?: string | null;
     numberOfPeople: number;
     totalPrice: number;
+    incompletePassengerCount?: number;
+    ticketBlocked?: boolean;
+    staffAssistRequested?: boolean;
     leadTravelerName?: string | null;
     user?: {
         fullName?: string | null;
@@ -75,6 +79,12 @@ const successDict = {
         generatingTicket: "Đang tạo vé điện tử...",
         ticketNotFound: "Không tìm thấy vé",
         backToHome: "Quay lại Trang chủ",
+        ticketBlockedTitle: "Cần hoàn tất thông tin hành khách",
+        ticketBlockedDesc: "Tour có vé máy bay yêu cầu thông tin đầy đủ của tất cả hành khách (khớp giấy tờ tùy thân) trước khi xuất vé. Vui lòng bổ sung thông tin còn thiếu để nhận vé.",
+        completeNow: "Bổ sung thông tin ngay",
+        staffAssistTitle: "Đặt chỗ thành công — nhân viên sẽ liên hệ hỗ trợ",
+        staffAssistDesc: "Nhân viên sẽ liên hệ Quý khách qua điện thoại và email đã đăng ký để thu thập và nhập thông tin hành khách trước ngày khởi hành. Vui lòng giữ máy.",
+        staffAssistViewBooking: "Xem đơn đặt của tôi",
         bookingCode: "Mã đặt chỗ",
         tourName: "Tên Tour",
         dateTime: "Ngày & Giờ",
@@ -140,6 +150,12 @@ const successDict = {
         generatingTicket: "Generating your e-ticket...",
         ticketNotFound: "Ticket not found",
         backToHome: "Back to Home",
+        ticketBlockedTitle: "Passenger details required",
+        ticketBlockedDesc: "Tours with flights require complete details for all passengers (matching their ID/passport) before the ticket can be issued. Please complete the missing details to receive your ticket.",
+        completeNow: "Complete details now",
+        staffAssistTitle: "Booking confirmed — our staff will contact you shortly",
+        staffAssistDesc: "A staff member will reach out via your registered phone and email to collect and enter the remaining passengers' details before departure. Please keep your phone on.",
+        staffAssistViewBooking: "View my booking",
         bookingCode: "Booking Code",
         tourName: "Tour Name",
         dateTime: "Date & Time",
@@ -342,6 +358,60 @@ function SuccessTicketContent() {
                     <h1 className="text-2xl font-bold text-error">{sd.ticketNotFound}</h1>
                     <Link href="/" className="text-primary hover:underline">{sd.backToHome}</Link>
                 </div>
+                <Footer />
+            </div>
+        );
+    }
+
+    if (ticketData.ticketBlocked) {
+        const bookingHref = ticketData.id ? `/my-bookings/${ticketData.id}` : '/my-bookings';
+        const completeHref = ticketData.id ? `/my-bookings/${ticketData.id}#passenger-details` : '/my-bookings';
+
+        // Khách chủ động nhờ nhân viên nhập hộ → không hiện thẻ đỏ gây hoảng loạn,
+        // thay bằng thông báo xanh xác nhận nhân viên sẽ liên hệ.
+        if (ticketData.staffAssistRequested) {
+            return (
+                <div className="bg-surface font-body text-on-surface min-h-screen flex flex-col">
+                    <Header />
+                    <main className="flex-grow flex items-center justify-center px-6 pt-32 pb-20">
+                        <div className="w-full max-w-md rounded-3xl border border-primary/20 bg-white p-8 text-center shadow-xl">
+                            <span className="material-symbols-outlined text-5xl text-primary" aria-hidden="true">support_agent</span>
+                            <h1 className="mt-4 font-headline text-xl font-extrabold text-on-surface">{sd.staffAssistTitle}</h1>
+                            <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">{sd.staffAssistDesc}</p>
+                            <Link
+                                href={bookingHref}
+                                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-md transition-colors hover:bg-primary/90"
+                            >
+                                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">receipt_long</span>
+                                {sd.staffAssistViewBooking}
+                            </Link>
+                        </div>
+                    </main>
+                    <Footer />
+                </div>
+            );
+        }
+
+        return (
+            <div className="bg-surface font-body text-on-surface min-h-screen flex flex-col">
+                <Header />
+                <main className="flex-grow flex items-center justify-center px-6 pt-32 pb-20">
+                    <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white p-8 text-center shadow-xl">
+                        <span className="material-symbols-outlined text-5xl text-red-500" aria-hidden="true">flight</span>
+                        <h1 className="mt-4 font-headline text-xl font-extrabold text-on-surface">{sd.ticketBlockedTitle}</h1>
+                        <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">{sd.ticketBlockedDesc}</p>
+                        <Link
+                            href={completeHref}
+                            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold text-white shadow-md transition-colors hover:bg-red-700"
+                        >
+                            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit_note</span>
+                            {sd.completeNow}
+                        </Link>
+                        <Link href="/my-bookings" className="mt-3 inline-block text-sm font-semibold text-primary hover:underline">
+                            {sd.viewProfile}
+                        </Link>
+                    </div>
+                </main>
                 <Footer />
             </div>
         );

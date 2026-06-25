@@ -168,6 +168,9 @@ export default function SupportTicketDetail({
       });
       if (res.ok) {
         setHasRated(true);
+        const updated = { ...ticket, rating };
+        setTicket(updated);
+        onTicketUpdate(updated);
       } else {
         setSelectedRating(previousRating);
         setError(resolveMessage(await res.json()) ?? t('profile.supportConnectionError'));

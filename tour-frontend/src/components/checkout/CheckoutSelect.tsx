@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export type CheckoutSelectOption = {
     value: string;
@@ -19,6 +20,14 @@ type CheckoutSelectProps = {
     menuClassName?: string;
 };
 
+type MenuPosition = {
+    left: number;
+    minWidth: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+};
+
 export function CheckoutSelect({
     value,
     options,
@@ -31,25 +40,58 @@ export function CheckoutSelect({
 }: CheckoutSelectProps) {
     const listboxId = useId();
     const [isOpen, setIsOpen] = useState(false);
-    const selectRef = useRef<HTMLDivElement | null>(null);
+    const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
     const selectedOption = options.find(option => option.value === value);
+
+    // Định vị menu theo viewport để không bị cắt bởi vùng cuộn của modal/cha overflow.
+    const positionMenu = useCallback(() => {
+        const trigger = triggerRef.current;
+        if (!trigger) return;
+        const rect = trigger.getBoundingClientRect();
+        const gap = 8;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        // Mở lên trên nếu dưới không đủ chỗ mà trên rộng hơn.
+        const openUp = spaceBelow < 280 && spaceAbove > spaceBelow;
+        setMenuPos({
+            left: rect.left,
+            minWidth: rect.width,
+            top: openUp ? undefined : rect.bottom + gap,
+            bottom: openUp ? window.innerHeight - rect.top + gap : undefined,
+            maxHeight: Math.max(160, (openUp ? spaceAbove : spaceBelow) - gap - 8),
+        });
+    }, []);
 
     useEffect(() => {
         if (!isOpen) return;
-
-        const handleMouseDown = (event: MouseEvent) => {
-            if (!selectRef.current?.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
+        positionMenu();
+        const onReposition = () => positionMenu();
+        window.addEventListener('scroll', onReposition, true);
+        window.addEventListener('resize', onReposition);
+        return () => {
+            window.removeEventListener('scroll', onReposition, true);
+            window.removeEventListener('resize', onReposition);
         };
+    }, [isOpen, positionMenu]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleMouseDown = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (triggerRef.current?.contains(target)) return;
+            if (menuRef.current?.contains(target)) return;
+            setIsOpen(false);
+        };
         document.addEventListener('mousedown', handleMouseDown);
         return () => document.removeEventListener('mousedown', handleMouseDown);
     }, [isOpen]);
 
     return (
-        <div ref={selectRef} className={`relative ${className}`}>
+        <div className={`relative ${className}`}>
             <button
+                ref={triggerRef}
                 type="button"
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
@@ -85,13 +127,21 @@ export function CheckoutSelect({
                 </span>
             </button>
 
-            {isOpen && (
+            {isOpen && menuPos && typeof document !== 'undefined' && createPortal(
                 <div
+                    ref={menuRef}
                     id={listboxId}
                     role="listbox"
-                    className={`absolute left-0 z-[95] mt-2 w-max min-w-full max-w-80 overflow-hidden rounded-2xl border border-outline-variant/15 bg-surface-container-lowest p-1.5 shadow-2xl shadow-slate-900/12 ${menuClassName}`}
+                    style={{
+                        position: 'fixed',
+                        left: menuPos.left,
+                        minWidth: menuPos.minWidth,
+                        top: menuPos.top,
+                        bottom: menuPos.bottom,
+                    }}
+                    className={`z-[200] w-max max-w-80 overflow-hidden rounded-2xl border border-outline-variant/15 bg-surface-container-lowest p-1.5 shadow-2xl shadow-slate-900/12 ${menuClassName}`}
                 >
-                    <div className="max-h-72 overflow-y-auto">
+                    <div className="overflow-y-auto" style={{ maxHeight: menuPos.maxHeight }}>
                         {options.map(option => {
                             const selected = option.value === value;
                             return (
@@ -128,7 +178,8 @@ export function CheckoutSelect({
                             );
                         })}
                     </div>
-                </div>
+                </div>,
+                document.body,
             )}
         </div>
     );

@@ -106,6 +106,12 @@ export function BookingPaymentPanel({
 }: Props) {
     const { t, formatPrice, formatDateTime } = useLocale();
 
+    const incompleteCount = booking.incompletePassengerCount ?? 0;
+    const manifestIncomplete = incompleteCount > 0;
+    // Tour có vé máy bay (FLIGHT/COMBO) bắt buộc đủ thông tin hành khách trước khi xuất vé.
+    const isFlightTour = booking.departureTransport?.type === 'FLIGHT' || booking.departureTransport?.type === 'COMBO';
+    const blockTicket = isFlightTour && manifestIncomplete;
+
     return (
         <div className="bg-surface-container-lowest rounded-2xl p-6 md:p-8 shadow-[0_8px_32px_rgba(25,28,33,0.04)] border border-outline-variant/10 space-y-5">
             <p className="text-[10px] font-bold uppercase tracking-widest text-outline">
@@ -171,18 +177,57 @@ export function BookingPaymentPanel({
 
             {isPaid ? (
                 <>
-                    {/* Primary action: E-Ticket */}
-                    <Link
-                        href={`/success?bookingId=${booking.bookingCode}`}
-                        className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary py-3.5 font-bold text-white shadow-md shadow-primary/20 outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-lg hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
-                    >
-                        <span
-                            className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-white/20 opacity-0 transition-[opacity,transform] duration-500 ease-out group-hover:translate-x-[420%] group-hover:opacity-100 motion-reduce:hidden"
-                            aria-hidden="true"
-                        />
-                        <span className="material-symbols-outlined relative z-10 text-lg transition-transform duration-200 ease-out group-hover:scale-110 group-hover:-rotate-6 motion-reduce:transform-none">qr_code_scanner</span>
-                        <span className="relative z-10">{t('my_bookings.eTicket')}</span>
-                    </Link>
+                    {/* Primary action: E-Ticket — chặn cứng khi tour bay còn thiếu thông tin hành khách */}
+                    {blockTicket ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+                            <div className="flex items-start gap-3">
+                                <span className="material-symbols-outlined shrink-0 text-red-600">error</span>
+                                <div>
+                                    <p className="text-sm font-bold text-red-800">Cần hoàn tất thông tin hành khách để nhận vé</p>
+                                    <p className="mt-0.5 text-xs leading-relaxed text-red-700">
+                                        Tour có vé máy bay yêu cầu thông tin đầy đủ của tất cả hành khách (khớp giấy tờ tùy thân) trước khi xuất vé. Còn {incompleteCount} hành khách chưa có thông tin.
+                                    </p>
+                                </div>
+                            </div>
+                            <a
+                                href="#passenger-details"
+                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-red-700"
+                            >
+                                <span className="material-symbols-outlined text-base">edit_note</span>
+                                Bổ Sung Thông Tin Hành Khách
+                            </a>
+                            <Link
+                                href="/contact"
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 py-2.5 text-sm font-bold text-red-500 transition-colors hover:bg-red-50"
+                            >
+                                <span className="material-symbols-outlined text-base">support_agent</span>
+                                Liên Hệ Hỗ Trợ
+                            </Link>
+                        </div>
+                    ) : (
+                        <>
+                            {manifestIncomplete && (
+                                <a
+                                    href="#passenger-details"
+                                    className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+                                >
+                                    <span className="material-symbols-outlined text-base shrink-0">info</span>
+                                    <span>Còn {incompleteCount} hành khách chưa có thông tin — nên bổ sung trước ngày khởi hành.</span>
+                                </a>
+                            )}
+                            <Link
+                                href={`/success?bookingId=${booking.bookingCode}`}
+                                className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary py-3.5 font-bold text-white shadow-md shadow-primary/20 outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-lg hover:shadow-primary/25 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:translate-y-0 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none"
+                            >
+                                <span
+                                    className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-white/20 opacity-0 transition-[opacity,transform] duration-500 ease-out group-hover:translate-x-[420%] group-hover:opacity-100 motion-reduce:hidden"
+                                    aria-hidden="true"
+                                />
+                                <span className="material-symbols-outlined relative z-10 text-lg transition-transform duration-200 ease-out group-hover:scale-110 group-hover:-rotate-6 motion-reduce:transform-none">qr_code_scanner</span>
+                                <span className="relative z-10">{t('my_bookings.eTicket')}</span>
+                            </Link>
+                        </>
+                    )}
 
                     {/* Secondary actions: Review (when completed) or Cancel (when cancelable) */}
                     {(canCancelBooking || (tripLifecycle === 'COMPLETED' && canReview)) && (

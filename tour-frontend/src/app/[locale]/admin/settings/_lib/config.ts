@@ -11,6 +11,8 @@ export const SETTING_DISPLAY_META: Record<string, { impact: string; risky?: bool
     booking_hold_minutes: { impact: 'Ảnh hưởng trực tiếp thời gian giữ ghế trước thanh toán.', risky: true },
     booking_max_people: { impact: 'Giới hạn số khách tối đa trong một lượt đặt.', risky: true },
     booking_min_people: { impact: 'Giới hạn số khách tối thiểu trong một lượt đặt.', risky: true },
+    passenger_info_deadline_days: { impact: 'Số ngày trước khởi hành mà khách phải hoàn tất thông tin hành khách.', risky: true },
+    staff_assist_min_people: { impact: 'Từ số khách này trở lên, checkout hiện tùy chọn nhờ nhân viên nhập hộ thông tin.', risky: true },
 };
 
 export const PANEL_META: Record<SettingsPanel, { title: string; subtitle: string; icon: string; iconBg: string; iconColor: string; kind: 'editable' | 'info' }> = {

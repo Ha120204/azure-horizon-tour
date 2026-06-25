@@ -425,6 +425,11 @@ model Booking {
   packageId          Int? // [PHASE 2] Liên kết đến Gói Tour
   contactInfo        Json? // [PHASE 2] Thông tin liên hệ người đặt (tên, email, phone)
   passengers         Json? // [PHASE 2] Danh sách hành khách
+  staffAssistRequested Boolean @default(false) // [PHASE 3] Khách yêu cầu nhân viên nhập hộ thông tin
+  passengerReminderSentAt DateTime? // [PHASE 3] Mốc nhắc bổ sung thông tin HK gần nhất (mọi kênh)
+  passengerReminderChannel String? // [PHASE 3] Kênh nhắc gần nhất: EMAIL | ZALO | CALL
+  passengerReminders      Json? // [PHASE 3] Lịch sử nhắc: [{ channel, at, byId, source }]
+  passengerInfoNotifiedAt DateTime? // [PHASE 3] Mốc đã tạo thông báo cho staff (chống spam thông báo)
   adminNote          String?   @db.Text // Ghi chú nội bộ của admin/staff về đơn (không hiển thị cho khách)
   adminNoteById      Int? // Người sửa ghi chú gần nhất
   adminNoteUpdatedAt DateTime? // Thời điểm sửa ghi chú gần nhất

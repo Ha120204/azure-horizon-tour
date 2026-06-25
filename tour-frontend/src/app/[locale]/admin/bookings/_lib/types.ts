@@ -118,7 +118,20 @@ export interface Booking {
   supportTickets?: { id: number; status: string; category: string; subject?: string | null; createdAt: string }[];
   transportAssignment?: BookingTransportAssignment | null;
   passengers?: BookingPassenger[] | null;
+  incompletePassengerCount?: number;
+  passengerInfoOverdue?: boolean;
+  staffAssistRequested?: boolean;
+  passengerReminderSentAt?: string | null;
+  passengerReminderChannel?: string | null;
+  passengerReminders?: PassengerReminderEntry[] | null;
 }
+
+export type PassengerReminderEntry = {
+  channel: 'EMAIL' | 'ZALO' | 'CALL';
+  at: string;
+  byId: number | null;
+  source: 'AUTO' | 'MANUAL';
+};
 
 export interface Stats {
   pending: number;
@@ -173,7 +186,7 @@ export interface PaymentStats {
   byGroup: Record<string, { revenue: number; percentage: number }>;
 }
 
-export type BookingSavedViewKey = 'all' | 'pending' | 'unpaid' | 'upcoming' | 'cancelled' | 'needsCall';
+export type BookingSavedViewKey = 'all' | 'pending' | 'unpaid' | 'upcoming' | 'cancelled' | 'needsCall' | 'needsPassengerInfo';
 
 export type AssistedDraftStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'NEEDS_REVISION' | 'REJECTED' | 'CONVERTED';
 export type AssistedDraftAction = 'submit' | 'approve' | 'reject' | 'request-revision';

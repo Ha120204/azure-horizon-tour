@@ -47,7 +47,7 @@ export default function PersonalInfoForm({
     const profileSelectButtonClass =
         '!min-h-[48px] !rounded-lg !border-transparent !bg-surface-container-low !px-3 !py-3 !text-sm !shadow-none hover:!border-primary/35 hover:!bg-white focus-visible:!ring-2 focus-visible:!ring-primary/30';
     const profileSelectMenuClass =
-        '!z-[120] !w-full !max-w-none !rounded-xl !border-outline-variant/20 !bg-white !shadow-xl !shadow-slate-900/10';
+        '!z-[120] !rounded-xl !border-outline-variant/20 !bg-white !shadow-xl !shadow-slate-900/10';
 
     return (
         <div className="space-y-6">

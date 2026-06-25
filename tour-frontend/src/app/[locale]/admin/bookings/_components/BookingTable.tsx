@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import AdminPagination from '@/components/admin/AdminPagination';
 import { SkeletonRow } from './SkeletonRow';
@@ -10,7 +11,7 @@ import {
   PAY_CFG,
   STATUS_CFG,
 } from '../_lib/config';
-import { canRemindPayment, fmt, fmtDate, getInitials, toTelHref, toZaloPhone } from '../_lib/helpers';
+import { canRemindPayment, copyPhone, fmt, fmtDate, fmtDateTime, getInitials, toTelHref, toZaloPhone } from '../_lib/helpers';
 import type { Booking, Meta } from '../_lib/types';
 
 interface BookingTableProps {
@@ -21,6 +22,7 @@ interface BookingTableProps {
   hasFilter: boolean;
   statusFilter: string;
   canWrite: boolean;
+  canRecordPayment?: boolean;
   meta: Meta;
   pageSize: number;
   onOpenBooking: (booking: Booking) => void;
@@ -42,6 +44,7 @@ export function BookingTable({
   hasFilter,
   statusFilter,
   canWrite,
+  canRecordPayment,
   meta,
   pageSize,
   onOpenBooking,
@@ -215,6 +218,7 @@ export function BookingTable({
                   booking={booking}
                   statusFilter={statusFilter}
                   canWrite={canWrite}
+                  canRecordPayment={canRecordPayment}
                   onOpenBooking={onOpenBooking}
                   onCopyPaymentRequest={onCopyPaymentRequest}
                   onResendPaymentRequest={onResendPaymentRequest}
@@ -271,6 +275,7 @@ interface BookingTableRowProps {
   booking: Booking;
   statusFilter: string;
   canWrite: boolean;
+  canRecordPayment?: boolean;
   onOpenBooking: (booking: Booking) => void;
   onCopyPaymentRequest: (booking: Booking) => void;
   onResendPaymentRequest: (booking: Booking) => void;
@@ -284,6 +289,7 @@ function BookingTableRow({
   booking,
   statusFilter,
   canWrite,
+  canRecordPayment,
   onOpenBooking,
   onCopyPaymentRequest,
   onResendPaymentRequest,
@@ -294,8 +300,11 @@ function BookingTableRow({
 }: BookingTableRowProps) {
   const statusConfig = STATUS_CFG[booking.status] ?? STATUS_CFG.PENDING;
   const paymentConfig = PAY_CFG[booking.paymentStatus] ?? PAY_CFG.UNPAID;
+  // Chỉ cảnh báo thiếu thông tin HK trên đơn đã thanh toán (đáng quan tâm để đôn đốc).
+  const incompletePassengerInfo = booking.paymentStatus === 'PAID' ? (booking.incompletePassengerCount ?? 0) : 0;
   const colorIndex = booking.user.id % AVATAR_COLORS.length;
   const isPending = booking.status === 'PENDING';
+  const effectiveCanRecordPayment = canRecordPayment ?? canWrite;
   const latestPaymentRequest = booking.paymentMethod === 'PAYOS' && booking.paymentStatus !== 'PAID'
     ? booking.notifications?.[0]
     : undefined;
@@ -303,19 +312,42 @@ function BookingTableRow({
   const telHref = toTelHref(contactPhone);
   const zaloPhone = toZaloPhone(contactPhone);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  // Menu mở qua portal + fixed để không bị overflow của bảng cắt mất khi danh sách ngắn.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; up: boolean } | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const openActionMenu = () => {
+    const rect = actionMenuRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const openUpward = window.innerHeight - rect.bottom < 300;
+    setMenuPos({
+      top: openUpward ? rect.top - 6 : rect.bottom + 6,
+      left: rect.right - 208,
+      up: openUpward,
+    });
+    setIsActionMenuOpen(true);
+  };
 
   useEffect(() => {
     if (!isActionMenuOpen) return;
 
     const handleMouseDown = (event: MouseEvent) => {
-      if (!actionMenuRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!actionMenuRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setIsActionMenuOpen(false);
       }
     };
+    const close = () => setIsActionMenuOpen(false);
 
     document.addEventListener('mousedown', handleMouseDown);
-    return () => document.removeEventListener('mousedown', handleMouseDown);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
   }, [isActionMenuOpen]);
 
   return (
@@ -395,10 +427,39 @@ function BookingTableRow({
       </td>
 
       <td className="py-4 px-5">
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${statusConfig.badge}`}>
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusConfig.dot}`} />
-          {statusConfig.label}
-        </span>
+        <div className="flex flex-col items-start gap-1.5">
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${statusConfig.badge}`}>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusConfig.dot}`} />
+            {statusConfig.label}
+          </span>
+          {incompletePassengerInfo > 0 && (
+            <span
+              title="Đơn còn thiếu thông tin hành khách — cần đôn đốc/điền hộ trước khởi hành"
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${booking.passengerInfoOverdue ? 'bg-red-50 border-red-200 text-red-700' : 'bg-orange-50 border-orange-200 text-orange-700'}`}
+            >
+              <span className="material-symbols-outlined text-[12px]">badge</span>
+              Thiếu {incompletePassengerInfo} HK
+            </span>
+          )}
+          {booking.staffAssistRequested && (
+            <span
+              title="Khách yêu cầu nhân viên hỗ trợ nhập thông tin hành khách"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border bg-rose-50 border-rose-200 text-rose-700"
+            >
+              <span className="material-symbols-outlined text-[12px]">support_agent</span>
+              Nhờ NV nhập hộ
+            </span>
+          )}
+          {incompletePassengerInfo > 0 && booking.passengerReminderSentAt && (
+            <span
+              title={`Đã gửi email nhắc khách lúc ${fmtDateTime(booking.passengerReminderSentAt)}`}
+              className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600"
+            >
+              <span className="material-symbols-outlined text-[12px]">mark_email_read</span>
+              Đã nhắc
+            </span>
+          )}
+        </div>
       </td>
 
       <td className="py-4 px-5">
@@ -476,6 +537,7 @@ function BookingTableRow({
             <span className="group/tip relative inline-flex">
               <a
                 href={`tel:${telHref}`}
+                onClick={() => copyPhone(contactPhone)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-700 outline-none transition-colors hover:bg-sky-100 focus-visible:ring-2 focus-visible:ring-primary"
                 aria-label={`Gọi khách ${booking.bookingCode}`}
               >
@@ -490,7 +552,7 @@ function BookingTableRow({
           <span className="group/tip relative inline-flex">
             <button
               type="button"
-              onClick={() => setIsActionMenuOpen(open => !open)}
+              onClick={() => (isActionMenuOpen ? setIsActionMenuOpen(false) : openActionMenu())}
               aria-haspopup="menu"
               aria-expanded={isActionMenuOpen}
               aria-label={`Mở thêm thao tác cho ${booking.bookingCode}`}
@@ -510,10 +572,18 @@ function BookingTableRow({
             )}
           </span>
 
-          {isActionMenuOpen && (
+          {isActionMenuOpen && menuPos && createPortal(
             <div
+              ref={menuRef}
               role="menu"
-              className="absolute right-0 top-10 z-[80] w-52 overflow-hidden rounded-2xl border border-outline-variant/15 bg-white p-1.5 text-left shadow-2xl shadow-slate-900/12"
+              onClick={event => event.stopPropagation()}
+              style={{
+                position: 'fixed',
+                top: menuPos.top,
+                left: menuPos.left,
+                transform: menuPos.up ? 'translateY(-100%)' : undefined,
+              }}
+              className="z-[80] w-52 overflow-hidden rounded-2xl border border-outline-variant/15 bg-white p-1.5 text-left shadow-2xl shadow-slate-900/12"
             >
               {isPending && canWrite && (
                 <button
@@ -543,7 +613,7 @@ function BookingTableRow({
                   Copy thanh toán
                 </button>
               )}
-              {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && canWrite && (
+              {isPending && booking.paymentStatus === 'UNPAID' && booking.paymentMethod === 'PAYOS' && effectiveCanRecordPayment && (
                 <button
                   type="button"
                   role="menuitem"
@@ -571,7 +641,7 @@ function BookingTableRow({
                   Mở Zalo
                 </a>
               )}
-              {canWrite && (
+              {effectiveCanRecordPayment && (
                 <button
                   type="button"
                   role="menuitem"
@@ -605,7 +675,8 @@ function BookingTableRow({
                   Hủy đơn
                 </button>
               )}
-            </div>
+            </div>,
+            document.body
           )}
         </div>
       </td>

@@ -98,3 +98,85 @@ export function hasPassengerDetails(passenger: PassengerDetailsLike) {
     passenger.notes?.trim()
   );
 }
+
+// ── "Dán từ Excel": tách & chuẩn hoá danh sách hành khách ──────────────────
+// Copy từ Excel → cột tách bằng Tab; gõ tay → ngăn cách bằng dấu phẩy.
+
+export type PastedPassengerRow = {
+  fullName: string;
+  dob: string;
+  gender: string;
+  identityType: string;
+  identityNo: string;
+};
+
+function normalizePastedGender(raw: string): string {
+  const v = raw.trim().toLowerCase();
+  if (!v) return '';
+  if (['nam', 'male', 'm', 'boy'].includes(v)) return 'Male';
+  if (['nữ', 'nu', 'female', 'f', 'girl'].includes(v)) return 'Female';
+  return 'Other';
+}
+
+function normalizePastedDob(raw: string): string {
+  const v = raw.trim();
+  let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = v.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return '';
+}
+
+function normalizePastedIdentityType(raw: string): string {
+  const v = raw.trim().toLowerCase();
+  if (!v) return '';
+  if (v.includes('passport') || v.includes('hộ chiếu') || v.includes('ho chieu')) return 'PASSPORT';
+  if (v.includes('birth') || v.includes('khai sinh')) return 'BIRTH_CERT';
+  return 'CCCD';
+}
+
+function isPastedHeaderLine(line: string): boolean {
+  const l = line.toLowerCase();
+  return (
+    l.includes('họ tên') || l.includes('họ và tên') || l.includes('full name') ||
+    l.includes('ngày sinh') || l.includes('giới tính') || l.includes('gender') || l.includes('dob')
+  );
+}
+
+export function parsePastedPassengers(text: string): PastedPassengerRow[] {
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  // Bỏ dòng tiêu đề nếu khách copy cả header từ file mẫu.
+  if (lines.length > 0 && isPastedHeaderLine(lines[0])) lines.shift();
+  return lines
+    .map(line => {
+      const cols = (line.includes('\t') ? line.split('\t') : line.split(',')).map(c => c.trim());
+      const identityNo = cols[4] ?? '';
+      return {
+        fullName: cols[0] ?? '',
+        dob: normalizePastedDob(cols[1] ?? ''),
+        gender: normalizePastedGender(cols[2] ?? ''),
+        identityType: cols[3] ? normalizePastedIdentityType(cols[3]) : (identityNo ? 'CCCD' : ''),
+        identityNo,
+      };
+    });
+}
+
+/** Tải file mẫu (CSV, mở được bằng Excel) cho tính năng "Dán từ Excel". */
+export function downloadPassengerTemplate() {
+  const rows = [
+    ['Họ và tên', 'Ngày sinh (dd/mm/yyyy)', 'Giới tính', 'Loại giấy tờ', 'Số giấy tờ'],
+    ['Nguyễn Văn A', '01/02/1990', 'Nam', 'CCCD', '012345678901'],
+    ['Trần Thị B', '15/08/1995', 'Nữ', 'Hộ chiếu', 'B1234567'],
+  ];
+  const bom = String.fromCharCode(0xFEFF); // Excel đọc đúng tiếng Việt
+  const csv = bom + rows
+    .map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'mau-thong-tin-hanh-khach.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}

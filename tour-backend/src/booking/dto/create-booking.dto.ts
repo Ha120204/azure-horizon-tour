@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min, IsNumber, IsObject, IsArray } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, IsNumber, IsObject, IsArray, IsBoolean } from 'class-validator';
 import { Prisma } from '@prisma/client';
 
 export type PassengerDto = {
@@ -52,4 +52,8 @@ export class CreateBookingDto {
     @IsOptional()
     @IsString()
     paymentMethod?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    staffAssistRequested?: boolean;
 }

@@ -81,6 +81,7 @@ export function useBookingManagement() {
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('');
   const [needsReconciliation, setNeedsReconciliation] = useState(false);
   const [needsCustomerCall, setNeedsCustomerCall] = useState(false);
+  const [needsPassengerInfo, setNeedsPassengerInfo] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [departureFrom, setDepartureFrom] = useState('');
@@ -93,6 +94,8 @@ export function useBookingManagement() {
   const [isAdmin, setIsAdmin] = useState(false);
   // SUPER_ADMIN xem read-only: isAdmin vẫn true (layout), canWrite=false để ẩn thao tác
   const [canWrite, setCanWrite] = useState(false);
+  // STAFF cũng được ghi nhận thanh toán tại quầy (thu tiền trực tiếp)
+  const [canRecordPayment, setCanRecordPayment] = useState(false);
   const [hasFreshData, setHasFreshData] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
@@ -116,6 +119,7 @@ export function useBookingManagement() {
     const role = localStorage.getItem('userRole') ?? '';
     setIsAdmin(role === 'ADMIN' || role === 'SUPER_ADMIN');
     setCanWrite(role === 'ADMIN');
+    setCanRecordPayment(role === 'ADMIN' || role === 'STAFF');
   }, []);
 
   const showToast = useCallback((msg: string, ok = true) => {
@@ -131,13 +135,14 @@ export function useBookingManagement() {
     if (paymentMethodFilter) qs.set('paymentMethod', paymentMethodFilter);
     if (needsReconciliation) qs.set('needsReconciliation', 'true');
     if (needsCustomerCall) qs.set('needsCustomerCall', 'true');
+    if (needsPassengerInfo) qs.set('needsPassengerInfo', 'true');
     if (dateFrom) qs.set('dateFrom', dateFrom);
     if (dateTo) qs.set('dateTo', dateTo);
     if (departureFrom) qs.set('departureFrom', departureFrom);
     if (departureTo) qs.set('departureTo', departureTo);
     Object.entries(overrides).forEach(([key, value]) => qs.set(key, value));
     return qs.toString();
-  }, [debouncedSearch, statusFilter, paymentFilter, paymentMethodFilter, needsReconciliation, needsCustomerCall, dateFrom, dateTo, departureFrom, departureTo]);
+  }, [debouncedSearch, statusFilter, paymentFilter, paymentMethodFilter, needsReconciliation, needsCustomerCall, needsPassengerInfo, dateFrom, dateTo, departureFrom, departureTo]);
 
   const buildBookingSignature = useCallback((payload: BookingListPayload) => JSON.stringify({
     total: payload.meta?.totalItems ?? 0,
@@ -254,6 +259,17 @@ export function useBookingManagement() {
       fetchPaymentStats(),
     ]);
   }, [fetchBookings, fetchPaymentStats]);
+
+  // Refresh danh sách và giữ đồng bộ đơn đang mở trong modal chi tiết.
+  const refreshDetail = useCallback(async () => {
+    const payload = await getBookingsPayload();
+    const list = payload.bookings ?? [];
+    setBookings(list);
+    if (payload.stats) setStats(payload.stats);
+    if (payload.meta) setMeta(payload.meta);
+    lastBookingSignature.current = buildBookingSignature(payload);
+    setSelectedBooking(prev => (prev ? list.find(b => b.id === prev.id) ?? prev : null));
+  }, [getBookingsPayload, buildBookingSignature]);
   const shouldRefreshFromRealtime = useCallback((detail: { resourceType: string; href?: string | null }) => (
     detail.resourceType === 'Booking' || detail.href?.startsWith('/admin/bookings') === true
   ), []);
@@ -315,6 +331,7 @@ export function useBookingManagement() {
     setPaymentMethodFilter('');
     setNeedsReconciliation(false);
     setNeedsCustomerCall(false);
+    setNeedsPassengerInfo(false);
     setDateFrom('');
     setDateTo('');
     setDepartureFrom('');
@@ -330,6 +347,7 @@ export function useBookingManagement() {
     setPaymentMethodFilter('');
     setNeedsReconciliation(false);
     setNeedsCustomerCall(false);
+    setNeedsPassengerInfo(false);
     setDateFrom('');
     setDateTo('');
     setDepartureFrom('');
@@ -343,6 +361,7 @@ export function useBookingManagement() {
     }
     if (view === 'cancelled') setStatusFilter('CANCELLED');
     if (view === 'needsCall') setNeedsCustomerCall(true);
+    if (view === 'needsPassengerInfo') setNeedsPassengerInfo(true);
     setPage(1);
   }, []);
 
@@ -498,19 +517,20 @@ export function useBookingManagement() {
     setStatsDateTo(getTodayDateInputValue());
   }, []);
 
-  const hasFilter = !!(search || statusFilter || paymentFilter || paymentMethodFilter || needsReconciliation || needsCustomerCall || dateFrom || dateTo || departureFrom || departureTo);
+  const hasFilter = !!(search || statusFilter || paymentFilter || paymentMethodFilter || needsReconciliation || needsCustomerCall || needsPassengerInfo || dateFrom || dateTo || departureFrom || departureTo);
   const activeSavedView: BookingSavedViewKey | null = (() => {
     const noSearch = !search && !debouncedSearch;
     const noCreatedDate = !dateFrom && !dateTo;
     const noPaymentMethod = !paymentMethodFilter;
-    const noSpecialFlags = !needsReconciliation && !needsCustomerCall;
+    const noSpecialFlags = !needsReconciliation && !needsCustomerCall && !needsPassengerInfo;
     const noDeparture = !departureFrom && !departureTo;
     if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && !statusFilter && !paymentFilter) return 'all';
     if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'PENDING' && !paymentFilter) return 'pending';
     if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && !statusFilter && paymentFilter === 'UNPAID') return 'unpaid';
     if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && !statusFilter && !paymentFilter && departureFrom === getDateInputValue(0) && departureTo === getDateInputValue(7)) return 'upcoming';
     if (noSearch && noCreatedDate && noPaymentMethod && noSpecialFlags && noDeparture && statusFilter === 'CANCELLED' && !paymentFilter) return 'cancelled';
-    if (noSearch && noCreatedDate && noPaymentMethod && needsCustomerCall && !needsReconciliation && noDeparture && !statusFilter && !paymentFilter) return 'needsCall';
+    if (noSearch && noCreatedDate && noPaymentMethod && needsCustomerCall && !needsReconciliation && !needsPassengerInfo && noDeparture && !statusFilter && !paymentFilter) return 'needsCall';
+    if (noSearch && noCreatedDate && noPaymentMethod && needsPassengerInfo && !needsReconciliation && !needsCustomerCall && noDeparture && !statusFilter && !paymentFilter) return 'needsPassengerInfo';
     return null;
   })();
 
@@ -527,6 +547,7 @@ export function useBookingManagement() {
     paymentMethodFilter,
     needsReconciliation,
     needsCustomerCall,
+    needsPassengerInfo,
     dateFrom,
     dateTo,
     departureFrom,
@@ -536,6 +557,7 @@ export function useBookingManagement() {
     toast,
     isAdmin,
     canWrite,
+    canRecordPayment,
     hasFreshData,
     lastSyncedAt,
     paymentStats,
@@ -558,6 +580,7 @@ export function useBookingManagement() {
     handleExport,
     resetFilters,
     applySavedView,
+    refreshDetail,
     copyPaymentRequest,
     resendPaymentRequest,
     bulkResendPaymentRequests,

@@ -1,9 +1,16 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from '@/context/LocaleContext';
 import type { BookingDetail, BookingPassenger } from '../_lib/types';
+import { CompletePassengersModal } from './CompletePassengersModal';
 
 type Props = {
     booking: BookingDetail;
+    canEdit?: boolean;
+    departureDate?: string;
+    onUpdated?: () => void;
 };
 
 function normalizePassengerType(type?: string | null) {
@@ -20,7 +27,7 @@ function maskIdentity(value?: string | null) {
     return `${'•'.repeat(Math.min(6, normalized.length - 4))}${normalized.slice(-4)}`;
 }
 
-function PassengerRow({ passenger, index }: { passenger: BookingPassenger; index: number }) {
+function PassengerRow({ passenger, index, canEdit, onEdit }: { passenger: BookingPassenger; index: number; canEdit?: boolean; onEdit?: () => void }) {
     const { formatDate, language } = useLocale();
     const isVietnamese = language === 'vi';
     const type = normalizePassengerType(passenger.type);
@@ -35,9 +42,18 @@ function PassengerRow({ passenger, index }: { passenger: BookingPassenger; index
             ? 'border-violet-200 bg-violet-50 text-violet-700'
             : 'border-slate-200 bg-slate-50 text-slate-700';
     const identity = maskIdentity(passenger.identityNo);
+    const incomplete = !(passenger.fullName?.trim() && passenger.dob?.trim() && passenger.gender?.trim());
+    // Cho sửa mọi hành khách đi cùng (#2 trở đi), kể cả đã có thông tin. Người đại diện (#1) giữ nguyên.
+    const clickable = Boolean(canEdit && index >= 1 && onEdit);
 
     return (
-        <li className="grid gap-3 border-b border-outline-variant/15 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <li
+            role={clickable ? 'button' : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onClick={clickable ? onEdit : undefined}
+            onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit?.(); } } : undefined}
+            className={`grid gap-3 border-b border-outline-variant/15 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${clickable ? 'cursor-pointer rounded-lg px-2 transition-colors hover:bg-surface-container-low/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary' : ''}`}
+        >
             <div className="flex min-w-0 items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/8 text-sm font-extrabold text-primary">
                     {index + 1}
@@ -59,17 +75,31 @@ function PassengerRow({ passenger, index }: { passenger: BookingPassenger; index
                     ) : null}
                 </div>
             </div>
-            <span className={`inline-flex min-h-7 items-center self-start rounded-md border px-2.5 py-1 text-xs font-bold ${typeClass}`}>
-                {typeLabel}
-            </span>
+            <div className="flex items-center gap-2 self-start sm:self-center">
+                <span className={`inline-flex min-h-7 items-center rounded-md border px-2.5 py-1 text-xs font-bold ${typeClass}`}>
+                    {typeLabel}
+                </span>
+                {clickable && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+                        <span className="material-symbols-outlined text-[15px]" aria-hidden="true">{incomplete ? 'edit_note' : 'edit'}</span>
+                        {incomplete ? (isVietnamese ? 'Nhập thông tin' : 'Add details') : (isVietnamese ? 'Sửa' : 'Edit')}
+                    </span>
+                )}
+            </div>
         </li>
     );
 }
 
-export function BookingPassengerDetails({ booking }: Props) {
-    const { language } = useLocale();
+export function BookingPassengerDetails({ booking, canEdit = false, departureDate, onUpdated }: Props) {
+    const { language, formatDate } = useLocale();
     const isVietnamese = language === 'vi';
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const passengers = Array.isArray(booking.passengers) ? booking.passengers : [];
+    const incompleteCount = booking.incompletePassengerCount
+        ?? passengers.filter(p => !(p.fullName?.trim() && p.dob?.trim() && p.gender?.trim())).length;
+    const showCompletePrompt = canEdit && passengers.length > 0 && incompleteCount > 0;
+    const overdue = Boolean(booking.passengerInfoOverdue);
+    const deadlineText = booking.passengerInfoDeadline ? formatDate(booking.passengerInfoDeadline) : null;
     const contactName = booking.contactInfo?.fullName?.trim() || booking.user?.fullName?.trim() || null;
     const contactEmail = booking.contactInfo?.email?.trim() || booking.user?.email?.trim() || null;
     const contactPhone = booking.contactInfo?.phone?.trim() || booking.user?.phone?.trim() || null;
@@ -101,6 +131,38 @@ export function BookingPassengerDetails({ booking }: Props) {
                 </div>
                 <p className="text-sm font-bold text-on-surface-variant">{countSummary}</p>
             </div>
+
+            {showCompletePrompt && (
+                <div className={`mb-4 flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${overdue ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+                    <div className="flex items-start gap-3">
+                        <span className={`material-symbols-outlined shrink-0 ${overdue ? 'text-red-600' : 'text-amber-600'}`} aria-hidden="true">{overdue ? 'error' : 'info'}</span>
+                        <div>
+                            <p className={`text-sm font-bold ${overdue ? 'text-red-800' : 'text-amber-800'}`}>
+                                {isVietnamese
+                                    ? `Còn ${incompleteCount} hành khách chưa có thông tin`
+                                    : `${incompleteCount} traveler${incompleteCount === 1 ? '' : 's'} still need details`}
+                            </p>
+                            <p className={`mt-0.5 text-xs leading-relaxed ${overdue ? 'text-red-700' : 'text-amber-700'}`}>
+                                {overdue
+                                    ? (isVietnamese
+                                        ? `Đã quá hạn bổ sung thông tin${deadlineText ? ` (${deadlineText})` : ''}. Vui lòng hoàn tất ngay để tránh ảnh hưởng đến chuyến đi.`
+                                        : `The deadline to complete details${deadlineText ? ` (${deadlineText})` : ''} has passed. Please complete now to avoid affecting your trip.`)
+                                    : (isVietnamese
+                                        ? `Vui lòng hoàn tất trước ${deadlineText ? `ngày ${deadlineText}` : 'ngày khởi hành'} để bảo đảm vé và thủ tục.`
+                                        : `Please complete before ${deadlineText ?? 'departure'} to secure tickets and procedures.`)}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsModalOpen(true)}
+                        className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition-colors ${overdue ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'}`}
+                    >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit_note</span>
+                        {isVietnamese ? 'Bổ sung ngay' : 'Complete now'}
+                    </button>
+                </div>
+            )}
 
             <div className="grid overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-lowest lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.2fr)]">
                 <div className="border-b border-outline-variant/15 bg-surface-container-low p-5 lg:border-b-0 lg:border-r">
@@ -147,7 +209,7 @@ export function BookingPassengerDetails({ booking }: Props) {
                     {passengers.length > 0 ? (
                         <ol>
                             {passengers.map((passenger, index) => (
-                                <PassengerRow key={`${passenger.fullName ?? 'passenger'}-${index}`} passenger={passenger} index={index} />
+                                <PassengerRow key={`${passenger.fullName ?? 'passenger'}-${index}`} passenger={passenger} index={index} canEdit={canEdit} onEdit={() => setIsModalOpen(true)} />
                             ))}
                         </ol>
                     ) : (
@@ -176,6 +238,16 @@ export function BookingPassengerDetails({ booking }: Props) {
                     </div>
                 </div>
             </div>
+
+            {isModalOpen && (
+                <CompletePassengersModal
+                    bookingId={booking.id}
+                    passengers={passengers}
+                    departureDate={departureDate}
+                    onClose={() => setIsModalOpen(false)}
+                    onUpdated={() => onUpdated?.()}
+                />
+            )}
         </section>
     );
 }

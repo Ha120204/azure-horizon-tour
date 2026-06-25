@@ -8,7 +8,6 @@ import type { ContactInfoItem } from '../_hooks/useContactForm';
 interface ContactInfoPanelProps {
     t: (key: string) => string;
     supportPhoneHref: string;
-    supportEmailHref: string;
     isLoggedIn: boolean;
     publicSettings: {
         company_email: string;
@@ -20,7 +19,6 @@ interface ContactInfoPanelProps {
 export function ContactInfoPanel({
     t,
     supportPhoneHref,
-    supportEmailHref,
     isLoggedIn,
     publicSettings,
 }: ContactInfoPanelProps) {
@@ -84,13 +82,6 @@ export function ContactInfoPanel({
                 >
                     <span className="material-symbols-outlined text-[18px]" aria-hidden="true">call</span>
                     {t('contact.callNow')}
-                </a>
-                <a
-                    href={supportEmailHref}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-outline-variant/60 bg-white px-5 py-2.5 text-sm font-bold text-primary transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                >
-                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">mail</span>
-                    {t('contact.emailUs')}
                 </a>
                 {isLoggedIn ? (
                     <Link

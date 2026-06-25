@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   getPassengerMaxDate,
   getPassengerMinDate,
+  downloadPassengerTemplate,
 } from '@/lib/booking/passengerDetails';
 import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 import {
@@ -101,7 +102,7 @@ export function AssistedBookingWorkspace({
     pendingCount, needsApprovalValidation, approvalValidationIssues, hasBlockingApprovalIssues,
     fetchDrafts, updateForm, updatePassengerCount,
     getDefaultPassengerIdentityType, openPassengerEditor,
-    updatePassengerDetail, clearPassengerDetail, scrollToDraftField,
+    updatePassengerDetail, clearPassengerDetail, fillPassengersFromPaste, scrollToDraftField,
     resetDraftForm, openCreateDraft, openEditDraft, openDraftDetail,
     createDraft, runDraftAction, closeDraftActionDialog,
     canDeleteDraft, openDeleteDraft, closeDeleteDraftDialog,
@@ -109,6 +110,20 @@ export function AssistedBookingWorkspace({
   } = useAssistedBookingWorkspace({ onChanged, showToast });
 
   const [showConfirmClose, setShowConfirmClose] = useState(false);
+  const [isPasteOpen, setIsPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteInfo, setPasteInfo] = useState('');
+
+  const handleApplyPaste = () => {
+    const filled = fillPassengersFromPaste(pasteText);
+    if (filled === 0) {
+      setPasteInfo('Không đọc được dòng nào — hãy copy các hàng từ Excel rồi dán.');
+      return;
+    }
+    setPasteInfo(`Đã điền ${filled} hành khách — vui lòng kiểm tra lại.`);
+    setPasteText('');
+    setIsPasteOpen(false);
+  };
 
   const isDirty = editingDraft
     ? (form.customerName !== (editingDraft.customerName ?? '') ||
@@ -504,6 +519,64 @@ export function AssistedBookingWorkspace({
                           {generatedPassengerRows.length}/{totalPassengerCount} khách
                         </span>
                       </div>
+
+                      {/* Dán từ Excel — đổ nhanh danh sách cả đoàn */}
+                      {totalPassengerCount > 0 && (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => setIsPasteOpen(open => !open)}
+                            className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left"
+                          >
+                            <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                              <span className="material-symbols-outlined text-[18px] text-indigo-600">content_paste</span>
+                              Dán danh sách từ Excel
+                            </span>
+                            <span className={`material-symbols-outlined text-slate-400 transition-transform duration-200 ${isPasteOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                          </button>
+                          {isPasteOpen && (
+                            <div className="space-y-2 border-t border-slate-200 p-4">
+                              <p className="text-xs leading-relaxed text-slate-500">
+                                Dán <strong>đầy đủ danh sách {totalPassengerCount} khách</strong> theo đúng thứ tự, mỗi dòng một người. Thứ tự cột: Họ tên → Ngày sinh (dd/mm/yyyy) → Giới tính → [Loại giấy tờ] → [Số giấy tờ].
+                              </p>
+                              <p className="text-[11px] leading-relaxed text-slate-400">
+                                Copy thẳng các ô từ Excel rồi dán — cột tự tách bằng Tab. Nếu gõ tay, ngăn cách bằng dấu phẩy &quot;,&quot;. (Khi dán, tuỳ chọn &quot;dùng người đại diện làm khách 1&quot; sẽ tắt để điền tay từ danh sách.)
+                              </p>
+                              <textarea
+                                value={pasteText}
+                                onChange={e => setPasteText(e.target.value)}
+                                rows={4}
+                                placeholder={'Nguyễn Văn A, 01/02/1990, Nam, CCCD, 012345678901'}
+                                className="w-full rounded-xl border border-slate-200 bg-white p-3 font-mono text-xs outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                              />
+                              <div className="flex items-center justify-between gap-2">
+                                <button
+                                  type="button"
+                                  onClick={downloadPassengerTemplate}
+                                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline"
+                                >
+                                  <span className="material-symbols-outlined text-[15px]">download</span>
+                                  Tải file mẫu
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleApplyPaste}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-700"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">playlist_add</span>
+                                  Điền vào danh sách
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {pasteInfo && (
+                            <p className="mx-4 mb-3 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                              <span className="material-symbols-outlined text-[15px]">check_circle</span>{pasteInfo}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
                         {generatedPassengerRows.map(row => {
                           const passenger = row.passenger;

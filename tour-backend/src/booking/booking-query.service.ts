@@ -16,6 +16,7 @@ import { BookingCancellationService } from './booking-cancellation.service';
 import { SettingsService } from '../settings/settings.service';
 import {
   calculateBookingHoldExpiresAt,
+  countIncompletePassengers,
   getErrorMessage,
   isBookingStatus,
   isPaymentStatus,
@@ -315,9 +316,18 @@ export class BookingQueryService {
         })
       : null;
     const meetingPoint = await this.getMeetingPoint();
+    const resolvedDepartureDate = departure?.departureDate ?? booking.tour.startDate;
+    const incompletePassengerCount = countIncompletePassengers(booking.passengers);
+    const { passengerInfoDeadlineDays } = await this.settingsService.getBookingPolicy();
+    const passengerInfoDeadline = new Date(resolvedDepartureDate);
+    passengerInfoDeadline.setDate(
+      passengerInfoDeadline.getDate() - passengerInfoDeadlineDays,
+    );
+    const passengerInfoOverdue =
+      incompletePassengerCount > 0 && Date.now() > passengerInfoDeadline.getTime();
     return {
       ...base,
-      departureDate: departure?.departureDate ?? booking.tour.startDate,
+      departureDate: resolvedDepartureDate,
       meetingTime:
         departure?.transport?.gatheringTime ??
         departure?.transport?.boardingTime ??
@@ -327,6 +337,9 @@ export class BookingQueryService {
       departureTransport: departure?.transport ?? null,
       contactInfo: booking.contactInfo ?? null,
       passengers: booking.passengers ?? null,
+      incompletePassengerCount,
+      passengerInfoDeadline: passengerInfoDeadline.toISOString(),
+      passengerInfoOverdue,
       user: booking.user,
       transactions: booking.transactions.map(t => ({ ...t, amount: Number(t.amount) })),
       supportTickets: booking.supportTickets,
@@ -341,12 +354,30 @@ export class BookingQueryService {
         id: true, bookingCode: true, status: true, paymentStatus: true, paymentMethod: true,
         holdExpiresAt: true,
         createdAt: true, numberOfPeople: true, totalPrice: true, departureId: true,
+        passengers: true, staffAssistRequested: true,
         user: { select: { fullName: true } },
         tour: { select: { id: true, name: true, imageUrl: true, startDate: true, duration: true, durationEn: true } },
       },
     });
     if (!booking) throw new NotFoundException('Booking not found');
-    return this.toETicketDto(booking);
+
+    const dto = await this.toETicketDto(booking);
+    const incompletePassengerCount = countIncompletePassengers(booking.passengers);
+    // Tour có vé máy bay (FLIGHT/COMBO) bị chặn xuất vé khi thiếu thông tin hành khách.
+    let isFlightTour = false;
+    if (booking.departureId) {
+      const departure = await this.prisma.tourDeparture.findUnique({
+        where: { id: booking.departureId },
+        select: { transport: { select: { type: true } } },
+      });
+      isFlightTour = departure?.transport?.type === 'FLIGHT' || departure?.transport?.type === 'COMBO';
+    }
+    return {
+      ...dto,
+      incompletePassengerCount,
+      ticketBlocked: isFlightTour && incompletePassengerCount > 0,
+      staffAssistRequested: booking.staffAssistRequested,
+    };
   }
 
   async retryPayment(bookingId: number, userId: number) {
@@ -550,6 +581,7 @@ export class BookingQueryService {
     departureFrom?: string,
     departureTo?: string,
     needsCustomerCall = false,
+    needsPassengerInfo = false,
   ) {
     const where: Prisma.BookingWhereInput = { deletedAt: null };
     const andFilters: Prisma.BookingWhereInput[] = [];
@@ -582,6 +614,11 @@ export class BookingQueryService {
     if (needsCustomerCall) {
       where.status = 'PENDING';
       where.paymentStatus = 'UNPAID';
+    }
+    // ── Filter mới: đơn đã thanh toán còn thiếu thông tin hành khách ──────────
+    if (needsPassengerInfo) {
+      where.status = 'CONFIRMED';
+      where.paymentStatus = 'PAID';
     }
     // ────────────────────────────────────────────────────────────────────────
     if (search) {
@@ -628,8 +665,41 @@ export class BookingQueryService {
       where.AND = andFilters;
     }
 
+    // Thiếu thông tin HK nằm trong JSON `passengers` → không lọc được bằng SQL.
+    // Quét id+passengers, lọc đơn còn thiếu, rồi SẮP THEO ĐỘ KHẨN (gần ngày đi nhất lên đầu)
+    // và tự phân trang theo danh sách id đã sắp.
+    let passengerInfoOrderedPageIds: number[] | null = null;
+    let passengerInfoTotal = 0;
+    if (needsPassengerInfo) {
+      const candidates = await this.prisma.booking.findMany({
+        where,
+        select: { id: true, passengers: true, departureId: true },
+      });
+      const incomplete = candidates.filter(c => countIncompletePassengers(c.passengers) > 0);
+      const candidateDepIds = incomplete
+        .map(c => c.departureId)
+        .filter((id): id is number => typeof id === 'number');
+      const candidateDeps = candidateDepIds.length > 0
+        ? await this.prisma.tourDeparture.findMany({
+            where: { id: { in: candidateDepIds } },
+            select: { id: true, departureDate: true },
+          })
+        : [];
+      const depTimeById = new Map(candidateDeps.map(d => [d.id, d.departureDate.getTime()]));
+      // Gần ngày đi nhất lên đầu; đơn không gắn chuyến xếp cuối.
+      incomplete.sort((a, b) => {
+        const ta = a.departureId ? depTimeById.get(a.departureId) ?? Infinity : Infinity;
+        const tb = b.departureId ? depTimeById.get(b.departureId) ?? Infinity : Infinity;
+        return ta - tb;
+      });
+      const orderedIds = incomplete.map(c => c.id);
+      passengerInfoTotal = orderedIds.length;
+      passengerInfoOrderedPageIds = orderedIds.slice((page - 1) * limit, (page - 1) * limit + limit);
+      where.id = { in: passengerInfoOrderedPageIds };
+    }
+
     const skip = (page - 1) * limit;
-    const [bookings, total] = await Promise.all([
+    const [bookingsRaw, total] = await Promise.all([
       this.prisma.booking.findMany({
         where,
         include: {
@@ -653,10 +723,20 @@ export class BookingQueryService {
           },
           transportAssignment: true,
         },
-        orderBy: { createdAt: 'desc' }, skip, take: limit,
+        orderBy: { createdAt: 'desc' },
+        ...(needsPassengerInfo ? {} : { skip, take: limit }),
       }),
-      this.prisma.booking.count({ where }),
+      needsPassengerInfo
+        ? Promise.resolve(passengerInfoTotal)
+        : this.prisma.booking.count({ where }),
     ]);
+
+    // Với worklist "thiếu thông tin HK": giữ đúng thứ tự đã sắp theo độ khẩn.
+    const bookings = passengerInfoOrderedPageIds
+      ? passengerInfoOrderedPageIds
+          .map(id => bookingsRaw.find(b => b.id === id))
+          .filter((b): b is (typeof bookingsRaw)[number] => Boolean(b))
+      : bookingsRaw;
 
     const [globalStats, paymentStats, revenueResult, assistedDraftStats] = await Promise.all([
       this.prisma.booking.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { status: true } }),
@@ -681,6 +761,7 @@ export class BookingQueryService {
         })
       : [];
     const departureMap = new Map(departures.map(departure => [departure.id, departure.departureDate]));
+    const { passengerInfoDeadlineDays } = await this.settingsService.getBookingPolicy();
 
     const noteEditorIds = [...new Set(
       bookings
@@ -701,8 +782,14 @@ export class BookingQueryService {
           ? b.contactInfo as Record<string, unknown>
           : {};
         const departureDate = b.departureId ? departureMap.get(b.departureId) ?? b.tour.startDate : b.tour.startDate;
+        const incompletePassengerCount = countIncompletePassengers(b.passengers);
+        const passengerInfoDeadline = new Date(departureDate);
+        passengerInfoDeadline.setDate(passengerInfoDeadline.getDate() - passengerInfoDeadlineDays);
         return {
           ...b,
+          incompletePassengerCount,
+          passengerInfoOverdue:
+            incompletePassengerCount > 0 && Date.now() > passengerInfoDeadline.getTime(),
           contactPhone: typeof contactInfo.phone === 'string' ? contactInfo.phone : b.user.phone ?? null,
           adminNote: b.adminNote ?? null,
           adminNoteUpdatedAt: b.adminNoteUpdatedAt ?? null,

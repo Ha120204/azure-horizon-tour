@@ -220,8 +220,8 @@ export default function ConfirmBookingModal({
                                 </li>
                                 {passengers.map((passenger, idx) => (
                                     <li key={`${passenger.fullName}-${idx}`} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-outline-variant/10">
-                                        <span className="min-w-0 text-sm font-bold text-on-surface">
-                                            {t('checkout.passengerN', { number: idx + 2 })}: {passenger.fullName}
+                                        <span className={`min-w-0 text-sm font-bold ${passenger.fullName ? 'text-on-surface' : 'text-outline italic'}`}>
+                                            {t('checkout.passengerN', { number: idx + 2 })}: {passenger.fullName || t('checkout.deferLater')}
                                         </span>
                                         <span className="shrink-0 rounded-full bg-surface-container px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-on-surface-variant">
                                             {getPassengerTypeLabel(passenger.type, t)}

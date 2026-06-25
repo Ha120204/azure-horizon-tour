@@ -1,9 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Tour, TourPackage, TourDeparture } from '@/types';
 import DepartureCalendarModal from './DepartureCalendarModal';
 import TransportSummaryCard from './TransportSummaryCard';
+import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
 
 const LOW_SEAT_THRESHOLD = 10;
+
+type GuestKey = 'adults' | 'children' | 'infants';
 
 type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -29,6 +33,17 @@ export default function BookingSidebarNew({
     language,
 }: BookingSidebarProps) {
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+    const [isGuestsOpen, setIsGuestsOpen] = useState(false);
+    const [publicSettings, setPublicSettings] = useState(DEFAULT_PUBLIC_SETTINGS);
+    const [guests, setGuests] = useState({ adults: 1, children: 0, infants: 0 });
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchPublicSettings(controller.signal)
+            .then(setPublicSettings)
+            .catch(() => {});
+        return () => controller.abort();
+    }, []);
 
     const departures: TourDeparture[] = useMemo(() => tour?.departures ?? [], [tour?.departures]);
     const hasDepartures = departures.length > 0;
@@ -43,19 +58,55 @@ export default function BookingSidebarNew({
         ? Math.min(...(tour.packages.map((p: TourPackage) => p.price)))
         : tour?.price ?? 0;
 
+    // Sẵn sàng chọn số khách khi đã có gói và (không có lịch / đã chọn lịch).
+    const isReadyForGuests = hasPackages && !!selectedPackage && (!hasDepartures || !!selectedDeparture);
+
+    // Trần số khách: tổng người ≤ booking_max_people; ghế (adult+child, infant không tính ghế)
+    // ≤ số ghế còn lại của chuyến; infant ≤ số người lớn.
+    const maxPeople = publicSettings.booking_max_people;
+    const seatLimit = selectedDeparture?.availableSeats ?? (hasDepartures ? 0 : tour?.availableSeats ?? 0);
+    const totalGuests = guests.adults + guests.children + guests.infants;
+    const seatsUsed = guests.adults + guests.children;
+    const reachedMaxPeople = totalGuests >= maxPeople;
+    const reachedSeatLimit = seatsUsed >= seatLimit;
+
+    const guestSubtotal = effectivePrice * (
+        guests.adults * PASSENGER_MULTIPLIERS['Adult (12+)'] +
+        guests.children * PASSENGER_MULTIPLIERS['Child (4-11)'] +
+        guests.infants * PASSENGER_MULTIPLIERS['Infant (<4)']
+    );
+
+    const guestSummary = [
+        `${guests.adults} ${t('tour_detail.guestsAdults')}`,
+        guests.children > 0 ? `${guests.children} ${t('tour_detail.guestsChildren')}` : null,
+        guests.infants > 0 ? `${guests.infants} ${t('tour_detail.guestsInfants')}` : null,
+    ].filter(Boolean).join(' · ');
+
+    const changeGuest = (key: GuestKey, delta: number) => {
+        setGuests(prev => {
+            const next = { ...prev, [key]: Math.max(0, prev[key] + delta) };
+            if (next.adults < 1) next.adults = 1;
+            if (next.infants > next.adults) next.infants = next.adults;
+            return next;
+        });
+    };
+
     // Link to checkout
     const buildCheckoutUrl = () => {
         const params = new URLSearchParams({ tourId: String(tour?.id ?? '') });
         if (selectedDeparture) params.set('departureId', String(selectedDeparture.id));
         if (selectedPackage) params.set('packageId', String(selectedPackage.id));
+        params.set('adults', String(guests.adults));
+        params.set('children', String(guests.children));
+        params.set('infants', String(guests.infants));
         return `/checkout?${params.toString()}`;
     };
 
     return (
         <div className="col-span-1 lg:col-span-4">
-            <div className="sticky top-28 bg-white rounded-3xl shadow-xl border border-outline-variant/10 overflow-hidden">
+            <div className="sticky top-28 bg-white rounded-3xl shadow-xl border border-outline-variant/10 overflow-hidden lg:flex lg:flex-col lg:max-h-[calc(100vh-7.5rem)]">
                 {/* ── Price header ── */}
-                <div className="bg-gradient-to-br from-primary to-primary-container p-6 text-white">
+                <div className="bg-gradient-to-br from-primary to-primary-container p-6 text-white lg:shrink-0">
                     <p className="text-xs font-semibold opacity-70 mb-1 uppercase tracking-wider">
                         {selectedDeparture ? t('tour_detail.totalPerPerson') : (hasDepartures ? t('tour_detail.fromPerPerson') : t('tour_detail.listedPrice'))}
                     </p>
@@ -70,7 +121,7 @@ export default function BookingSidebarNew({
                     )}
                 </div>
 
-                <div className="p-5 space-y-5">
+                <div className="p-5 space-y-5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                     {/* ── Tour Info ── */}
                     <div className="space-y-2.5">
                         <div className="flex items-center gap-2.5 text-sm text-on-surface-variant">
@@ -155,6 +206,96 @@ export default function BookingSidebarNew({
                         </div>
                     )}
 
+                    {/* ── Chọn số khách (thu gọn, bấm để mở) ── */}
+                    {isReadyForGuests && (
+                        <div className="border-t border-outline-variant/15 pt-5">
+                            <button
+                                type="button"
+                                onClick={() => setIsGuestsOpen(open => !open)}
+                                aria-expanded={isGuestsOpen}
+                                className="w-full flex items-center justify-between gap-3 text-left rounded-2xl px-1 py-1 transition-colors hover:bg-surface-container-low/60"
+                            >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>group</span>
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-0.5">{t('tour_detail.guestsLabel')}</p>
+                                        <p className="font-semibold text-on-surface text-sm truncate">{guestSummary}</p>
+                                    </div>
+                                </div>
+                                <span className={`material-symbols-outlined text-outline transition-transform duration-200 ${isGuestsOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                            </button>
+
+                            {isGuestsOpen && (
+                            <div className="mt-3 space-y-1">
+                                {([
+                                    { key: 'adults' as GuestKey, label: t('tour_detail.guestsAdults'), age: t('tour_detail.guestsAdultsAge'), value: guests.adults, canDec: guests.adults > 1, canInc: !reachedSeatLimit && !reachedMaxPeople },
+                                    { key: 'children' as GuestKey, label: t('tour_detail.guestsChildren'), age: t('tour_detail.guestsChildrenAge'), value: guests.children, canDec: guests.children > 0, canInc: !reachedSeatLimit && !reachedMaxPeople },
+                                    { key: 'infants' as GuestKey, label: t('tour_detail.guestsInfants'), age: t('tour_detail.guestsInfantsAge'), value: guests.infants, canDec: guests.infants > 0, canInc: guests.infants < guests.adults && !reachedMaxPeople },
+                                ]).map(row => (
+                                    <div key={row.key} className="flex items-center justify-between py-1.5">
+                                        <div>
+                                            <p className="font-semibold text-sm text-on-surface">{row.label}</p>
+                                            <p className="text-[11px] text-outline">{row.age}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => changeGuest(row.key, -1)}
+                                                disabled={!row.canDec}
+                                                aria-label={`-1 ${row.label}`}
+                                                className="h-9 w-9 rounded-full border-2 border-outline-variant/30 text-primary flex items-center justify-center transition-colors hover:border-primary/40 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-outline-variant/30"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">remove</span>
+                                            </button>
+                                            <span className="w-6 text-center font-bold text-on-surface tabular-nums">{row.value}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => changeGuest(row.key, 1)}
+                                                disabled={!row.canInc}
+                                                aria-label={`+1 ${row.label}`}
+                                                className="h-9 w-9 rounded-full border-2 border-outline-variant/30 text-primary flex items-center justify-center transition-colors hover:border-primary/40 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-outline-variant/30"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">add</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {guests.infants > 0 && (
+                                    <p className="text-[11px] text-outline mt-2">{t('tour_detail.guestsInfantSeatNote')}</p>
+                                )}
+                                {reachedMaxPeople && (
+                                    <p className="text-[11px] text-amber-600 mt-2">{t('tour_detail.guestsMaxReached', { max: maxPeople })}</p>
+                                )}
+                            </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── Cam kết (gọn, đặt cuối vùng cuộn) ── */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-outline-variant/15 pt-4 text-[11px] text-on-surface-variant">
+                        {[
+                            { icon: 'verified_user', text: t('tour_detail.paymentSecure') },
+                            { icon: 'cancel', text: t('tour_detail.freeCancellation24h') },
+                            { icon: 'support_agent', text: t('tour_detail.support247') },
+                        ].map(item => (
+                            <span key={item.text} className="inline-flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-primary text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>{item.icon}</span>
+                                {item.text}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+
+                {/* ── Footer ghim đáy thẻ: tạm tính + nút Đặt luôn hiển thị ── */}
+                <div className="border-t border-outline-variant/10 bg-white p-5 space-y-3 lg:shrink-0">
+                    {isReadyForGuests && (
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-outline">{t('tour_detail.guestsEstTotal')}</span>
+                            <span className="text-lg font-extrabold text-primary">{formatPrice(guestSubtotal)}</span>
+                        </div>
+                    )}
+
                     {/* ── Book CTA ── */}
                     {!hasPackages ? (
                         <button
@@ -190,20 +331,6 @@ export default function BookingSidebarNew({
                             {t('tour_detail.selectDateFirst')}
                         </button>
                     )}
-
-                    {/* Trust indicators */}
-                    <div className="space-y-2 pt-1">
-                        {[
-                            { icon: 'verified_user', text: t('tour_detail.paymentSecure') },
-                            { icon: 'cancel', text: t('tour_detail.freeCancellation24h') },
-                            { icon: 'support_agent', text: t('tour_detail.support247') },
-                        ].map(item => (
-                            <div key={item.text} className="flex items-center gap-2 text-xs text-on-surface-variant">
-                                <span className="material-symbols-outlined text-primary text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }}>{item.icon}</span>
-                                {item.text}
-                            </div>
-                        ))}
-                    </div>
                 </div>
             </div>
 

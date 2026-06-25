@@ -58,4 +58,28 @@ export class BookingCronService {
             this.logger.error(`[CRON] Failed job=${jobName} code=${code} message=${message}`);
         }
     }
+
+    /**
+     * Chạy mỗi ngày lúc 8h sáng.
+     * Nhắc bổ sung thông tin hành khách cho các đơn đã thanh toán sắp khởi hành mà còn thiếu.
+     */
+    @Cron(CronExpression.EVERY_DAY_AT_8AM)
+    async handlePassengerInfoReminders() {
+        const jobName = 'passenger_info_reminders';
+        this.logger.log(`[CRON] Start job=${jobName}`);
+        try {
+            const result = await this.bookingService.sendPassengerInfoReminders();
+            this.logger.log(
+                `[CRON] Success job=${jobName} batchSize=${result.batchSize} sentCount=${result.sentCount} notifiedCount=${result.notifiedCount}`,
+            );
+        } catch (error: unknown) {
+            const code = isCronErrorShape(error)
+                ? stringifyErrorField(error.code) ?? stringifyErrorField(error.status) ?? 'unknown'
+                : 'unknown';
+            const message = isCronErrorShape(error)
+                ? stringifyErrorField(error.message) ?? getErrorMessage(error)
+                : getErrorMessage(error);
+            this.logger.error(`[CRON] Failed job=${jobName} code=${code} message=${message}`);
+        }
+    }
 }

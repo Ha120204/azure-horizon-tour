@@ -140,7 +140,6 @@ export function useContactForm() {
     const selectedSubject = SUBJECT_OPTIONS.find(o => o.value === formData.subject) ?? SUBJECT_OPTIONS[0];
     const isBookingRefRequired = BOOKING_REF_REQUIRED_SUBJECTS.has(formData.subject);
     const supportPhoneHref = `tel:${publicSettings.company_phone.replace(/\s+/g, '')}`;
-    const supportEmailHref = `mailto:${publicSettings.company_email}`;
     const heroTitle = t('contact.howCanWeAssist');
     const bookingRefLabel = t('contact.bookingRefLabel');
     const today = new Date();
@@ -397,7 +396,6 @@ export function useContactForm() {
         selectedSubject,
         isBookingRefRequired,
         supportPhoneHref,
-        supportEmailHref,
         heroTitle,
         bookingRefLabel,
         bookingRefHelp,

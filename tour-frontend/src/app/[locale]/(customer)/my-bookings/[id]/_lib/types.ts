@@ -73,6 +73,9 @@ export type BookingDetail = {
     pickupLocation?: string | null;
     contactInfo?: BookingContactInfo | null;
     passengers?: BookingPassenger[] | null;
+    incompletePassengerCount?: number;
+    passengerInfoDeadline?: string | null;
+    passengerInfoOverdue?: boolean;
     user?: {
         fullName?: string | null;
         email?: string | null;

@@ -1,6 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
+import { api } from '@/lib/http/fetchWithAuth';
+import { CompletePassengersModal } from '@/app/[locale]/(customer)/my-bookings/[id]/_components/CompletePassengersModal';
+import type { BookingPassenger as CustomerBookingPassenger } from '@/app/[locale]/(customer)/my-bookings/[id]/_lib/types';
 import {
   AVATAR_COLORS,
   CONFIRMED_SOURCE_LABEL,
@@ -8,7 +12,7 @@ import {
   PAY_CFG,
   STATUS_CFG,
 } from '../_lib/config';
-import { fmt, fmtDate, fmtDateTime, getInitials, getVisibleTransactions, toTelHref, toZaloPhone } from '../_lib/helpers';
+import { copyPhone, fmt, fmtDate, fmtDateTime, getInitials, getVisibleTransactions, toTelHref, toZaloPhone } from '../_lib/helpers';
 import type { Booking, BookingNotification, PaymentTransaction } from '../_lib/types';
 import { TransportAssignmentSection } from './TransportAssignmentSection';
 
@@ -265,10 +269,21 @@ function getBookingTimeline(
 export function BookingDetailView({
   booking,
   onClose,
+  canWrite = false,
+  canRecordPayment,
+  onPassengersUpdated,
+  showToast,
 }: {
   booking: Booking;
   onClose: () => void;
+  canWrite?: boolean;
+  /** ADMIN + STAFF: ghi nhận thanh toán tại quầy và điền hộ hành khách. */
+  canRecordPayment?: boolean;
+  onPassengersUpdated?: () => void | Promise<void>;
+  showToast?: (msg: string, ok?: boolean) => void;
 }) {
+  const [isPassengerModalOpen, setIsPassengerModalOpen] = useState(false);
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
   const sc = STATUS_CFG[booking.status] ?? STATUS_CFG.PENDING;
   const pc = PAY_CFG[booking.paymentStatus] ?? PAY_CFG.UNPAID;
   const mc = PAYMENT_METHOD_CFG[booking.paymentMethod] ?? PAYMENT_METHOD_CFG.PAYOS;
@@ -296,6 +311,45 @@ export function BookingDetailView({
         }))
         .filter(p => p.note.length > 0)
     : [];
+  const passengerList = Array.isArray(booking.passengers) ? booking.passengers : [];
+  const asStr = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const passengerRows = passengerList.map((p, idx) => ({
+    index: idx,
+    name: asStr(p?.fullName),
+    type: asStr(p?.type),
+    complete: Boolean(asStr(p?.fullName) && asStr(p?.dob) && asStr(p?.gender)),
+  }));
+  const incompletePassengerCount = booking.incompletePassengerCount ?? passengerRows.filter(r => !r.complete).length;
+  const canEditPassengers = (canWrite || (canRecordPayment ?? false)) && booking.status !== 'CANCELLED' && passengerList.length > 1;
+  const passengerTypeLabel = (type: string) => {
+    const t = type.toUpperCase();
+    if (t.startsWith('CHILD')) return 'Trẻ em';
+    if (t.startsWith('INFANT')) return 'Em bé';
+    return 'Người lớn';
+  };
+  const passengerReminders = Array.isArray(booking.passengerReminders) ? booking.passengerReminders : [];
+  const reminderChannelLabel = (channel: string) => channel === 'EMAIL' ? 'Email' : channel === 'ZALO' ? 'Zalo' : 'Điện thoại';
+  const reminderChannelIcon = (channel: string) => channel === 'EMAIL' ? 'mail' : channel === 'ZALO' ? 'chat' : 'call';
+
+  const handleReminderAction = async (channel: 'EMAIL' | 'ZALO' | 'CALL') => {
+    if (isSendingReminder) return;
+    // Mở kênh ngoài ngay trong cú click (tránh popup blocker); CALL dùng href tel:.
+    if (channel === 'ZALO' && zaloPhone) window.open(`https://zalo.me/${zaloPhone}`, '_blank', 'noopener');
+    setIsSendingReminder(true);
+    try {
+      const result = await api.patch(`/booking/admin/${booking.id}/passenger-reminder`, { channel }, { silent: true });
+      if (!result.ok) {
+        showToast?.(result.error || 'Không thực hiện được, vui lòng thử lại', false);
+        return;
+      }
+      showToast?.(channel === 'EMAIL' ? 'Đã gửi email nhắc khách' : channel === 'ZALO' ? 'Đã ghi nhận nhắc qua Zalo' : 'Đã ghi nhận nhắc qua điện thoại', true);
+      void onPassengersUpdated?.();
+    } catch {
+      showToast?.('Có lỗi xảy ra, vui lòng thử lại', false);
+    } finally {
+      setIsSendingReminder(false);
+    }
+  };
   const bookingTimeline = getBookingTimeline(booking, visibleTransactions, latestPaymentRequest);
   const successfulPayment = visibleTransactions.find(tx => tx.status === 'SUCCESS');
   const failedPayment = visibleTransactions.find(tx => tx.status === 'FAILED');
@@ -410,6 +464,7 @@ export function BookingDetailView({
                   {telHref && (
                     <a
                       href={`tel:${telHref}`}
+                      onClick={() => copyPhone(contactPhone)}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-100"
                     >
                       <span className="material-symbols-outlined text-[14px]">call</span>
@@ -490,6 +545,118 @@ export function BookingDetailView({
                 <p className="pt-1 text-[11px] text-amber-700/80">
                   Lưu ý khi sắp xếp chỗ ngồi / phương tiện cho khách.
                 </p>
+              </div>
+            </section>
+          )}
+
+          {/* Thông tin hành khách + điền hộ */}
+          {passengerList.length > 0 && (
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-[14px]">groups</span>
+                  Thông tin hành khách
+                </h3>
+                {canEditPassengers && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPassengerModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-primary/90"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">edit_note</span>
+                    Điền hộ
+                  </button>
+                )}
+              </div>
+
+              {booking.staffAssistRequested && (
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                  <span className="material-symbols-outlined text-[16px]">support_agent</span>
+                  Khách yêu cầu nhân viên hỗ trợ nhập thông tin — vui lòng liên hệ khách để điền hộ.
+                </div>
+              )}
+
+              {incompletePassengerCount > 0 && (
+                <div className={`mb-3 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${booking.passengerInfoOverdue ? 'border-red-200 bg-red-50 text-red-700' : 'border-orange-200 bg-orange-50 text-orange-700'}`}>
+                  <span className="material-symbols-outlined text-[16px]">{booking.passengerInfoOverdue ? 'error' : 'info'}</span>
+                  Còn {incompletePassengerCount} hành khách chưa có thông tin{booking.passengerInfoOverdue ? ' (đã quá hạn)' : ''}.
+                </div>
+              )}
+
+              {incompletePassengerCount > 0 && (
+                <div className="mb-3 space-y-2.5 rounded-xl border border-outline-variant/15 bg-surface-container-low/40 p-3">
+                  {(canRecordPayment ?? canWrite) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/60">Nhắc khách bổ sung:</span>
+                      <button
+                        type="button"
+                        disabled={isSendingReminder}
+                        onClick={() => handleReminderAction('EMAIL')}
+                        className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">mail</span>
+                        Gửi email
+                      </button>
+                      {zaloPhone && (
+                        <button
+                          type="button"
+                          disabled={isSendingReminder}
+                          onClick={() => handleReminderAction('ZALO')}
+                          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">chat</span>
+                          Nhắn Zalo
+                        </button>
+                      )}
+                      {contactPhone && (
+                        <button
+                          type="button"
+                          disabled={isSendingReminder}
+                          onClick={() => { copyPhone(contactPhone); void handleReminderAction('CALL'); }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">call</span>
+                          Gọi
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {passengerReminders.length > 0 ? (
+                    <ul className="space-y-1">
+                      {passengerReminders.slice().reverse().slice(0, 5).map((r, i) => (
+                        <li key={i} className="flex items-center gap-1.5 text-[11px] text-on-surface-variant/70">
+                          <span className="material-symbols-outlined text-[14px]">{reminderChannelIcon(r.channel)}</span>
+                          Nhắc qua {reminderChannelLabel(r.channel)} lúc {fmtDateTime(r.at)} · {r.source === 'AUTO' ? 'Tự động' : 'Nhân viên'}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-on-surface-variant/60">Chưa nhắc khách lần nào.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-outline-variant/15 divide-y divide-outline-variant/10 overflow-hidden">
+                {passengerRows.map(row => (
+                  <div key={row.index} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/8 text-xs font-extrabold text-primary">{row.index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-sm font-semibold ${row.name ? 'text-on-surface' : 'text-outline italic'}`}>
+                        {row.name || `Hành khách ${row.index + 1}`}
+                      </p>
+                      <p className="text-[11px] text-on-surface-variant/70">{passengerTypeLabel(row.type)}{row.index === 0 ? ' · Người đại diện' : ''}</p>
+                    </div>
+                    {row.complete ? (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                        <span className="material-symbols-outlined text-[13px]">check_circle</span>Đủ
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                        <span className="material-symbols-outlined text-[13px]">pending</span>Thiếu
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             </section>
           )}
@@ -818,6 +985,17 @@ export function BookingDetailView({
 
         </div>
       </div>
+
+      {isPassengerModalOpen && (
+        <CompletePassengersModal
+          bookingId={booking.id}
+          passengers={(booking.passengers ?? []) as unknown as CustomerBookingPassenger[]}
+          departureDate={booking.departureDate ?? undefined}
+          endpoint={`/booking/admin/${booking.id}/passengers`}
+          onClose={() => setIsPassengerModalOpen(false)}
+          onUpdated={() => { void onPassengersUpdated?.(); }}
+        />
+      )}
     </>
   );
 }

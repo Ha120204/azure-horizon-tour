@@ -81,7 +81,12 @@ export default function DepartureCalendarModal({
     const handlePrevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
     const handleNextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const today = new Date();
+    const isPrevDisabled = currentYear < today.getFullYear()
+        ? false
+        : currentYear === today.getFullYear() && currentMonth <= today.getMonth();
+
+    const todayStr = today.toISOString().split('T')[0];
 
     // Build grid cells
     const cells = [];
@@ -179,7 +184,7 @@ export default function DepartureCalendarModal({
 
                 {/* Calendar Controls */}
                 <div className="px-6 py-4 flex items-center justify-between shrink-0 bg-surface-container-lowest">
-                    <button onClick={handlePrevMonth} className="p-2 rounded-xl border border-outline-variant/30 hover:bg-surface-container hover:text-primary transition-all flex items-center">
+                    <button onClick={handlePrevMonth} disabled={isPrevDisabled} className="p-2 rounded-xl border border-outline-variant/30 hover:bg-surface-container hover:text-primary transition-all flex items-center disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-current">
                         <span className="material-symbols-outlined text-[20px]">chevron_left</span>
                     </button>
                     <h3 className="text-lg font-bold text-on-surface uppercase tracking-wide">

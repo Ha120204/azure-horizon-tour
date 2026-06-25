@@ -107,11 +107,13 @@ export const NOTIF_STYLE: Record<NotifType, { icon: string; iconBg: string; icon
     review_good:       { icon: 'star',                   iconBg: 'bg-purple-50',  iconColor: 'text-purple-500',  dot: 'bg-purple-400' },
     review_bad:        { icon: 'sentiment_dissatisfied', iconBg: 'bg-orange-50',  iconColor: 'text-orange-500',  dot: 'bg-orange-500' },
     customer_new:      { icon: 'person_add',             iconBg: 'bg-blue-50',    iconColor: 'text-blue-500',    dot: 'bg-blue-400' },
+    passenger_info_missing: { icon: 'badge',             iconBg: 'bg-orange-50',  iconColor: 'text-orange-600',  dot: 'bg-orange-500' },
+    staff_assist_requested: { icon: 'support_agent',     iconBg: 'bg-rose-50',    iconColor: 'text-rose-600',    dot: 'bg-rose-500' },
 };
 
 export const TABS: { key: TabKey; label: string; types: NotifType[]; href: string; roles: AdminRole[] }[] = [
-    { key: 'all',      label: 'Tất cả',    types: ['booking_pending','booking_confirmed','booking_cancelled','booking_cancel_requested','support_new','support_in_progress','review_good','review_bad','customer_new'], href: '', roles: ALL_ADMIN_ROLES },
-    { key: 'booking',  label: 'Đặt tour',  types: ['booking_pending','booking_confirmed','booking_cancelled','booking_cancel_requested'], href: '/admin/bookings', roles: ALL_ADMIN_ROLES },
+    { key: 'all',      label: 'Tất cả',    types: ['booking_pending','booking_confirmed','booking_cancelled','booking_cancel_requested','passenger_info_missing','staff_assist_requested','support_new','support_in_progress','review_good','review_bad','customer_new'], href: '', roles: ALL_ADMIN_ROLES },
+    { key: 'booking',  label: 'Đặt tour',  types: ['booking_pending','booking_confirmed','booking_cancelled','booking_cancel_requested','passenger_info_missing','staff_assist_requested'], href: '/admin/bookings', roles: ALL_ADMIN_ROLES },
     { key: 'support',  label: 'Hỗ trợ',    types: ['support_new','support_in_progress'], href: '/admin/support', roles: ALL_ADMIN_ROLES },
     { key: 'review',   label: 'Đánh giá',  types: ['review_good','review_bad'], href: '/admin/reviews', roles: ADMIN_AND_SUPER_ROLES },
     { key: 'customer', label: 'Khách hàng',types: ['customer_new'], href: '/admin/customers', roles: ALL_ADMIN_ROLES },

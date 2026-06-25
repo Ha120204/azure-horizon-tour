@@ -91,6 +91,7 @@ export default function BookingDetailPage() {
     const { t, language } = useLocale();
     const {
         booking, isLoading, fetchError, refetchBooking, isPaying, payError,
+        isLoggedIn,
         showCancelModal, setShowCancelModal,
         cancelSuccess,
         showIssueForm, setShowIssueForm,
@@ -154,7 +155,12 @@ export default function BookingDetailPage() {
                     <div className="space-y-10 p-6 sm:p-8 md:space-y-12 md:p-12">
                         <BookingEssentialSummary booking={booking} departureDate={departureDate} />
                         <BookingDepartureGuide booking={booking} />
-                        <BookingPassengerDetails booking={booking} />
+                        <BookingPassengerDetails
+                            booking={booking}
+                            canEdit={isLoggedIn && !isCancelled && tripLifecycle !== 'COMPLETED'}
+                            departureDate={departureDate}
+                            onUpdated={refetchBooking}
+                        />
 
                         {/*
                           Mobile order: payment panel first (order-first), trip details second (default).

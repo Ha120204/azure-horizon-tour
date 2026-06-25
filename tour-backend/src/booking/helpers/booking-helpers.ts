@@ -70,6 +70,23 @@ export function calcSeatCount(
   return Math.max(1, seatCount);
 }
 
+/** Một slot hành khách được coi là đủ thông tin khi có tên, ngày sinh và giới tính. */
+export function isPassengerComplete(passenger: PassengerInput | undefined): boolean {
+  if (!passenger) return false;
+  const str = (key: string) => {
+    const value = passenger[key];
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  return Boolean(str('fullName') && str('dob') && str('gender'));
+}
+
+/** Số slot hành khách còn thiếu thông tin (dùng cho luồng "bổ sung sau"). */
+export function countIncompletePassengers(passengers: unknown): number {
+  const inputs = asPassengerInputs(passengers);
+  if (!inputs?.length) return 0;
+  return inputs.filter((p) => !isPassengerComplete(p)).length;
+}
+
 
 // ─── Age validation helpers ───────────────────────────────────────────────────
 

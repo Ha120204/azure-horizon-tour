@@ -19,6 +19,7 @@ import type { PassengerType } from '@/lib/booking/passengerDetails';
 import type { TourDepartureTransport } from '@/types';
 import { getPassengerNameError, validatePassengerIdentityNo } from '@/lib/booking/passengerDetails';
 import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
+import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
 
 interface Passenger {
     type: PassengerType;
@@ -121,6 +122,13 @@ function CheckoutContent() {
     const packageIdStr = searchParams.get('packageId');
     const departureIdStr = searchParams.get('departureId');
 
+    // Số khách được chọn sẵn ở trang chi tiết tour. Khi có, thành phần đoàn bị
+    // khoá (không thêm/bớt tại checkout) — khách chỉ điền thông tin từng người.
+    const hasGuestSelection = searchParams.has('adults');
+    const adultsParam = Math.max(1, Number(searchParams.get('adults')) || 1);
+    const childrenParam = Math.max(0, Number(searchParams.get('children')) || 0);
+    const infantsParam = Math.max(0, Number(searchParams.get('infants')) || 0);
+
     // STATE LƯU THÔNG TIN TOUR TỪ DATABASE
     const [tourData, setTourData] = useState<CheckoutTourData | null>(null);
     const [selectedPackage, setSelectedPackage] = useState<CheckoutPackage | null>(null);
@@ -132,6 +140,10 @@ function CheckoutContent() {
 
     const [tempFormData, setTempFormData] = useState({ fullName: '', dob: '', gender: '', identityType: 'CCCD', identityNo: '' });
     const [passengers, setPassengers] = useState<Passenger[]>([]);
+    const [deferPassengers, setDeferPassengers] = useState(false);
+    const [staffAssist, setStaffAssist] = useState(false);
+    const [passengerInfoDeadlineDays, setPassengerInfoDeadlineDays] = useState(DEFAULT_PUBLIC_SETTINGS.passenger_info_deadline_days);
+    const [staffAssistMinPeople, setStaffAssistMinPeople] = useState(DEFAULT_PUBLIC_SETTINGS.staff_assist_min_people);
     const [isBookForMyself, setIsBookForMyself] = useState(true);
     const [activeFormType, setActiveFormType] = useState<PassengerType | null>(null);
     const [editingPassengerIndex, setEditingPassengerIndex] = useState<number | null>(null);
@@ -227,6 +239,10 @@ function CheckoutContent() {
 
         for (let i = 0; i < passengers.length; i++) {
             const p = passengers[i];
+            if (hasGuestSelection && !deferPassengers && !staffAssist && !(p.fullName.trim() && p.dob && p.gender)) {
+                showError(t('checkout.errors.completePassengers'));
+                return;
+            }
             const pNameErr = getPassengerNameError(p.fullName);
             if (pNameErr) { showError(pNameErr); return; }
             if (p.identityNo) {
@@ -262,6 +278,8 @@ function CheckoutContent() {
             sessionStorage.removeItem('checkout_leadTraveler');
             sessionStorage.removeItem('checkout_passengers');
             sessionStorage.removeItem('checkout_isBookForMyself');
+            sessionStorage.removeItem('checkout_deferPassengers');
+            sessionStorage.removeItem('checkout_staffAssist');
             sessionStorage.removeItem('checkout_appliedVoucher');
             sessionStorage.removeItem('checkout_voucherCode');
         }
@@ -279,14 +297,50 @@ function CheckoutContent() {
             try { setLeadTraveler(JSON.parse(savedLead)); } catch {}
         }
 
+        // Slot cho các hành khách ngoài người đại diện (1 người lớn đầu là lead).
+        const makeSlot = (type: PassengerType): Passenger => ({
+            type, fullName: '', dob: '', gender: '',
+            identityType: type === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD', identityNo: '',
+        });
+        const expectedSlots: Passenger[] = hasGuestSelection ? [
+            ...Array.from({ length: Math.max(0, adultsParam - 1) }, () => makeSlot('Adult (12+)')),
+            ...Array.from({ length: childrenParam }, () => makeSlot('Child (4-11)')),
+            ...Array.from({ length: infantsParam }, () => makeSlot('Infant (<4)')),
+        ] : [];
+
+        let restored: Passenger[] | null = null;
         const savedPassengers = sessionStorage.getItem('checkout_passengers');
         if (savedPassengers) {
-            try { setPassengers(JSON.parse(savedPassengers)); } catch {}
+            try { restored = JSON.parse(savedPassengers); } catch {}
+        }
+
+        if (hasGuestSelection) {
+            // URL là nguồn chân lý cho thành phần đoàn (đã chốt ở trang chi tiết).
+            // Giữ lại dữ liệu đã điền nếu thành phần (theo type) khớp; nếu khách đổi
+            // số lượng rồi quay lại thì tạo lại slot rỗng theo lựa chọn mới.
+            const sig = (list: Passenger[]) => list.map(p => p.type).sort().join('|');
+            if (restored && sig(restored) === sig(expectedSlots)) {
+                setPassengers(restored);
+            } else {
+                setPassengers(expectedSlots);
+            }
+        } else if (restored) {
+            setPassengers(restored);
         }
 
         const savedBookMyself = sessionStorage.getItem('checkout_isBookForMyself');
         if (savedBookMyself) {
             setIsBookForMyself(savedBookMyself === 'true');
+        }
+
+        const savedDefer = sessionStorage.getItem('checkout_deferPassengers');
+        if (savedDefer) {
+            setDeferPassengers(savedDefer === 'true');
+        }
+
+        const savedStaffAssist = sessionStorage.getItem('checkout_staffAssist');
+        if (savedStaffAssist) {
+            setStaffAssist(savedStaffAssist === 'true');
         }
 
         const savedVoucher = sessionStorage.getItem('checkout_appliedVoucher');
@@ -296,7 +350,7 @@ function CheckoutContent() {
         
         const savedVoucherCode = sessionStorage.getItem('checkout_voucherCode');
         if (savedVoucherCode) setVoucherCode(savedVoucherCode);
-    }, [tourIdStr]);
+    }, [tourIdStr, hasGuestSelection, adultsParam, childrenParam, infantsParam]);
 
     // Save to sessionStorage when states change
     useEffect(() => {
@@ -322,6 +376,36 @@ function CheckoutContent() {
     useEffect(() => {
         sessionStorage.setItem('checkout_isBookForMyself', isBookForMyself.toString());
     }, [isBookForMyself]);
+
+    useEffect(() => {
+        sessionStorage.setItem('checkout_deferPassengers', deferPassengers.toString());
+    }, [deferPassengers]);
+
+    useEffect(() => {
+        sessionStorage.setItem('checkout_staffAssist', staffAssist.toString());
+    }, [staffAssist]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchPublicSettings(controller.signal)
+            .then(s => {
+                setPassengerInfoDeadlineDays(s.passenger_info_deadline_days);
+                setStaffAssistMinPeople(s.staff_assist_min_people);
+            })
+            .catch(() => {});
+        return () => controller.abort();
+    }, []);
+
+    // Sát ngày khởi hành (≤ hạn bổ sung) → không cho hoãn, buộc điền đủ ngay.
+    const deadlineDepartureDate = selectedDeparture?.departureDate ?? tourData?.startDate ?? null;
+    const daysUntilDeparture = deadlineDepartureDate
+        ? Math.ceil((new Date(deadlineDepartureDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+        : Infinity;
+    const isNearDeparture = Number.isFinite(daysUntilDeparture) && daysUntilDeparture <= passengerInfoDeadlineDays;
+
+    useEffect(() => {
+        if (isNearDeparture && deferPassengers) setDeferPassengers(false);
+    }, [isNearDeparture, deferPassengers]);
 
     // 2. GỌI API LẤY DATA THẬT CỦA TOUR VÀ THÔNG TIN NGƯỜI DÙNG
     useEffect(() => {
@@ -451,6 +535,12 @@ function CheckoutContent() {
     const adultCount = 1 + passengers.filter(p => p.type === 'Adult (12+)').length;
     const childCount = passengers.filter(p => p.type === 'Child (4-11)').length;
     const infantCount = passengers.filter(p => p.type === 'Infant (<4)').length;
+    // Đoàn đông (≥ ngưỡng) → cho khách nhờ nhân viên nhập hộ.
+    const showStaffAssist = hasGuestSelection && (adultCount + childCount + infantCount) >= staffAssistMinPeople;
+
+    useEffect(() => {
+        if (!showStaffAssist && staffAssist) setStaffAssist(false);
+    }, [showStaffAssist, staffAssist]);
 
     const subtotal = (adultCount * PRICES['Adult (12+)']) +
         (childCount * PRICES['Child (4-11)']) +
@@ -551,6 +641,26 @@ function CheckoutContent() {
         setAppliedVoucher(null);
         setVoucherCode('');
         setVoucherError('');
+    };
+
+    const handleToggleDefer = (checked: boolean) => {
+        setDeferPassengers(checked);
+        // Đóng mọi form hành khách đang nhập dở để không vướng validate khi bật hoãn.
+        if (checked) {
+            setStaffAssist(false);
+            setActiveFormType(null);
+            setEditingPassengerIndex(null);
+        }
+    };
+
+    const handleToggleStaffAssist = (checked: boolean) => {
+        setStaffAssist(checked);
+        // Nhờ nhân viên = không tự điền → loại trừ với "tự bổ sung sau", đóng form đang nhập.
+        if (checked) {
+            setDeferPassengers(false);
+            setActiveFormType(null);
+            setEditingPassengerIndex(null);
+        }
     };
 
     const handleToggleBookForMyself = (checked: boolean) => {
@@ -660,6 +770,10 @@ function CheckoutContent() {
 
         for (let i = 0; i < passengers.length; i++) {
             const p = passengers[i];
+            if (hasGuestSelection && !deferPassengers && !staffAssist && !(p.fullName.trim() && p.dob && p.gender)) {
+                showError(t('checkout.errors.completePassengers'));
+                return;
+            }
             const pNameErr = getPassengerNameError(p.fullName);
             if (pNameErr) { showError(pNameErr); return; }
             if (p.identityNo) {
@@ -704,6 +818,7 @@ function CheckoutContent() {
                 seatCount: seatCount,          // số ghế thực cần giữ (không tính infant)
                 voucherCode: appliedVoucher?.code || undefined,
                 paymentMethod: paymentMethod,
+                staffAssistRequested: staffAssist,
             };
 
             const response = await fetchWithAuth(`${API_BASE_URL}/booking`, {
@@ -788,6 +903,14 @@ function CheckoutContent() {
                         t={t}
                         maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats ?? undefined}
                         departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
+                        lockComposition={hasGuestSelection}
+                        deferPassengers={deferPassengers}
+                        onToggleDefer={handleToggleDefer}
+                        disableDefer={hasGuestSelection && isNearDeparture}
+                        showStaffAssist={showStaffAssist}
+                        staffAssist={staffAssist}
+                        onToggleStaffAssist={handleToggleStaffAssist}
+                        onUpdateAllPassengers={(list) => setPassengers(list)}
                     />
 
                 </div>

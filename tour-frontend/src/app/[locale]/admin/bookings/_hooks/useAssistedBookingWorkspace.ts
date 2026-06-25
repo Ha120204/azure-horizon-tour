@@ -8,6 +8,7 @@ import {
   getPassengerMaxDate,
   getPassengerMinDate,
   hasPassengerDetails,
+  parsePastedPassengers,
 } from '@/lib/booking/passengerDetails';
 import { PASSENGER_PRICING } from '../_lib/config';
 import {
@@ -159,6 +160,7 @@ export interface UseAssistedBookingWorkspaceReturn {
   openPassengerEditor: (row: GeneratedPassengerRow) => void;
   updatePassengerDetail: (index: number, patch: Partial<DraftPassenger>) => void;
   clearPassengerDetail: (row: GeneratedPassengerRow) => void;
+  fillPassengersFromPaste: (text: string) => number;
   scrollToDraftField: (key: keyof AssistedDraftForm) => void;
   resetDraftForm: () => void;
   openCreateDraft: () => void;
@@ -520,6 +522,32 @@ export function useAssistedBookingWorkspace({
     });
   };
 
+  // "Dán từ Excel": đổ danh sách đầy đủ vào tất cả slot theo thứ tự (giữ nguyên loại theo số lượng đã chọn).
+  const fillPassengersFromPaste = (text: string): number => {
+    const rows = parsePastedPassengers(text);
+    if (rows.length === 0) return 0;
+    if (draftFormError) setDraftFormError(null);
+    setUseRepresentativeAsFirstPassenger(false);
+    setPassengerDrafts(() => {
+      const base = buildPassengerDraftPayload(form, passengerDrafts, { useRepresentativeAsFirstPassenger: false });
+      return base.map((p, i) => {
+        if (i >= rows.length) return { ...p };
+        const r = rows[i];
+        const type = normalizePassengerTypeLabel(String(p.type ?? 'Adult (12+)'));
+        return {
+          ...p,
+          fullName: r.fullName || (typeof p.fullName === 'string' ? p.fullName : ''),
+          dob: r.dob || (typeof p.dob === 'string' ? p.dob : ''),
+          gender: r.gender || (typeof p.gender === 'string' ? p.gender : ''),
+          identityType: r.identityType || (typeof p.identityType === 'string' ? p.identityType : ''),
+          identityNo: r.identityNo || (typeof p.identityNo === 'string' ? p.identityNo : ''),
+          type,
+        };
+      });
+    });
+    return Math.min(rows.length, totalPassengerCount);
+  };
+
   const resetDraftForm = () => {
     const nextForm: AssistedDraftForm = { ...EMPTY_FORM };
     setEditingDraft(null);
@@ -745,6 +773,7 @@ export function useAssistedBookingWorkspace({
     openPassengerEditor,
     updatePassengerDetail,
     clearPassengerDetail,
+    fillPassengersFromPaste,
     scrollToDraftField,
     resetDraftForm,
     openCreateDraft,

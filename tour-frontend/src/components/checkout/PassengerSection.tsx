@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     getPassengerAgeLabel,
     getPassengerIdentityDocTypes,
@@ -42,6 +42,22 @@ interface PassengerSectionProps {
     t: (key: string) => string;
     /** Số ghế tối đa còn lại (availableSeats của departure/tour). Infant (<4) không tính ghế. */
     maxPassengers?: number;
+    /**
+     * Thành phần đoàn đã chốt ở trang chi tiết tour (slot tạo sẵn).
+     * Khi true: ẩn nút thêm/bớt loại hành khách, khách chỉ điền thông tin từng slot.
+     */
+    lockComposition?: boolean;
+    /** Hoãn điền thông tin các khách còn lại (chỉ người đại diện là bắt buộc). */
+    deferPassengers?: boolean;
+    onToggleDefer?: (checked: boolean) => void;
+    /** Sát ngày khởi hành → ẩn lựa chọn hoãn, buộc điền đủ ngay. */
+    disableDefer?: boolean;
+    /** Đoàn đông → cho khách nhờ nhân viên nhập hộ. */
+    showStaffAssist?: boolean;
+    staffAssist?: boolean;
+    onToggleStaffAssist?: (checked: boolean) => void;
+    /** Lưu một lần toàn bộ hành khách đi cùng (modal gộp). */
+    onUpdateAllPassengers?: (list: Passenger[]) => void;
     /**
      * Ngày khởi hành (ISO string). Dùng làm mốc tính tuổi chính xác.
      * Nếu không có, fallback về ngày hiện tại.
@@ -138,8 +154,22 @@ export default function PassengerSection({
     t,
     maxPassengers,
     departureDate,
+    lockComposition = false,
+    deferPassengers = false,
+    onToggleDefer,
+    disableDefer = false,
+    showStaffAssist = false,
+    staffAssist = false,
+    onToggleStaffAssist,
+    onUpdateAllPassengers,
 }: PassengerSectionProps) {
+    // Hoãn tự làm HOẶC nhờ nhân viên → đều chưa cần điền thông tin các khách đi cùng.
+    const isDeferred = deferPassengers || staffAssist;
+    const deferredLabel = staffAssist ? t('checkout.staffAssistBadge') : t('checkout.deferLater');
     const isEditingPassenger = editingPassengerIndex !== null;
+    const [isAllModalOpen, setIsAllModalOpen] = useState(false);
+    const [draft, setDraft] = useState<Passenger[]>([]);
+    const [draftErrors, setDraftErrors] = useState<Record<number, { fullName?: string; dob?: string; identityNo?: string }>>({});
 
     // Mốc tính tuổi = ngày khởi hành (nếu có), fallback về today.
     // Việc dùng ngày khởi hành đảm bảo trẻ 11 tuổi hôm nay nhưng 12 tuổi ngày đi
@@ -163,6 +193,58 @@ export default function PassengerSection({
     const isInfantFull = infantCount >= adultCount;
     // Local validation errors — only "required" errors shown on save attempt
     const [fieldErrors, setFieldErrors] = useState<{ fullName?: string; dob?: string }>({});
+
+    // Khoá cuộn nền khi modal nhập thông tin đang mở.
+    useEffect(() => {
+        if (!activeFormType && !isAllModalOpen) return;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = previous; };
+    }, [activeFormType, isAllModalOpen]);
+
+    const openAllModal = () => {
+        setDraft(passengers.map(passenger => ({ ...passenger })));
+        setDraftErrors({});
+        setIsAllModalOpen(true);
+    };
+
+    const updateDraft = (index: number, patch: Partial<Passenger>) => {
+        setDraft(prev => prev.map((passenger, idx) => (idx === index ? { ...passenger, ...patch } : passenger)));
+        setDraftErrors(prev => {
+            if (!prev[index]) return prev;
+            const next = { ...prev };
+            delete next[index];
+            return next;
+        });
+    };
+
+    const handleSaveAll = () => {
+        const errors: Record<number, { fullName?: string; dob?: string; identityNo?: string }> = {};
+        draft.forEach((passenger, idx) => {
+            const type = passenger.type as PassengerType;
+            const fieldError: { fullName?: string; dob?: string; identityNo?: string } = {};
+            // Cho phép lưu dở dang — chỉ kiểm định dạng các trường đã nhập.
+            if (passenger.fullName) {
+                const nameErr = getNameError(passenger.fullName);
+                if (nameErr) fieldError.fullName = nameErr;
+            }
+            if (passenger.dob) {
+                const ageErr = getAgeError(type, passenger.dob, referenceDate);
+                if (ageErr) fieldError.dob = ageErr;
+            }
+            if (passenger.identityNo) {
+                const idErr = validateIdentityNo(passenger.identityType || 'CCCD', passenger.identityNo);
+                if (idErr) fieldError.identityNo = idErr;
+            }
+            if (Object.keys(fieldError).length > 0) errors[idx] = fieldError;
+        });
+        if (Object.keys(errors).length > 0) {
+            setDraftErrors(errors);
+            return;
+        }
+        onUpdateAllPassengers?.(draft);
+        setIsAllModalOpen(false);
+    };
 
     // Identity document validation
     function getIdentityDocTypes(type: PassengerType) {
@@ -330,73 +412,149 @@ export default function PassengerSection({
                     </div>
                 </div>
 
+                {/* Tùy chọn hoãn / nhờ nhân viên cho các khách đi cùng */}
+                {lockComposition && passengers.length > 0 && (
+                    <div className="space-y-2">
+                        {/* Đoàn đông → cho khách nhờ nhân viên nhập hộ */}
+                        {showStaffAssist && onToggleStaffAssist && (
+                            <label className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={staffAssist}
+                                    onChange={(e) => onToggleStaffAssist(e.target.checked)}
+                                    className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
+                                />
+                                <span className="min-w-0">
+                                    <span className="block font-semibold text-sm text-on-surface">{t('checkout.staffAssistTitle')}</span>
+                                    <span className="block text-xs text-on-surface-variant mt-0.5 leading-relaxed">{t('checkout.staffAssistDesc')}</span>
+                                </span>
+                            </label>
+                        )}
+
+                        {staffAssist ? (
+                            <div className="flex items-start gap-3 rounded-xl border border-primary/40 bg-primary/5 p-4">
+                                <span className="material-symbols-outlined shrink-0 text-primary">support_agent</span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-bold text-primary">{t('checkout.staffAssistNoticeTitle')}</span>
+                                    <span className="mt-0.5 block text-xs leading-relaxed text-on-surface-variant">{t('checkout.staffAssistNoticeDesc')}</span>
+                                </span>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Tự bổ sung sau — ẩn khi sát ngày khởi hành */}
+                                {onToggleDefer && !disableDefer && (
+                                    <label className="flex items-start gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-low/40 p-4 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={deferPassengers}
+                                            onChange={(e) => onToggleDefer(e.target.checked)}
+                                            className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
+                                        />
+                                        <span className="min-w-0">
+                                            <span className="block font-semibold text-sm text-on-surface">{t('checkout.deferPassengersTitle')}</span>
+                                            <span className="block text-xs text-on-surface-variant mt-0.5 leading-relaxed">{t('checkout.deferPassengersDesc')}</span>
+                                        </span>
+                                    </label>
+                                )}
+
+                                {/* Sát ngày đi mà không có lựa chọn nhờ nhân viên → buộc điền đủ */}
+                                {onToggleDefer && disableDefer && !showStaffAssist && (
+                                    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                        <span className="material-symbols-outlined shrink-0 text-amber-600">schedule</span>
+                                        <span className="min-w-0">
+                                            <span className="block text-sm font-bold text-amber-800">{t('checkout.deferDisabledTitle')}</span>
+                                            <span className="mt-0.5 block text-xs leading-relaxed text-amber-700">{t('checkout.deferDisabledDesc')}</span>
+                                        </span>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                )}
+
                 {/* Added Passengers List */}
                 {passengers.length > 0 && (
                     <div className="space-y-3">
-                        <h4 className="font-bold text-sm text-on-surface-variant">{t('checkout.addedPassengers')}</h4>
-                        {passengers.map((p, idx) => (
-                            <div
-                                key={idx}
-                                className={`flex items-center justify-between gap-3 rounded-xl border p-4 shadow-sm transition-all ${
-                                    editingPassengerIndex === idx
-                                        ? 'border-primary bg-primary/5 ring-2 ring-primary/10'
-                                        : 'border-primary/20 bg-white hover:border-primary/40'
-                                }`}
-                            >
-                                <div className="flex min-w-0 items-center gap-3">
-                                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                                        editingPassengerIndex === idx ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
-                                    }`}>
-                                        <span className="material-symbols-outlined text-xl">{p.type.includes('Child') ? 'child_care' : p.type.includes('Infant') ? 'baby_changing_station' : 'person'}</span>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <p className="truncate font-bold text-on-surface">{p.fullName}</p>
-                                            {editingPassengerIndex === idx && (
-                                                <span className="hidden shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary sm:inline-flex">
-                                                    {t('checkout.editingPassenger')}
-                                                </span>
-                                            )}
+                        <h4 className="font-bold text-sm text-on-surface-variant">{lockComposition ? t('checkout.otherPassengers') : t('checkout.addedPassengers')}</h4>
+                        {passengers.map((p, idx) => {
+                            const editing = editingPassengerIndex === idx;
+                            const incomplete = !p.fullName;
+                            const inner = (
+                                <>
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                                            editing ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
+                                        }`}>
+                                            <span className="text-sm font-extrabold">{idx + 2}</span>
                                         </div>
-                                        <p className="truncate text-xs font-medium text-outline">
-                                            {t(p.type === 'Adult (12+)' ? 'checkout.adult' : p.type === 'Child (4-11)' ? 'checkout.child' : 'checkout.infant')}
-                                            {' '}•{' '}{ageLabel(p)}
-                                            {' '}•{' '}{p.dob}
-                                        </p>
+                                        <div className="min-w-0">
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                <p className={`truncate font-bold ${p.fullName ? 'text-on-surface' : 'text-outline italic'}`}>{p.fullName || (isDeferred ? deferredLabel : t('checkout.passengerNeedsInfo'))}</p>
+                                                {editing && (
+                                                    <span className="hidden shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary sm:inline-flex">
+                                                        {t('checkout.editingPassenger')}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="truncate text-xs font-medium text-outline">
+                                                {t(p.type === 'Adult (12+)' ? 'checkout.adult' : p.type === 'Child (4-11)' ? 'checkout.child' : 'checkout.infant')}
+                                                {p.dob && <>{' '}•{' '}{ageLabel(p)}{' '}•{' '}{p.dob}</>}
+                                            </p>
+                                        </div>
                                     </div>
+                                </>
+                            );
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`flex items-stretch gap-1 overflow-hidden rounded-xl border shadow-sm transition-all ${
+                                        editing
+                                            ? 'border-primary bg-primary/5 ring-2 ring-primary/10'
+                                            : 'border-primary/20 bg-white hover:border-primary/40'
+                                    }`}
+                                >
+                                    {isDeferred ? (
+                                        <div className="flex min-w-0 flex-1 items-center justify-between gap-3 p-4">
+                                            {inner}
+                                            <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                                                {deferredLabel}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => lockComposition ? openAllModal() : handleEditPassenger(idx)}
+                                            aria-label={`${incomplete ? t('checkout.fillInfo') : t('checkout.edit')} — ${t('checkout.otherPassengers')} ${idx + 2}`}
+                                            className="flex min-w-0 flex-1 items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-primary/5"
+                                        >
+                                            {inner}
+                                            <span className={`inline-flex shrink-0 items-center gap-1 text-xs font-bold ${incomplete ? 'text-primary' : 'text-on-surface-variant'}`}>
+                                                <span className="material-symbols-outlined text-[18px]">{incomplete ? 'edit_note' : 'edit'}</span>
+                                                <span className="hidden sm:inline">{incomplete ? t('checkout.fillInfo') : t('checkout.edit')}</span>
+                                            </span>
+                                        </button>
+                                    )}
+                                    {!lockComposition && !isDeferred && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onRemovePassenger(idx)}
+                                            aria-label={`${t('checkout.deletePassenger')} ${p.fullName}`}
+                                            title={t('checkout.deletePassenger')}
+                                            className="flex shrink-0 items-center px-3 text-error transition-colors hover:bg-error/10"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                                        </button>
+                                    )}
                                 </div>
-                                <div className="flex shrink-0 items-center gap-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleEditPassenger(idx)}
-                                        aria-label={`${t('checkout.edit')} ${p.fullName}`}
-                                        title={t('checkout.edit')}
-                                        className={`rounded-lg p-2 transition-[transform,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.92] motion-reduce:transform-none motion-reduce:transition-none ${
-                                            editingPassengerIndex === idx
-                                                ? 'bg-primary text-white shadow-md shadow-primary/20'
-                                                : 'text-primary hover:bg-primary/10 hover:shadow-sm'
-                                        }`}
-                                    >
-                                        <span className="material-symbols-outlined text-[20px]">edit</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => onRemovePassenger(idx)}
-                                        aria-label={`${t('checkout.deletePassenger')} ${p.fullName}`}
-                                        title={t('checkout.deletePassenger')}
-                                        className="rounded-lg p-2 text-error transition-[transform,background-color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-error/10 hover:shadow-sm active:translate-y-0 active:scale-[0.92] motion-reduce:transform-none motion-reduce:transition-none"
-                                    >
-                                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
 
                 {/* Add Passenger Buttons + Form */}
-                <div className="space-y-4 pt-4 border-t border-outline-variant/20">
+                <div className={lockComposition ? 'space-y-4' : 'space-y-4 pt-4 border-t border-outline-variant/20'}>
                     {/* Header: tiêu đề + seat counter badge */}
+                    {!lockComposition && (
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                         <h3 className="font-headline font-bold text-lg">
                             {isEditingPassenger ? t('checkout.editPassenger') : t('checkout.addPassenger')}
@@ -419,9 +577,10 @@ export default function PassengerSection({
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Banner cảnh báo khi đầy ghế */}
-                    {isSeatFull && !isEditingPassenger && (
+                    {isSeatFull && !isEditingPassenger && !lockComposition && (
                         <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                             <span className="material-symbols-outlined text-amber-500 text-xl mt-0.5 flex-shrink-0">info</span>
                             <div>
@@ -437,7 +596,7 @@ export default function PassengerSection({
                         </div>
                     )}
 
-                    {!isEditingPassenger && (
+                    {!isEditingPassenger && !lockComposition && (
                         <div className="grid grid-cols-3 gap-2 md:gap-4">
                             {(['Adult (12+)', 'Child (4-11)', 'Infant (<4)'] as PassengerType[]).map((type) => {
                                 const isActive = activeFormType === type;
@@ -506,19 +665,26 @@ export default function PassengerSection({
                     )}
 
                     {activeFormType && (
-                        <div className={`relative rounded-2xl border p-5 md:p-8 animate-fade-in ${isEditingPassenger ? 'mt-2 border-primary/30 bg-white shadow-sm' : 'mt-4 border-primary/20 bg-primary/5'}`}>
-                            {!isEditingPassenger && (
-                                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-surface border-t border-l border-primary/20 rotate-45" style={{ backgroundColor: '#f6f8fb' }}></div>
-                            )}
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="font-headline font-bold text-lg text-primary">
-                                    {isEditingPassenger ? t('checkout.editPassenger') : t('checkout.enterInfoFor')} {activeFormType === 'Adult (12+)' ? t('checkout.adult') : activeFormType === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant')}
-                                    <span className="ml-2 text-sm font-normal text-on-surface-variant">
-                                        ({activeFormType === 'Adult (12+)' ? '>=12' : activeFormType === 'Child (4-11)' ? '4-11' : '<4'} {t('checkout.yearsOld')})
-                                    </span>
-                                </h4>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+                            <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+                                <div className="flex items-start justify-between gap-4 border-b border-outline-variant/15 px-6 py-4">
+                                    <h4 className="font-headline font-bold text-lg text-primary">
+                                        {isEditingPassenger ? t('checkout.editPassenger') : t('checkout.enterInfoFor')} {activeFormType === 'Adult (12+)' ? t('checkout.adult') : activeFormType === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant')}
+                                        <span className="ml-2 text-sm font-normal text-on-surface-variant">
+                                            ({activeFormType === 'Adult (12+)' ? '>=12' : activeFormType === 'Child (4-11)' ? '4-11' : '<4'} {t('checkout.yearsOld')})
+                                        </span>
+                                    </h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenForm(null)}
+                                        aria-label={t('checkout.cancel')}
+                                        className="shrink-0 rounded-lg p-1.5 text-outline transition-colors hover:bg-surface-container hover:text-on-surface"
+                                    >
+                                        <span className="material-symbols-outlined">close</span>
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto px-6 py-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
                                 {/* Full Name */}
                                 <div className="md:col-span-2">
                                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.fullName')} <span className="text-error">*</span></label>
@@ -649,29 +815,168 @@ export default function PassengerSection({
                                     )}
                                 </div>
                             </div>
-                            <div className="mt-8 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => handleOpenForm(null)}
-                                    className="min-h-[44px] rounded-full px-6 py-3 text-sm font-bold text-outline transition-[transform,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-surface-container hover:text-on-surface hover:shadow-sm active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
-                                >
-                                    {t('checkout.cancel')}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleValidatedSave}
-                                    className="group inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
-                                >
-                                    {isEditingPassenger ? t('checkout.updatePassenger') : t('checkout.savePassenger')}
-                                    <span className="material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5 motion-reduce:transform-none">
-                                        person_add
-                                    </span>
-                                </button>
+                                </div>
+                                <div className="flex justify-end gap-3 border-t border-outline-variant/15 px-6 py-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenForm(null)}
+                                        className="min-h-[44px] rounded-full px-6 py-3 text-sm font-bold text-outline transition-[transform,background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-surface-container hover:text-on-surface hover:shadow-sm active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+                                    >
+                                        {t('checkout.cancel')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleValidatedSave}
+                                        className="group inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-[transform,background-color,box-shadow,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:bg-primary-container hover:shadow-xl hover:shadow-primary/25 active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none motion-reduce:transition-none"
+                                    >
+                                        {isEditingPassenger ? t('checkout.updatePassenger') : t('checkout.savePassenger')}
+                                        <span className="material-symbols-outlined text-[18px] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5 motion-reduce:transform-none">
+                                            person_add
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* ── Modal gộp: điền tất cả hành khách đi cùng một lần ── */}
+            {isAllModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true">
+                    <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+                        <div className="flex items-start justify-between gap-4 border-b border-outline-variant/15 px-6 py-4">
+                            <div>
+                                <h4 className="font-headline font-bold text-lg text-primary">{t('checkout.passengerInfoTitle')}</h4>
+                                <p className="mt-0.5 text-xs text-on-surface-variant">{t('checkout.fillAllTravelers')}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsAllModalOpen(false)}
+                                aria-label={t('checkout.cancel')}
+                                className="shrink-0 rounded-lg p-1.5 text-outline transition-colors hover:bg-surface-container hover:text-on-surface"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+                            {draft.map((passenger, idx) => {
+                                const type = passenger.type as PassengerType;
+                                const typeLabel = type === 'Adult (12+)' ? t('checkout.adult') : type === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant');
+                                const ageRange = type === 'Adult (12+)' ? '>=12' : type === 'Child (4-11)' ? '4-11' : '<4';
+                                const rowErr = draftErrors[idx] ?? {};
+                                const age = passenger.dob ? calcAge(passenger.dob, referenceDate) : null;
+                                return (
+                                    <div key={idx} className="rounded-2xl border border-outline-variant/20 p-4 sm:p-5">
+                                        <div className="mb-3 flex items-center gap-2.5">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-extrabold text-primary">{idx + 2}</span>
+                                            <span className="text-sm font-bold text-on-surface">{typeLabel}</span>
+                                            <span className="rounded-full bg-surface-container px-2 py-0.5 text-[10px] font-bold text-on-surface-variant">{ageRange} {t('checkout.yearsOld')}</span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                                            <div className="md:col-span-2">
+                                                <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5">{t('checkout.fullName')} <span className="text-error">*</span></label>
+                                                <input
+                                                    type="text"
+                                                    value={passenger.fullName}
+                                                    placeholder={t('checkout.enterFullName')}
+                                                    onChange={(e) => updateDraft(idx, { fullName: e.target.value })}
+                                                    className={`w-full rounded-lg border bg-white p-3 text-sm shadow-sm outline-none focus:ring-1 ${rowErr.fullName ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
+                                                />
+                                                {rowErr.fullName && <p className="mt-1 text-xs font-medium text-error">{rowErr.fullName}</p>}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5">{t('checkout.dob')} <span className="text-error">*</span></label>
+                                                <input
+                                                    type="date"
+                                                    value={passenger.dob}
+                                                    min={getMinDate(type, referenceDate)}
+                                                    max={getMaxDate(type, referenceDate)}
+                                                    onChange={(e) => updateDraft(idx, { dob: e.target.value })}
+                                                    className={`w-full rounded-lg border bg-white p-3 text-sm shadow-sm outline-none focus:ring-1 ${rowErr.dob ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
+                                                />
+                                                {rowErr.dob ? (
+                                                    <p className="mt-1 text-xs font-medium text-error">{rowErr.dob}</p>
+                                                ) : age !== null ? (
+                                                    <p className="mt-1 text-[11px] font-semibold text-emerald-600">{age} {t('checkout.yearsOld')}</p>
+                                                ) : null}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5">{t('checkout.gender')} <span className="text-error">*</span></label>
+                                                <CheckoutSelect
+                                                    ariaLabel={t('checkout.gender')}
+                                                    value={passenger.gender}
+                                                    options={genderOptions}
+                                                    onChange={(value) => updateDraft(idx, { gender: value })}
+                                                />
+                                            </div>
+
+                                            <div className="md:col-span-2">
+                                                <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                                                    {t('checkout.identityDocumentOptional')}
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <CheckoutSelect
+                                                        className="w-36 flex-shrink-0"
+                                                        menuClassName="w-64"
+                                                        ariaLabel={t('checkout.identityDocumentOptional')}
+                                                        value={passenger.identityType || (type === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD')}
+                                                        options={getIdentityDocTypes(type).map(opt => ({
+                                                            value: opt.value,
+                                                            label: opt.label,
+                                                            icon: opt.value === 'CCCD' ? 'badge' : opt.value === 'PASSPORT' ? 'id_card' : 'history_edu',
+                                                        }))}
+                                                        onChange={(value) => updateDraft(idx, { identityType: value, identityNo: '' })}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={passenger.identityNo || ''}
+                                                        placeholder={(passenger.identityType || 'CCCD') === 'CCCD' ? t('checkout.enterCitizenId') : (passenger.identityType || 'CCCD') === 'PASSPORT' ? t('checkout.enterPassport') : t('checkout.enterBirthCertificate')}
+                                                        maxLength={(passenger.identityType || 'CCCD') === 'CCCD' ? 12 : 20}
+                                                        onChange={(e) => {
+                                                            const idType = passenger.identityType || 'CCCD';
+                                                            const v = idType === 'CCCD'
+                                                                ? e.target.value.replace(/\D/g, '')
+                                                                : idType === 'PASSPORT'
+                                                                    ? e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+                                                                    : e.target.value;
+                                                            updateDraft(idx, { identityNo: v });
+                                                        }}
+                                                        className={`min-w-0 flex-1 rounded-lg border bg-white p-3 text-sm shadow-sm outline-none focus:ring-1 ${rowErr.identityNo ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
+                                                    />
+                                                </div>
+                                                {rowErr.identityNo && <p className="mt-1 text-xs font-medium text-error">{rowErr.identityNo}</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex justify-end gap-3 border-t border-outline-variant/15 px-6 py-4">
+                            <button
+                                type="button"
+                                onClick={() => setIsAllModalOpen(false)}
+                                className="min-h-[44px] rounded-full px-6 py-3 text-sm font-bold text-outline transition-colors hover:bg-surface-container hover:text-on-surface"
+                            >
+                                {t('checkout.cancel')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveAll}
+                                className="group inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-primary px-8 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary-container"
+                            >
+                                {t('checkout.confirmPassengers')}
+                                <span className="material-symbols-outlined text-[18px]">group_add</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }

@@ -25,6 +25,8 @@ import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 import { BookingService } from './booking.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { UpdateBookingPassengersDto } from './dto/update-booking-passengers.dto';
+import { SendPassengerReminderDto } from './dto/send-passenger-reminder.dto';
 import { CreateAssistedBookingDraftDto } from './dto/create-assisted-booking-draft.dto';
 import { ReviewAssistedBookingDraftDto } from './dto/review-assisted-booking-draft.dto';
 import {
@@ -236,6 +238,21 @@ export class BookingController {
     return { message: 'Success', data: booking };
   }
 
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('my/:id/passengers')
+  async updateMyBookingPassengers(
+    @Param('id') id: string,
+    @Body() dto: UpdateBookingPassengersDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.bookingService.updateMyBookingPassengers(
+      Number(id),
+      getAuthUserId(req),
+      dto,
+    );
+    return { message: 'Success', data };
+  }
+
   /**
    * Staff + Admin: Quick stats (số lượng booking theo status, không có doanh thu)
    * GET /booking/admin/stats
@@ -290,6 +307,7 @@ export class BookingController {
     @Query('departureFrom') departureFrom?: string,
     @Query('departureTo') departureTo?: string,
     @Query('needsCustomerCall') needsCustomerCall?: string,
+    @Query('needsPassengerInfo') needsPassengerInfo?: string,
   ) {
     const validPaymentMethod =
       paymentMethod === 'PAYOS' || paymentMethod === 'IN_STORE'
@@ -308,6 +326,7 @@ export class BookingController {
       departureFrom,
       departureTo,
       needsCustomerCall === 'true',
+      needsPassengerInfo === 'true',
     );
 
     // Doanh thu chỉ dành cho Admin/Super Admin — không trả số tiền cho STAFF.
@@ -443,6 +462,36 @@ export class BookingController {
       Number(id),
       getAuthUserId(req),
       dto.note,
+    );
+    return { message: 'Success', data };
+  }
+
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Patch('admin/:id/passengers')
+  @AuditLog('UPDATE', 'Booking')
+  async updateBookingPassengersByStaff(
+    @Param('id') id: string,
+    @Body() dto: UpdateBookingPassengersDto,
+  ) {
+    const data = await this.bookingService.updateBookingPassengersByStaff(
+      Number(id),
+      dto,
+    );
+    return { message: 'Success', data };
+  }
+
+  @UseGuards(AuthGuard('jwt'), StaffOrAdminGuard)
+  @Patch('admin/:id/passenger-reminder')
+  @AuditLog('UPDATE', 'Booking')
+  async sendPassengerReminder(
+    @Param('id') id: string,
+    @Body() dto: SendPassengerReminderDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = await this.bookingService.sendPassengerReminderByStaff(
+      Number(id),
+      getAuthUserId(req),
+      dto.channel,
     );
     return { message: 'Success', data };
   }

@@ -72,6 +72,20 @@ const DEFAULT_SETTINGS = [
     description: 'Số lượng hành khách tối thiểu một lần đặt tour',
     group: 'booking',
   },
+  {
+    key: 'passenger_info_deadline_days',
+    value: '3',
+    label: 'Hạn bổ sung thông tin hành khách (ngày)',
+    description: 'Số ngày trước khởi hành mà khách phải hoàn tất thông tin hành khách còn thiếu',
+    group: 'booking',
+  },
+  {
+    key: 'staff_assist_min_people',
+    value: '6',
+    label: 'Số khách tối thiểu để hiện "nhờ nhân viên nhập hộ"',
+    description: 'Từ số khách này trở lên, checkout hiện tùy chọn để khách nhờ nhân viên nhập thông tin hành khách',
+    group: 'booking',
+  },
 ];
 
 const SETTING_DEFINITIONS: Record<string, SettingDefinition> = {
@@ -83,6 +97,8 @@ const SETTING_DEFINITIONS: Record<string, SettingDefinition> = {
   booking_hold_minutes: { key: 'booking_hold_minutes', type: 'integer', min: 5, max: 120, required: true },
   booking_max_people: { key: 'booking_max_people', type: 'integer', min: 1, max: 99, required: true },
   booking_min_people: { key: 'booking_min_people', type: 'integer', min: 1, max: 99, required: true },
+  passenger_info_deadline_days: { key: 'passenger_info_deadline_days', type: 'integer', min: 1, max: 60, required: true },
+  staff_assist_min_people: { key: 'staff_assist_min_people', type: 'integer', min: 1, max: 99, required: true },
 };
 
 const ADMIN_EDITABLE_GROUPS = new Set(['company', 'booking']);
@@ -146,12 +162,17 @@ export interface PublicSettings {
   company_phone: string;
   company_email: string;
   company_description: string;
+  booking_max_people: number;
+  booking_min_people: number;
+  passenger_info_deadline_days: number;
+  staff_assist_min_people: number;
 }
 
 export interface BookingPolicy {
   holdMinutes: number;
   maxPeople: number;
   minPeople: number;
+  passengerInfoDeadlineDays: number;
 }
 
 type SystemHealthStatus = 'ok' | 'warning' | 'error';
@@ -266,18 +287,35 @@ export class SettingsService implements OnModuleInit {
       'company_phone',
       'company_email',
       'company_description',
+      'booking_max_people',
+      'booking_min_people',
+      'passenger_info_deadline_days',
+      'staff_assist_min_people',
     ];
     const settings = await this.prisma.systemSetting.findMany({
       where: { key: { in: allowedKeys } },
     });
     const flat: Record<string, string> = {};
     for (const s of settings) flat[s.key] = s.value;
+
+    const toInt = (raw: string | undefined, fallback: number) => {
+      const n = Number(raw);
+      return Number.isInteger(n) && n > 0 ? n : fallback;
+    };
+    const maxPeople = toInt(flat.booking_max_people, 20);
+    const minPeople = toInt(flat.booking_min_people, 1);
+
     return {
       company_name: flat.company_name ?? 'Azure Horizon',
       company_address: flat.company_address ?? '',
       company_phone: flat.company_phone ?? '',
       company_email: flat.company_email ?? '',
       company_description: flat.company_description ?? '',
+      booking_max_people: maxPeople,
+      // An toàn: min không bao giờ vượt max dù settings bị lệch.
+      booking_min_people: Math.min(minPeople, maxPeople),
+      passenger_info_deadline_days: toInt(flat.passenger_info_deadline_days, 3),
+      staff_assist_min_people: toInt(flat.staff_assist_min_people, 6),
     };
   }
 
@@ -419,12 +457,14 @@ export class SettingsService implements OnModuleInit {
     const holdMinutes = clamp(flat.booking_hold_minutes, SETTING_DEFINITIONS.booking_hold_minutes, 15);
     const maxPeople = clamp(flat.booking_max_people, SETTING_DEFINITIONS.booking_max_people, 20);
     const minPeople = clamp(flat.booking_min_people, SETTING_DEFINITIONS.booking_min_people, 1);
+    const passengerInfoDeadlineDays = clamp(flat.passenger_info_deadline_days, SETTING_DEFINITIONS.passenger_info_deadline_days, 3);
 
     const value: BookingPolicy = {
       holdMinutes,
       maxPeople,
       // An toàn: min không bao giờ vượt max dù settings bị lệch.
       minPeople: Math.min(minPeople, maxPeople),
+      passengerInfoDeadlineDays,
     };
     this.bookingPolicyCache = { value, expiresAt: Date.now() + 60_000 };
     return value;

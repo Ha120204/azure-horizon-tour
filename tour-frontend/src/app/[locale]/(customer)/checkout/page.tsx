@@ -122,9 +122,6 @@ function CheckoutContent() {
     const packageIdStr = searchParams.get('packageId');
     const departureIdStr = searchParams.get('departureId');
 
-    // Số khách được chọn sẵn ở trang chi tiết tour. Khi có, thành phần đoàn bị
-    // khoá (không thêm/bớt tại checkout) — khách chỉ điền thông tin từng người.
-    const hasGuestSelection = searchParams.has('adults');
     const adultsParam = Math.max(1, Number(searchParams.get('adults')) || 1);
     const childrenParam = Math.max(0, Number(searchParams.get('children')) || 0);
     const infantsParam = Math.max(0, Number(searchParams.get('infants')) || 0);
@@ -139,6 +136,8 @@ function CheckoutContent() {
     const [leadTraveler, setLeadTraveler] = useState({ fullName: '', dob: '', gender: '', identityType: 'CCCD', identityNo: '', notes: '' });
 
     const [tempFormData, setTempFormData] = useState({ fullName: '', dob: '', gender: '', identityType: 'CCCD', identityNo: '' });
+    const [guestCounts, setGuestCounts] = useState({ adults: adultsParam, children: childrenParam, infants: infantsParam });
+    const [bookingMaxPeople, setBookingMaxPeople] = useState(DEFAULT_PUBLIC_SETTINGS.booking_max_people);
     const [passengers, setPassengers] = useState<Passenger[]>([]);
     const [deferPassengers, setDeferPassengers] = useState(false);
     const [staffAssist, setStaffAssist] = useState(false);
@@ -239,7 +238,7 @@ function CheckoutContent() {
 
         for (let i = 0; i < passengers.length; i++) {
             const p = passengers[i];
-            if (hasGuestSelection && !deferPassengers && !staffAssist && !(p.fullName.trim() && p.dob && p.gender)) {
+            if (!deferPassengers && !staffAssist && !(p.fullName.trim() && p.dob && p.gender)) {
                 showError(t('checkout.errors.completePassengers'));
                 return;
             }
@@ -302,11 +301,11 @@ function CheckoutContent() {
             type, fullName: '', dob: '', gender: '',
             identityType: type === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD', identityNo: '',
         });
-        const expectedSlots: Passenger[] = hasGuestSelection ? [
+        const expectedSlots: Passenger[] = [
             ...Array.from({ length: Math.max(0, adultsParam - 1) }, () => makeSlot('Adult (12+)')),
             ...Array.from({ length: childrenParam }, () => makeSlot('Child (4-11)')),
             ...Array.from({ length: infantsParam }, () => makeSlot('Infant (<4)')),
-        ] : [];
+        ];
 
         let restored: Passenger[] | null = null;
         const savedPassengers = sessionStorage.getItem('checkout_passengers');
@@ -314,18 +313,13 @@ function CheckoutContent() {
             try { restored = JSON.parse(savedPassengers); } catch {}
         }
 
-        if (hasGuestSelection) {
-            // URL là nguồn chân lý cho thành phần đoàn (đã chốt ở trang chi tiết).
-            // Giữ lại dữ liệu đã điền nếu thành phần (theo type) khớp; nếu khách đổi
-            // số lượng rồi quay lại thì tạo lại slot rỗng theo lựa chọn mới.
-            const sig = (list: Passenger[]) => list.map(p => p.type).sort().join('|');
-            if (restored && sig(restored) === sig(expectedSlots)) {
-                setPassengers(restored);
-            } else {
-                setPassengers(expectedSlots);
-            }
-        } else if (restored) {
+        // Giữ lại dữ liệu đã điền nếu thành phần (theo type) khớp; nếu khách đổi
+        // số lượng thì tạo lại slot rỗng theo lựa chọn mới.
+        const sig = (list: Passenger[]) => list.map(p => p.type).sort().join('|');
+        if (restored && sig(restored) === sig(expectedSlots)) {
             setPassengers(restored);
+        } else {
+            setPassengers(expectedSlots);
         }
 
         const savedBookMyself = sessionStorage.getItem('checkout_isBookForMyself');
@@ -350,7 +344,7 @@ function CheckoutContent() {
         
         const savedVoucherCode = sessionStorage.getItem('checkout_voucherCode');
         if (savedVoucherCode) setVoucherCode(savedVoucherCode);
-    }, [tourIdStr, hasGuestSelection, adultsParam, childrenParam, infantsParam]);
+    }, [tourIdStr, adultsParam, childrenParam, infantsParam]);
 
     // Save to sessionStorage when states change
     useEffect(() => {
@@ -391,6 +385,7 @@ function CheckoutContent() {
             .then(s => {
                 setPassengerInfoDeadlineDays(s.passenger_info_deadline_days);
                 setStaffAssistMinPeople(s.staff_assist_min_people);
+                setBookingMaxPeople(s.booking_max_people);
             })
             .catch(() => {});
         return () => controller.abort();
@@ -534,11 +529,49 @@ function CheckoutContent() {
         'Infant (<4)': basePrice * PASSENGER_MULTIPLIERS['Infant (<4)']
     };
 
-    const adultCount = 1 + passengers.filter(p => p.type === 'Adult (12+)').length;
-    const childCount = passengers.filter(p => p.type === 'Child (4-11)').length;
-    const infantCount = passengers.filter(p => p.type === 'Infant (<4)').length;
+    const adultCount = guestCounts.adults;
+    const childCount = guestCounts.children;
+    const infantCount = guestCounts.infants;
+    const totalGuests = adultCount + childCount + infantCount;
+
+    // Constraints cho stepper
+    const availableSeats = selectedDeparture?.availableSeats ?? tourData?.availableSeats ?? undefined;
+    const seatsUsed = adultCount + childCount;
+    const maxPeopleReached = totalGuests >= bookingMaxPeople;
+    const seatLimitReached = availableSeats !== undefined && seatsUsed >= availableSeats;
+    const canIncreaseAdults = !maxPeopleReached && !seatLimitReached;
+    const canIncreaseChildren = !maxPeopleReached && !seatLimitReached;
+    const canIncreaseInfants = infantCount < adultCount && !maxPeopleReached;
+
+    const handleChangeGuest = (key: 'adults' | 'children' | 'infants', delta: 1 | -1) => {
+        // Tính next counts đồng bộ để dùng cho cả guestCounts lẫn passengers
+        const next = { ...guestCounts, [key]: Math.max(0, guestCounts[key] + delta) };
+        if (next.adults < 1) next.adults = 1;
+        if (next.infants > next.adults) next.infants = next.adults;
+        setGuestCounts(next);
+
+        // Sync passengers: trim/pad từng loại để khớp với next counts, giữ lại dữ liệu đã điền
+        const makeSlot = (type: PassengerType): Passenger => ({
+            type, fullName: '', dob: '', gender: '',
+            identityType: type === 'Infant (<4)' ? 'BIRTH_CERT' : 'CCCD', identityNo: '',
+        });
+        setPassengers(prev => {
+            const adults = prev.filter(p => p.type === 'Adult (12+)');
+            const children = prev.filter(p => p.type === 'Child (4-11)');
+            const infants = prev.filter(p => p.type === 'Infant (<4)');
+            const targetAdults = next.adults - 1; // lead traveler không nằm trong passengers
+            const pad = <T,>(arr: T[], n: number, make: () => T) =>
+                n >= arr.length ? [...arr, ...Array.from({ length: n - arr.length }, make)] : arr.slice(0, n);
+            return [
+                ...pad(adults, targetAdults, () => makeSlot('Adult (12+)')),
+                ...pad(children, next.children, () => makeSlot('Child (4-11)')),
+                ...pad(infants, next.infants, () => makeSlot('Infant (<4)')),
+            ];
+        });
+    };
+
     // Đoàn đông (≥ ngưỡng) → cho khách nhờ nhân viên nhập hộ.
-    const showStaffAssist = hasGuestSelection && (adultCount + childCount + infantCount) >= staffAssistMinPeople;
+    const showStaffAssist = totalGuests >= staffAssistMinPeople;
 
     useEffect(() => {
         if (!showStaffAssist && staffAssist) setStaffAssist(false);
@@ -772,7 +805,7 @@ function CheckoutContent() {
 
         for (let i = 0; i < passengers.length; i++) {
             const p = passengers[i];
-            if (hasGuestSelection && !deferPassengers && !staffAssist && !(p.fullName.trim() && p.dob && p.gender)) {
+            if (!deferPassengers && !staffAssist && !(p.fullName.trim() && p.dob && p.gender)) {
                 showError(t('checkout.errors.completePassengers'));
                 return;
             }
@@ -905,10 +938,10 @@ function CheckoutContent() {
                         t={t}
                         maxPassengers={selectedDeparture?.availableSeats ?? tourData?.availableSeats ?? undefined}
                         departureDate={selectedDeparture?.departureDate ?? tourData?.startDate ?? null}
-                        lockComposition={hasGuestSelection}
+                        lockComposition={true}
                         deferPassengers={deferPassengers}
                         onToggleDefer={handleToggleDefer}
-                        disableDefer={hasGuestSelection && isNearDeparture}
+                        disableDefer={isNearDeparture}
                         showStaffAssist={showStaffAssist}
                         staffAssist={staffAssist}
                         onToggleStaffAssist={handleToggleStaffAssist}
@@ -946,6 +979,12 @@ function CheckoutContent() {
                     onPayment={handleOpenConfirmModal}
                     agreedToTerms={agreedToTerms}
                     setAgreedToTerms={setAgreedToTerms}
+                    onChangeGuest={handleChangeGuest}
+                    canIncreaseAdults={canIncreaseAdults}
+                    canIncreaseChildren={canIncreaseChildren}
+                    canIncreaseInfants={canIncreaseInfants}
+                    maxPeopleReached={maxPeopleReached}
+                    maxPeople={bookingMaxPeople}
                     t={t}
                     formatPrice={formatPrice}
                 />

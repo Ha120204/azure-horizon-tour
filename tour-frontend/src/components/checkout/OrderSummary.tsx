@@ -71,6 +71,13 @@ interface OrderSummaryProps {
     onPayment: () => void;
     agreedToTerms: boolean;
     setAgreedToTerms: (agreed: boolean) => void;
+    // Guest stepper
+    onChangeGuest: (key: 'adults' | 'children' | 'infants', delta: 1 | -1) => void;
+    canIncreaseAdults: boolean;
+    canIncreaseChildren: boolean;
+    canIncreaseInfants: boolean;
+    maxPeopleReached: boolean;
+    maxPeople: number;
     t: (key: string, params?: Record<string, string | number | Date>) => string;
     formatPrice: (price: number) => string;
 }
@@ -145,6 +152,12 @@ export default function OrderSummary({
     onPayment,
     agreedToTerms,
     setAgreedToTerms,
+    onChangeGuest,
+    canIncreaseAdults,
+    canIncreaseChildren,
+    canIncreaseInfants,
+    maxPeopleReached,
+    maxPeople,
     t,
     formatPrice,
 }: OrderSummaryProps) {
@@ -288,25 +301,51 @@ export default function OrderSummary({
                         </div>
                     )}
 
-                    {/* Price Breakdown */}
-                    <div className="space-y-3 pt-4 border-t border-dashed border-outline-variant/40 text-sm">
-                        {adultCount > 0 && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-on-surface-variant font-medium">{t('checkout.adultX')} x {adultCount}</span>
-                                <span className="font-semibold text-on-surface">{formatPrice(adultCount * prices['Adult (12+)'])}</span>
+                    {/* Guest Stepper + Price Breakdown */}
+                    <div className="space-y-2 pt-4 border-t border-dashed border-outline-variant/40">
+                        {([
+                            { key: 'adults' as const, label: t('tour_detail.guestsAdults'), age: t('tour_detail.guestsAdultsAge'), count: adultCount, price: prices['Adult (12+)'], canDec: adultCount > 1, canInc: canIncreaseAdults },
+                            { key: 'children' as const, label: t('tour_detail.guestsChildren'), age: t('tour_detail.guestsChildrenAge'), count: childCount, price: prices['Child (4-11)'], canDec: childCount > 0, canInc: canIncreaseChildren },
+                            { key: 'infants' as const, label: t('tour_detail.guestsInfants'), age: t('tour_detail.guestsInfantsAge'), count: infantCount, price: prices['Infant (<4)'], canDec: infantCount > 0, canInc: canIncreaseInfants },
+                        ]).map(row => (
+                            <div key={row.key} className="flex items-center gap-2">
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-on-surface-variant">{row.label}</p>
+                                    <p className="text-[10px] text-outline">{row.age}</p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => onChangeGuest(row.key, -1)}
+                                        disabled={!row.canDec}
+                                        aria-label={`-1 ${row.label}`}
+                                        className="h-8 w-8 rounded-full border-2 border-outline-variant/30 text-primary flex items-center justify-center transition-colors hover:border-primary/40 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">remove</span>
+                                    </button>
+                                    <span className="w-6 text-center font-bold tabular-nums text-on-surface text-sm">{row.count}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => onChangeGuest(row.key, 1)}
+                                        disabled={!row.canInc}
+                                        aria-label={`+1 ${row.label}`}
+                                        className="h-8 w-8 rounded-full border-2 border-outline-variant/30 text-primary flex items-center justify-center transition-colors hover:border-primary/40 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">add</span>
+                                    </button>
+                                </div>
+                                <span className="text-sm font-semibold text-on-surface tabular-nums shrink-0 w-24 text-right">
+                                    {row.count > 0 ? formatPrice(row.count * row.price) : '—'}
+                                </span>
                             </div>
-                        )}
-                        {childCount > 0 && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-on-surface-variant font-medium">{t('checkout.childX')} x {childCount}</span>
-                                <span className="font-semibold text-on-surface">{formatPrice(childCount * prices['Child (4-11)'])}</span>
-                            </div>
+                        ))}
+                        {maxPeopleReached && (
+                            <p className="text-[11px] text-amber-600 pt-1">
+                                {t('tour_detail.guestsMaxReached', { max: maxPeople })}
+                            </p>
                         )}
                         {infantCount > 0 && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-on-surface-variant font-medium">{t('checkout.infantX')} x {infantCount}</span>
-                                <span className="font-semibold text-on-surface">{formatPrice(infantCount * prices['Infant (<4)'])}</span>
-                            </div>
+                            <p className="text-[11px] text-outline pt-1">{t('tour_detail.guestsInfantSeatNote')}</p>
                         )}
                     </div>
 

@@ -257,6 +257,8 @@ export default function PassengerSection({
 
     // Computed errors — shown in real-time as user types (same pattern as ContactInfoForm)
     const leadNameError = getNameError(leadTraveler.fullName);
+    // Người đại diện luôn là người lớn (Adult 12+) → validate tuổi theo loại đó tại ngày khởi hành.
+    const leadDobError = leadTraveler.dob ? getAgeError('Adult (12+)', leadTraveler.dob, referenceDate) : null;
     const leadIdentityError = validateIdentityNo(leadTraveler.identityType || 'CCCD', leadTraveler.identityNo);
     const tempNameError = tempFormData.fullName ? getNameError(tempFormData.fullName) : null;
     const tempIdentityError = validateIdentityNo(
@@ -337,11 +339,17 @@ export default function PassengerSection({
                         <div>
                             <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.dob')} <span className="text-error">*</span></label>
                             <input
-                                className="w-full bg-white border border-outline-variant/20 rounded-lg p-3 md:p-4 focus:ring-1 focus:ring-primary outline-none shadow-sm"
+                                className={`w-full bg-white border rounded-lg p-3 md:p-4 focus:ring-1 outline-none shadow-sm ${leadDobError ? 'border-error/60 bg-error/5 focus:ring-error' : 'border-outline-variant/20 focus:ring-primary'}`}
                                 type="date"
                                 value={leadTraveler.dob}
                                 onChange={(e) => setLeadTraveler({ ...leadTraveler, dob: e.target.value })}
                             />
+                            {leadDobError && (
+                                <p className="mt-1.5 text-xs text-error font-medium flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[13px]">error</span>
+                                    {leadDobError}
+                                </p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{t('checkout.gender')} <span className="text-error">*</span></label>

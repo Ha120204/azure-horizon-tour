@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, IsUUID, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ChatRequestDto {
@@ -17,4 +17,10 @@ export class ChatRequestDto {
   @IsInt()
   @IsPositive()
   currentTourId?: number;
+
+  // Ngôn ngữ giao diện hiện tại — dùng làm fallback khi không xác định được
+  // ngôn ngữ tin nhắn của khách (AI ưu tiên "soi gương" theo ngôn ngữ khách gõ).
+  @IsOptional()
+  @IsIn(['vi', 'en'])
+  language?: string;
 }

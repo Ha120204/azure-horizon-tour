@@ -162,33 +162,15 @@ export function useConcierge() {
                 return;
             }
 
+            // Đã đăng nhập: tải danh sách lịch sử cho nút "Lịch sử", nhưng KHÔNG tự
+            // khôi phục đoạn chat cũ. Mỗi lần vào web mở hội thoại mới (kiểu ChatGPT) —
+            // muốn xem lại thì bấm "Lịch sử". Đoạn chat đang dở trong cùng phiên không
+            // bị mất vì widget mount ở layout (chỉ reset khi tải lại trang / đổi auth).
             await loadSessions();
             if (!isActive || !isMountedRef.current) return;
 
-            setIsLoadingHistory(true);
-            try {
-                const res = await fetchOptionalAuth(`${API_BASE_URL}/ai/chat/me/latest`);
-                if (!isActive || !isMountedRef.current) return;
-                if (res.ok) {
-                    const json = await res.json();
-                    if (!isActive || !isMountedRef.current) return;
-                    const data = (json.data ?? json) as { sessionId?: string; messages?: Message[] };
-                    if (data.sessionId) {
-                        localStorage.setItem('aiSessionId', data.sessionId);
-                        setActiveSessionId(data.sessionId);
-                    }
-                    if (data.messages && data.messages.length > 0) {
-                        setMessages(data.messages);
-                        return;
-                    }
-                }
-            } catch (e) {
-                console.error('[AI] Loi tai lich su tai khoan:', e);
-            } finally {
-                if (isActive && isMountedRef.current) setIsLoadingHistory(false);
-            }
-
-            // Đã đăng nhập nhưng chưa có cuộc trò chuyện nào: bắt đầu mới
+            localStorage.removeItem('aiSessionId');
+            setActiveSessionId(undefined);
             setMessages([{ id: Date.now().toString(), role: 'ai', textKey: 'conciergeApp.aiGreeting' }]);
         };
 
@@ -226,6 +208,7 @@ export function useConcierge() {
                         message: text,
                         sessionId: sessionId || undefined,
                         currentTourId: currentTourIdRef.current ?? undefined,
+                        language,
                     }),
                 });
                 if (!isMountedRef.current) return;
@@ -339,7 +322,7 @@ export function useConcierge() {
                 ]);
             }
         },
-        [inputValue, isTyping, isStreaming, cooldown, loadSessions, hasAccessToken, t],
+        [inputValue, isTyping, isStreaming, cooldown, loadSessions, hasAccessToken, t, language],
     );
 
     // ── Handlers ──────────────────────────────────────────────────────────

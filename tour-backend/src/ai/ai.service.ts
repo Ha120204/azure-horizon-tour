@@ -56,7 +56,12 @@ const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           },
           startMonth: {
             type: 'number',
-            description: 'Tháng khởi hành (1–12). Ví dụ: 8 = tháng 8.',
+            description: 'Tháng khởi hành ĐÚNG MỘT tháng cụ thể (1–12). Ví dụ: 8 = chỉ tháng 8.',
+          },
+          startMonthFrom: {
+            type: 'number',
+            description:
+              'Tháng khởi hành SỚM NHẤT khi khách muốn "từ tháng X trở đi / đổ đi / khoảng tháng X về sau" (1–12), không giới hạn tháng trên. Ví dụ: 7 = từ tháng 7 trở đi. Dùng cái này thay cho startMonth khi khách nói "đổ đi/trở đi".',
           },
           partySize: {
             type: 'number',
@@ -366,7 +371,11 @@ export class AiService {
   }
 
   // System prompt.
-  private buildSystemPrompt(currentTour?: { id: number; name: string } | null): string {
+  private buildSystemPrompt(
+    currentTour?: { id: number; name: string } | null,
+    language?: string | null,
+  ): string {
+    const uiLangLabel = language === 'en' ? 'English (tiếng Anh)' : 'tiếng Việt';
     const today = new Date().toLocaleDateString('vi-VN', {
       weekday: 'long',
       year: 'numeric',
@@ -385,7 +394,8 @@ Hôm nay là ${today}. Khi khách nhắc tới "tháng tới", "cuối năm", "h
 
 PHONG CÁCH TƯ VẤN:
 - Trả lời như một nhân viên tư vấn du lịch có kinh nghiệm: tự nhiên, ấm áp, chủ động gợi mở, không máy móc.
-- Ưu tiên tiếng Việt nếu khách dùng tiếng Việt. Câu trả lời nên ngắn vừa đủ, dễ quét, có bullet khi đưa nhiều lựa chọn.
+- NGÔN NGỮ: Trả lời CÙNG ngôn ngữ với tin nhắn GẦN NHẤT của khách (khách viết tiếng Việt → trả lời tiếng Việt; viết tiếng Anh → trả lời tiếng Anh), kể cả khi khách đổi ngôn ngữ giữa chừng cuộc trò chuyện. Nếu tin nhắn không xác định rõ ngôn ngữ (chỉ có tên địa danh/số/mã booking), dùng ngôn ngữ giao diện hiện tại: ${uiLangLabel}.
+- Câu trả lời nên ngắn vừa đủ, dễ quét, có bullet khi đưa nhiều lựa chọn.
 - Không ép khách cung cấp quá nhiều dữ liệu trước khi tư vấn. Hãy giúp họ tiến từng bước.
 
 QUY TRÌNH TƯ VẤN ĐIỂM ĐẾN (giống tổng đài du lịch):
@@ -414,8 +424,9 @@ LOẠI TOUR (tourType):
 SỐ KHÁCH (partySize):
 - Khi khách nói đi mấy người ("đi 2 người", "gia đình 4 thành viên") → truyền partySize là tổng số người, để chỉ trả tour còn đủ ghế.
 
-THÁNG KHỞI HÀNH (startMonth):
-- Khi khách đề cập tháng cụ thể → truyền startMonth là số (1–12).
+THÁNG KHỞI HÀNH (startMonth / startMonthFrom):
+- Khi khách đề cập ĐÚNG MỘT tháng ("đi tháng 8", "khởi hành tháng 8") → truyền startMonth là số (1–12).
+- Khi khách nói "TỪ tháng X trở đi / đổ đi / tháng X về sau / khoảng tháng X trở lên" → truyền startMonthFrom = X (KHÔNG truyền startMonth). Đây là mốc sớm nhất, hệ thống sẽ lấy mọi tháng từ X về sau.
 
 KHI NÀO GỌI TOOL:
 - Khi khách hỏi tìm tour, điểm đến, tour biển, tour gia đình, tour theo ngân sách, hoặc gợi ý tour phù hợp: PHẢI gọi tool "search_tours" trước khi kết luận có tour cụ thể.
@@ -429,6 +440,10 @@ KHI NÀO GỌI TOOL:
 KẾT QUẢ SEMANTIC SEARCH (_semanticMatch: true):
 - Khi "search_tours" trả về danh sách tour có trường "_semanticMatch: true", đây là kết quả tìm kiếm ngữ nghĩa (không khớp từ khóa chính xác mà khớp theo ý nghĩa gần nhất).
 - Hãy trình bày tự nhiên: "Tôi không tìm thấy tour khớp chính xác, nhưng đây là một số tour có thể phù hợp với bạn:" rồi liệt kê như bình thường. Không dùng từ "semantic" hay "vector" với khách.
+
+KẾT QUẢ ĐÃ NỚI LỌC (_relaxed: true):
+- Khi "search_tours" trả về tour có "_relaxed: true", nghĩa là KHÔNG có tour khớp đúng toàn bộ yêu cầu; hệ thống đã tự nới các tiêu chí liệt kê trong "_relaxedFilters" (ví dụ: ngân sách, loại tour, thời gian) để tìm lựa chọn gần nhất.
+- Hãy nói rõ và trung thực TRƯỚC khi liệt kê, ví dụ: "Mình chưa thấy tour khớp đúng [ghi đúng các tiêu chí trong _relaxedFilters], nhưng đây là vài lựa chọn gần nhất:" rồi liệt kê như bình thường. TUYỆT ĐỐI không nói là khớp hoàn toàn. Không cần khách gõ lại yêu cầu.
 
 KHI KHÔNG TÌM THẤY TOUR:
 - TRƯỚC KHI kết luận không có: nếu lần tìm vừa rồi có kèm bộ lọc (tourType/giá/tháng), hãy gọi lại "search_tours" CHỈ với destination để chắc chắn. Chỉ khi tìm chỉ-với-destination vẫn rỗng mới nói chưa có.
@@ -526,7 +541,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     return this.llmClient.chat.completions.create({
       model,
       stream: false,
-      reasoning_effort: 'medium',
+      reasoning_effort: 'low',
       ...payload,
     });
   }
@@ -539,7 +554,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
       model,
       messages,
       stream: true,
-      reasoning_effort: 'medium',
+      reasoning_effort: 'low',
       max_tokens: 1024,
     });
   }
@@ -645,9 +660,10 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     dbHistory: { role: string; content: string }[],
     userMessage: string,
     currentTour?: { id: number; name: string } | null,
+    language?: string | null,
   ): OpenAI.Chat.ChatCompletionMessageParam[] {
     return [
-      { role: 'system', content: this.buildSystemPrompt(currentTour) },
+      { role: 'system', content: this.buildSystemPrompt(currentTour, language) },
       ...dbHistory
         .filter((msg) => msg.content?.trim())
         .slice(-20) // Giữ 20 messages gần nhất, tránh vượt context window và giảm chi phí.
@@ -730,6 +746,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     userId: number | null | undefined,
     currentTourId: number | null | undefined,
     anonId: string | null | undefined,
+    language?: string | null,
   ): Promise<
     | { limitExceeded: true; currentSessionId: string }
     | { limitExceeded: false; currentSessionId: string; messages: OpenAI.Chat.ChatCompletionMessageParam[] }
@@ -748,7 +765,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     await this.touchChatSession(currentSessionId);
 
     const currentTour = await this.getCurrentTourContext(currentTourId);
-    const messages = this.buildChatMessages(dbHistory, userMessage, currentTour);
+    const messages = this.buildChatMessages(dbHistory, userMessage, currentTour, language);
 
     return { limitExceeded: false, currentSessionId, messages };
   }
@@ -760,8 +777,9 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     userId?: number | null,
     currentTourId?: number | null,
     anonId?: string | null,
+    language?: string | null,
   ): Promise<{ reply: string; tourCard?: TourCard; sessionId?: string }> {
-    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId);
+    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language);
 
     if (prep.limitExceeded) {
       return {
@@ -786,13 +804,14 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     userId?: number | null,
     currentTourId?: number | null,
     anonId?: string | null,
+    language?: string | null,
   ): AsyncGenerator<
     | { searching: true }
     | { token: string }
     | { done: true; tourCard?: TourCard; sessionId: string; followUps?: string[] }
     | { error: string; errorType: string }
   > {
-    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId);
+    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language);
 
     if (prep.limitExceeded) {
       yield { token: 'Cuộc trò chuyện này đã quá dài. Vui lòng bắt đầu cuộc trò chuyện mới để tiếp tục được tư vấn nhé!' };

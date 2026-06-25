@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BookingCancellationService } from '../booking/booking-cancellation.service';
 import { AiEmbeddingService } from './ai-embedding.service';
 
-interface SearchToursArgs { destination?: string; departurePoint?: string; minPrice?: number; maxPrice?: number; tourType?: string; startMonth?: number; partySize?: number }
+interface SearchToursArgs { destination?: string; departurePoint?: string; minPrice?: number; maxPrice?: number; tourType?: string; startMonth?: number; startMonthFrom?: number; partySize?: number }
 interface GetTourDetailsArgs { tourId?: number }
 interface CheckMyBookingsArgs { status?: string; bookingCode?: string }
 interface GetCancellationPolicyArgs { bookingCode?: string }
@@ -42,10 +42,14 @@ export class AiToolService {
     return tokens.length > 0 ? tokens : [input.trim()];
   }
 
-  // Tool: search tours in the database.
-  private async executeSearchTours(args: Record<string, unknown>) {
-    const { destination, departurePoint, minPrice, maxPrice, tourType, startMonth, partySize } =
-      args as SearchToursArgs;
+  // Dựng điều kiện truy vấn tour. opts cho phép TẮT từng bộ lọc phụ (giá/loại/tháng)
+  // để nới dần khi không có kết quả khớp đúng. Điểm đến + điểm khởi hành + đủ ghế
+  // luôn được giữ (đó là ý định cốt lõi của khách).
+  private buildTourWhere(
+    args: SearchToursArgs,
+    opts: { price: boolean; tourType: boolean; month: boolean },
+  ): Prisma.TourWhereInput {
+    const { destination, departurePoint, minPrice, maxPrice, tourType, startMonth, startMonthFrom, partySize } = args;
     const party = partySize ? Number(partySize) : null;
 
     const whereClause: Prisma.TourWhereInput = {
@@ -84,22 +88,33 @@ export class AiToolService {
       whereClause.AND = andConditions;
     }
 
-    if (minPrice || maxPrice) {
+    if (opts.price && (minPrice || maxPrice)) {
       whereClause.price = {
         ...(minPrice ? { gte: Number(minPrice) } : {}),
         ...(maxPrice ? { lte: Number(maxPrice) } : {}),
       };
     }
 
-    if (tourType) {
+    if (opts.tourType && tourType) {
       whereClause.tourType = { contains: String(tourType), mode: 'insensitive' };
     }
 
-    if (startMonth) {
-      const month = Number(startMonth);
+    // Lọc tháng khởi hành: hoặc ĐÚNG một tháng (startMonth), hoặc TỪ một tháng trở đi
+    // không chặn trên (startMonthFrom — cho yêu cầu "từ tháng X đổ đi").
+    if (opts.month && (startMonth || startMonthFrom)) {
       const now = new Date();
-      const year = now.getMonth() + 1 > month ? now.getFullYear() + 1 : now.getFullYear();
-      const range = { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) };
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      let range: { gte: Date; lt?: Date };
+      if (startMonthFrom) {
+        const month = Number(startMonthFrom);
+        // Lấy đầu tháng X năm nay; nếu tháng đó đã qua thì tính từ đầu tháng hiện tại.
+        const candidate = new Date(now.getFullYear(), month - 1, 1);
+        range = { gte: candidate < startOfThisMonth ? startOfThisMonth : candidate };
+      } else {
+        const month = Number(startMonth);
+        const year = now.getMonth() + 1 > month ? now.getFullYear() + 1 : now.getFullYear();
+        range = { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) };
+      }
       // Ưu tiên khớp theo NGÀY KHỞI HÀNH cụ thể (TourDeparture còn đủ ghế),
       // fallback về Tour.startDate cho tour chưa tạo lịch khởi hành chi tiết.
       whereClause.OR = [
@@ -116,40 +131,20 @@ export class AiToolService {
       ];
     }
 
-    const tours = await this.prisma.tour.findMany({
-      where: whereClause,
+    return whereClause;
+  }
+
+  private queryTours(where: Prisma.TourWhereInput) {
+    return this.prisma.tour.findMany({
+      where,
       include: { destination: true },
       take: 5,
       orderBy: { price: 'asc' },
     });
+  }
 
-    if (tours.length === 0) {
-      // Keyword search trả về rỗng → thử semantic search nếu có đủ văn bản truy vấn.
-      const semanticQuery = [destination, tourType].filter(Boolean).join(' ');
-      if (semanticQuery) {
-        const semanticRows = await this.embeddingService.semanticSearch(semanticQuery, party ?? 1);
-        if (semanticRows.length > 0) {
-          return semanticRows.map((t) => ({
-            id: t.id,
-            name: t.name,
-            destination: t.destinationName || 'Vô định',
-            region: t.region || '',
-            departurePoint: t.departurePoint || '',
-            price: Number(t.price),
-            duration: t.duration,
-            startDate: new Date(t.startDate).toISOString().split('T')[0],
-            availableSeats: Number(t.availableSeats),
-            imageUrl: t.imageUrl,
-            averageRating: Number(t.averageRating),
-            tourType: t.tourType,
-            _semanticMatch: true,
-          }));
-        }
-      }
-      return { message: 'Không tìm thấy tour nào phù hợp với yêu cầu này.' };
-    }
-
-    return tours.map((t) => ({
+  private mapTour(t: Prisma.TourGetPayload<{ include: { destination: true } }>) {
+    return {
       id: t.id,
       name: t.name,
       destination: t.destination?.name || 'Vô định',
@@ -162,7 +157,70 @@ export class AiToolService {
       imageUrl: t.imageUrl,
       averageRating: t.averageRating,
       tourType: t.tourType,
-    }));
+    };
+  }
+
+  // Tool: search tours in the database.
+  private async executeSearchTours(args: Record<string, unknown>) {
+    const a = args as SearchToursArgs;
+    const party = a.partySize ? Number(a.partySize) : null;
+
+    // 1) Tìm với đầy đủ bộ lọc khách đưa.
+    const tours = await this.queryTours(this.buildTourWhere(a, { price: true, tourType: true, month: true }));
+    if (tours.length > 0) {
+      return tours.map((t) => this.mapTour(t));
+    }
+
+    // 2) Không khớp đúng → tự nới dần bộ lọc phụ thay vì bắt khách gõ lại.
+    //    Thứ tự ưu tiên bỏ: ngân sách → loại tour → thời gian (giữ điểm đến + đủ ghế).
+    const priceGiven = Boolean(a.minPrice || a.maxPrice);
+    const typeGiven = Boolean(a.tourType);
+    const monthGiven = Boolean(a.startMonth || a.startMonthFrom);
+    const dropOrder: Array<{ key: 'price' | 'tourType' | 'month'; label: string; given: boolean }> = [
+      { key: 'price', label: 'ngân sách', given: priceGiven },
+      { key: 'tourType', label: 'loại tour', given: typeGiven },
+      { key: 'month', label: 'thời gian', given: monthGiven },
+    ];
+
+    if (dropOrder.some((f) => f.given)) {
+      const keep = { price: priceGiven, tourType: typeGiven, month: monthGiven };
+      const dropped: string[] = [];
+      for (const filter of dropOrder) {
+        if (!filter.given) continue;
+        keep[filter.key] = false;
+        dropped.push(filter.label);
+        const relaxed = await this.queryTours(this.buildTourWhere(a, keep));
+        if (relaxed.length > 0) {
+          return relaxed.map((t) => ({ ...this.mapTour(t), _relaxed: true, _relaxedFilters: [...dropped] }));
+        }
+      }
+    }
+
+    // 3) Vẫn rỗng → thử semantic search nếu có đủ văn bản truy vấn.
+    const semanticQuery = [a.destination, a.tourType].filter(Boolean).join(' ');
+    if (semanticQuery) {
+      const semanticRows = await this.embeddingService.semanticSearch(semanticQuery, party ?? 1);
+      if (semanticRows.length > 0) {
+        return semanticRows.map((t) => ({
+          id: t.id,
+          name: t.name,
+          destination: t.destinationName || 'Vô định',
+          region: t.region || '',
+          departurePoint: t.departurePoint || '',
+          price: Number(t.price),
+          duration: t.duration,
+          startDate: new Date(t.startDate).toISOString().split('T')[0],
+          availableSeats: Number(t.availableSeats),
+          imageUrl: t.imageUrl,
+          averageRating: Number(t.averageRating),
+          tourType: t.tourType,
+          _semanticMatch: true,
+        }));
+      }
+    }
+
+    // 4) Thực sự không có tour nào.
+    return { message: 'Không tìm thấy tour nào phù hợp với yêu cầu này.' };
   }
   // Tool: get tour details by ID.
   private async executeGetTourDetails(args: Record<string, unknown>) {

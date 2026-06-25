@@ -93,7 +93,6 @@ export default function BookingDetailPage() {
         booking, isLoading, fetchError, refetchBooking, isPaying, payError,
         isLoggedIn,
         showCancelModal, setShowCancelModal,
-        cancelSuccess,
         showIssueForm, setShowIssueForm,
         paymentIssueResult, setPaymentIssueResult,
         banksList, isBankListLoading,
@@ -130,20 +129,6 @@ export default function BookingDetailPage() {
                     <span className="material-symbols-outlined text-sm transition-transform duration-200 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/back:-translate-x-1 motion-reduce:transition-none motion-reduce:group-hover/back:translate-x-0" aria-hidden="true">arrow_back</span>
                     {t('my_bookings.backToList')}
                 </Link>
-
-                {cancelSuccess && (
-                    <div
-                        role="status"
-                        aria-live="polite"
-                        className="mb-6 flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl px-5 py-4"
-                    >
-                        <span className="material-symbols-outlined text-emerald-600 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">check_circle</span>
-                        <div>
-                            <p className="font-bold text-sm">Yêu cầu đã được ghi nhận!</p>
-                            <p className="text-xs opacity-80 mt-0.5">Chúng tôi sẽ xử lý và thông báo kết quả trong vòng 1–3 ngày làm việc.</p>
-                        </div>
-                    </div>
-                )}
 
                 <div className="rounded-[2rem] border border-slate-100 bg-white shadow-xl">
                     <BookingHeroImage

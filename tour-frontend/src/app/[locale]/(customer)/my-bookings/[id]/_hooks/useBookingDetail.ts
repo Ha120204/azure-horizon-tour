@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { API_BASE_URL } from '@/lib/http/constants';
+import { toastEmitter } from '@/lib/http/toastEmitter';
 import { useLocale } from '@/context/LocaleContext';
 import { EXPIRY_MINUTES, type BookingDetail, type BankOption, type PaymentIssueResult, type QRPaymentData } from '../_lib/types';
 
@@ -46,7 +47,7 @@ export function useCountdown(expiresAt: string | undefined) {
 export function useBookingDetail() {
     const params = useParams();
     const router = useRouter();
-    const { formatNumber } = useLocale();
+    const { formatNumber, language } = useLocale();
 
     const [booking, setBooking] = useState<BookingDetail | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +55,6 @@ export function useBookingDetail() {
     const [isPaying, setIsPaying] = useState(false);
     const [payError, setPayError] = useState('');
     const [showCancelModal, setShowCancelModal] = useState(false);
-    const [cancelSuccess, setCancelSuccess] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [showIssueForm, setShowIssueForm] = useState(false);
     const [paymentIssueResult, setPaymentIssueResult] = useState<PaymentIssueResult | null>(null);
@@ -174,11 +174,23 @@ export function useBookingDetail() {
         return () => clearInterval(poll);
     }, [paymentData, booking, router]);
 
-    const handleCancelSuccess = useCallback(() => {
+    const handleCancelSuccess = useCallback((immediate: boolean) => {
         setShowCancelModal(false);
-        setCancelSuccess(true);
+        if (immediate) {
+            toastEmitter.success(
+                language === 'vi' ? 'Đã hủy tour thành công' : 'Tour cancelled',
+                language === 'vi' ? 'Đặt tour của bạn đã được hủy.' : 'Your booking has been cancelled.',
+            );
+        } else {
+            toastEmitter.success(
+                language === 'vi' ? 'Đã gửi yêu cầu hủy' : 'Cancellation requested',
+                language === 'vi'
+                    ? 'Chúng tôi sẽ xử lý và thông báo kết quả trong vòng 1–3 ngày làm việc.'
+                    : 'We will process and notify you within 1–3 business days.',
+            );
+        }
         fetchBooking();
-    }, [fetchBooking]);
+    }, [fetchBooking, language]);
 
     const submitPaymentIssue = useCallback(async (data: {
         amount: number;
@@ -257,7 +269,6 @@ export function useBookingDetail() {
         payError,
         showCancelModal,
         setShowCancelModal,
-        cancelSuccess,
         isLoggedIn,
         showIssueForm,
         setShowIssueForm,

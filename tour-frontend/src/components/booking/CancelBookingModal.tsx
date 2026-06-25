@@ -30,7 +30,7 @@ interface CancelBookingModalProps {
     policyTier: string;
   };
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (immediate: boolean) => void;
 }
 
 // Tính hoàn tiền phía client để hiện thị preview (logic giống backend)
@@ -189,7 +189,7 @@ export default function CancelBookingModal({
       const result = await res.json();
 
       if (res.ok) {
-        onSuccess();
+        onSuccess(isPending);
       } else {
         setError(result.message ?? 'Không thể gửi yêu cầu hủy. Vui lòng thử lại.');
       }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
@@ -53,7 +53,10 @@ export default function TourDetailClient({
     const searchParams = useSearchParams();
     const tourId = String(tour.id);
 
-    const departures = useMemo<TourDeparture[]>(() => tour.departures ?? [], [tour.departures]);
+    // Số ghế là dữ liệu biến động. Khởi tạo từ server render (SEO), nhưng làm tươi
+    // lại ở client lúc mount — xem useEffect bên dưới.
+    const [departures, setDepartures] = useState<TourDeparture[]>(tour.departures ?? []);
+    const [tourSeats, setTourSeats] = useState<number>(tour.availableSeats ?? 0);
     const hasDepartures = departures.length > 0;
 
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
@@ -65,6 +68,30 @@ export default function TourDetailClient({
             ? departures.find((d) => d.id === initialDepartureId) ?? null
             : null,
     );
+
+    // Router Cache / bfcache có thể giữ lại bản cũ khi khách quay về từ trang thanh
+    // toán → calendar hiện số ghế cũ. Fetch live (no-store) lúc mount để tồn kho luôn
+    // đúng, miễn nhiễm mọi tầng cache. Phần nội dung khác vẫn dùng server render.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/tour/${tourId}?locale=${language}`, { cache: 'no-store' });
+                if (!res.ok) return;
+                const json = await res.json();
+                const fresh = json.data ?? json;
+                if (cancelled || !fresh) return;
+                setDepartures(fresh.departures ?? []);
+                setTourSeats(fresh.availableSeats ?? 0);
+                setSelectedDeparture((prev) =>
+                    prev ? (fresh.departures ?? []).find((d: TourDeparture) => d.id === prev.id) ?? prev : prev,
+                );
+            } catch {
+                // Im lặng — giữ dữ liệu server render nếu fetch lỗi
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [tourId, language]);
 
     const handleSelectDeparture = (departure: TourDeparture) => {
         setSelectedDeparture(departure);
@@ -79,7 +106,7 @@ export default function TourDetailClient({
         ? selectedDeparture.availableSeats
         : hasDepartures
             ? Math.max(...departures.map((d) => d.availableSeats ?? 0))
-            : tour.availableSeats;
+            : tourSeats;
     const [reviews, setReviews] = useState<Review[]>(initialReviews);
     const [reviewStats, setReviewStats] = useState<ReviewStats>(initialReviewStats);
     const [ratingBreakdown, setRatingBreakdown] = useState<RatingBreakdownStats | null>(initialRatingBreakdown);
@@ -108,6 +135,12 @@ export default function TourDetailClient({
 
     const hasPackages = (tour.packages?.length ?? 0) > 0;
     const hasReviewStats = reviewStats.totalReviews > 0 && reviewStats.averageRating > 0;
+
+    // Tour với tồn kho ghế đã làm tươi — truyền cho sidebar/calendar để hiển thị realtime.
+    const liveTour = useMemo<Tour>(
+        () => ({ ...tour, departures, availableSeats: tourSeats }),
+        [tour, departures, tourSeats],
+    );
 
     return (
         <div className="bg-surface font-body text-on-surface antialiased min-h-screen flex flex-col pb-[76px] lg:pb-0">
@@ -298,7 +331,7 @@ export default function TourDetailClient({
 
                     {/* ── Right: Booking Sidebar ── */}
                     <BookingSidebarNew
-                        tour={tour}
+                        tour={liveTour}
                         selectedDeparture={selectedDeparture}
                         onSelectDeparture={handleSelectDeparture}
                         selectedPackage={selectedPackage}

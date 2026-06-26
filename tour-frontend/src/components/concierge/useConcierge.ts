@@ -7,7 +7,7 @@ import { fetchAuthProfile, fetchOptionalAuth } from '@/lib/auth/authSession';
 import type { Message, ChatSessionSummary } from './types';
 
 export function useConcierge() {
-    const { language, t } = useLocale();
+    const { language, currency, t } = useLocale();
 
     const [isOpen, setIsOpen] = useState(false);
     const [inputValue, setInputValue] = useState('');
@@ -209,6 +209,7 @@ export function useConcierge() {
                         sessionId: sessionId || undefined,
                         currentTourId: currentTourIdRef.current ?? undefined,
                         language,
+                        currency,
                     }),
                 });
                 if (!isMountedRef.current) return;
@@ -322,7 +323,7 @@ export function useConcierge() {
                 ]);
             }
         },
-        [inputValue, isTyping, isStreaming, cooldown, loadSessions, hasAccessToken, t, language],
+        [inputValue, isTyping, isStreaming, cooldown, loadSessions, hasAccessToken, t, language, currency],
     );
 
     // ── Handlers ──────────────────────────────────────────────────────────

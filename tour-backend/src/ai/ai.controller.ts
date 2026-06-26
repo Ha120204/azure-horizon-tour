@@ -100,7 +100,7 @@ export class AiController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const anonId = req.user?.userId ? undefined : this.ensureAnonId(req, res);
-    return this.aiService.chat(body.message.trim(), body.sessionId, req.user?.userId, body.currentTourId, anonId, body.language);
+    return this.aiService.chat(body.message.trim(), body.sessionId, req.user?.userId, body.currentTourId, anonId, body.language, body.currency);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -121,7 +121,7 @@ export class AiController {
     res.flushHeaders();
 
     try {
-      for await (const event of this.aiService.chatStream(body.message.trim(), body.sessionId, userId, body.currentTourId, anonId, body.language)) {
+      for await (const event of this.aiService.chatStream(body.message.trim(), body.sessionId, userId, body.currentTourId, anonId, body.language, body.currency)) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
     } catch {

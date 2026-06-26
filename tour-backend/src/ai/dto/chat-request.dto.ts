@@ -23,4 +23,9 @@ export class ChatRequestDto {
   @IsOptional()
   @IsIn(['vi', 'en'])
   language?: string;
+
+  // Đơn vị tiền khách đang dùng — để AI nhận/gợi ý ngân sách theo đúng tiền tệ.
+  @IsOptional()
+  @IsIn(['VND', 'USD'])
+  currency?: string;
 }

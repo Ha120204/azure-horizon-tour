@@ -374,8 +374,12 @@ export class AiService {
   private buildSystemPrompt(
     currentTour?: { id: number; name: string } | null,
     language?: string | null,
+    currency?: string | null,
   ): string {
     const uiLangLabel = language === 'en' ? 'English (tiếng Anh)' : 'tiếng Việt';
+    const uiCurrency = currency === 'USD' ? 'USD' : 'VND';
+    // Tỷ giá quy đổi USD→VND (khớp với VND_TO_USD_RATE ở frontend LocaleContext).
+    const VND_PER_USD = 26331;
     const today = new Date().toLocaleDateString('vi-VN', {
       weekday: 'long',
       year: 'numeric',
@@ -413,9 +417,12 @@ NGUYÊN TẮC DỮ LIỆU:
 - Khi nói về tour/booking có trong hệ thống, phải dựa trên tool.
 - Bạn có thể tư vấn ý tưởng du lịch chung, cách chọn điểm đến, cách chia ngân sách, hoặc gợi ý cách tìm lại mà không khẳng định đó là tour có sẵn.
 
-NGÂN SÁCH:
-- Giá tour tính bằng VND. Khi khách nói "10 triệu" → maxPrice: 10000000. Khi nói "từ 5 đến 15 triệu" → minPrice: 5000000, maxPrice: 15000000.
-- Không tự quy đổi sang USD.
+NGÂN SÁCH (đơn vị tiền khách đang dùng: ${uiCurrency}):
+- Giá tour trong hệ thống và tham số minPrice/maxPrice LUÔN tính bằng VND.
+- Khách CÓ THỂ nêu ngân sách bằng VND hoặc USD — chấp nhận cả hai, KHÔNG bắt khách đổi sang VND.
+  + VND: "10 triệu" → maxPrice: 10000000; "từ 5 đến 15 triệu" → minPrice: 5000000, maxPrice: 15000000.
+  + USD ("$200", "200 đô", "over 190$"): QUY ĐỔI sang VND theo tỷ giá 1 USD = ${VND_PER_USD} VND rồi mới đặt minPrice/maxPrice. Ví dụ "under $200" → maxPrice ≈ ${200 * VND_PER_USD}; "over $190" → minPrice ≈ ${190 * VND_PER_USD}.
+- Khi GỢI Ý mức ngân sách hoặc nêu giá trong câu trả lời, dùng ĐÚNG đơn vị tiền của khách (${uiCurrency}): nếu là USD thì viết kiểu "under $200", "$200–$300" (quy đổi ngược từ VND theo tỷ giá trên), nếu là VND thì viết "5 triệu", "5–7 triệu". Tuyệt đối KHÔNG yêu cầu khách phải nhập lại bằng VND.
 
 LOẠI TOUR (tourType):
 - Các giá trị hợp lệ duy nhất: "Tour Gia Đình", "Tour Cao Cấp", "Nghỉ Dưỡng", "Khám Phá", "Văn Hóa & Lịch Sử", "Tour Ghép Đoàn".
@@ -665,9 +672,10 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     userMessage: string,
     currentTour?: { id: number; name: string } | null,
     language?: string | null,
+    currency?: string | null,
   ): OpenAI.Chat.ChatCompletionMessageParam[] {
     return [
-      { role: 'system', content: this.buildSystemPrompt(currentTour, language) },
+      { role: 'system', content: this.buildSystemPrompt(currentTour, language, currency) },
       ...dbHistory
         .filter((msg) => msg.content?.trim())
         .slice(-20) // Giữ 20 messages gần nhất, tránh vượt context window và giảm chi phí.
@@ -751,6 +759,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     currentTourId: number | null | undefined,
     anonId: string | null | undefined,
     language?: string | null,
+    currency?: string | null,
   ): Promise<
     | { limitExceeded: true; currentSessionId: string }
     | { limitExceeded: false; currentSessionId: string; messages: OpenAI.Chat.ChatCompletionMessageParam[] }
@@ -769,7 +778,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     await this.touchChatSession(currentSessionId);
 
     const currentTour = await this.getCurrentTourContext(currentTourId);
-    const messages = this.buildChatMessages(dbHistory, userMessage, currentTour, language);
+    const messages = this.buildChatMessages(dbHistory, userMessage, currentTour, language, currency);
 
     return { limitExceeded: false, currentSessionId, messages };
   }
@@ -782,8 +791,9 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     currentTourId?: number | null,
     anonId?: string | null,
     language?: string | null,
+    currency?: string | null,
   ): Promise<{ reply: string; tourCard?: TourCard; sessionId?: string }> {
-    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language);
+    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language, currency);
 
     if (prep.limitExceeded) {
       return {
@@ -809,13 +819,14 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     currentTourId?: number | null,
     anonId?: string | null,
     language?: string | null,
+    currency?: string | null,
   ): AsyncGenerator<
     | { searching: true }
     | { token: string }
     | { done: true; tourCard?: TourCard; sessionId: string; followUps?: string[] }
     | { error: string; errorType: string }
   > {
-    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language);
+    const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language, currency);
 
     if (prep.limitExceeded) {
       yield { token: 'Cuộc trò chuyện này đã quá dài. Vui lòng bắt đầu cuộc trò chuyện mới để tiếp tục được tư vấn nhé!' };

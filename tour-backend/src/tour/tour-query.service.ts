@@ -275,6 +275,28 @@ export class TourQueryService {
         ? { ...kpiPublishedWhere, startDate: { gte: new Date() } }
         : futurePublishedWhere;
 
+    const now = new Date();
+    const saleDepartureFilter = {
+      some: {
+        isActive: true,
+        departureDate: { gte: getMinBookableDate() },
+        AND: [
+          {
+            OR: [
+              { category: { in: [...SALE_DEPARTURE_CATEGORIES] } },
+              {
+                AND: [
+                  { category: null },
+                  { note: { in: [...SALE_DEPARTURE_CATEGORIES] } },
+                ],
+              },
+            ],
+          },
+          { OR: [{ flashSaleEndsAt: null }, { flashSaleEndsAt: { gt: now } }] },
+        ],
+      },
+    };
+
     const [
       totalVisible,
       total,
@@ -283,6 +305,7 @@ export class TourQueryService {
       pending,
       rejected,
       completed,
+      onSale,
       seatsAgg,
       priceAgg,
     ] = await Promise.all([
@@ -295,6 +318,9 @@ export class TourQueryService {
       }),
       this.prisma.tour.count({ where: workflowWhere(TourStatus.REJECTED) }),
       this.prisma.tour.count({ where: workflowWhere(TourStatus.COMPLETED) }),
+      this.prisma.tour.count({
+        where: { ...kpiPublishedWhere, departures: saleDepartureFilter },
+      }),
       this.prisma.tour.aggregate({
         where: kpiFuturePublishedWhere,
         _sum: { availableSeats: true },
@@ -313,6 +339,7 @@ export class TourQueryService {
       pending,
       rejected,
       completed,
+      onSale,
       active: published,
       totalSeats: Number(seatsAgg._sum.availableSeats ?? 0),
       avgPrice: Number(priceAgg._avg.price ?? 0),

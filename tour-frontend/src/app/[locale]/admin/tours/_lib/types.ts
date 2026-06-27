@@ -31,6 +31,7 @@ export interface Tour {
   averageRating: number;
   reviewCount?: number;
   isFeatured?: boolean;
+  hasSale?: boolean;
   startDate: string;
   endDate?: string;
   departurePoint?: string;
@@ -114,6 +115,7 @@ export interface TourDeparture {
   note?: string;
   noteEn?: string;
   category?: string;
+  flashSaleEndsAt?: string | null;
   transport?: TourDepartureTransport | null;
 }
 
@@ -186,6 +188,7 @@ export interface TourStats {
   rejected: number;
   completed: number;
   active: number;
+  onSale: number;
   totalSeats: number;
   avgPrice: number;
   loaded: boolean;

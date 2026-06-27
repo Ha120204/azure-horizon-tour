@@ -7,22 +7,27 @@ interface BuildTourKpisOptions {
     isAdmin: boolean;
     isStaff: boolean;
     filterStatus: string;
+    filterSale: boolean;
     tourStats: TourStats;
     onStatusToggle: (status: KpiFilterStatus, activateTab?: boolean) => void;
+    onSaleToggle: () => void;
 }
 
 export function buildTourKpis({
     isAdmin,
     isStaff,
     filterStatus,
+    filterSale,
     tourStats,
     onStatusToggle,
+    onSaleToggle,
 }: BuildTourKpisOptions): TourKpiItem[] {
     const totalTours = isAdmin ? tourStats.total : tourStats.totalVisible;
     const pendingCount = tourStats.pending;
     const rejectedCount = tourStats.rejected;
     const draftCount = tourStats.draft;
     const staffPendingCount = tourStats.pending;
+    const onSaleCount = tourStats.onSale ?? 0;
 
     return [
         {
@@ -64,6 +69,16 @@ export function buildTourKpis({
             onClick: null,
         },
         ...(isAdmin ? [
+            {
+                icon: 'local_offer',
+                label: 'Đang Sale',
+                value: tourStats.loaded ? String(onSaleCount) : '…',
+                unit: null,
+                subtitle: tourStats.loaded && onSaleCount > 0 ? 'tour có chương trình ưu đãi' : null,
+                color: onSaleCount > 0 ? 'bg-rose-500/10 text-rose-600' : 'bg-surface-container text-on-surface-variant',
+                highlight: false,
+                onClick: () => onSaleToggle(),
+            },
             {
                 icon: 'pending_actions',
                 label: 'Chờ Duyệt',

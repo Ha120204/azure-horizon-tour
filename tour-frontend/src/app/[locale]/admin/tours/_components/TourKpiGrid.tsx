@@ -5,16 +5,21 @@ import type { TourKpiItem } from '../_lib/types';
 interface TourKpiGridProps {
     isAdmin: boolean;
     filterStatus: string;
+    filterSale: boolean;
     kpis: TourKpiItem[];
 }
 
-export function TourKpiGrid({ isAdmin, filterStatus, kpis }: TourKpiGridProps) {
+export function TourKpiGrid({ isAdmin, filterStatus, filterSale, kpis }: TourKpiGridProps) {
+    const gridCols = isAdmin
+        ? kpis.length > 6 ? 'grid-cols-2 lg:grid-cols-4 xl:grid-cols-7' : 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-6'
+        : 'grid-cols-2 lg:grid-cols-4';
     return (
-        <div className={`grid gap-4 mb-8 ${isAdmin ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4'}`}>
+        <div className={`grid gap-4 mb-8 ${gridCols}`}>
             {kpis.map(kpi => {
                 const isActive =
                     (kpi.label === 'Chờ Duyệt' && filterStatus === 'PENDING_REVIEW') ||
-                    (kpi.label === 'Bị Từ Chối' && filterStatus === 'REJECTED');
+                    (kpi.label === 'Bị Từ Chối' && filterStatus === 'REJECTED') ||
+                    (kpi.label === 'Đang Sale' && filterSale);
                 const Tag = kpi.onClick ? 'button' : 'div';
                 return (
                     <Tag
@@ -46,7 +51,7 @@ export function TourKpiGrid({ isAdmin, filterStatus, kpis }: TourKpiGridProps) {
                             )}
                         </div>
                         {isActive && (
-                            <p className="text-[10px] font-semibold text-amber-600 mt-2">Đang lọc • Nhấn để bỏ lọc</p>
+                            <p className={`text-[10px] font-semibold mt-2 ${kpi.label === 'Đang Sale' ? 'text-rose-600' : 'text-amber-600'}`}>Đang lọc • Nhấn để bỏ lọc</p>
                         )}
                     </Tag>
                 );

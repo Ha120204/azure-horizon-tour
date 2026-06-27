@@ -9,9 +9,7 @@ import {
   Request,
   Ip,
   Req,
-  Res,
   BadRequestException,
-  Query,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Prisma } from '@prisma/client';

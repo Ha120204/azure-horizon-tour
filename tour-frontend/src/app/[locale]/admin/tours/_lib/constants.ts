@@ -9,6 +9,7 @@ export const EMPTY_TOUR_STATS: TourStats = {
     rejected: 0,
     completed: 0,
     active: 0,
+    onSale: 0,
     totalSeats: 0,
     avgPrice: 0,
     loaded: false,

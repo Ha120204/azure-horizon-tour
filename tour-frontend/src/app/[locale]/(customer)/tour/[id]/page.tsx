@@ -60,8 +60,8 @@ export default async function TourDetailPage({ params, searchParams }: PageProps
     // Fetch tour + reviews + rating stats in parallel
     const [tourResult, reviewsResult, ratingStatsResult] = await Promise.allSettled([
         fetchTour(id, locale),
-        fetch(`${API_BASE_URL}/tour/${id}/reviews?limit=2`, { next: { revalidate: 300, tags: [`tour-${id}`] } }),
-        fetch(`${API_BASE_URL}/tour/${id}/rating-stats`, { next: { revalidate: 300, tags: [`tour-${id}`] } }),
+        fetch(`${API_BASE_URL}/tour/${id}/reviews?limit=2`, { cache: 'no-store' }),
+        fetch(`${API_BASE_URL}/tour/${id}/rating-stats`, { cache: 'no-store' }),
     ]);
 
     const tour = tourResult.status === 'fulfilled' ? tourResult.value : null;

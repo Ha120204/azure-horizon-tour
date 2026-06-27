@@ -80,4 +80,8 @@ export class FilterTourDto {
   @IsOptional()
   @IsString()
   featured?: string; // 'true' → chỉ lấy tour nổi bật (dùng cho trang chủ)
+
+  @IsOptional()
+  @IsString()
+  hasSale?: string; // 'true' → chỉ lấy tour có departure sale đang active
 }

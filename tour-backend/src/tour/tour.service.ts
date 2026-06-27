@@ -17,6 +17,7 @@ import {
   requirePublishableTour,
   parseTravelScope,
 } from './tour-helpers';
+import { isSaleDeparture, SALE_DEPARTURE_CATEGORIES } from './promotion-rules';
 
 const DRAFT_DESTINATION_NAME = 'Chưa xác định';
 
@@ -113,6 +114,7 @@ export class TourService {
       startDateFrom,
       startDateTo,
       featured,
+      hasSale,
       page = '1',
       limit = '10',
     } = query;
@@ -153,6 +155,32 @@ export class TourService {
 
     if (featured === 'true') {
       where.isFeatured = true;
+    }
+
+    if (hasSale === 'true') {
+      const now = new Date();
+      appendAndFilter(where, {
+        departures: {
+          some: {
+            isActive: true,
+            departureDate: { gte: getMinBookableDate() },
+            AND: [
+              {
+                OR: [
+                  { category: { in: [...SALE_DEPARTURE_CATEGORIES] } },
+                  {
+                    AND: [
+                      { category: null },
+                      { note: { in: [...SALE_DEPARTURE_CATEGORIES] } },
+                    ],
+                  },
+                ],
+              },
+              { OR: [{ flashSaleEndsAt: null }, { flashSaleEndsAt: { gt: now } }] },
+            ],
+          },
+        },
+      });
     }
 
     if (dest) {
@@ -371,7 +399,7 @@ export class TourService {
             },
           },
           departures: {
-            select: { price: true, note: true, noteEn: true },
+            select: { price: true, note: true, noteEn: true, category: true, flashSaleEndsAt: true },
             where: {
               isActive: true,
               departureDate: { gte: getMinBookableDate() },
@@ -401,12 +429,16 @@ export class TourService {
           0,
         );
         const totalSeats = tour.availableSeats + bookedSeats;
+        const hasSaleFlag = (tour.departures ?? []).some((dep) =>
+          isSaleDeparture(dep, { regularPrice: tour.price }),
+        );
         return {
           ...localizedTour,
           reviewCount,
           averageRating: reviewCount > 0 ? localizedTour.averageRating : 0,
           bookedSeats,
           totalSeats,
+          hasSale: hasSaleFlag,
         };
       }),
       meta: {

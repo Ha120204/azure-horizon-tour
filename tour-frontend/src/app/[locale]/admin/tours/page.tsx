@@ -34,7 +34,7 @@ export default function AdminToursPage() {
                 />
             )}
 
-            <TourKpiGrid isAdmin={tour.isAdmin} filterStatus={tour.filterStatus} kpis={tour.kpis} />
+            <TourKpiGrid isAdmin={tour.isAdmin} filterStatus={tour.filterStatus} filterSale={tour.filterSale} kpis={tour.kpis} />
 
             {tour.canWrite && (
                 <TourTabs
@@ -54,6 +54,7 @@ export default function AdminToursPage() {
                     filterDest={tour.filterDest}
                     sortBy={tour.sortBy}
                     filterStatus={tour.filterStatus}
+                    filterSale={tour.filterSale}
                     filterDateFrom={tour.filterDateFrom}
                     filterDateTo={tour.filterDateTo}
                     filterSeats={tour.filterSeats}
@@ -63,6 +64,7 @@ export default function AdminToursPage() {
                     onFilterDestChange={tour.changeFilterDest}
                     onSortByChange={tour.changeSortBy}
                     onFilterStatusChange={tour.changeFilterStatus}
+                    onFilterSaleChange={tour.changeFilterSale}
                     onFilterDateFromChange={tour.changeFilterDateFrom}
                     onFilterDateToChange={tour.changeFilterDateTo}
                     onFilterSeatsChange={tour.changeFilterSeats}

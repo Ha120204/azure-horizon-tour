@@ -11,7 +11,7 @@ import { BookingModule } from '../booking/booking.module';
   imports: [
     BookingModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'azure_horizon_secret_k3y_2026',
+      secret: process.env.JWT_SECRET,
     }),
   ],
   controllers: [AiController],

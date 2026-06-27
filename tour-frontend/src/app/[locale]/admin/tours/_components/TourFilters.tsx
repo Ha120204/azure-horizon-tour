@@ -10,6 +10,7 @@ interface TourFiltersProps {
     filterDest: string;
     sortBy: string;
     filterStatus: string;
+    filterSale: boolean;
     filterDateFrom: string;
     filterDateTo: string;
     filterSeats: string;
@@ -19,6 +20,7 @@ interface TourFiltersProps {
     onFilterDestChange: (value: string) => void;
     onSortByChange: (value: string) => void;
     onFilterStatusChange: (value: string) => void;
+    onFilterSaleChange: () => void;
     onFilterDateFromChange: (value: string) => void;
     onFilterDateToChange: (value: string) => void;
     onFilterSeatsChange: (value: string) => void;
@@ -61,6 +63,7 @@ export function TourFilters({
     filterDest,
     sortBy,
     filterStatus,
+    filterSale,
     filterDateFrom,
     filterDateTo,
     filterSeats,
@@ -70,6 +73,7 @@ export function TourFilters({
     onFilterDestChange,
     onSortByChange,
     onFilterStatusChange,
+    onFilterSaleChange,
     onFilterDateFromChange,
     onFilterDateToChange,
     onFilterSeatsChange,
@@ -134,6 +138,24 @@ export function TourFilters({
                             active={Boolean(filterStatus)}
                             className="w-[220px] max-w-full"
                         />
+                    )}
+                    {isAdmin && (
+                        <button
+                            type="button"
+                            onClick={onFilterSaleChange}
+                            aria-pressed={filterSale}
+                            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                                filterSale
+                                    ? 'border-rose-400/60 bg-rose-50 text-rose-700 ring-1 ring-rose-400/40'
+                                    : 'border-outline-variant/15 bg-surface-container-low text-on-surface-variant hover:border-rose-300/50 hover:bg-rose-50/60 hover:text-rose-600'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true" style={{ fontVariationSettings: filterSale ? "'FILL' 1" : "'FILL' 0" }}>local_offer</span>
+                            Đang Sale
+                            {filterSale && (
+                                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">close</span>
+                            )}
+                        </button>
                     )}
                 </div>
             </div>

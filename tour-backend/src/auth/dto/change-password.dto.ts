@@ -8,10 +8,10 @@ import {
 export class ChangePasswordDto {
   @IsString()
   @IsNotEmpty()
-  currentPassword: string;
+  currentPassword!: string;
 
   @IsString()
   @MinLength(8, { message: PASSWORD_MIN_LENGTH_MESSAGE })
   @Matches(PASSWORD_POLICY_REGEX, { message: PASSWORD_POLICY_MESSAGE })
-  newPassword: string;
+  newPassword!: string;
 }

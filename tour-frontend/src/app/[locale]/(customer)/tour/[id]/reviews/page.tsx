@@ -58,7 +58,7 @@ export default async function ReviewsPage({ params }: PageProps) {
     const [tourResult, reviewsResult] = await Promise.allSettled([
         fetch(`${API_BASE_URL}/tour/${id}`, { next: { revalidate: 3600 } }),
         fetch(`${API_BASE_URL}/tour/${id}/reviews?page=1&limit=5&sortBy=newest`, {
-            next: { revalidate: 300 },
+            cache: 'no-store',
         }),
     ]);
 

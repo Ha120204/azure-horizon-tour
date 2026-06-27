@@ -33,6 +33,7 @@ export function useTourManagement() {
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
     const [filterSeats, setFilterSeats] = useState('');
+    const [filterSale, setFilterSale] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [activeTab, setActiveTab] = useState<TourTab>('active');
@@ -60,6 +61,7 @@ export function useTourManagement() {
             if (search) qs.append('dest', search);
             if (filterDest) qs.append('destinationId', filterDest);
             if (filterStatus) qs.append('status', filterStatus);
+            if (filterSale) qs.append('hasSale', 'true');
             if (filterDateFrom) qs.append('startDateFrom', filterDateFrom);
             if (filterDateTo) qs.append('startDateTo', filterDateTo);
             qs.append('sortBy', sortBy);
@@ -78,7 +80,7 @@ export function useTourManagement() {
         } finally {
             setIsLoading(false);
         }
-    }, [search, filterDest, filterStatus, filterDateFrom, filterDateTo, sortBy, page, pageSize, showToast]);
+    }, [search, filterDest, filterStatus, filterSale, filterDateFrom, filterDateTo, sortBy, page, pageSize, showToast]);
 
     useEffect(() => { fetchTours(); }, [fetchTours]);
 
@@ -205,11 +207,17 @@ export function useTourManagement() {
         isAdmin,
         isStaff,
         filterStatus,
+        filterSale,
         tourStats,
         onStatusToggle: (status, activateTab = false) => {
             setFilterStatus(current => current === status ? '' : status);
             setPage(1);
             if (activateTab) setActiveTab('active');
+        },
+        onSaleToggle: () => {
+            setFilterSale(current => !current);
+            setPage(1);
+            setActiveTab('active');
         },
     });
 
@@ -323,6 +331,7 @@ export function useTourManagement() {
         filterDateFrom,
         filterDateTo,
         filterSeats,
+        filterSale,
         sortBy,
         page,
         pageSize,
@@ -353,6 +362,7 @@ export function useTourManagement() {
         changeFilterDateFrom,
         changeFilterDateTo,
         changeFilterSeats,
+        changeFilterSale: () => { setFilterSale(c => !c); setPage(1); },
         changeTrashStatus,
         changeTrashDeletable,
         changePageSize,

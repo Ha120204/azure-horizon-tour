@@ -12,6 +12,12 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
+  if (!process.env.JWT_SECRET) {
+    throw new Error(
+      'JWT_SECRET chưa được cấu hình trong môi trường (.env). Dừng app để tránh ký/verify token bằng secret rỗng.',
+    );
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.use(json({ limit: '5mb' }));
   app.use(urlencoded({ extended: true, limit: '5mb' }));

@@ -54,6 +54,16 @@ export function ActiveTourRow({
 }: ActiveTourRowProps) {
     const { locale } = useParams<{ locale: string }>();
     const tourStatusBadge = getTourStatusBadge(tour.status ?? 'PUBLISHED');
+
+    const SALE_BADGE_MAP: Record<string, { label: string; cls: string }> = {
+        FLASH_SALE: { label: 'FLASH SALE', cls: 'bg-rose-500/10 text-rose-600 border border-rose-300/40' },
+        EARLY_BIRD: { label: 'ĐẶT SỚM', cls: 'bg-sky-500/10 text-sky-700 border border-sky-300/40' },
+        LAST_MINUTE: { label: 'GIỜ CHÓT', cls: 'bg-violet-500/10 text-violet-700 border border-violet-300/40' },
+    };
+    const saleDeparture = tour.hasSale
+        ? (tour.departures ?? []).find(d => d.category && SALE_BADGE_MAP[d.category])
+        : null;
+    const saleBadge = saleDeparture?.category ? SALE_BADGE_MAP[saleDeparture.category] : null;
     const isMyTour = tour.createdById === userId;
     const canStaffEdit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
     const canStaffSubmit = isStaff && isMyTour && (tour.status === 'DRAFT' || tour.status === 'REJECTED');
@@ -116,6 +126,12 @@ export function ActiveTourRow({
                             {' · '}
                             <span className="inline-flex items-center px-1.5 py-0.5 bg-surface-container rounded text-[10px] font-medium">{tour.tourType || 'Tour'}</span>
                         </p>
+                        {saleBadge && (
+                            <span className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${saleBadge.cls}`}>
+                                <span className="material-symbols-outlined text-[11px]" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">local_offer</span>
+                                {saleBadge.label}
+                            </span>
+                        )}
                     </div>
                 </button>
             </td>

@@ -209,12 +209,17 @@ function PageSizeSelect({
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
 
+    // h-8 per item + p-1 padding (8px) + border (2px)
+    const estimatedMenuHeight = options.length * 32 + 10;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward = spaceBelow < estimatedMenuHeight + 8;
+
     setMenuStyle({
       left: rect.left,
-      top: rect.bottom + 8,
+      top: openUpward ? rect.top - estimatedMenuHeight - 8 : rect.bottom + 8,
       width: Math.max(rect.width, 64),
     });
-  }, []);
+  }, [options.length]);
 
   const openMenu = () => {
     positionMenu();

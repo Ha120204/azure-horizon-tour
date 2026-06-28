@@ -37,6 +37,11 @@ export interface UpsertDepartureTransportDto {
   returnDepartureTime?: string;
   returnArrivalTime?: string;
   returnFlightClass?: string;
+  // Quá cảnh (bay nối chuyến)
+  transitPoint?: string;
+  transitPointEn?: string;
+  returnTransitPoint?: string;
+  returnTransitPointEn?: string;
   // Xe / ô tô
   vehicleType?: string;
   vehicleTypeEn?: string;
@@ -307,6 +312,10 @@ export class TourDepartureService {
       returnDepartureTime: dto.returnDepartureTime ? new Date(dto.returnDepartureTime) : null,
       returnArrivalTime: dto.returnArrivalTime ? new Date(dto.returnArrivalTime) : null,
       returnFlightClass: dto.returnFlightClass ?? null,
+      transitPoint: dto.transitPoint ?? null,
+      transitPointEn: dto.transitPointEn ?? null,
+      returnTransitPoint: dto.returnTransitPoint ?? null,
+      returnTransitPointEn: dto.returnTransitPointEn ?? null,
       vehicleType: dto.vehicleType ?? null,
       vehicleTypeEn: dto.vehicleTypeEn ?? null,
       operator: dto.operator ?? null,

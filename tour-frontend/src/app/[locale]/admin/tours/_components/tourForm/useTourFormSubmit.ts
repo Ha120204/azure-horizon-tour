@@ -233,6 +233,8 @@ export function useTourFormSubmit({
               returnDepartureTime: t.returnDepartureTime || undefined,
               returnArrivalTime: t.returnArrivalTime || undefined,
               returnFlightClass: t.returnFlightClass || undefined,
+              transitPoint: t.transitPoint || undefined,
+              returnTransitPoint: t.returnTransitPoint || undefined,
               vehicleType: t.vehicleType || undefined,
               operator: t.operator || undefined,
               boardingPoint: t.boardingPoint || undefined,

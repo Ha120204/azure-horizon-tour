@@ -197,6 +197,34 @@ function buildTimeline(day: DayPlan): Prisma.InputJsonValue {
   ];
 }
 
+const TRANSPORT_EN: Record<string, string> = {
+  'Xe đón sân bay': 'Airport pickup transfer',
+  'Xe tiễn sân bay': 'Airport drop-off transfer',
+  'Xe du lịch': 'Coach',
+  'Máy bay': 'Flight',
+  'Xe du lịch và cano': 'Coach and speedboat',
+  'Xe du lịch và cáp treo': 'Coach and cable car',
+  'Xe du lịch và thuyền': 'Coach and boat',
+  'Xe du lịch và tàu lửa rừng': 'Coach and forest railway',
+  'Xe du lịch và tàu/cầu đường biển': 'Coach, then ferry/sea bridge',
+  'Xe du lịch hoặc tàu theo lịch': 'Coach or train as scheduled',
+  'Xe du lịch chuyên dụng theo lịch': 'Specialized coach as scheduled',
+};
+
+function translateTransport(vi: string): string {
+  return TRANSPORT_EN[vi] ?? vi;
+}
+
+const DEPARTURE_POINT_EN: Record<string, string> = {
+  'Hà Nội': 'Hanoi',
+  'TP.HCM': 'Ho Chi Minh City',
+};
+
+function durationEnFromVi(vi: string): string {
+  const match = vi.match(/(\d+)\s*ngày\s*(\d+)\s*đêm/);
+  return match ? `${match[1]} Days ${match[2]} Nights` : vi;
+}
+
 const internationalTours: InternationalTourSeed[] = [
   {
     destination: {
@@ -226,16 +254,16 @@ const internationalTours: InternationalTourSeed[] = [
         'Tham quan chùa Wat Arun và các điểm biểu tượng Bangkok',
         'Trải nghiệm Pattaya và không gian biển Thái Lan',
         'Có thời gian mua sắm tại các trung tâm lớn',
-        'Lịch trình de di, phù hợp khách lần đầu di tour nước ngoài',
+        'Lịch trình dễ đi, phù hợp khách lần đầu đi tour nước ngoài',
       ],
       gallery: [...IMAGES.bangkokPattaya],
       itinerary: [
         {
           title: 'Việt Nam - Bangkok',
           description:
-            'Làm thủ tục bay sang Bangkok, đón khách tại sân bay, dung bữa tối và nhận phòng nghỉ ngơi.',
+            'Làm thủ tục bay sang Bangkok, đón khách tại sân bay, dùng bữa tối và nhận phòng nghỉ ngơi.',
           accommodation: 'Khách sạn Bangkok theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay Việt Nam - Bangkok', 'Dùng bữa tối Thái Lan'],
           imageUrl: IMAGES.bangkokPattaya[0],
         },
@@ -251,7 +279,7 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Bangkok - Pattaya',
           description:
-            'Di chuyển đếnPattaya, tham quan điểm giải trí, nghỉ đêm tại thảnh phổ biến.',
+            'Di chuyển đến Pattaya, tham quan điểm giải trí, nghỉ đêm tại thành phố biển.',
           accommodation: 'Khách sạn Pattaya theo gói',
           transport: 'Xe du lịch',
           activities: [
@@ -274,7 +302,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Bangkok - Việt Nam',
           description:
             'Ăn sáng, ra sân bay Suvarnabhumi và bay về Việt Nam, kết thúc hành trình.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Sân bay Suvarnabhumi', 'Bay về Việt Nam'],
           imageUrl: IMAGES.bangkokPattaya[2],
         },
@@ -330,7 +358,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay đến Singapore, tham quan khu Marina Bay, Merlion và nghỉ đêm tại Singapore.',
           accommodation: 'Khách sạn Singapore theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Marina Bay', 'Merlion Park', 'Singapore về đêm'],
           imageUrl: IMAGES.singaporeMalaysia[0],
         },
@@ -369,7 +397,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Kuala Lumpur - Việt Nam',
           description:
             'Ăn sáng, tự do mua đặc sản cuối chuyến tại Kuala Lumpur và ra sân bay KLIA bay về Việt Nam.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: [
             'Mua đặc sản Malaysia',
             'Sân bay KLIA',
@@ -406,9 +434,9 @@ const internationalTours: InternationalTourSeed[] = [
       tourCode: 'INT-IDN-003',
       name: 'Bali Ubud - Đền Ulun Danu - Nghỉ Dưỡng Biển 4 Ngày 3 Đêm',
       description: buildDescription(
-        'Tour Bali dảnh cho khách yêu nghỉ dưỡng, kết hợp Ubud, đền Ulun Danu, ruộng bậc thang và thời gian thư giãn ben biển.',
-        'nghỉ dưỡng dao, văn hóa Hindu Bali, ruộng bậc thang và resort biển',
-        'cặp đôi, khách honeymoon, gia đình và nhóm bạn muốn lịch trình đẹp nhưng không qua gap',
+        'Tour Bali dành cho khách yêu nghỉ dưỡng, kết hợp Ubud, đền Ulun Danu, ruộng bậc thang và thời gian thư giãn bên biển.',
+        'nghỉ dưỡng đảo, văn hóa Hindu Bali, ruộng bậc thang và resort biển',
+        'cặp đôi, khách honeymoon, gia đình và nhóm bạn muốn lịch trình đẹp nhưng không quá gấp',
       ),
       price: 16_900_000,
       duration: '4 ngày 3 đêm',
@@ -420,7 +448,7 @@ const internationalTours: InternationalTourSeed[] = [
         'Tham quan đền Ulun Danu và cảnh quan Bali',
         'Trải nghiệm Ubud và ruộng bậc thang',
         'Có thời gian nghỉ dưỡng biển',
-        'Phù hợp honeymoon và khách thich resort',
+        'Phù hợp honeymoon và khách thích resort',
       ],
       gallery: [...IMAGES.bali],
       itinerary: [
@@ -429,7 +457,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay đến Bali, đón khách tại sân bay, nhận phòng và nghỉ ngơi tại resort/khách sạn.',
           accommodation: 'Khách sạn/resort Bali theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Bali', 'Nhận phòng nghỉ dưỡng'],
           imageUrl: IMAGES.bali[0],
         },
@@ -445,7 +473,7 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Ruộng bậc thang - Nghỉ dưỡng biển',
           description:
-            'Check-in ruộng bậc thang, tự do nghỉ dưỡng, tam biển hoặc dung dịch vụ resort.',
+            'Check-in ruộng bậc thang, tự do nghỉ dưỡng, tắm biển hoặc dùng dịch vụ resort.',
           accommodation: 'Khách sạn/resort Bali theo gói',
           transport: 'Xe du lịch',
           activities: ['Ruộng bậc thang', 'Nghỉ dưỡng biển', 'Tự do thư giãn'],
@@ -454,8 +482,8 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Bali - Việt Nam',
           description: 'Tự do mua sắm, trả phòng và bay về Việt Nam.',
-          transport: 'Xe du lịch và máy bay',
-          activities: ['Mua qua địa phương', 'Bay về Việt Nam'],
+          transport: 'Xe tiễn sân bay',
+          activities: ['Mua quà địa phương', 'Bay về Việt Nam'],
           imageUrl: IMAGES.bali[2],
         },
       ],
@@ -480,7 +508,7 @@ const internationalTours: InternationalTourSeed[] = [
       region: 'Đông Bắc Á',
       countryCode: 'TW',
       description:
-        'Điểm đến đông bắc A được ưa chuộng với Đài Bắc 101, chợ đêm, Cửu Phần, Đài Trung, Cao Hùng và ẩm thực đường phố.',
+        'Điểm đến Đông Bắc Á được ưa chuộng với Đài Bắc 101, chợ đêm, Cửu Phần, Đài Trung, Cao Hùng và ẩm thực đường phố.',
       imageUrl: IMAGES.taiwan[0],
     },
     tour: {
@@ -488,7 +516,7 @@ const internationalTours: InternationalTourSeed[] = [
       name: 'Đài Loan Đài Bắc - Đài Trung - Cao Hùng 5 Ngày 4 Đêm',
       description: buildDescription(
         'Tour Đài Loan kết hợp Đài Bắc 101, chợ đêm, Cửu Phần, Đài Trung, Cao Hùng và các điểm city tour phổ biến.',
-        'city tour, ẩm thực chợ đêm, mua sắm và cảnh quan đông bắc A',
+        'city tour, ẩm thực chợ đêm, mua sắm và cảnh quan Đông Bắc Á',
         'khách trẻ, gia đình, nhóm bạn và khách muốn tour gần Việt Nam với chi phí vừa phải',
       ),
       price: 17_900_000,
@@ -510,7 +538,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay đến Đài Bắc, nhận phòng và trải nghiệm chợ đêm theo thời gian đến.',
           accommodation: 'Khách sạn Đài Bắc theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Đài Bắc', 'Chợ đêm Đài Loan'],
           imageUrl: IMAGES.taiwan[0],
         },
@@ -526,7 +554,7 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Cửu Phần - Đài Trung',
           description:
-            'Khám phá phố cổ Cửu Phần hoặc điểm phù hợp thời tiết, di chuyển đếnĐài Trung.',
+            'Khám phá phố cổ Cửu Phần hoặc điểm phù hợp thời tiết, di chuyển đến Đài Trung.',
           accommodation: 'Khách sạn Đài Trung theo gói',
           transport: 'Xe du lịch',
           activities: ['Cửu Phần', 'Đài Trung', 'Ẩm thực địa phương'],
@@ -549,7 +577,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Đài Loan - Việt Nam',
           description:
             'Ăn sáng, trả phòng và ra sân bay bay về Việt Nam, kết thúc hành trình.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Sân bay Cao Hùng/Đài Bắc', 'Bay về Việt Nam'],
           imageUrl: IMAGES.taiwan[1],
         },
@@ -583,8 +611,8 @@ const internationalTours: InternationalTourSeed[] = [
       name: 'Hong Kong - Macau 4 Ngày 3 Đêm',
       description: buildDescription(
         'Tour Hong Kong - Macau kết hợp Victoria Harbour, các khu mua sắm, city tour Hong Kong và di sản Ruins of St. Paul tại Macau.',
-        'đô thị chau A, mua sắm, ẩm thực Quang Dong và di sản Macau',
-        'khách thich city break, mua sắm, gia đình và nhóm bạn muốn tour ngắn ngày',
+        'đô thị châu Á, mua sắm, ẩm thực Quảng Đông và di sản Macau',
+        'khách thích city break, mua sắm, gia đình và nhóm bạn muốn tour ngắn ngày',
       ),
       price: 18_900_000,
       duration: '4 ngày 3 đêm',
@@ -593,10 +621,10 @@ const internationalTours: InternationalTourSeed[] = [
       tourType: 'Nghỉ Dưỡng',
       departurePoint: 'Hà Nội',
       highlights: [
-        'Ngam skyline Hong Kong và Victoria Harbour',
+        'Ngắm skyline Hong Kong và Victoria Harbour',
         'Tham quan các khu mua sắm nổi bật',
         'Di chuyển sang Macau và check-in Ruins of St. Paul',
-        'Lịch trình ngan, phù hợp kỳ nghỉ ngắn ngày',
+        'Lịch trình ngắn, phù hợp kỳ nghỉ ngắn ngày',
       ],
       gallery: [...IMAGES.hongKongMacau],
       itinerary: [
@@ -605,7 +633,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay đến Hong Kong, đón khách, nhận phòng và tự do khám phá khu trung tâm.',
           accommodation: 'Khách sạn Hong Kong theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Hong Kong', 'Victoria Harbour'],
           imageUrl: IMAGES.hongKongMacau[0],
         },
@@ -615,7 +643,7 @@ const internationalTours: InternationalTourSeed[] = [
             'Tham quan các điểm biểu tượng, khu mua sắm và điểm ngắm cảnh theo chương trình.',
           accommodation: 'Khách sạn Hong Kong theo gói',
           transport: 'Xe du lịch',
-          activities: ['City tour Hong Kong', 'Mua sắm', 'Ẩm thực Quang Dong'],
+          activities: ['City tour Hong Kong', 'Mua sắm', 'Ẩm thực Quảng Đông'],
           imageUrl: IMAGES.hongKongMacau[0],
         },
         {
@@ -630,14 +658,14 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Macau/Hong Kong - Việt Nam',
           description: 'Mua đặc sản, trả phòng và bay về Việt Nam.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Mua đặc sản', 'Bay về Việt Nam'],
           imageUrl: IMAGES.hongKongMacau[2],
         },
       ],
       faqs: [
         {
-          question: 'Tour có di ca Hong Kong và Macau không?',
+          question: 'Tour có đi cả Hong Kong và Macau không?',
           answer:
             'Có. Lịch trình có đầy đủ hai điểm đến, có thể điều chỉnh số đêm tùy sản phẩm thực tế.',
         },
@@ -656,14 +684,14 @@ const internationalTours: InternationalTourSeed[] = [
       region: 'Đông Bắc Á',
       countryCode: 'KR',
       description:
-        'Tuyến Hàn Quốc phổ biến với Seoul, Gyeongbokgung, dao Nami, mua sắm, ẩm thực và cong vien giải trí theo mùa.',
+        'Tuyến Hàn Quốc phổ biến với Seoul, Gyeongbokgung, đảo Nami, mua sắm, ẩm thực và công viên giải trí theo mùa.',
       imageUrl: IMAGES.seoulNami[0],
     },
     tour: {
       tourCode: 'INT-KOR-006',
       name: 'Hàn Quốc Seoul - Nami - Everland 5 Ngày 4 Đêm',
       description: buildDescription(
-        'Tour Hàn Quốc kết hợp cung điện Gyeongbokgung, dao Nami, mua sắm Seoul và Everland hoặc điểm thay the theo mùa.',
+        'Tour Hàn Quốc kết hợp cung điện Gyeongbokgung, đảo Nami, mua sắm Seoul và Everland hoặc điểm thay thế theo mùa.',
         'văn hóa Hàn Quốc, cảnh quan theo mùa, mua sắm và trải nghiệm giải trí',
         'gia đình, khách trẻ, nhóm bạn và khách yêu K-culture',
       ),
@@ -675,7 +703,7 @@ const internationalTours: InternationalTourSeed[] = [
       departurePoint: 'TP.HCM',
       highlights: [
         'Tham quan Gyeongbokgung và trung tâm Seoul',
-        'Check-in dao Nami theo mùa',
+        'Check-in đảo Nami theo mùa',
         'Trải nghiệm Everland hoặc điểm giải trí phù hợp',
         'Mua sắm mỹ phẩm, nhân sâm và đặc sản Hàn Quốc',
       ],
@@ -685,7 +713,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Việt Nam - Seoul',
           description: 'Bay đến Seoul, đón khách, nhận phòng và nghỉ ngơi.',
           accommodation: 'Khách sạn Seoul theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Seoul', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.seoulNami[0],
         },
@@ -701,7 +729,7 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Đảo Nami - Everland',
           description:
-            'Di dao Nami, tiếp tục Everland hoặc điểm thay the theo thời tiết và mua.',
+            'Đi đảo Nami, tiếp tục Everland hoặc điểm thay thế theo thời tiết và mùa.',
           accommodation: 'Khách sạn Seoul theo gói',
           transport: 'Xe du lịch',
           activities: ['Đảo Nami', 'Everland', 'Mua sắm'],
@@ -724,7 +752,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Seoul - Việt Nam',
           description:
             'Ăn sáng, trả phòng và ra sân bay Incheon bay về Việt Nam, kết thúc hành trình.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Sân bay Incheon', 'Bay về Việt Nam'],
           imageUrl: IMAGES.seoulNami[0],
         },
@@ -736,7 +764,7 @@ const internationalTours: InternationalTourSeed[] = [
             'Thường cần visa hoặc điều kiện nhập cảnh phù hợp. Khách cần nộp hồ sơ theo hướng dẫn trước ngày khởi hành.',
         },
         {
-          question: 'Đảo Nami mua nao đẹp?',
+          question: 'Đảo Nami mùa nào đẹp?',
           answer:
             'Xuân, thu và đông đều có nét hấp dẫn riêng, phù hợp khởi hành quanh năm.',
         },
@@ -757,7 +785,7 @@ const internationalTours: InternationalTourSeed[] = [
       tourCode: 'INT-JPN-007',
       name: 'Nhật Bản Tokyo - Fuji - Hakone 5 Ngày 4 Đêm',
       description: buildDescription(
-        'Tour Nhật Bản tuyến Tokyo - Fuji - Hakone, phù hợp khách lần đầu đếnNhật với các điểm biểu tượng và thời gian mua sắm.',
+        'Tour Nhật Bản tuyến Tokyo - Fuji - Hakone, phù hợp khách lần đầu đến Nhật với các điểm biểu tượng và thời gian mua sắm.',
         'núi Phú Sĩ, đô thị Tokyo, văn hóa Nhật và mua sắm',
         'gia đình, cặp đôi, nhóm bạn và khách muốn sản phẩm Nhật Bản kinh điển',
       ),
@@ -768,7 +796,7 @@ const internationalTours: InternationalTourSeed[] = [
       tourType: 'Khám Phá',
       departurePoint: 'Hà Nội',
       highlights: [
-        'Ngam núi Phú Sĩ và khu Hakone/Fuji Five Lakes',
+        'Ngắm núi Phú Sĩ và khu Hakone/Fuji Five Lakes',
         'City tour Tokyo với các khu phố biểu tượng',
         'Trải nghiệm ẩm thực và mua sắm Nhật Bản',
         'Tuyến tour tiêu biểu cho phân khúc giá cao',
@@ -779,14 +807,14 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Việt Nam - Tokyo',
           description: 'Bay đến Tokyo, đón khách và nghỉ ngơi tại khách sạn.',
           accommodation: 'Khách sạn Tokyo theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Tokyo', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.tokyoFuji[2],
         },
         {
           title: 'Tokyo city tour',
           description:
-            'Tham quan các khu phố biểu tượng, đền chùa/noi mua sắm theo lịch trình.',
+            'Tham quan các khu phố biểu tượng, đền chùa/nơi mua sắm theo lịch trình.',
           accommodation: 'Khách sạn Tokyo theo gói',
           transport: 'Xe du lịch',
           activities: ['City tour Tokyo', 'Mua sắm', 'Ẩm thực Nhật'],
@@ -814,7 +842,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Tokyo - Việt Nam',
           description:
             'Ăn sáng, trả phòng và ra sân bay Narita hoặc Haneda bay về Việt Nam.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Sân bay Narita/Haneda', 'Bay về Việt Nam'],
           imageUrl: IMAGES.tokyoFuji[2],
         },
@@ -826,7 +854,7 @@ const internationalTours: InternationalTourSeed[] = [
             'Thông thường cần visa Nhật Bản. Khách cần hộ chiếu còn hạn và hồ sơ theo yêu cầu.',
         },
         {
-          question: 'Có đảm bảo thay núi Phú Sĩ không?',
+          question: 'Có đảm bảo thấy núi Phú Sĩ không?',
           answer:
             'Cảnh núi Phú Sĩ phụ thuộc thời tiết. Nếu sương/mưa, lịch trình vẫn giữ điểm tham quan nhưng tầm nhìn có thể hạn chế.',
         },
@@ -869,7 +897,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Việt Nam - Osaka',
           description: 'Bay đến Osaka, đón khách và nhận phòng nghỉ ngơi.',
           accommodation: 'Khách sạn Osaka theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Osaka', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.osakaKyoto[1],
         },
@@ -904,7 +932,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Osaka - Việt Nam',
           description:
             'Ăn sáng, tự do mua đặc sản Osaka và ra sân bay Kansai bay về Việt Nam.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: [
             'Mua đặc sản Osaka',
             'Sân bay Kansai',
@@ -917,7 +945,7 @@ const internationalTours: InternationalTourSeed[] = [
         {
           question: 'Tour Osaka - Kyoto khác Tokyo - Fuji như thế nào?',
           answer:
-            'Tuyến Kansai nghieng ve văn hóa cổ đô, đền chùa và ẩm thực; Tokyo - Fuji nghieng ve đô thị hiện đại và núi Phú Sĩ.',
+            'Tuyến Kansai nghiêng về văn hóa cổ đô, đền chùa và ẩm thực; Tokyo - Fuji nghiêng về đô thị hiện đại và núi Phú Sĩ.',
         },
         {
           question: 'Có cần visa Nhật Bản không?',
@@ -934,7 +962,7 @@ const internationalTours: InternationalTourSeed[] = [
       region: 'Trung Đông',
       countryCode: 'AE',
       description:
-        'Tuyến Trung Đông cao cap với Burj Khalifa, Dubai Mall, sa mạc, Abu Dhabi và Sheikh Zayed Grand Mosque.',
+        'Tuyến Trung Đông cao cấp với Burj Khalifa, Dubai Mall, sa mạc, Abu Dhabi và Sheikh Zayed Grand Mosque.',
       imageUrl: IMAGES.dubaiAbuDhabi[0],
     },
     tour: {
@@ -955,7 +983,7 @@ const internationalTours: InternationalTourSeed[] = [
         'Check-in Burj Khalifa và Dubai skyline',
         'Trải nghiệm desert safari theo chương trình',
         'Tham quan Sheikh Zayed Grand Mosque tại Abu Dhabi',
-        'Mua sắm tại Dubai Mall hoặc các khu thường mai lon',
+        'Mua sắm tại Dubai Mall hoặc các khu thương mại lớn',
       ],
       gallery: [...IMAGES.dubaiAbuDhabi],
       itinerary: [
@@ -963,7 +991,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Việt Nam - Dubai',
           description: 'Bay đến Dubai, đón khách, nhận phòng và nghỉ ngơi.',
           accommodation: 'Khách sạn Dubai theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Dubai', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.dubaiAbuDhabi[0],
         },
@@ -979,9 +1007,9 @@ const internationalTours: InternationalTourSeed[] = [
         {
           title: 'Desert safari',
           description:
-            'Trải nghiệm sa mạc theo chương trình, dung bữa tối và thưởng thức hoạt động giải trí địa phương.',
+            'Trải nghiệm sa mạc theo chương trình, dùng bữa tối và thưởng thức hoạt động giải trí địa phương.',
           accommodation: 'Khách sạn Dubai theo gói',
-          transport: 'Xe du lịch/chuyen dung theo lịch',
+          transport: 'Xe du lịch chuyên dụng theo lịch',
           activities: [
             'Desert safari',
             'Bữa tối sa mạc',
@@ -1006,7 +1034,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Dubai - Việt Nam',
           description:
             'Ăn sáng, mua sắm tự do tại Dubai Mall và ra sân bay DXB bay về Việt Nam, kết thúc hành trình.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Mua đặc sản', 'Sân bay Dubai DXB', 'Bay về Việt Nam'],
           imageUrl: IMAGES.dubaiAbuDhabi[0],
         },
@@ -1062,7 +1090,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay đến Paris, đón khách tại sân bay CDG, nhận phòng và tự do nghỉ ngơi sau chuyến bay dài.',
           accommodation: 'Khách sạn Paris theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Paris', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.europeClassic[0],
         },
@@ -1127,7 +1155,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Tự do Amsterdam - Khởi hành',
           description:
             'Tự do buổi sáng mua đặc sản Hà Lan, buổi chiều ra sân bay Schiphol khởi hành chuyến bay đêm về Việt Nam.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: [
             'Mua đặc sản Hà Lan',
             'Sân bay Schiphol Amsterdam',
@@ -1195,7 +1223,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay sang Bangkok, đón khách tại sân bay, tham quan chùa Phật Vàng và dạo chợ đêm Asiatique ven sông.',
           accommodation: 'Khách sạn Bangkok theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay Việt Nam - Bangkok', 'Chùa Phật Vàng', 'Asiatique'],
           imageUrl: IMAGES.bangkokPattaya[0],
         },
@@ -1221,7 +1249,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Pattaya - Bangkok - Việt Nam',
           description:
             'Mua đặc sản, ra sân bay Suvarnabhumi và bay về Việt Nam, kết thúc hành trình.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Mua đặc sản', 'Sân bay Suvarnabhumi', 'Bay về Việt Nam'],
           imageUrl: IMAGES.bangkokPattaya[0],
         },
@@ -1276,7 +1304,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Việt Nam - Seoul',
           description: 'Bay đến Seoul, đón khách, nhận phòng và nghỉ ngơi.',
           accommodation: 'Khách sạn Seoul theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Seoul', 'Nhận phòng nghỉ ngơi'],
           imageUrl: IMAGES.seoulNami[0],
         },
@@ -1311,7 +1339,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Seoul - Việt Nam',
           description:
             'Ăn sáng, trả phòng và ra sân bay Incheon bay về Việt Nam, kết thúc hành trình.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Sân bay Incheon', 'Bay về Việt Nam'],
           imageUrl: IMAGES.seoulNami[1],
         },
@@ -1367,7 +1395,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay đến Singapore, tham quan khu Marina Bay, Merlion và ngắm Singapore về đêm.',
           accommodation: 'Khách sạn Singapore theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Marina Bay', 'Merlion Park', 'Singapore về đêm'],
           imageUrl: IMAGES.singaporeMalaysia[0],
         },
@@ -1393,7 +1421,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Singapore - Việt Nam',
           description:
             'Ăn sáng, tự do mua đặc sản và ra sân bay Changi bay về Việt Nam.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Mua đặc sản', 'Sân bay Changi', 'Bay về Việt Nam'],
           imageUrl: IMAGES.singaporeMalaysia[0],
         },
@@ -1449,7 +1477,7 @@ const internationalTours: InternationalTourSeed[] = [
           description:
             'Bay đến Đài Bắc, nhận phòng và trải nghiệm chợ đêm theo thời gian đến.',
           accommodation: 'Khách sạn Đài Bắc theo gói',
-          transport: 'Máy bay và xe du lịch',
+          transport: 'Xe đón sân bay',
           activities: ['Bay đến Đài Bắc', 'Chợ đêm Đài Loan'],
           imageUrl: IMAGES.taiwan[0],
         },
@@ -1484,7 +1512,7 @@ const internationalTours: InternationalTourSeed[] = [
           title: 'Đài Bắc - Việt Nam',
           description:
             'Ăn sáng, mua đặc sản và ra sân bay bay về Việt Nam, kết thúc hành trình.',
-          transport: 'Xe du lịch và máy bay',
+          transport: 'Xe tiễn sân bay',
           activities: ['Mua đặc sản Đài Loan', 'Sân bay Đào Viên', 'Bay về Việt Nam'],
           imageUrl: IMAGES.taiwan[1],
         },
@@ -1516,6 +1544,8 @@ type FlightConfig = {
   flightDurationHours: number;
   flightClass: string;
   tourDays: number; // used to compute return day offset
+  transit?: string; // Điểm quá cảnh nếu bay nối chuyến (VD: "Doha (DOH)")
+  transitEn?: string;
 };
 
 // tourCode → flight config
@@ -1629,16 +1659,18 @@ const FLIGHT_CONFIGS: Record<string, FlightConfig> = {
     tourDays: 5,
   },
   'INT-EUR-010': {
-    airline: 'Air France',
-    airlineEn: 'Air France',
-    flightCode: 'AF-259',
-    returnFlightCode: 'AF-258',
+    airline: 'Qatar Airways',
+    airlineEn: 'Qatar Airways',
+    flightCode: 'QR-977',
+    returnFlightCode: 'QR-976',
     departureAirport: 'SGN',
     arrivalAirport: 'CDG',
-    departureHour: 22,
-    flightDurationHours: 12,
+    departureHour: 20,
+    flightDurationHours: 16,
     flightClass: 'Economy',
     tourDays: 8,
+    transit: 'Doha (DOH)',
+    transitEn: 'Doha (DOH)',
   },
   'INT-THA-011': {
     airline: 'Vietnam Airlines',
@@ -1706,6 +1738,9 @@ function buildFlightCreate(cfg: FlightConfig, departureDate: Date) {
     retDepTime.getTime() + cfg.flightDurationHours * 3_600_000,
   );
 
+  // Bay quốc tế: khách có mặt sân bay trước giờ cất cánh 3 tiếng để làm thủ tục.
+  const gatheringTime = new Date(depTime.getTime() - 3 * 3_600_000);
+
   return {
     type: TransportType.FLIGHT,
     airline: cfg.airline,
@@ -1724,6 +1759,11 @@ function buildFlightCreate(cfg: FlightConfig, departureDate: Date) {
     returnDepartureTime: retDepTime,
     returnArrivalTime: retArrTime,
     returnFlightClass: cfg.flightClass,
+    transitPoint: cfg.transit ?? null,
+    transitPointEn: cfg.transitEn ?? cfg.transit ?? null,
+    returnTransitPoint: cfg.transit ?? null,
+    returnTransitPointEn: cfg.transitEn ?? cfg.transit ?? null,
+    gatheringTime,
     notes:
       'Vé máy bay đã bao gồm trong giá tour. Hành lý ký gửi theo quy định hãng bay.',
     notesEn:
@@ -1785,11 +1825,14 @@ export async function seedInternationalTours(prisma: PrismaClient) {
         destinationId: destination.id,
         startDate: addDays(30),
         duration: item.tour.duration,
+        durationEn: durationEnFromVi(item.tour.duration),
         availableSeats: item.tour.availableSeats,
         imageUrl: item.tour.imageUrl,
         averageRating: 4.7,
         tourType: item.tour.tourType,
+        primaryTransport: TransportType.FLIGHT,
         departurePoint: item.tour.departurePoint,
+        departurePointEn: DEPARTURE_POINT_EN[item.tour.departurePoint] ?? null,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
         deletedAt: null,
@@ -1803,11 +1846,14 @@ export async function seedInternationalTours(prisma: PrismaClient) {
         destinationId: destination.id,
         startDate: addDays(30),
         duration: item.tour.duration,
+        durationEn: durationEnFromVi(item.tour.duration),
         availableSeats: item.tour.availableSeats,
         imageUrl: item.tour.imageUrl,
         averageRating: 4.7,
         tourType: item.tour.tourType,
+        primaryTransport: TransportType.FLIGHT,
         departurePoint: item.tour.departurePoint,
+        departurePointEn: DEPARTURE_POINT_EN[item.tour.departurePoint] ?? null,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
       },
@@ -1855,6 +1901,7 @@ export async function seedInternationalTours(prisma: PrismaClient) {
             mealsDinner: index < item.tour.itinerary.length - 1,
             accommodation: day.accommodation ?? null,
             transport: day.transport,
+            transportEn: translateTransport(day.transport),
             activities: day.activities,
             imageUrl: day.imageUrl,
             timeline: buildTimeline(day),

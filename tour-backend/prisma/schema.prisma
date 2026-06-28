@@ -361,6 +361,12 @@ model TourDepartureTransport {
   returnArrivalTime      DateTime?
   returnFlightClass      String?
 
+  // ── Điểm quá cảnh (chỉ dùng khi bay nối chuyến) ──────────────────────────
+  transitPoint         String? // "Doha (DOH)"
+  transitPointEn       String?
+  returnTransitPoint   String?
+  returnTransitPointEn String?
+
   // ── Thông tin xe/ô tô ────────────────────────────────────────────────────
   vehicleType     String? // "Xe 45 chỗ", "Limousine 9 chỗ"
   vehicleTypeEn   String?

@@ -55,6 +55,8 @@ export const EMPTY_TRANSPORT: DepartureTransport = {
   returnDepartureTime: "",
   returnArrivalTime: "",
   returnFlightClass: "Economy",
+  transitPoint: "",
+  returnTransitPoint: "",
   vehicleType: "",
   operator: "",
   boardingPoint: "",
@@ -192,6 +194,22 @@ function FlightLeg({
             )
           }
         />
+        <div className="sm:col-span-2">
+          <label className={fieldLabel}>Điểm quá cảnh (nếu bay nối chuyến)</label>
+          <input
+            type="text"
+            value={isReturn ? transport.returnTransitPoint : transport.transitPoint}
+            onChange={(e) =>
+              onChange(
+                isReturn
+                  ? { returnTransitPoint: e.target.value }
+                  : { transitPoint: e.target.value },
+              )
+            }
+            placeholder="Doha (DOH), Bangkok (BKK)... — bỏ trống nếu bay thẳng"
+            className={inputClass}
+          />
+        </div>
         <div>
           <label className={fieldLabel}>Giờ cất cánh</label>
           <FlightDateTimeField

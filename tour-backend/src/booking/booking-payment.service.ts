@@ -75,18 +75,22 @@ export class BookingPaymentService {
       confirmedNote?: string;
       evidenceUrl?: string;
     },
-  ) {
+  ): Promise<boolean> {
     const now = new Date();
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id: bookingId },
+    return this.prisma.$transaction(async (tx) => {
+      // Atomic compare-and-set: chỉ một request thắng (count=1), các request
+      // song song khác nhận count=0 và bỏ qua toàn bộ side-effects bên dưới.
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, status: { notIn: ['CONFIRMED', 'CANCELLED'] } },
         data: {
           status: 'CONFIRMED',
           paymentStatus: 'PAID',
           confirmedById,
         },
       });
+
+      if (result.count === 0) return false; // Đã được xử lý bởi request khác
 
       // 1. Ghi PaymentTransaction với đầy đủ audit trail
       const pendingTransaction = await tx.paymentTransaction.findFirst({
@@ -149,6 +153,8 @@ export class BookingPaymentService {
           booking.voucherCode,
         );
       }
+
+      return true;
     });
   }
 
@@ -205,18 +211,23 @@ export class BookingPaymentService {
     const confirmedSource = IN_STORE_SOURCE_MAP[dto.collectionMethod];
     const amount = dto.amount ?? Number(booking.totalPrice);
 
-    await this.confirmBookingAsPaid(bookingId, confirmedSource, actorId, {
-      gateway: 'MANUAL',
-      transactionRef: dto.receiptRef,
-      amount,
-      confirmedNote: dto.note,
-    });
+    const processed = await this.confirmBookingAsPaid(
+      bookingId,
+      confirmedSource,
+      actorId,
+      {
+        gateway: 'MANUAL',
+        transactionRef: dto.receiptRef,
+        amount,
+        confirmedNote: dto.note,
+      },
+    );
 
     this.logger.log(
       `[IN_STORE] Payment collected for bookingId=${bookingId} method=${dto.collectionMethod} actorId=${actorId ?? 'system'}`,
     );
 
-    await this.sendConfirmationEmail(bookingId);
+    if (processed) await this.sendConfirmationEmail(bookingId);
 
     return { message: 'Đã ghi nhận thu tiền tại cửa hàng thành công' };
   }
@@ -252,14 +263,19 @@ export class BookingPaymentService {
 
     if (paymentInfo?.status === 'PAID') {
       const txnRef = paymentInfo.transactions?.[0]?.reference || `PAYOS-QR-SYNC-${orderCode}`;
-      await this.confirmBookingAsPaid(bookingId, 'PAYOS_RETURN_SYNC', userId, {
-        gateway: 'PAYOS',
-        transactionRef: txnRef,
-        amount: paymentInfo.amount || Number(booking.totalPrice),
-        confirmedNote: `QR inline sync · User #${userId}`,
-        evidenceUrl: undefined,
-      });
-      await this.sendConfirmationEmail(bookingId);
+      const processed = await this.confirmBookingAsPaid(
+        bookingId,
+        'PAYOS_RETURN_SYNC',
+        userId,
+        {
+          gateway: 'PAYOS',
+          transactionRef: txnRef,
+          amount: paymentInfo.amount || Number(booking.totalPrice),
+          confirmedNote: `QR inline sync · User #${userId}`,
+          evidenceUrl: undefined,
+        },
+      );
+      if (processed) await this.sendConfirmationEmail(bookingId);
       return { synced: true, status: 'PAID' };
     }
 
@@ -314,7 +330,7 @@ export class BookingPaymentService {
       const txnRef =
         paymentInfo.transactions?.[0]?.reference || `PAYOS-SYNC-${orderCode}`;
 
-      await this.confirmBookingAsPaid(
+      const processed = await this.confirmBookingAsPaid(
         bookingId,
         'PAYOS_RETURN_SYNC',
         actorId,
@@ -327,7 +343,7 @@ export class BookingPaymentService {
         },
       );
 
-      await this.sendConfirmationEmail(bookingId);
+      if (processed) await this.sendConfirmationEmail(bookingId);
       return { synced: true, status: 'PAID', message: 'PayOS đã xác nhận thanh toán. Đơn đã được xác nhận.' };
     }
 
@@ -368,7 +384,7 @@ export class BookingPaymentService {
       );
     }
 
-    await this.confirmBookingAsPaid(
+    const processed = await this.confirmBookingAsPaid(
       bookingId,
       'PAYOS_MANUAL_RECONCILIATION',
       actorId,
@@ -404,7 +420,7 @@ export class BookingPaymentService {
       `[PAYOS_RECONCILE] Payment reconciled for bookingId=${bookingId} actorId=${actorId}`,
     );
 
-    await this.sendConfirmationEmail(bookingId);
+    if (processed) await this.sendConfirmationEmail(bookingId);
 
     return { message: 'Đã xác nhận đối soát thành công. Đơn đã được xác nhận.' };
   }

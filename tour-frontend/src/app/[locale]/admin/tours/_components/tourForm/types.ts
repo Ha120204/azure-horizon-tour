@@ -26,6 +26,9 @@ export interface DepartureTransport {
   returnDepartureTime: string;
   returnArrivalTime: string;
   returnFlightClass: string;
+  // Transit (bay nối chuyến)
+  transitPoint: string;
+  returnTransitPoint: string;
   // Bus / car
   vehicleType: string;
   operator: string;
@@ -181,6 +184,8 @@ export interface ExistingTourDeparture {
     returnDepartureTime?: string | Date | null;
     returnArrivalTime?: string | Date | null;
     returnFlightClass?: string | null;
+    transitPoint?: string | null;
+    returnTransitPoint?: string | null;
     vehicleType?: string | null;
     vehicleTypeEn?: string | null;
     operator?: string | null;

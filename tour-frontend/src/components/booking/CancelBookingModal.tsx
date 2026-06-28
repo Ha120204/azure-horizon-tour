@@ -180,7 +180,7 @@ export default function CancelBookingModal({
             bankDetails: (isPaid && refundPreview.refundAmount > 0) ? {
               bankName: bankName.trim(),
               accountNumber: accountNumber.trim(),
-              accountName: accountName.trim()
+              accountHolder: accountName.trim()
             } : undefined
           }),
         }

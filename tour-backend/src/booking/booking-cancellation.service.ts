@@ -461,13 +461,23 @@ export class BookingCancellationService {
   }
 
   async getCancelRequests() {
+    const bookingInclude = {
+      user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
+      tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, startDate: true } },
+    };
+
     const requests = await this.prisma.booking.findMany({
       where: { status: 'CANCEL_REQUESTED', deletedAt: null },
-      include: {
-        user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
-        tour: { select: { id: true, name: true, imageUrl: true, tourCode: true, startDate: true } },
-      },
+      include: bookingInclude,
       orderBy: { cancelRequestedAt: 'asc' },
+    });
+
+    // Đơn đã duyệt hủy, có khoản hoàn nhưng admin chưa chuyển khoản (refundedAt = null).
+    // Gồm cả đơn khách tự hủy lẫn admin hủy — đây là hàng đợi cần chuyển tiền.
+    const pendingRefunds = await this.prisma.booking.findMany({
+      where: { status: 'CANCELLED', refundedAt: null, refundAmount: { gt: 0 }, deletedAt: null },
+      include: bookingInclude,
+      orderBy: { cancelledAt: 'asc' },
     });
 
     const formattedRequests = requests.map((b) => ({
@@ -477,9 +487,16 @@ export class BookingCancellationService {
       discountAmount: Number(b.discountAmount),
       refundAmount: Number(b.refundAmount ?? 0),
     }));
+    const formattedRefunds = pendingRefunds.map((b) => ({
+      ...b,
+      totalPrice: Number(b.totalPrice),
+      unitPriceAtBooking: Number(b.unitPriceAtBooking),
+      discountAmount: Number(b.discountAmount),
+      refundAmount: Number(b.refundAmount ?? 0),
+    }));
 
     const pendingCancelCount = formattedRequests.length;
-    const pendingRefundAmount = formattedRequests.reduce((sum, r) => sum + r.refundAmount, 0);
+    const pendingRefundAmount = formattedRefunds.reduce((sum, r) => sum + r.refundAmount, 0);
 
     const refundedAgg = await this.prisma.booking.aggregate({
       where: { status: 'CANCELLED', refundedAt: { not: null }, deletedAt: null },
@@ -488,7 +505,13 @@ export class BookingCancellationService {
 
     return {
       requests: formattedRequests,
-      stats: { pendingCancelCount, pendingRefundAmount, totalRefundedAmount: Number(refundedAgg._sum.refundAmount ?? 0) },
+      refunds: formattedRefunds,
+      stats: {
+        pendingCancelCount,
+        pendingRefundCount: formattedRefunds.length,
+        pendingRefundAmount,
+        totalRefundedAmount: Number(refundedAgg._sum.refundAmount ?? 0),
+      },
     };
   }
 }

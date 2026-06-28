@@ -87,10 +87,15 @@ export interface TourDepartureTransport {
   returnDepartureTime?: string | null;
   returnArrivalTime?: string | null;
   returnFlightClass?: string | null;
+  transitPoint?: string | null;
+  transitPointEn?: string | null;
+  returnTransitPoint?: string | null;
+  returnTransitPointEn?: string | null;
   vehicleType?: string | null;
   operator?: string | null;
   boardingPoint?: string | null;
   boardingTime?: string | null;
+  gatheringTime?: string | null;
   notes?: string | null;
 }
 

@@ -14,17 +14,17 @@ import { Type } from 'class-transformer';
  * Nested object — được validate tự động qua @ValidateNested + @Type.
  */
 export class RefundBankDetailsDto {
-  @IsString()
-  @MinLength(2)
+  @IsString({ message: 'Vui lòng chọn ngân hàng nhận tiền hoàn' })
+  @MinLength(2, { message: 'Vui lòng chọn ngân hàng nhận tiền hoàn' })
   bankName: string;
 
-  @IsString()
-  @MinLength(6)
-  @MaxLength(30)
+  @IsString({ message: 'Vui lòng nhập số tài khoản nhận hoàn' })
+  @MinLength(6, { message: 'Số tài khoản phải có ít nhất 6 chữ số' })
+  @MaxLength(30, { message: 'Số tài khoản không được vượt quá 30 chữ số' })
   accountNumber: string;
 
-  @IsString()
-  @MinLength(2)
+  @IsString({ message: 'Vui lòng nhập tên chủ tài khoản' })
+  @MinLength(2, { message: 'Tên chủ tài khoản phải có ít nhất 2 ký tự' })
   accountHolder: string;
 }
 

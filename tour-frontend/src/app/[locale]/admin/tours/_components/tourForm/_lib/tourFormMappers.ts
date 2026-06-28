@@ -71,6 +71,8 @@ export const mapDeparturesToForm = (departures: ExistingTourDeparture[]): TourDe
               ? new Date(t.returnArrivalTime).toISOString().slice(0, 16)
               : "",
             returnFlightClass: t.returnFlightClass ?? "Economy",
+            transitPoint: t.transitPoint ?? "",
+            returnTransitPoint: t.returnTransitPoint ?? "",
             vehicleType: t.vehicleType ?? "",
             operator: t.operator ?? "",
             boardingPoint: t.boardingPoint ?? "",

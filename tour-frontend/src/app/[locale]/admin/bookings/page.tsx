@@ -55,7 +55,13 @@ export default function BookingManagementPage() {
       />
 
       {booking.canWrite && (
-        <CancelRequestPanel onActionDone={booking.refreshBookingsAndPaymentStats} />
+        <CancelRequestPanel
+          onActionDone={booking.refreshBookingsAndPaymentStats}
+          onViewInTable={(status) => {
+            booking.filterByStatus(status);
+            document.getElementById('bookings-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
       )}
 
       <section className="mb-8" aria-label="Danh sách đơn đặt tour">

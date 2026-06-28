@@ -3621,6 +3621,64 @@ const additionalHeroTours: DomesticTourSeed[] = [
   }),
 ];
 
+// Điểm khởi hành/đón là hub khi khách xuất phát từ thành phố trung tâm (lái xe
+// được); các giá trị khác là thành phố điểm đến (khách bay tới, đón tại chỗ).
+const HUB_DEPARTURE_POINTS = new Set(['Hà Nội', 'TP.HCM', 'Nhà hát Lớn Hà Nội']);
+
+const LOCATION_EN: Record<string, string> = {
+  'Hà Nội': 'Hanoi',
+  'Nhà hát Lớn Hà Nội': 'Hanoi Opera House',
+  'TP.HCM': 'Ho Chi Minh City',
+  'Đồng Hới': 'Dong Hoi',
+  Huế: 'Hue',
+  'Đà Nẵng': 'Da Nang',
+  'Nha Trang': 'Nha Trang',
+  'Đà Lạt': 'Da Lat',
+  'Phú Quốc': 'Phu Quoc',
+  'Quy Nhơn': 'Quy Nhon',
+  'Tuy Hòa': 'Tuy Hoa',
+};
+
+function locationEn(vi: string): string {
+  return LOCATION_EN[vi] ?? vi;
+}
+
+const TRANSPORT_EN: Record<string, string> = {
+  'Xe du lịch': 'Tour coach',
+  'Xe du lịch theo chương trình': 'Tour coach per itinerary',
+  'Xe limousine': 'Limousine',
+  'Xe du lịch/limousine': 'Tour coach or limousine',
+  'Xe limousine hoặc xe du lịch': 'Limousine or tour coach',
+  'Xe du lịch và đi bộ trong phố cổ': 'Tour coach and walking in the Old Quarter',
+  'Xe du lịch và đi bộ đường dài': 'Tour coach and trekking',
+  'Xe limousine và đi bộ đường dài': 'Limousine and trekking',
+  'Đi bộ và xe limousine': 'Trekking and limousine',
+  'Xe du lịch và du thuyền': 'Tour coach and cruise',
+  'Du thuyền và xe du lịch': 'Cruise and tour coach',
+  'Xe du lịch và thuyền': 'Tour coach and boat',
+  'Xe du lịch và thuyền chèo tay': 'Tour coach and rowing boat',
+  'Xe du lịch và thuyền rồng': 'Tour coach and dragon boat',
+  'Xe du lịch và thuyền thúng': 'Tour coach and basket boat',
+  'Xe du lịch và thuyền địa phương': 'Tour coach and local boat',
+  'Xe du lịch và thuyền Tràng An': 'Tour coach and Trang An boat',
+  'Xe du lịch và cáp treo': 'Tour coach and cable car',
+  'Xe du lịch và cáp treo theo gói': 'Tour coach and package-based cable car',
+  'Xe du lịch và cáp treo Yên Tử': 'Tour coach and Yen Tu cable car',
+  'Xe du lịch và cáp treo tự túc/nâng cấp theo gói':
+    'Tour coach and cable car (self-paid or upgraded by package)',
+  'Xe du lịch và tàu': 'Tour coach and boat',
+  'Tàu và xe du lịch': 'Boat and tour coach',
+  'Xe du lịch và cano': 'Tour coach and speedboat',
+  'Xe du lịch và cano cao tốc': 'Tour coach and high-speed speedboat',
+  'Xe du lịch và cano/tàu theo điều kiện':
+    'Tour coach and speedboat or boat depending on conditions',
+};
+
+// Trả null khi chưa có bản dịch curated → localizer dùng heuristic fallback.
+function translateTransport(vi: string): string | null {
+  return TRANSPORT_EN[vi] ?? null;
+}
+
 function departureData(
   basePrice: number,
   baseSeats: number,
@@ -3655,7 +3713,7 @@ function departureData(
           operator: transportSeed.operator,
           operatorEn: transportSeed.operatorEn,
           boardingPoint,
-          boardingPointEn: boardingPoint,
+          boardingPointEn: locationEn(boardingPoint),
           boardingTime,
           notes: transportSeed.notes,
           notesEn: transportSeed.notesEn,
@@ -3710,6 +3768,12 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         ? { vi: 'TP.HCM', en: 'Ho Chi Minh City' }
         : { vi: 'Hà Nội', en: 'Hanoi' };
 
+    // Tour lái xe được từ hub → giữ hub; tour bay tới (điểm khởi hành gốc là
+    // thành phố điểm đến) → dùng đúng thành phố đó cho khớp boardingPoint + itinerary.
+    const departure = HUB_DEPARTURE_POINTS.has(item.tour.departurePoint)
+      ? departureHub
+      : { vi: item.tour.departurePoint, en: locationEn(item.tour.departurePoint) };
+
     const tour = await prisma.tour.upsert({
       where: { tourCode: item.tour.tourCode },
       update: {
@@ -3724,8 +3788,8 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         averageRating: 4.8,
         tourType: item.tour.tourType,
         primaryTransport: transportSeed.type,
-        departurePoint: departureHub.vi,
-        departurePointEn: departureHub.en,
+        departurePoint: departure.vi,
+        departurePointEn: departure.en,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
         deletedAt: null,
@@ -3744,8 +3808,8 @@ export async function seedDomesticTours(prisma: PrismaClient) {
         averageRating: 4.8,
         tourType: item.tour.tourType,
         primaryTransport: transportSeed.type,
-        departurePoint: departureHub.vi,
-        departurePointEn: departureHub.en,
+        departurePoint: departure.vi,
+        departurePointEn: departure.en,
         status: TourStatus.PUBLISHED,
         publishedAt: new Date(),
       },
@@ -3794,6 +3858,7 @@ export async function seedDomesticTours(prisma: PrismaClient) {
             mealsDinner: index < item.tour.itinerary.length - 1,
             accommodation: day.accommodation ?? null,
             transport: day.transport,
+            transportEn: translateTransport(day.transport),
             activities: day.activities,
             imageUrl: day.imageUrl,
             timeline: buildTimeline(day),

@@ -12,6 +12,28 @@ const TRANSPORT_LABEL: Record<string, Record<string, string>> = {
   en: { FLIGHT: 'Flight', BUS: 'Coach', PRIVATE_CAR: 'Private car', COMBO: 'Combo' },
 };
 
+const AIRPORT_NAME: Record<string, { vi: string; en: string }> = {
+  HAN: { vi: 'Hà Nội', en: 'Hanoi' },
+  SGN: { vi: 'TP.HCM', en: 'Ho Chi Minh City' },
+  DAD: { vi: 'Đà Nẵng', en: 'Da Nang' },
+  BKK: { vi: 'Bangkok', en: 'Bangkok' },
+  SIN: { vi: 'Singapore', en: 'Singapore' },
+  TPE: { vi: 'Đài Bắc', en: 'Taipei' },
+  HKG: { vi: 'Hồng Kông', en: 'Hong Kong' },
+  ICN: { vi: 'Seoul', en: 'Seoul' },
+  NRT: { vi: 'Tokyo', en: 'Tokyo' },
+  KIX: { vi: 'Osaka', en: 'Osaka' },
+  DXB: { vi: 'Dubai', en: 'Dubai' },
+  CDG: { vi: 'Paris', en: 'Paris' },
+  DOH: { vi: 'Doha', en: 'Doha' },
+};
+
+function airportLabel(code: string | null | undefined, lang: 'en' | 'vi'): string {
+  if (!code) return '';
+  const name = AIRPORT_NAME[code];
+  return name ? `${name[lang]} (${code})` : code;
+}
+
 function formatShortTime(iso: string | null | undefined, lang: 'en' | 'vi'): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -31,6 +53,12 @@ export default function TransportSummaryCard({
   const isFlightLike = transport.type === 'FLIGHT' || transport.type === 'COMBO';
   const isVehicle = transport.type === 'BUS' || transport.type === 'PRIVATE_CAR' || transport.type === 'COMBO';
 
+  const pickTransit = (vi?: string | null, en?: string | null) =>
+    (lang === 'en' ? en || vi : vi) || '';
+  const outboundTransit = pickTransit(transport.transitPoint, transport.transitPointEn);
+  const returnTransit = pickTransit(transport.returnTransitPoint, transport.returnTransitPointEn);
+  const transitLabel = lang === 'vi' ? 'Quá cảnh:' : 'Transit:';
+
   return (
     <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 space-y-2.5">
       <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-700">
@@ -48,16 +76,22 @@ export default function TransportSummaryCard({
             <span className="font-mono text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg">{transport.flightCode}</span>
             <span className="text-xs text-on-surface-variant">{transport.airline}</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-on-surface-variant pl-5">
-            <span className="font-bold text-on-surface">{transport.departureAirport}</span>
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-on-surface-variant pl-5">
+            <span className="font-bold text-on-surface">{airportLabel(transport.departureAirport, lang)}</span>
             <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
-            <span className="font-bold text-on-surface">{transport.arrivalAirport}</span>
+            <span className="font-bold text-on-surface">{airportLabel(transport.arrivalAirport, lang)}</span>
             {transport.departureTime && (
               <span className="ml-auto text-primary font-semibold">
                 {formatShortTime(transport.departureTime, lang)} → {formatShortTime(transport.arrivalTime, lang)}
               </span>
             )}
           </div>
+          {outboundTransit && (
+            <p className="flex items-center gap-1 text-[10px] text-on-surface-variant pl-5">
+              <span className="material-symbols-outlined text-[12px]">connecting_airports</span>
+              {transitLabel} <span className="font-semibold text-on-surface">{outboundTransit}</span>
+            </p>
+          )}
           {/* Return */}
           {transport.returnFlightCode && (
             <>
@@ -66,20 +100,32 @@ export default function TransportSummaryCard({
                 <span className="font-mono text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg">{transport.returnFlightCode}</span>
                 <span className="text-xs text-on-surface-variant">{transport.returnAirline ?? transport.airline}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-on-surface-variant pl-5">
-                <span className="font-bold text-on-surface">{transport.returnDepartureAirport}</span>
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-on-surface-variant pl-5">
+                <span className="font-bold text-on-surface">{airportLabel(transport.returnDepartureAirport, lang)}</span>
                 <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
-                <span className="font-bold text-on-surface">{transport.returnArrivalAirport}</span>
+                <span className="font-bold text-on-surface">{airportLabel(transport.returnArrivalAirport, lang)}</span>
                 {transport.returnDepartureTime && (
                   <span className="ml-auto text-primary font-semibold">
                     {formatShortTime(transport.returnDepartureTime, lang)} → {formatShortTime(transport.returnArrivalTime, lang)}
                   </span>
                 )}
               </div>
+              {returnTransit && (
+                <p className="flex items-center gap-1 text-[10px] text-on-surface-variant pl-5">
+                  <span className="material-symbols-outlined text-[12px]">connecting_airports</span>
+                  {transitLabel} <span className="font-semibold text-on-surface">{returnTransit}</span>
+                </p>
+              )}
             </>
           )}
           {transport.flightClass && (
             <p className="text-[10px] text-on-surface-variant pl-5">{lang === 'vi' ? 'Hạng vé:' : 'Class:'} <span className="font-semibold text-on-surface">{transport.flightClass}</span></p>
+          )}
+          {transport.gatheringTime && (
+            <p className="flex items-center gap-1 text-[10px] text-on-surface-variant pl-5">
+              <span className="material-symbols-outlined text-[12px]">schedule</span>
+              {lang === 'vi' ? 'Có mặt sân bay:' : 'Airport check-in:'} <span className="font-semibold text-on-surface">{formatShortTime(transport.gatheringTime, lang)}</span>
+            </p>
           )}
         </div>
       )}

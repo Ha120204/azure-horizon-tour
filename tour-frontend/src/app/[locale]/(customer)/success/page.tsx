@@ -49,6 +49,7 @@ type TicketResponse = {
 type PublicSettings = {
     company_name?: string;
     company_address?: string;
+    company_address_en?: string;
     company_phone?: string;
 };
 
@@ -255,6 +256,9 @@ function SuccessTicketContent() {
 
     const lang = (language === 'vi' || language === 'en') ? language : 'vi';
     const sd = successDict[lang];
+    const officeAddress = (lang === 'en'
+        ? (officeSettings?.company_address_en?.trim() || officeSettings?.company_address)
+        : officeSettings?.company_address) || sd.officeAddress;
 
     // Đặt chỗ đã hoàn tất tại đây → dọn dữ liệu nháp checkout (được giữ tới giờ để
     // khách còn quay lại sửa từ trang thanh toán nếu chưa trả tiền).
@@ -659,7 +663,7 @@ function SuccessTicketContent() {
                                             {officeSettings?.company_name || sd.officeName}
                                         </p>
                                         <p className="mt-1">
-                                            {officeSettings?.company_address || sd.officeAddress}
+                                            {officeAddress}
                                         </p>
                                         <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                                             <p className="text-[10px] text-outline">{sd.officeHours}</p>
@@ -678,7 +682,7 @@ function SuccessTicketContent() {
                                             </a>
                                         )}
                                         <a
-                                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(officeSettings?.company_address || sd.officeAddress)}`}
+                                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(officeAddress)}`}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-primary transition-colors hover:text-primary/75"

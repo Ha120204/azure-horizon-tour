@@ -1,5 +1,6 @@
 import {
   IsEmail,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -46,6 +47,10 @@ export class SendContactDto {
   @IsOptional()
   @IsString()
   attachmentName?: string;
+
+  @IsOptional()
+  @IsIn(['vi', 'en'])
+  locale?: string;
 
   @IsOptional()
   @IsString()

@@ -3,6 +3,7 @@
 import { formatDistanceToNow } from 'date-fns';
 import { enUS, vi } from 'date-fns/locale';
 import { useLocale } from '@/context/LocaleContext';
+import { localizeTicketSubject, localizeSenderName } from '@/lib/i18n/supportTicket';
 
 export interface TicketReply {
   id: number;
@@ -94,7 +95,7 @@ export default function SupportTicketList({ tickets, onSelectTicket }: Props) {
                     )}
                   </div>
                   <h3 className="font-headline font-bold text-on-surface text-sm line-clamp-1">
-                    {ticket.subject}
+                    {localizeTicketSubject(ticket.subject, language)}
                   </h3>
                 </div>
 
@@ -105,7 +106,7 @@ export default function SupportTicketList({ tickets, onSelectTicket }: Props) {
               </div>
 
               <p className="text-xs text-outline line-clamp-2 mb-3 leading-relaxed">
-                {lastReply ? `${lastReply.senderName}: ${lastReply.content}` : ticket.message}
+                {lastReply ? `${localizeSenderName(lastReply.senderName, language)}: ${lastReply.content}` : ticket.message}
               </p>
 
               <div className="flex items-center justify-between">

@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../http/constants';
 export type PublicSettings = {
     company_name: string;
     company_address: string;
+    company_address_en: string;
     company_phone: string;
     company_email: string;
     company_description: string;
@@ -15,6 +16,7 @@ export type PublicSettings = {
 export const DEFAULT_PUBLIC_SETTINGS: PublicSettings = {
     company_name: 'Azure Horizon',
     company_address: '123 Horizon Avenue, District 1, Ho Chi Minh City',
+    company_address_en: '123 Horizon Avenue, District 1, Ho Chi Minh City',
     company_phone: '+84 1900 1234',
     company_email: 'hello@azurehorizon.com',
     company_description: 'Pioneering premium travel experiences.',

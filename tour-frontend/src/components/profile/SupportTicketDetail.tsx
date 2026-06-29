@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { useLocale } from '@/context/LocaleContext';
+import { localizeTicketSubject, localizeSenderName } from '@/lib/i18n/supportTicket';
 import type { SupportTicket, TicketReply } from './SupportTicketList';
 
 const STATUS_CONFIG = {
@@ -20,7 +21,7 @@ const CATEGORY_LABEL_KEYS: Record<string, string> = {
   general: 'profile.supportCategoryGeneral',
 };
 
-const POLL_INTERVAL_MS = 10000;
+const POLL_INTERVAL_MS = 5000;
 const OPEN_TICKET_STATUSES = new Set<SupportTicket['status']>(['NEW', 'IN_PROGRESS']);
 
 type CustomerTicketPayload = {
@@ -65,7 +66,7 @@ export default function SupportTicketDetail({
   onClose,
   onTicketUpdate,
 }: Props) {
-  const { t, formatDateTime } = useLocale();
+  const { t, formatDateTime, language } = useLocale();
   const [ticket, setTicket] = useState<SupportTicket>(initialTicket);
   const [replyContent, setReplyContent] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -74,6 +75,7 @@ export default function SupportTicketDetail({
   const [hasRated, setHasRated] = useState(Boolean(ticket.rating));
   const [error, setError] = useState('');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const initialRefreshDone = useRef(false);
 
   const apiBase = API_BASE_URL;
   const cfg = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.NEW;
@@ -105,8 +107,27 @@ export default function SupportTicketDetail({
     }
   }, [callCustomerEndpoint, lookupAccessCode, onTicketUpdate]);
 
+  const translateReply = useCallback(async (content: string): Promise<string> => {
+    const body: Record<string, unknown> = { content, targetLang: language === 'en' ? 'en' : 'vi' };
+    if (lookupAccessCode) body.accessCode = lookupAccessCode;
+    const res = await callCustomerEndpoint('/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('translate failed');
+    const json = await res.json();
+    return json?.data?.translation ?? json?.translation ?? '';
+  }, [callCustomerEndpoint, language, lookupAccessCode]);
+
   useEffect(() => {
     if (!OPEN_TICKET_STATUSES.has(ticket.status)) return;
+
+    // Lấy dữ liệu mới ngay khi mở modal (đừng đợi hết 1 chu kỳ polling).
+    if (!initialRefreshDone.current) {
+      initialRefreshDone.current = true;
+      void refreshTicket();
+    }
 
     const pollTicket = () => {
       if (document.visibilityState !== 'visible') return;
@@ -219,7 +240,7 @@ export default function SupportTicketDetail({
                 {t(cfg.labelKey)}
               </span>
             </div>
-            <h2 className="mt-0.5 line-clamp-1 font-headline text-base font-bold text-on-surface">{ticket.subject}</h2>
+            <h2 className="mt-0.5 line-clamp-1 font-headline text-base font-bold text-on-surface">{localizeTicketSubject(ticket.subject, language)}</h2>
           </div>
           <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full text-outline transition-colors hover:bg-surface-container">
             <span className="material-symbols-outlined">close</span>
@@ -264,8 +285,9 @@ export default function SupportTicketDetail({
               key={reply.id}
               content={reply.content}
               createdAt={reply.createdAt}
-              senderName={reply.senderType === 'customer' ? t('profile.supportYou') : reply.senderName}
+              senderName={reply.senderType === 'customer' ? t('profile.supportYou') : localizeSenderName(reply.senderName, language)}
               senderType={reply.senderType}
+              onTranslate={language === 'en' && reply.senderType === 'staff' ? translateReply : undefined}
             />
           ))}
 
@@ -355,16 +377,68 @@ export default function SupportTicketDetail({
   );
 }
 
+function TranslateReplyButton({
+  content,
+  onTranslate,
+}: {
+  content: string;
+  onTranslate: (content: string) => Promise<string>;
+}) {
+  const { t } = useLocale();
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const run = async () => {
+    if (translation || loading) return;
+    setLoading(true);
+    setFailed(false);
+    try {
+      setTranslation(await onTranslate(content));
+    } catch {
+      setFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (translation) {
+    return (
+      <div className="mt-1.5 rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2">
+        <p className="mb-0.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700">
+          <span className="material-symbols-outlined text-[12px]">translate</span>
+          {t('profile.supportAutoTranslation')}
+        </p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface">{translation}</p>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={run}
+      disabled={loading}
+      className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 transition hover:text-blue-700 disabled:opacity-50"
+    >
+      <span className={`material-symbols-outlined text-[13px] ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'translate'}</span>
+      {loading ? t('profile.supportTranslating') : failed ? t('profile.supportTranslateError') : t('profile.supportTranslate')}
+    </button>
+  );
+}
+
 function MessageBubble({
   content,
   createdAt,
   senderName,
   senderType,
+  onTranslate,
 }: {
   content: string;
   createdAt: string;
   senderName: string;
   senderType: 'staff' | 'customer';
+  onTranslate?: (content: string) => Promise<string>;
 }) {
   const { formatDateTime } = useLocale();
   const isStaff = senderType === 'staff';
@@ -384,6 +458,9 @@ function MessageBubble({
         <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${isStaff ? 'rounded-tl-sm bg-surface-container text-on-surface' : 'rounded-tr-sm bg-primary/10 text-on-surface'}`}>
           {content}
         </div>
+        {isStaff && onTranslate && (
+          <TranslateReplyButton content={content} onTranslate={onTranslate} />
+        )}
       </div>
       {!isStaff && (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20">

@@ -268,6 +268,7 @@ export class ContactService {
         subject: subjectLabel,
         message: ticketMessage,
         category: CATEGORY_MAP[dto.subject] ?? 'general',
+        locale: dto.locale,
         userId,
       });
       ticketId = ticket.id;

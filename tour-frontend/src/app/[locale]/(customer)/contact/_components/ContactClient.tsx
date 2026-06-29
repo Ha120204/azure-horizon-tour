@@ -49,6 +49,7 @@ export default function ContactClient() {
                         t={form.t}
                         supportPhoneHref={form.supportPhoneHref}
                         isLoggedIn={form.isLoggedIn}
+                        language={form.language}
                         publicSettings={form.publicSettings}
                     />
                     <ContactFormPanel form={form} />

@@ -187,6 +187,7 @@ function PaymentSelectorContent() {
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
     const [qrPaymentData, setQrPaymentData] = useState<QRPaymentData | null>(null);
     const [qrSuccess, setQrSuccess] = useState(false);
+    const [officeSettings, setOfficeSettings] = useState<{ company_address?: string; company_address_en?: string } | null>(null);
 
     // Cuộn lên đầu trang khi component mount (kể cả khi bấm back/forward)
     useEffect(() => {
@@ -267,6 +268,16 @@ function PaymentSelectorContent() {
 
     const lang = (language === 'vi' || language === 'en') ? language : 'vi';
     const d = dict[lang];
+    const officeAddress = (lang === 'en'
+        ? (officeSettings?.company_address_en?.trim() || officeSettings?.company_address)
+        : officeSettings?.company_address) || d.officeAddress;
+
+    useEffect(() => {
+        fetch(`${API_BASE_URL}/settings/public`)
+            .then(r => r.json())
+            .then(json => { if (json.data) setOfficeSettings(json.data); })
+            .catch(() => {});
+    }, []);
 
     // 1. Fetch booking details by code
     useEffect(() => {
@@ -557,7 +568,7 @@ function PaymentSelectorContent() {
                                                     <span className="material-symbols-outlined text-sm text-primary">location_on</span>
                                                     <div>
                                                         <strong className="text-on-surface">{d.officeLabel}</strong>
-                                                        <p className="mt-0.5">{d.officeAddress}</p>
+                                                        <p className="mt-0.5">{officeAddress}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-start gap-2">

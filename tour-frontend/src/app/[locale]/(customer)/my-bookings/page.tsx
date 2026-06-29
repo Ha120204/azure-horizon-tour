@@ -25,7 +25,7 @@ export default function MyBookingsPage() {
     const [bookings, setBookings] = useState<BookingHistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [hasLoadError, setHasLoadError] = useState(false);
-    const { t } = useLocale();
+    const { t, language } = useLocale();
 
     const [filterStatus, setFilterStatus] = useState<BookingFilter>('ALL');
 
@@ -34,7 +34,7 @@ export default function MyBookingsPage() {
         setHasLoadError(false);
 
         try {
-            const result = await api.get<BookingHistoryItem[]>('/booking/history/my-bookings');
+            const result = await api.get<BookingHistoryItem[]>(`/booking/history/my-bookings?locale=${language}`);
             if (!result.ok || !Array.isArray(result.data)) {
                 setHasLoadError(true);
                 return;
@@ -46,7 +46,7 @@ export default function MyBookingsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [language]);
 
     useEffect(() => {
         void fetchMyBookings();

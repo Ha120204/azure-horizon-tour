@@ -77,7 +77,7 @@ export function useBookingDetail() {
             if (emailParam && codeParam) {
                 res = await fetch(`${API_BASE_URL}/booking/public/lookup?bookingCode=${codeParam}&email=${encodeURIComponent(emailParam)}`);
             } else {
-                res = await fetchWithAuth(`${API_BASE_URL}/booking/my/${params.id}`);
+                res = await fetchWithAuth(`${API_BASE_URL}/booking/my/${params.id}?locale=${language}`);
             }
             if (res.ok) {
                 const result = await res.json();
@@ -94,7 +94,7 @@ export function useBookingDetail() {
         } finally {
             setIsLoading(false);
         }
-    }, [params.id, router]);
+    }, [params.id, router, language]);
 
     useEffect(() => { fetchBooking(); }, [fetchBooking]);
 

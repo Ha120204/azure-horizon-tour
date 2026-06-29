@@ -704,7 +704,9 @@ model Voucher {
   id                       Int          @id @default(autoincrement())
   code                     String       @unique
   label                    String
+  labelEn                  String?
   description              String       @db.Text
+  descriptionEn            String?      @db.Text
   discountType             DiscountType
   discountValue            Float
   maxDiscountAmount        Float?
@@ -900,6 +902,7 @@ model SupportTicket {
   subject         String
   message         String   @db.Text
   category        String   @default("general") // booking|payment|reschedule|complaint|general
+  locale          String   @default("vi") // Ngôn ngữ khách gửi ticket (vi|en) — gợi ý chiều dịch
   status          String   @default("NEW") // NEW|IN_PROGRESS|RESOLVED
   assignedStaffId Int? // Staff được assign xử lý
   rating          Int? // Đánh giá của khách sau khi RESOLVED (1-5)

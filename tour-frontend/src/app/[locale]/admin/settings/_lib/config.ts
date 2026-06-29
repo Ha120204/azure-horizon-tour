@@ -5,6 +5,7 @@ import type { SettingsPanel, SystemHealthStatus } from './types';
 export const SETTING_DISPLAY_META: Record<string, { impact: string; risky?: boolean }> = {
     company_name: { impact: 'Hiển thị ở header, footer và email hệ thống.' },
     company_address: { impact: 'Dùng trong thông tin liên hệ và chứng từ gửi khách.' },
+    company_address_en: { impact: 'Bản tiếng Anh của địa chỉ; để trống sẽ tự dịch khi khách xem giao diện EN.' },
     company_phone: { impact: 'Hiển thị ở email vé và kênh hỗ trợ khách hàng.' },
     company_email: { impact: 'Email hỗ trợ khách hàng và biểu mẫu liên hệ.' },
     company_description: { impact: 'Ảnh hưởng nội dung giới thiệu thương hiệu.' },

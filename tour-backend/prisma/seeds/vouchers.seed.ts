@@ -329,11 +329,166 @@ const vouchers: VoucherSeed[] = [
   },
 ];
 
+const VOUCHER_TEXT_EN: Record<string, { labelEn: string; descriptionEn: string }> = {
+  AZUREWELCOME: {
+    labelEn: 'Azure Horizon Welcome',
+    descriptionEn:
+      'Get 5% off any tour for new customers. Great for trying out the save-voucher, apply-code and checkout flow.',
+  },
+  WEEKDAY5: {
+    labelEn: 'Weekday Deal',
+    descriptionEn:
+      'Save 5% on tours departing on weekdays, encouraging off-peak travel dates.',
+  },
+  FAMILY300K: {
+    labelEn: 'Family Getaway',
+    descriptionEn:
+      'Save 300,000đ on family bookings of two or more guests, valid on most domestic tours.',
+  },
+  CITYTOUR150K: {
+    labelEn: 'City Tour Saver',
+    descriptionEn:
+      'Save 150,000đ on city sightseeing tours, ideal for short-trip groups.',
+  },
+  BEACH7: {
+    labelEn: 'Blue Sea Season',
+    descriptionEn:
+      'Save 7% on beach tours, great for Da Nang, Nha Trang, Quy Nhon or Phu Quoc trips.',
+  },
+  HERITAGE200K: {
+    labelEn: 'Heritage Mark',
+    descriptionEn:
+      'Save 200,000đ on culture, old-town, heritage and traditional craft-village tours.',
+  },
+  COUPLE6: {
+    labelEn: 'Couple Escape',
+    descriptionEn:
+      'Save 6% on bookings for two, ideal for resort stays or weekend city breaks.',
+  },
+  LOCAL100K: {
+    labelEn: 'Nearby Departure',
+    descriptionEn:
+      'Save 100,000đ on short or local tours with a lower order value.',
+  },
+  GROUP8: {
+    labelEn: 'Friends On The Go',
+    descriptionEn:
+      'Save 8% for groups with a total booking value from 5,000,000đ, supporting group sales.',
+  },
+  RETURN250K: {
+    labelEn: 'Returning Guest',
+    descriptionEn:
+      'Save 250,000đ for loyal customers booking their next trip with Azure Horizon.',
+  },
+  LIMITED10: {
+    labelEn: 'Limited 10 Slots',
+    descriptionEn:
+      'Save 10% for the first 10 uses. Demonstrates the limited-voucher and sold-out states.',
+  },
+  LIMITED500K: {
+    labelEn: '500K Limited Quantity',
+    descriptionEn:
+      'Save 500,000đ on a limited number of bookings, fit for short-term demand campaigns.',
+  },
+  EARLYBIRD12: {
+    labelEn: 'Limited Early Bird',
+    descriptionEn:
+      'Save 12% for early bookers, with limited uses to keep the promo budget in check.',
+  },
+  WEEKEND300K: {
+    labelEn: 'Limited Weekend',
+    descriptionEn:
+      'Save 300,000đ on weekend tours, limited to 35 uses in a short campaign.',
+  },
+  SEATSALE15: {
+    labelEn: 'Seat Sale 15%',
+    descriptionEn:
+      'Save 15% on tours that need to fill remaining seats, capped to stay within budget.',
+  },
+  LIMITEDHA500: {
+    labelEn: 'Hanoi Limited 500K',
+    descriptionEn:
+      'Save 500,000đ on Hanoi or northern tours, with limited uses during the campaign.',
+  },
+  LIMITEDSEA18: {
+    labelEn: 'Limited Summer Sea',
+    descriptionEn:
+      'Save 18% on select beach tours, limited to the first 18 uses.',
+  },
+  FLASH400K: {
+    labelEn: 'Flash 400K',
+    descriptionEn:
+      'A quick 400,000đ off bookings meeting the minimum value, ideal for flash-sale displays.',
+  },
+  LIMITEDGROUP20: {
+    labelEn: 'Limited Group 20%',
+    descriptionEn:
+      'Save 20% for groups booking high-value tours, with low usage to demo premium campaigns.',
+  },
+  LIMITEDVIP1M: {
+    labelEn: 'VIP Limited 1 Million',
+    descriptionEn:
+      'Save 1,000,000đ on premium bookings, with few uses to create a sense of exclusivity.',
+  },
+  MEGA25: {
+    labelEn: 'Mega Sale 25%',
+    descriptionEn:
+      'A deep 25% off high-value bookings, to demo strong promotions on the promotions page.',
+  },
+  DEEP1M: {
+    labelEn: 'Deep Cut 1 Million',
+    descriptionEn:
+      'A direct 1,000,000đ off premium tours or high-value family groups.',
+  },
+  SUPER30: {
+    labelEn: 'Super Deal 30%',
+    descriptionEn:
+      'Save 30% in a controlled deep-discount campaign requiring a high minimum order.',
+  },
+  LUXURY2M: {
+    labelEn: 'Luxury 2 Million Off',
+    descriptionEn:
+      'Save 2,000,000đ on premium-class bookings, fit for resort or international tours.',
+  },
+  FAMILYDEEP22: {
+    labelEn: 'Family Deep 22%',
+    descriptionEn:
+      'Save 22% on high-value family bookings, to demo percentage-based discounts.',
+  },
+  HOLIDAY1500K: {
+    labelEn: 'Holiday 1.5 Million Off',
+    descriptionEn:
+      'Save 1,500,000đ for holidays, applied to bookings meeting the minimum value.',
+  },
+  LASTMINUTE28: {
+    labelEn: 'Last Minute 28%',
+    descriptionEn:
+      'Save 28% for quick decision-makers, ideal for simulating last-minute seat-filling campaigns.',
+  },
+  PREMIUM2500K: {
+    labelEn: 'Premium 2.5 Million Off',
+    descriptionEn:
+      'Save 2,500,000đ on premium tours, with a high minimum order to protect margins on deep discounts.',
+  },
+  MEGA35: {
+    labelEn: 'Mega Deal 35%',
+    descriptionEn:
+      'Save 35% in a special campaign with moderate usage and a high minimum order value.',
+  },
+  ULTRA3M: {
+    labelEn: 'Ultra 3 Million Off',
+    descriptionEn:
+      'Save 3,000,000đ on very premium bookings, to demo a large fixed-amount voucher.',
+  },
+};
+
 export async function seedVouchers(prisma: PrismaClient) {
   for (const voucher of vouchers) {
     const voucherData = {
       label: voucher.label,
+      labelEn: VOUCHER_TEXT_EN[voucher.code]?.labelEn ?? null,
       description: voucher.description,
+      descriptionEn: VOUCHER_TEXT_EN[voucher.code]?.descriptionEn ?? null,
       discountType: voucher.discountType,
       discountValue: voucher.discountValue,
       maxDiscountAmount: voucher.maxDiscountAmount ?? null,

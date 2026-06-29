@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 import { MailService } from '../mail/mail.service';
+import { AiTranslationService } from '../ai/ai-translation.service';
 
 type TicketStatus   = 'NEW' | 'IN_PROGRESS' | 'RESOLVED';
 type TicketCategory = 'booking' | 'payment' | 'reschedule' | 'complaint' | 'general';
@@ -31,6 +32,7 @@ export class SupportService {
     private prisma: PrismaService,
     private readonly adminNotifications: AdminNotificationService,
     private readonly mailService: MailService,
+    private readonly aiTranslation: AiTranslationService,
   ) {}
 
   private normalizeBookingRef(bookingRef?: string | null) {
@@ -455,6 +457,7 @@ export class SupportService {
     subject:       string;
     message:       string;
     category:      TicketCategory;
+    locale?:       string;  // Ngôn ngữ khách gửi (vi|en)
     userId?:       number;  // Optional — chỉ có khi user đã đăng nhập
   }) {
     const ticket = await this.prisma.supportTicket.create({
@@ -466,6 +469,7 @@ export class SupportService {
         subject:       data.subject,
         message:       data.message,
         category:      data.category,
+        locale:        data.locale === 'en' ? 'en' : 'vi',
         status:        'NEW',
         userId:        data.userId ?? null,
       },
@@ -580,6 +584,33 @@ export class SupportService {
     });
 
     return reply;
+  }
+
+  // ─── [DỊCH] Dịch tin nhắn hỗ trợ on-demand (giữ bản gốc ở phía gọi) ─────────
+  async translateMessage(content: string, targetLang: 'vi' | 'en') {
+    const translation = await this.aiTranslation.translateText(content, targetLang);
+    return { translation };
+  }
+
+  /** Khách dịch tin: verify quyền sở hữu ticket trước khi gọi AI (chống lạm dụng). */
+  async translateMessageForCustomer(
+    id: number,
+    content: string,
+    targetLang: 'vi' | 'en',
+    identifier: { accessCode?: string; userId?: number },
+  ) {
+    const ticket = await this.prisma.supportTicket.findUnique({
+      where: { id },
+      select: { userId: true, accessCode: true },
+    });
+    if (!ticket) throw new NotFoundException('Ticket không tồn tại');
+
+    const isOwner = identifier.userId
+      ? ticket.userId === identifier.userId
+      : (identifier.accessCode && ticket.accessCode === identifier.accessCode);
+    if (!isOwner) throw new ForbiddenException('Bạn không có quyền thực hiện thao tác này');
+
+    return this.translateMessage(content, targetLang);
   }
 
   // ─── [CUSTOMER] Đánh giá sau khi RESOLVED ───────────────────────────────────

@@ -301,6 +301,7 @@ export function useContactForm() {
             Object.entries(formData).forEach(([key, value]) => body.append(key, value));
             Object.entries(contextFields).forEach(([key, value]) => { if (value.trim()) body.append(key, value.trim()); });
             if (selectedFile) body.append('attachment', selectedFile);
+            body.append('locale', language === 'en' ? 'en' : 'vi');
             // apiClient gửi kèm cookie (userId lấy từ JWT phía server) và tự bóc envelope { data }
             const result = await apiClient<ContactSubmitResponse>('/contact/send', { method: 'POST', body }, { silent: true });
             if (!result.ok) {

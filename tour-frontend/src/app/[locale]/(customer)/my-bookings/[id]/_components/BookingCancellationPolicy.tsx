@@ -16,7 +16,7 @@ type TierStyle = {
     icon: string;
     badgeBg: string;
     badgeText: string;
-    label: string;
+    labelKey: string;
 };
 
 function getTierStyle(policyTier: string, canCancel: boolean, tripLifecycle: string): TierStyle {
@@ -25,53 +25,61 @@ function getTierStyle(policyTier: string, canCancel: boolean, tripLifecycle: str
             return {
                 bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600',
                 iconColor: 'text-slate-400', icon: 'task_alt',
-                badgeBg: '', badgeText: '', label: 'Chuyến đi đã hoàn thành',
+                badgeBg: '', badgeText: '', labelKey: 'tripCompletedLabel',
             };
         }
         return {
             bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800',
             iconColor: 'text-red-400', icon: 'event_busy',
-            badgeBg: '', badgeText: '', label: 'Không thể hủy',
+            badgeBg: '', badgeText: '', labelKey: 'cancelNotAllowed',
         };
     }
     if (policyTier === 'FULL_REFUND_24H') {
         return {
             bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800',
             iconColor: 'text-emerald-600', icon: 'check_circle',
-            badgeBg: 'bg-emerald-100', badgeText: 'text-emerald-700', label: 'Hủy miễn phí',
+            badgeBg: 'bg-emerald-100', badgeText: 'text-emerald-700', labelKey: 'cancelFree',
         };
     }
     if (policyTier === 'UNPAID') {
         return {
             bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800',
             iconColor: 'text-emerald-600', icon: 'check_circle',
-            badgeBg: 'bg-emerald-100', badgeText: 'text-emerald-700', label: 'Hủy miễn phí',
+            badgeBg: 'bg-emerald-100', badgeText: 'text-emerald-700', labelKey: 'cancelFree',
         };
     }
     if (policyTier === 'EIGHTY_REFUND') {
         return {
             bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-900',
             iconColor: 'text-amber-600', icon: 'event_available',
-            badgeBg: 'bg-amber-100', badgeText: 'text-amber-800', label: 'Hủy có phí',
+            badgeBg: 'bg-amber-100', badgeText: 'text-amber-800', labelKey: 'cancelWithFee',
         };
     }
     if (policyTier === 'HALF_REFUND') {
         return {
             bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-900',
             iconColor: 'text-orange-500', icon: 'event_available',
-            badgeBg: 'bg-orange-100', badgeText: 'text-orange-800', label: 'Hủy có phí',
+            badgeBg: 'bg-orange-100', badgeText: 'text-orange-800', labelKey: 'cancelWithFee',
         };
     }
     // NO_REFUND — can cancel but no money back
     return {
         bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-900',
         iconColor: 'text-red-400', icon: 'money_off',
-        badgeBg: 'bg-red-100', badgeText: 'text-red-700', label: 'Hủy không hoàn tiền',
+        badgeBg: 'bg-red-100', badgeText: 'text-red-700', labelKey: 'cancelNoRefund',
     };
 }
 
+const NOTE_KEY_BY_TIER: Record<string, string> = {
+    FULL_REFUND_24H: 'noteFullRefund24h',
+    EIGHTY_REFUND: 'noteEightyRefund',
+    HALF_REFUND: 'noteHalfRefund',
+    NO_REFUND: 'noteNoRefund',
+    UNPAID: 'noteUnpaid',
+};
+
 export function BookingCancellationPolicy({ cancellationPolicy, bookingCreatedAt, isPaidBooking }: Props) {
-    const { formatPrice, formatDate, formatDateTime, language } = useLocale();
+    const { t, formatPrice, formatDate, formatDateTime, language } = useLocale();
 
     const {
         policyTier, canCancel, refundPercent, estimatedRefundAmount,
@@ -114,7 +122,12 @@ export function BookingCancellationPolicy({ cancellationPolicy, bookingCreatedAt
         return null;
     }, [tierDeadline, policyTier, language, formatDate, formatDateTime]);
 
-    const note = canCancel ? refundNote : (cancelUnavailableReason ?? refundNote);
+    const fallbackNote = canCancel ? refundNote : (cancelUnavailableReason ?? refundNote);
+    const localizedNote = NOTE_KEY_BY_TIER[policyTier]
+        ? t(`my_bookings.${NOTE_KEY_BY_TIER[policyTier]}`)
+        : policyTier === 'NOT_CANCELABLE'
+            ? t(`my_bookings.${tripLifecycle === 'COMPLETED' ? 'noteTripCompleted' : 'noteTodayNoCancel'}`)
+            : fallbackNote;
 
     return (
         <div className={`rounded-xl border px-4 py-3.5 ${style.bg} ${style.border} ${style.text}`}>
@@ -129,7 +142,7 @@ export function BookingCancellationPolicy({ cancellationPolicy, bookingCreatedAt
                     >
                         {style.icon}
                     </span>
-                    {style.label}
+                    {t(`my_bookings.${style.labelKey}`)}
                 </div>
                 {canCancel && refundPercent > 0 && style.badgeBg && (
                     <span className={`shrink-0 text-[11px] font-extrabold px-2 py-0.5 rounded-full ${style.badgeBg} ${style.badgeText}`}>
@@ -152,8 +165,8 @@ export function BookingCancellationPolicy({ cancellationPolicy, bookingCreatedAt
             )}
 
             {/* Note */}
-            {note && (
-                <p className="mt-1.5 text-xs opacity-60 leading-relaxed">{note}</p>
+            {localizedNote && (
+                <p className="mt-1.5 text-xs opacity-60 leading-relaxed">{localizedNote}</p>
             )}
         </div>
     );

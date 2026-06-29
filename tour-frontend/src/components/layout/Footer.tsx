@@ -27,9 +27,9 @@ export default function Footer() {
     const companyDescription = language === 'vi'
         ? (publicSettings.company_description || 'Tiên phong thiết kế lại các chuyến đi cao cấp. Chúng tôi tin rằng mỗi lịch trình đều nên mang đậm bản sắc địa phương và để lại dấu ấn cá nhân.')
         : 'Premium journeys, thoughtfully planned with local character and personal detail.';
-    const companyAddress = language === 'vi'
-        ? publicSettings.company_address
-        : '175 Tay Son Street, Kim Lien, Hanoi';
+    const companyAddress = language === 'en'
+        ? (publicSettings.company_address_en?.trim() || publicSettings.company_address)
+        : publicSettings.company_address;
 
 
     return (

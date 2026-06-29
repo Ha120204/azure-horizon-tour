@@ -53,11 +53,18 @@ export default function TransportSummaryCard({
   const isFlightLike = transport.type === 'FLIGHT' || transport.type === 'COMBO';
   const isVehicle = transport.type === 'BUS' || transport.type === 'PRIVATE_CAR' || transport.type === 'COMBO';
 
-  const pickTransit = (vi?: string | null, en?: string | null) =>
+  const pick = (vi?: string | null, en?: string | null) =>
     (lang === 'en' ? en || vi : vi) || '';
-  const outboundTransit = pickTransit(transport.transitPoint, transport.transitPointEn);
-  const returnTransit = pickTransit(transport.returnTransitPoint, transport.returnTransitPointEn);
+  const outboundTransit = pick(transport.transitPoint, transport.transitPointEn);
+  const returnTransit = pick(transport.returnTransitPoint, transport.returnTransitPointEn);
   const transitLabel = lang === 'vi' ? 'Quá cảnh:' : 'Transit:';
+
+  const airline = pick(transport.airline, transport.airlineEn);
+  const returnAirline = pick(transport.returnAirline, transport.returnAirlineEn) || airline;
+  const vehicleType = pick(transport.vehicleType, transport.vehicleTypeEn);
+  const operator = pick(transport.operator, transport.operatorEn);
+  const boardingPoint = pick(transport.boardingPoint, transport.boardingPointEn);
+  const notes = pick(transport.notes, transport.notesEn);
 
   return (
     <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 space-y-2.5">
@@ -74,7 +81,7 @@ export default function TransportSummaryCard({
           <div className="flex items-center gap-2 font-semibold text-on-surface">
             <span className="material-symbols-outlined text-[14px] text-blue-600">flight_takeoff</span>
             <span className="font-mono text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg">{transport.flightCode}</span>
-            <span className="text-xs text-on-surface-variant">{transport.airline}</span>
+            <span className="text-xs text-on-surface-variant">{airline}</span>
           </div>
           <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-on-surface-variant pl-5">
             <span className="font-bold text-on-surface">{airportLabel(transport.departureAirport, lang)}</span>
@@ -98,7 +105,7 @@ export default function TransportSummaryCard({
               <div className="flex items-center gap-2 font-semibold text-on-surface mt-1">
                 <span className="material-symbols-outlined text-[14px] text-blue-600">flight_land</span>
                 <span className="font-mono text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg">{transport.returnFlightCode}</span>
-                <span className="text-xs text-on-surface-variant">{transport.returnAirline ?? transport.airline}</span>
+                <span className="text-xs text-on-surface-variant">{returnAirline}</span>
               </div>
               <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs text-on-surface-variant pl-5">
                 <span className="font-bold text-on-surface">{airportLabel(transport.returnDepartureAirport, lang)}</span>
@@ -130,23 +137,23 @@ export default function TransportSummaryCard({
         </div>
       )}
 
-      {isVehicle && (transport.vehicleType || transport.operator) && (
+      {isVehicle && (vehicleType || operator) && (
         <div className="text-xs space-y-1 text-on-surface-variant">
-          {transport.vehicleType && (
-            <p><span className="font-semibold text-on-surface">{transport.vehicleType}</span>{transport.operator ? ` · ${transport.operator}` : ''}</p>
+          {vehicleType && (
+            <p><span className="font-semibold text-on-surface">{vehicleType}</span>{operator ? ` · ${operator}` : ''}</p>
           )}
-          {transport.boardingPoint && (
+          {boardingPoint && (
             <p className="flex items-center gap-1">
               <span className="material-symbols-outlined text-[12px]">location_on</span>
-              {transport.boardingPoint}
+              {boardingPoint}
               {transport.boardingTime && <span className="ml-1 text-primary font-semibold">{formatShortTime(transport.boardingTime, lang)}</span>}
             </p>
           )}
         </div>
       )}
 
-      {transport.notes && (
-        <p className="text-[10px] text-on-surface-variant border-t border-blue-100 pt-2 mt-1 leading-relaxed">{transport.notes}</p>
+      {notes && (
+        <p className="text-[10px] text-on-surface-variant border-t border-blue-100 pt-2 mt-1 leading-relaxed">{notes}</p>
       )}
     </div>
   );

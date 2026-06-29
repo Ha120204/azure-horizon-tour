@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  Query,
   UseGuards,
   Request,
   Ip,
@@ -44,8 +45,11 @@ export class BookingController {
 
   @UseGuards(AuthGuard('jwt'))
   @Get('history/my-bookings')
-  async getMyBookings(@Req() req: AuthenticatedRequest) {
-    const bookings = await this.bookingService.getMyBookings(getAuthUserId(req));
+  async getMyBookings(
+    @Req() req: AuthenticatedRequest,
+    @Query('locale') locale?: string,
+  ) {
+    const bookings = await this.bookingService.getMyBookings(getAuthUserId(req), locale);
     return { message: 'Success', data: bookings };
   }
 
@@ -64,8 +68,9 @@ export class BookingController {
   async getMyBookingById(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,
+    @Query('locale') locale?: string,
   ) {
-    const booking = await this.bookingService.getMyBookingById(Number(id), getAuthUserId(req));
+    const booking = await this.bookingService.getMyBookingById(Number(id), getAuthUserId(req), locale);
     return { message: 'Success', data: booking };
   }
 

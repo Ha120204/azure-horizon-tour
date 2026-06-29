@@ -70,6 +70,22 @@ export class LookupByEmailDto {
   accessCode: string;
 }
 
+/** Dịch một đoạn tin nhắn hỗ trợ on-demand (admin: targetLang='vi'; khách: ='en') */
+export class TranslateMessageDto {
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(3000)
+  content: string;
+
+  @IsIn(['vi', 'en'])
+  targetLang: 'vi' | 'en';
+
+  /** Access Code để verify quyền (guest không có JWT) */
+  @IsOptional()
+  @IsString()
+  accessCode?: string;
+}
+
 /** Đánh giá sau khi RESOLVED */
 export class RateTicketDto {
   @IsInt()

@@ -23,6 +23,7 @@ import {
   RateTicketDto,
   LookupQueryDto,
   LookupByEmailDto,
+  TranslateMessageDto,
 } from './dto/support.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -159,6 +160,12 @@ export class SupportController {
     const staffId = getRequiredAuthUserId(req);
     return this.supportService.replyTicket(id, dto.content, staffName, staffId, dto.isInternal);
   }
+
+  // POST /support/tickets/:id/translate  (staff dịch tin của khách sang tiếng Việt)
+  @Post('tickets/:id/translate')
+  async translateTicketMessage(@Body() dto: TranslateMessageDto) {
+    return this.supportService.translateMessage(dto.content, dto.targetLang);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -222,6 +229,22 @@ export class SupportCustomerController {
     const accessCode: string | undefined = dto.accessCode;
     const name = dto.senderName ?? getAuthDisplayName(req, 'Khách hàng');
     return this.supportService.customerReply(id, dto.content, { accessCode, userId, name });
+  }
+
+  /**
+   * POST /support/customer/ticket/:id/translate
+   * - Khách dịch reply của nhân viên sang ngôn ngữ của mình (on-demand).
+   */
+  @UseGuards(OptionalJwtGuard)
+  @Post('ticket/:id/translate')
+  async translateCustomerMessage(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: TranslateMessageDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const userId = getAuthUserId(req);
+    const accessCode: string | undefined = dto.accessCode;
+    return this.supportService.translateMessageForCustomer(id, dto.content, dto.targetLang, { accessCode, userId });
   }
 
   /**

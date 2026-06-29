@@ -956,11 +956,11 @@ export class BookingService {
   }
   // --- Query --- delegated to BookingQueryService -------------------------
 
-  async getMyBookings(userId: number) {
-    return this.queryService.getMyBookings(userId);
+  async getMyBookings(userId: number, locale?: string) {
+    return this.queryService.getMyBookings(userId, locale);
   }
-  async getMyBookingById(bookingId: number, userId: number) {
-    return this.queryService.getMyBookingById(bookingId, userId);
+  async getMyBookingById(bookingId: number, userId: number, locale?: string) {
+    return this.queryService.getMyBookingById(bookingId, userId, locale);
   }
   async findMyByBookingCode(bookingCode: string, userId: number) {
     return this.queryService.findMyByBookingCode(bookingCode, userId);

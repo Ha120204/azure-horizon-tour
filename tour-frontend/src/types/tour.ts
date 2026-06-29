@@ -74,6 +74,7 @@ export type TransportType =
 export interface TourDepartureTransport {
   type: TransportType;
   airline?: string | null;
+  airlineEn?: string | null;
   flightCode?: string | null;
   departureAirport?: string | null;
   arrivalAirport?: string | null;
@@ -82,6 +83,7 @@ export interface TourDepartureTransport {
   flightClass?: string | null;
   returnFlightCode?: string | null;
   returnAirline?: string | null;
+  returnAirlineEn?: string | null;
   returnDepartureAirport?: string | null;
   returnArrivalAirport?: string | null;
   returnDepartureTime?: string | null;
@@ -92,11 +94,15 @@ export interface TourDepartureTransport {
   returnTransitPoint?: string | null;
   returnTransitPointEn?: string | null;
   vehicleType?: string | null;
+  vehicleTypeEn?: string | null;
   operator?: string | null;
+  operatorEn?: string | null;
   boardingPoint?: string | null;
+  boardingPointEn?: string | null;
   boardingTime?: string | null;
   gatheringTime?: string | null;
   notes?: string | null;
+  notesEn?: string | null;
 }
 
 export interface TourDeparture {

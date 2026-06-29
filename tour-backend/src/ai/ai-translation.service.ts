@@ -434,4 +434,43 @@ export class AiTranslationService {
       }
     }
   }
+
+  private async runTextTranslation(
+    model: string,
+    text: string,
+    targetLang: 'vi' | 'en',
+  ): Promise<string> {
+    const targetName = targetLang === 'vi' ? 'Vietnamese' : 'English';
+    const response = await this.executeChatCompletion(model, {
+      messages: [
+        {
+          role: 'system',
+          content: `You are a professional support-chat translator for a travel company. Translate the user's message into natural, polite ${targetName}. Preserve names, booking codes, numbers, prices and dates exactly. Output ONLY the translated text, with no quotes, labels, or extra commentary.`,
+        },
+        { role: 'user', content: text },
+      ],
+      max_tokens: 1200,
+      temperature: 0.2,
+    });
+    return (response.choices[0]?.message?.content || '').trim();
+  }
+
+  /** Dịch một đoạn tin nhắn hỗ trợ on-demand. Bản gốc do phía gọi giữ lại. */
+  async translateText(text: string, targetLang: 'vi' | 'en'): Promise<string> {
+    const input = this.truncateForTranslation(text, 2000);
+    if (!input) return '';
+    try {
+      return await this.runTextTranslation(this.primaryModel, input, targetLang);
+    } catch (error) {
+      this.logAiErrorContext('Text translation primary model', this.primaryModel, error);
+      try {
+        return await this.runTextTranslation(this.fallbackModel, input, targetLang);
+      } catch (fallbackError) {
+        this.logAiErrorContext('Text translation fallback model', this.fallbackModel, fallbackError);
+        throw new ServiceUnavailableException(
+          'Không thể dịch nội dung lúc này. Vui lòng thử lại sau.',
+        );
+      }
+    }
+  }
 }

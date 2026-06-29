@@ -52,6 +52,7 @@ export interface Ticket {
     subject: string;
     message: string;
     status: TicketStatus;
+    locale?: string;
     assignedStaffId?: number | null;
     assignedStaffName?: string | null;
     linkedBooking?: LinkedBooking | null;

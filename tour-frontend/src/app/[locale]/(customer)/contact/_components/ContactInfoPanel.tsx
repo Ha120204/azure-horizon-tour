@@ -9,10 +9,12 @@ interface ContactInfoPanelProps {
     t: (key: string) => string;
     supportPhoneHref: string;
     isLoggedIn: boolean;
+    language: string;
     publicSettings: {
         company_email: string;
         company_phone: string;
         company_address: string;
+        company_address_en: string;
     };
 }
 
@@ -20,8 +22,12 @@ export function ContactInfoPanel({
     t,
     supportPhoneHref,
     isLoggedIn,
+    language,
     publicSettings,
 }: ContactInfoPanelProps) {
+    const officeAddress = language === 'en'
+        ? (publicSettings.company_address_en?.trim() || publicSettings.company_address)
+        : publicSettings.company_address;
     const infoItems: ContactInfoItem[] = [
         {
             icon: 'schedule',
@@ -44,7 +50,7 @@ export function ContactInfoPanel({
         {
             icon: 'location_on',
             title: t('contact.office'),
-            body: publicSettings.company_address,
+            body: officeAddress,
         },
         {
             icon: 'help_outline',

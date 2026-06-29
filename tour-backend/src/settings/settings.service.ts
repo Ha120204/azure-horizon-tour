@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isUsableEnglishText, toEnglishNameFallback } from '../tour/localization';
 
 type SettingType = 'text' | 'email' | 'phone' | 'integer' | 'boolean';
 
@@ -27,6 +28,13 @@ const DEFAULT_SETTINGS = [
     value: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
     label: 'Địa chỉ',
     description: 'Địa chỉ văn phòng chính',
+    group: 'company',
+  },
+  {
+    key: 'company_address_en',
+    value: '',
+    label: 'Địa chỉ (tiếng Anh)',
+    description: 'Bản tiếng Anh của địa chỉ văn phòng; để trống sẽ tự dịch khi hiển thị EN',
     group: 'company',
   },
   {
@@ -91,6 +99,7 @@ const DEFAULT_SETTINGS = [
 const SETTING_DEFINITIONS: Record<string, SettingDefinition> = {
   company_name: { key: 'company_name', type: 'text', required: true, maxLength: 120 },
   company_address: { key: 'company_address', type: 'text', required: true, maxLength: 250 },
+  company_address_en: { key: 'company_address_en', type: 'text', maxLength: 250 },
   company_phone: { key: 'company_phone', type: 'phone', required: true, maxLength: 32 },
   company_email: { key: 'company_email', type: 'email', required: true, maxLength: 120 },
   company_description: { key: 'company_description', type: 'text', maxLength: 180 },
@@ -159,6 +168,7 @@ const validateSettingValue = (definition: SettingDefinition, rawValue: string) =
 export interface PublicSettings {
   company_name: string;
   company_address: string;
+  company_address_en: string;
   company_phone: string;
   company_email: string;
   company_description: string;
@@ -284,6 +294,7 @@ export class SettingsService implements OnModuleInit {
     const allowedKeys = [
       'company_name',
       'company_address',
+      'company_address_en',
       'company_phone',
       'company_email',
       'company_description',
@@ -305,9 +316,17 @@ export class SettingsService implements OnModuleInit {
     const maxPeople = toInt(flat.booking_max_people, 20);
     const minPeople = toInt(flat.booking_min_people, 1);
 
+    // EN luôn có giá trị dùng được: ưu tiên bản admin nhập, trống thì tự dịch.
+    const companyAddress = flat.company_address ?? '';
+    const companyAddressEnRaw = flat.company_address_en?.trim();
+    const companyAddressEn = companyAddressEnRaw && isUsableEnglishText(companyAddressEnRaw)
+      ? companyAddressEnRaw
+      : (companyAddress ? toEnglishNameFallback(companyAddress, companyAddress) : '');
+
     return {
       company_name: flat.company_name ?? 'Azure Horizon',
-      company_address: flat.company_address ?? '',
+      company_address: companyAddress,
+      company_address_en: companyAddressEn,
       company_phone: flat.company_phone ?? '',
       company_email: flat.company_email ?? '',
       company_description: flat.company_description ?? '',

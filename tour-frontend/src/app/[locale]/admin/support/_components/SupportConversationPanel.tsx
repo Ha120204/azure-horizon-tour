@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
+import { API_BASE_URL } from '@/lib/http/constants';
 import { AVATAR_COLORS, CAT, STS } from '../_lib/config';
 import {
     fmtDate,
@@ -93,6 +95,9 @@ export function SupportConversationPanel({
                             <div className="mt-1 flex flex-wrap gap-1.5">
                                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${selectedCategory.color}`}>{selectedCategory.label}</span>
                                 <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${selectedStatus.tone}`}>{selectedStatus.label}</span>
+                                {selected.locale === 'en' && (
+                                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">🇬🇧 Khách dùng tiếng Anh</span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -174,7 +179,7 @@ export function SupportConversationPanel({
                     </div>
                 </div>
 
-                <CustomerMessage selected={selected} avatarColor={avatarColor} />
+                <CustomerMessage key={selected.id} selected={selected} avatarColor={avatarColor} />
 
                 {buildTimeline(selected.replies ?? [], selected.auditLogs ?? []).map((item, index) => {
                     if (item.type === 'audit') {
@@ -209,6 +214,9 @@ export function SupportConversationPanel({
                                         bulletClassName={!staff ? 'bg-primary' : internal ? 'bg-amber-400' : 'bg-white/85'}
                                     />
                                 </div>
+                                {!staff && selected.locale === 'en' && (
+                                    <TranslateButton ticketId={selected.id} content={r.content} />
+                                )}
                             </div>
                             {staff && (
                                 <div className={`mt-auto grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-black ${internal ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-200' : 'bg-primary text-on-primary'}`}>NV</div>
@@ -559,6 +567,56 @@ function AuditEventItem({ event }: { event: AuditEvent }) {
     );
 }
 
+function TranslateButton({ ticketId, content }: { ticketId: number; content: string }) {
+    const [translation, setTranslation] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [failed, setFailed] = useState(false);
+
+    const handleTranslate = async () => {
+        if (translation || loading) return;
+        setLoading(true);
+        setFailed(false);
+        try {
+            const res = await fetchWithAuth(`${API_BASE_URL}/support/tickets/${ticketId}/translate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content, targetLang: 'vi' }),
+            });
+            if (!res.ok) throw new Error('translate failed');
+            const json = await res.json();
+            setTranslation(json?.data?.translation ?? json?.translation ?? '');
+        } catch {
+            setFailed(true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (translation) {
+        return (
+            <div className="mt-1.5 rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2">
+                <p className="mb-0.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-blue-700">
+                    <span className="material-symbols-outlined text-[12px]">translate</span>
+                    Bản dịch tự động (tiếng Việt)
+                </p>
+                <p className="whitespace-pre-line text-sm leading-6 text-on-surface">{translation}</p>
+            </div>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={handleTranslate}
+            disabled={loading}
+            className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 transition hover:text-blue-700 disabled:opacity-50"
+        >
+            <span className={`material-symbols-outlined text-[13px] ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'translate'}</span>
+            {loading ? 'Đang dịch...' : failed ? 'Lỗi, bấm để thử lại' : 'Dịch sang tiếng Việt'}
+        </button>
+    );
+}
+
 function CustomerMessage({ selected, avatarColor }: { selected: Ticket; avatarColor: string }) {
     const request = parseSupportRequestMessage(selected.message);
 
@@ -572,6 +630,9 @@ function CustomerMessage({ selected, avatarColor }: { selected: Ticket; avatarCo
                 <div className="rounded-2xl rounded-bl-md border border-outline-variant/30 bg-surface px-4 py-3 text-sm leading-6 text-on-surface shadow-sm">
                     <FormattedTicketMessage message={request.message} />
                 </div>
+                {selected.locale === 'en' && (
+                    <TranslateButton ticketId={selected.id} content={request.message} />
+                )}
                 {request.details.length > 0 && (
                     <RequestInfoPanel details={request.details} />
                 )}

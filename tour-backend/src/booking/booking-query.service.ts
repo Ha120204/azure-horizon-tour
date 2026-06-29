@@ -24,6 +24,12 @@ import {
   PAYOS_MAX_HOLD_MINUTES,
 } from './helpers/booking-helpers';
 import type { CancellationPolicy } from './types';
+import {
+  normalizeLocale,
+  isUsableEnglishText,
+  toEnglishNameFallback,
+  type SupportedLocale,
+} from '../tour/localization';
 
 // Stream type for image proxy
 type ProxiedStream = Readable & { pipe(destination: Response): Response };
@@ -43,9 +49,29 @@ export class BookingQueryService {
   ) {}
 
   /** Điểm tập trung = địa chỉ văn phòng cấu hình ở Cài đặt (company_address). */
-  private async getMeetingPoint(): Promise<string | null> {
-    const { company_address } = await this.settingsService.getPublic();
-    return company_address?.trim() || null;
+  private async getMeetingPoint(locale: SupportedLocale = 'vi'): Promise<string | null> {
+    const { company_address, company_address_en } = await this.settingsService.getPublic();
+    const vi = company_address?.trim() || null;
+    if (locale !== 'en' || !vi) return vi;
+    const en = company_address_en?.trim();
+    return en && isUsableEnglishText(en) ? en : toEnglishNameFallback(vi, vi);
+  }
+
+  /**
+   * Điểm đón = boardingPoint của chuyến (nếu có), fallback về điểm tập trung.
+   * Với locale EN: ưu tiên boardingPointEn, không có thì tự dịch boardingPoint.
+   */
+  private resolvePickupLocation(
+    boardingPoint: string | null | undefined,
+    boardingPointEn: string | null | undefined,
+    meetingPoint: string | null,
+    locale: SupportedLocale,
+  ): string | null {
+    const vi = boardingPoint?.trim();
+    if (!vi) return meetingPoint;
+    if (locale !== 'en') return vi;
+    const en = boardingPointEn?.trim();
+    return en && isUsableEnglishText(en) ? en : toEnglishNameFallback(vi, vi);
   }
 
   private getCustomerVoucherStatus(booking: {
@@ -192,7 +218,8 @@ export class BookingQueryService {
 
   // ─── Customer-facing queries ───────────────────────────────────────────────
 
-  async getMyBookings(userId: number) {
+  async getMyBookings(userId: number, locale?: string) {
+    const lang = normalizeLocale(locale);
     const bookings = await this.prisma.booking.findMany({
       where: { userId, deletedAt: null },
       select: {
@@ -228,6 +255,7 @@ export class BookingQueryService {
               transport: {
                 select: {
                   boardingPoint: true,
+                  boardingPointEn: true,
                   boardingTime: true,
                   gatheringTime: true,
                   departureTime: true,
@@ -240,7 +268,7 @@ export class BookingQueryService {
       departures.map((departure) => [departure.id, departure]),
     );
 
-    const meetingPoint = await this.getMeetingPoint();
+    const meetingPoint = await this.getMeetingPoint(lang);
     return bookings.map((b) => {
       const departure = b.departureId
         ? departureMap.get(b.departureId)
@@ -253,7 +281,12 @@ export class BookingQueryService {
           departure?.transport?.boardingTime ??
           departure?.transport?.departureTime ??
           null,
-        pickupLocation: departure?.transport?.boardingPoint?.trim() || meetingPoint,
+        pickupLocation: this.resolvePickupLocation(
+          departure?.transport?.boardingPoint,
+          departure?.transport?.boardingPointEn,
+          meetingPoint,
+          lang,
+        ),
         voucherStatus: this.getCustomerVoucherStatus(b),
         refundStatus: this.getCustomerRefundStatus(b),
         totalPrice: Number(b.totalPrice),
@@ -263,7 +296,8 @@ export class BookingQueryService {
     });
   }
 
-  async getMyBookingById(bookingId: number, userId: number) {
+  async getMyBookingById(bookingId: number, userId: number, locale?: string) {
+    const lang = normalizeLocale(locale);
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, userId, deletedAt: null },
       select: {
@@ -303,6 +337,7 @@ export class BookingQueryService {
                 departureAirport: true,
                 arrivalAirport: true,
                 boardingPoint: true,
+                boardingPointEn: true,
                 boardingTime: true,
                 gatheringTime: true,
                 departureTime: true,
@@ -315,7 +350,7 @@ export class BookingQueryService {
           },
         })
       : null;
-    const meetingPoint = await this.getMeetingPoint();
+    const meetingPoint = await this.getMeetingPoint(lang);
     const resolvedDepartureDate = departure?.departureDate ?? booking.tour.startDate;
     const incompletePassengerCount = countIncompletePassengers(booking.passengers);
     const { passengerInfoDeadlineDays } = await this.settingsService.getBookingPolicy();
@@ -333,7 +368,12 @@ export class BookingQueryService {
         departure?.transport?.boardingTime ??
         departure?.transport?.departureTime ??
         null,
-      pickupLocation: departure?.transport?.boardingPoint?.trim() || meetingPoint,
+      pickupLocation: this.resolvePickupLocation(
+        departure?.transport?.boardingPoint,
+        departure?.transport?.boardingPointEn,
+        meetingPoint,
+        lang,
+      ),
       departureTransport: departure?.transport ?? null,
       contactInfo: booking.contactInfo ?? null,
       passengers: booking.passengers ?? null,

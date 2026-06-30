@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
@@ -32,6 +33,225 @@ interface CampaignComposerDialogProps {
   onClose: () => void;
   onSendTest: () => void;
   onSave: () => void;
+}
+
+type CampaignTypeOption = {
+  value: CampaignType;
+  label: string;
+  icon: string;
+  tone: string;
+};
+
+type CampaignTypeSelectProps = {
+  value: CampaignType;
+  options: CampaignTypeOption[];
+  onChange: (value: CampaignType) => void;
+  ariaLabel: string;
+};
+
+type SelectMenuPosition = {
+  left: number;
+  top?: number;
+  bottom?: number;
+  width: number;
+  maxHeight: number;
+};
+
+function CampaignTypeSelect({ value, options, onChange, ariaLabel }: CampaignTypeSelectProps) {
+  const listboxId = useId();
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<SelectMenuPosition | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedOption = options.find(option => option.value === value) ?? options[0];
+
+  const positionMenu = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const gap = 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUp = spaceBelow < 190 && spaceAbove > spaceBelow;
+    const availableSpace = openUp ? spaceAbove : spaceBelow;
+
+    setMenuPosition({
+      left: rect.left,
+      width: rect.width,
+      top: openUp ? undefined : rect.bottom + gap,
+      bottom: openUp ? window.innerHeight - rect.top + gap : undefined,
+      maxHeight: Math.max(156, Math.min(288, availableSpace - gap - 12)),
+    });
+  };
+
+  const focusOption = (index: number) => {
+    requestAnimationFrame(() => optionRefs.current[index]?.focus());
+  };
+
+  const openMenu = (focusIndex = Math.max(0, options.findIndex(option => option.value === value))) => {
+    positionMenu();
+    setIsOpen(true);
+    focusOption(focusIndex);
+  };
+
+  const closeMenu = (restoreFocus = false) => {
+    setIsOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    positionMenu();
+    const handleReposition = () => positionMenu();
+
+    window.addEventListener('scroll', handleReposition, true);
+    window.addEventListener('resize', handleReposition);
+    return () => {
+      window.removeEventListener('scroll', handleReposition, true);
+      window.removeEventListener('resize', handleReposition);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      closeMenu();
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [isOpen]);
+
+  const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMenu(true);
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      closeMenu();
+      return;
+    }
+
+    const lastIndex = options.length - 1;
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowDown') nextIndex = index === lastIndex ? 0 : index + 1;
+    if (event.key === 'ArrowUp') nextIndex = index === 0 ? lastIndex : index - 1;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = lastIndex;
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      optionRefs.current[nextIndex]?.focus();
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? listboxId : undefined}
+        onClick={() => {
+          if (isOpen) closeMenu();
+          else openMenu();
+        }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            closeMenu();
+            return;
+          }
+
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            const selectedIndex = Math.max(0, options.findIndex(option => option.value === value));
+            openMenu(event.key === 'ArrowUp' ? options.length - 1 : selectedIndex);
+          }
+        }}
+        className={`flex h-12 w-full items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3.5 text-left text-sm font-semibold outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          isOpen
+            ? 'border-blue-300 bg-white shadow-[0_0_0_3px_rgba(59,130,246,0.14)]'
+            : 'border-slate-200 hover:border-blue-200 hover:bg-white'
+        } active:scale-[0.99] focus-visible:border-blue-300 focus-visible:ring-2 focus-visible:ring-blue-100 motion-reduce:transform-none`}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${selectedOption.tone}`}>
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{selectedOption.icon}</span>
+          </span>
+          <span className="truncate text-slate-800">{selectedOption.label}</span>
+        </span>
+        <span className={`material-symbols-outlined shrink-0 text-[19px] text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-700' : ''}`} aria-hidden="true">
+          expand_more
+        </span>
+      </button>
+
+      {isOpen && menuPosition && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          id={listboxId}
+          role="listbox"
+          aria-label={ariaLabel}
+          style={{
+            position: 'fixed',
+            left: menuPosition.left,
+            top: menuPosition.top,
+            bottom: menuPosition.bottom,
+            width: menuPosition.width,
+          }}
+          className="z-[220] overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_42px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/5"
+        >
+          <div className="overflow-y-auto" style={{ maxHeight: menuPosition.maxHeight }}>
+            {options.map((option, index) => {
+              const selected = option.value === value;
+
+              return (
+                <button
+                  key={option.value}
+                  ref={element => {
+                    optionRefs.current[index] = element;
+                  }}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => {
+                    onChange(option.value);
+                    closeMenu(true);
+                  }}
+                  onKeyDown={event => handleOptionKeyDown(event, index)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition-colors ${
+                    selected
+                      ? 'bg-blue-700 text-white shadow-sm shadow-blue-700/20'
+                      : 'text-slate-700 hover:bg-slate-50 focus-visible:bg-blue-50'
+                  }`}
+                >
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${selected ? 'bg-white/15 text-white' : option.tone}`}>
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{option.icon}</span>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-bold">{option.label}</span>
+                  <span className={`material-symbols-outlined text-[18px] ${selected ? 'opacity-100' : 'opacity-0'}`} aria-hidden="true">
+                    done
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
 }
 
 export function CampaignComposerDialog({
@@ -105,6 +325,15 @@ export function CampaignComposerDialog({
       icon: 'checklist',
     },
   ];
+  const campaignTypeOptions = useMemo(
+    () => Object.entries(campaignTypeConfig).map(([value, cfg]) => ({
+      value: value as CampaignType,
+      label: cfg.label,
+      icon: cfg.icon,
+      tone: cfg.tone,
+    })),
+    [],
+  );
 
   useEffect(() => {
     if (campaignForm.audience !== 'MANUAL_SELECTION') return;
@@ -211,15 +440,12 @@ export function CampaignComposerDialog({
               </label>
               <label className="space-y-2">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Loại chiến dịch</span>
-                <select
+                <CampaignTypeSelect
                   value={campaignForm.type}
-                  onChange={e => setCampaignForm(form => ({ ...form, type: e.target.value as CampaignType }))}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                >
-                  {Object.entries(campaignTypeConfig).map(([value, cfg]) => (
-                    <option key={value} value={value}>{cfg.label}</option>
-                  ))}
-                </select>
+                  options={campaignTypeOptions}
+                  onChange={type => setCampaignForm(form => ({ ...form, type }))}
+                  ariaLabel="Loai chien dich"
+                />
               </label>
             </div>
 

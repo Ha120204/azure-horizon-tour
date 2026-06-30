@@ -33,3 +33,14 @@ export const campaignStatusConfig: Record<CampaignDraft['status'], { label: stri
   FAILED: { label: 'LỖI GỬI', tone: 'bg-rose-50 text-rose-700' },
   CANCELLED: { label: 'ĐÃ HỦY', tone: 'bg-slate-100 text-slate-500' },
 };
+
+export type CampaignFilterKey = 'active' | 'sent' | 'closed' | 'all';
+
+// Nhóm trạng thái cho bộ lọc danh sách chiến dịch — tách việc đang xử lý khỏi lịch sử đã kết thúc.
+// Việc lọc/đếm theo nhóm thực hiện ở backend; đây chỉ là nhãn cho các chip.
+export const campaignFilters: { key: CampaignFilterKey; label: string }[] = [
+  { key: 'active', label: 'Đang xử lý' },
+  { key: 'sent', label: 'Đã gửi' },
+  { key: 'closed', label: 'Đã hủy / lỗi' },
+  { key: 'all', label: 'Tất cả' },
+];

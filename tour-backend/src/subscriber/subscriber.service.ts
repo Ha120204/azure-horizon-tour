@@ -12,6 +12,15 @@ const CAMPAIGN_BATCH_SIZE = 100;
 const CAMPAIGN_LOCK_TTL_MS = 5 * 60_000;
 const ACTIVE_CAMPAIGN_STATUSES = ['SCHEDULED', 'SENDING'];
 
+type CampaignFilter = 'active' | 'sent' | 'closed' | 'all';
+
+// Nhóm trạng thái cho bộ lọc danh sách chiến dịch — tách việc đang xử lý khỏi lịch sử đã kết thúc
+const CAMPAIGN_STATUS_GROUPS: Record<Exclude<CampaignFilter, 'all'>, readonly string[]> = {
+  active: ['DRAFT', 'SCHEDULED', 'SENDING'],
+  sent: ['SENT'],
+  closed: ['CANCELLED', 'FAILED'],
+};
+
 // Nội dung dùng để tính đối tượng nhận (audience) — không phụ thuộc Prisma type
 interface CampaignAudienceData {
   audience: string;
@@ -195,10 +204,36 @@ export class SubscriberService {
   }
 
   // ── Bản nháp & chiến dịch ───────────────────────────────────────────────
-  async getCampaigns() {
-    return this.prisma.marketingCampaign.findMany({
-      orderBy: { updatedAt: 'desc' },
-    });
+  async getCampaigns(query: { page: number; limit: number; filter: CampaignFilter }) {
+    const { page, limit, filter } = query;
+    const skip = (page - 1) * limit;
+    const where: Prisma.MarketingCampaignWhereInput =
+      filter === 'all' ? {} : { status: { in: [...CAMPAIGN_STATUS_GROUPS[filter]] } };
+
+    const [data, total, grouped] = await Promise.all([
+      this.prisma.marketingCampaign.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.marketingCampaign.count({ where }),
+      this.prisma.marketingCampaign.groupBy({ by: ['status'], _count: { _all: true } }),
+    ]);
+
+    const countOf = (statuses: readonly string[]) =>
+      grouped.reduce((acc, g) => (statuses.includes(g.status) ? acc + g._count._all : acc), 0);
+    const counts = {
+      active: countOf(CAMPAIGN_STATUS_GROUPS.active),
+      sent: countOf(CAMPAIGN_STATUS_GROUPS.sent),
+      closed: countOf(CAMPAIGN_STATUS_GROUPS.closed),
+      all: grouped.reduce((acc, g) => acc + g._count._all, 0),
+    };
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)), counts },
+    };
   }
 
   async createDraft(dto: CreateCampaignDto, createdBy?: number) {

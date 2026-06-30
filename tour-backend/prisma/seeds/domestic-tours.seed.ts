@@ -3201,6 +3201,172 @@ const additionalHeroTours: DomesticTourSeed[] = [
       notesEn: 'Speedboat schedule depends on sea conditions and pier control.',
     },
   }),
+  createGeneratedDomesticTour(findDestination('da-nang'), {
+    tourCode: 'VN-DAD-045',
+    name: 'Đà Nẵng - Hội An - Bà Nà Hills 4 Ngày 3 Đêm (Bay Từ Hà Nội)',
+    intro:
+      'Trọn gói bay thẳng Hà Nội - Đà Nẵng cùng hành trình di sản miền Trung: Bà Nà Hills, phố cổ Hội An và biển Mỹ Khê, không lo tự đặt vé máy bay.',
+    focus: 'Bà Nà Hills, phố cổ Hội An và biển Mỹ Khê, trọn gói bay khứ hồi từ Hà Nội',
+    suitableFor:
+      'khách miền Bắc muốn trọn gói bay thẳng, gia đình và nhóm bạn ngại tự ghép vé',
+    price: 6_490_000,
+    duration: '4 ngày 3 đêm',
+    availableSeats: 80,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Bay thẳng khứ hồi Hà Nội - Đà Nẵng, xe đón tận sân bay',
+      'Một ngày vui chơi Bà Nà Hills và Cầu Vàng',
+      'Dạo phố cổ Hội An và không gian đèn lồng buổi tối',
+      'Tự do tắm biển Mỹ Khê và thưởng thức hải sản',
+    ],
+    gallery: [...IMAGES.daNang],
+    itinerary: [
+      {
+        title: 'Hà Nội - Đà Nẵng - Biển Mỹ Khê',
+        description:
+          'Đón khách tại sân bay Nội Bài, bay vào Đà Nẵng, xe đón về khách sạn, tự do tắm biển Mỹ Khê và ngắm Cầu Rồng buổi tối.',
+        accommodation: 'Khách sạn Đà Nẵng theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay Hà Nội - Đà Nẵng', 'Biển Mỹ Khê', 'Cầu Rồng'],
+      },
+      {
+        title: 'Bà Nà Hills - Cầu Vàng',
+        description:
+          'Cả ngày khám phá Bà Nà Hills, Cầu Vàng, làng Pháp và các khu vui chơi, tối về Đà Nẵng nghỉ ngơi.',
+        accommodation: 'Khách sạn Đà Nẵng theo gói',
+        transport: 'Xe du lịch và cáp treo',
+        activities: ['Bà Nà Hills', 'Cầu Vàng', 'Làng Pháp'],
+      },
+      {
+        title: 'Hội An phố cổ',
+        description:
+          'Di chuyển vào Hội An, dạo phố cổ, chùa Cầu, làng nghề và trải nghiệm đèn lồng, nghỉ đêm tại Hội An hoặc Đà Nẵng.',
+        accommodation: 'Khách sạn Hội An/Đà Nẵng theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Phố cổ Hội An', 'Chùa Cầu', 'Đèn lồng buổi tối'],
+      },
+      {
+        title: 'Ngũ Hành Sơn - Đà Nẵng - Hà Nội',
+        description:
+          'Tham quan Ngũ Hành Sơn và làng đá Non Nước, mua đặc sản, xe tiễn ra sân bay Đà Nẵng bay về Hà Nội.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Ngũ Hành Sơn', 'Làng đá Non Nước', 'Bay Đà Nẵng - Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi Hà Nội - Đà Nẵng hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành tùy hãng.',
+      },
+      {
+        question: 'Khách ở tỉnh khác miền Bắc tham gia được không?',
+        answer:
+          'Được. Khách tự di chuyển tới sân bay Nội Bài tập trung cùng đoàn, hoặc liên hệ để được tư vấn nối chuyến.',
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Vé máy bay khứ hồi Hà Nội - Đà Nẵng',
+        'Vé tham quan Ngũ Hành Sơn, Sơn Trà',
+      ],
+      optional: ['Vé cáp treo Bà Nà Hills nếu không ghi rõ trong gói đã chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi Hà Nội - Đà Nẵng + xe tham quan',
+      vehicleTypeEn: 'Round-trip Hanoi - Da Nang flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác miền Trung',
+      operatorEn: 'Domestic airline plus Central Vietnam partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Đà Nẵng.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Da Nang airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('da-nang'), {
+    tourCode: 'VN-DAD-046',
+    name: 'Đà Nẵng - Hội An - Bà Nà Hills 4 Ngày 3 Đêm (Bay Từ TP.HCM)',
+    intro:
+      'Trọn gói bay thẳng TP.HCM - Đà Nẵng cùng hành trình di sản miền Trung: Bà Nà Hills, phố cổ Hội An và biển Mỹ Khê, không lo tự đặt vé máy bay.',
+    focus: 'Bà Nà Hills, phố cổ Hội An và biển Mỹ Khê, trọn gói bay khứ hồi từ TP.HCM',
+    suitableFor:
+      'khách miền Nam muốn trọn gói bay thẳng, gia đình và nhóm bạn ngại tự ghép vé',
+    price: 6_290_000,
+    duration: '4 ngày 3 đêm',
+    availableSeats: 80,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Bay thẳng khứ hồi TP.HCM - Đà Nẵng, xe đón tận sân bay',
+      'Một ngày vui chơi Bà Nà Hills và Cầu Vàng',
+      'Dạo phố cổ Hội An và không gian đèn lồng buổi tối',
+      'Tự do tắm biển Mỹ Khê và thưởng thức hải sản',
+    ],
+    gallery: rotateGallery([...IMAGES.daNang], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Đà Nẵng - Biển Mỹ Khê',
+        description:
+          'Đón khách tại sân bay Tân Sơn Nhất, bay vào Đà Nẵng, xe đón về khách sạn, tự do tắm biển Mỹ Khê và ngắm Cầu Rồng buổi tối.',
+        accommodation: 'Khách sạn Đà Nẵng theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay TP.HCM - Đà Nẵng', 'Biển Mỹ Khê', 'Cầu Rồng'],
+      },
+      {
+        title: 'Bà Nà Hills - Cầu Vàng',
+        description:
+          'Cả ngày khám phá Bà Nà Hills, Cầu Vàng, làng Pháp và các khu vui chơi, tối về Đà Nẵng nghỉ ngơi.',
+        accommodation: 'Khách sạn Đà Nẵng theo gói',
+        transport: 'Xe du lịch và cáp treo',
+        activities: ['Bà Nà Hills', 'Cầu Vàng', 'Làng Pháp'],
+      },
+      {
+        title: 'Hội An phố cổ',
+        description:
+          'Di chuyển vào Hội An, dạo phố cổ, chùa Cầu, làng nghề và trải nghiệm đèn lồng, nghỉ đêm tại Hội An hoặc Đà Nẵng.',
+        accommodation: 'Khách sạn Hội An/Đà Nẵng theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Phố cổ Hội An', 'Chùa Cầu', 'Đèn lồng buổi tối'],
+      },
+      {
+        title: 'Ngũ Hành Sơn - Đà Nẵng - TP.HCM',
+        description:
+          'Tham quan Ngũ Hành Sơn và làng đá Non Nước, mua đặc sản, xe tiễn ra sân bay Đà Nẵng bay về TP.HCM.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Ngũ Hành Sơn', 'Làng đá Non Nước', 'Bay Đà Nẵng - TP.HCM'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi TP.HCM - Đà Nẵng hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành tùy hãng.',
+      },
+      {
+        question: 'Khách ở tỉnh khác miền Nam tham gia được không?',
+        answer:
+          'Được. Khách tự di chuyển tới sân bay Tân Sơn Nhất tập trung cùng đoàn, hoặc liên hệ để được tư vấn nối chuyến.',
+      },
+    ],
+    ticketPolicy: {
+      included: [
+        'Vé máy bay khứ hồi TP.HCM - Đà Nẵng',
+        'Vé tham quan Ngũ Hành Sơn, Sơn Trà',
+      ],
+      optional: ['Vé cáp treo Bà Nà Hills nếu không ghi rõ trong gói đã chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi TP.HCM - Đà Nẵng + xe tham quan',
+      vehicleTypeEn: 'Round-trip Ho Chi Minh City - Da Nang flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác miền Trung',
+      operatorEn: 'Domestic airline plus Central Vietnam partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Đà Nẵng.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Da Nang airport.',
+    },
+  }),
   createGeneratedDomesticTour(findDestination('hoi-an'), {
     tourCode: 'VN-HANQ-039',
     name: 'Hội An - Thánh Địa Mỹ Sơn - Cù Lao Chàm 3 Ngày 2 Đêm',
@@ -3619,6 +3785,744 @@ const additionalHeroTours: DomesticTourSeed[] = [
       notesEn: 'Speedboat schedule depends on sea conditions and pier control.',
     },
   }),
+  // ── Tour bay thẳng từ hub Hà Nội/TP.HCM cho các điểm đến trước đây chỉ khởi
+  // hành tại chỗ (Đà Lạt, Phú Quốc, Nha Trang, Quy Nhơn, Huế) ──────────────────
+  createGeneratedDomesticTour(findDestination('da-lat'), {
+    tourCode: 'VN-DLI-047',
+    name: 'Đà Lạt Thành Phố Ngàn Hoa 3 Ngày 2 Đêm (Bay Từ Hà Nội)',
+    intro:
+      'Trọn gói bay thẳng Hà Nội - Đà Lạt, tận hưởng khí hậu se lạnh, đồi chè, thác nước và những vườn hoa rực rỡ của thành phố ngàn hoa.',
+    focus: 'khí hậu mát lạnh, đồi chè Cầu Đất, hồ Xuân Hương và vườn hoa Đà Lạt',
+    suitableFor:
+      'khách miền Bắc muốn trọn gói bay thẳng, cặp đôi và gia đình thích nghỉ dưỡng',
+    price: 5_490_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 70,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Bay thẳng khứ hồi Hà Nội - Đà Lạt, xe đón tại sân bay Liên Khương',
+      'Săn mây và ngắm bình minh tại đồi chè Cầu Đất',
+      'Dạo hồ Xuân Hương, quảng trường Lâm Viên và vườn hoa thành phố',
+      'Khám phá Thung lũng Tình Yêu và thác Datanla',
+    ],
+    gallery: [...IMAGES.daLat],
+    itinerary: [
+      {
+        title: 'Hà Nội - Đà Lạt - Quảng trường Lâm Viên',
+        description:
+          'Đón khách tại sân bay Nội Bài, bay vào Liên Khương, xe đón về Đà Lạt nhận phòng, chiều dạo hồ Xuân Hương và quảng trường Lâm Viên.',
+        accommodation: 'Khách sạn Đà Lạt theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay Hà Nội - Đà Lạt', 'Hồ Xuân Hương', 'Quảng trường Lâm Viên'],
+      },
+      {
+        title: 'Đồi chè Cầu Đất - Thung lũng Tình Yêu',
+        description:
+          'Săn mây sớm tại đồi chè Cầu Đất, tham quan Thung lũng Tình Yêu, vườn hoa và các điểm check-in nổi tiếng, tối tự do chợ đêm Đà Lạt.',
+        accommodation: 'Khách sạn Đà Lạt theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Đồi chè Cầu Đất', 'Thung lũng Tình Yêu', 'Chợ đêm Đà Lạt'],
+      },
+      {
+        title: 'Thác Datanla - Đà Lạt - Hà Nội',
+        description:
+          'Trải nghiệm thác Datanla, mua đặc sản Đà Lạt, xe tiễn ra sân bay Liên Khương bay về Hà Nội.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Thác Datanla', 'Mua đặc sản', 'Bay Đà Lạt - Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi Hà Nội - Đà Lạt (sân bay Liên Khương) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Đà Lạt thời tiết thế nào, cần mang gì?',
+        answer:
+          'Đà Lạt mát lạnh quanh năm, buổi sáng và tối khá lạnh; khách nên mang áo ấm nhẹ và giày đi bộ thoải mái.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé tham quan Thung lũng Tình Yêu, thác Datanla', 'Xe đưa đón sân bay'],
+      optional: ['Vé máng trượt Datanla nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi Hà Nội - Đà Lạt + xe tham quan',
+      vehicleTypeEn: 'Round-trip Hanoi - Da Lat flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Đà Lạt',
+      operatorEn: 'Domestic airline plus Da Lat partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Liên Khương.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Lien Khuong airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('da-lat'), {
+    tourCode: 'VN-DLI-048',
+    name: 'Đà Lạt Thành Phố Ngàn Hoa 3 Ngày 2 Đêm (Bay Từ TP.HCM)',
+    intro:
+      'Trọn gói bay thẳng TP.HCM - Đà Lạt, tận hưởng khí hậu se lạnh, đồi chè, thác nước và những vườn hoa rực rỡ của thành phố ngàn hoa.',
+    focus: 'khí hậu mát lạnh, đồi chè Cầu Đất, hồ Xuân Hương và vườn hoa Đà Lạt',
+    suitableFor:
+      'khách miền Nam muốn trọn gói bay thẳng, cặp đôi và gia đình thích nghỉ dưỡng',
+    price: 4_990_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 70,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Bay thẳng khứ hồi TP.HCM - Đà Lạt, xe đón tại sân bay Liên Khương',
+      'Săn mây và ngắm bình minh tại đồi chè Cầu Đất',
+      'Dạo hồ Xuân Hương, quảng trường Lâm Viên và vườn hoa thành phố',
+      'Khám phá Thung lũng Tình Yêu và thác Datanla',
+    ],
+    gallery: rotateGallery([...IMAGES.daLat], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Đà Lạt - Quảng trường Lâm Viên',
+        description:
+          'Đón khách tại sân bay Tân Sơn Nhất, bay vào Liên Khương, xe đón về Đà Lạt nhận phòng, chiều dạo hồ Xuân Hương và quảng trường Lâm Viên.',
+        accommodation: 'Khách sạn Đà Lạt theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay TP.HCM - Đà Lạt', 'Hồ Xuân Hương', 'Quảng trường Lâm Viên'],
+      },
+      {
+        title: 'Đồi chè Cầu Đất - Thung lũng Tình Yêu',
+        description:
+          'Săn mây sớm tại đồi chè Cầu Đất, tham quan Thung lũng Tình Yêu, vườn hoa và các điểm check-in nổi tiếng, tối tự do chợ đêm Đà Lạt.',
+        accommodation: 'Khách sạn Đà Lạt theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Đồi chè Cầu Đất', 'Thung lũng Tình Yêu', 'Chợ đêm Đà Lạt'],
+      },
+      {
+        title: 'Thác Datanla - Đà Lạt - TP.HCM',
+        description:
+          'Trải nghiệm thác Datanla, mua đặc sản Đà Lạt, xe tiễn ra sân bay Liên Khương bay về TP.HCM.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Thác Datanla', 'Mua đặc sản', 'Bay Đà Lạt - TP.HCM'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi TP.HCM - Đà Lạt (sân bay Liên Khương) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Đà Lạt thời tiết thế nào, cần mang gì?',
+        answer:
+          'Đà Lạt mát lạnh quanh năm, buổi sáng và tối khá lạnh; khách nên mang áo ấm nhẹ và giày đi bộ thoải mái.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé tham quan Thung lũng Tình Yêu, thác Datanla', 'Xe đưa đón sân bay'],
+      optional: ['Vé máng trượt Datanla nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi TP.HCM - Đà Lạt + xe tham quan',
+      vehicleTypeEn: 'Round-trip Ho Chi Minh City - Da Lat flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Đà Lạt',
+      operatorEn: 'Domestic airline plus Da Lat partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Liên Khương.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Lien Khuong airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('phu-quoc'), {
+    tourCode: 'VN-PQC-049',
+    name: 'Phú Quốc Đảo Ngọc 4 Ngày 3 Đêm (Bay Từ Hà Nội)',
+    intro:
+      'Trọn gói bay thẳng Hà Nội - Phú Quốc, nghỉ dưỡng đảo ngọc với cáp treo Hòn Thơm, Bãi Sao và khu vui chơi Nam đảo.',
+    focus: 'biển đảo nghỉ dưỡng, cáp treo Hòn Thơm, Bãi Sao và Grand World',
+    suitableFor:
+      'khách miền Bắc muốn trọn gói bay thẳng, gia đình và cặp đôi nghỉ dưỡng biển',
+    price: 7_990_000,
+    duration: '4 ngày 3 đêm',
+    availableSeats: 70,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Bay thẳng khứ hồi Hà Nội - Phú Quốc, xe đón tại sân bay',
+      'Cáp treo Hòn Thơm vượt biển dài nhất thế giới',
+      'Tắm biển Bãi Sao và khám phá Nam đảo',
+      'Dạo Grand World và chợ đêm Phú Quốc',
+    ],
+    gallery: [...IMAGES.phuQuoc],
+    itinerary: [
+      {
+        title: 'Hà Nội - Phú Quốc - Bãi biển',
+        description:
+          'Đón khách tại sân bay Nội Bài, bay ra Phú Quốc, xe đón về resort nhận phòng, tự do tắm biển và ngắm hoàng hôn.',
+        accommodation: 'Resort/khách sạn Phú Quốc theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay Hà Nội - Phú Quốc', 'Tắm biển', 'Hoàng hôn Phú Quốc'],
+      },
+      {
+        title: 'Cáp treo Hòn Thơm - Nam đảo',
+        description:
+          'Đi cáp treo Hòn Thơm, vui chơi công viên biển, khám phá các điểm Nam đảo và tắm biển Bãi Sao.',
+        accommodation: 'Resort/khách sạn Phú Quốc theo gói',
+        transport: 'Xe du lịch và cáp treo',
+        activities: ['Cáp treo Hòn Thơm', 'Bãi Sao', 'Nam đảo'],
+      },
+      {
+        title: 'Grand World - Tự do',
+        description:
+          'Tham quan Grand World, tự do nghỉ dưỡng hoặc trải nghiệm thêm các show, tối dạo chợ đêm Phú Quốc.',
+        accommodation: 'Resort/khách sạn Phú Quốc theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Grand World', 'Tự do nghỉ dưỡng', 'Chợ đêm Phú Quốc'],
+      },
+      {
+        title: 'Phú Quốc - Hà Nội',
+        description:
+          'Tự do mua đặc sản, xe tiễn ra sân bay Phú Quốc bay về Hà Nội.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Mua đặc sản', 'Bay Phú Quốc - Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi Hà Nội - Phú Quốc hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành tùy hãng.',
+      },
+      {
+        question: 'Đi Phú Quốc mùa nào đẹp?',
+        answer:
+          'Khoảng tháng 11 đến tháng 4 biển êm, nắng đẹp, thuận lợi cho tắm biển và các hoạt động đảo.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Cáp treo Hòn Thơm khứ hồi', 'Vé Grand World', 'Xe đưa đón sân bay'],
+      optional: ['Các trò chơi công viên biển nâng cấp nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi Hà Nội - Phú Quốc + xe tham quan',
+      vehicleTypeEn: 'Round-trip Hanoi - Phu Quoc flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Phú Quốc',
+      operatorEn: 'Domestic airline plus Phu Quoc partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Phú Quốc.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Phu Quoc airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('phu-quoc'), {
+    tourCode: 'VN-PQC-050',
+    name: 'Phú Quốc Đảo Ngọc 4 Ngày 3 Đêm (Bay Từ TP.HCM)',
+    intro:
+      'Trọn gói bay thẳng TP.HCM - Phú Quốc, nghỉ dưỡng đảo ngọc với cáp treo Hòn Thơm, Bãi Sao và khu vui chơi Nam đảo.',
+    focus: 'biển đảo nghỉ dưỡng, cáp treo Hòn Thơm, Bãi Sao và Grand World',
+    suitableFor:
+      'khách miền Nam muốn trọn gói bay thẳng, gia đình và cặp đôi nghỉ dưỡng biển',
+    price: 6_990_000,
+    duration: '4 ngày 3 đêm',
+    availableSeats: 70,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Bay thẳng khứ hồi TP.HCM - Phú Quốc, xe đón tại sân bay',
+      'Cáp treo Hòn Thơm vượt biển dài nhất thế giới',
+      'Tắm biển Bãi Sao và khám phá Nam đảo',
+      'Dạo Grand World và chợ đêm Phú Quốc',
+    ],
+    gallery: rotateGallery([...IMAGES.phuQuoc], 2),
+    itinerary: [
+      {
+        title: 'TP.HCM - Phú Quốc - Bãi biển',
+        description:
+          'Đón khách tại sân bay Tân Sơn Nhất, bay ra Phú Quốc, xe đón về resort nhận phòng, tự do tắm biển và ngắm hoàng hôn.',
+        accommodation: 'Resort/khách sạn Phú Quốc theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay TP.HCM - Phú Quốc', 'Tắm biển', 'Hoàng hôn Phú Quốc'],
+      },
+      {
+        title: 'Cáp treo Hòn Thơm - Nam đảo',
+        description:
+          'Đi cáp treo Hòn Thơm, vui chơi công viên biển, khám phá các điểm Nam đảo và tắm biển Bãi Sao.',
+        accommodation: 'Resort/khách sạn Phú Quốc theo gói',
+        transport: 'Xe du lịch và cáp treo',
+        activities: ['Cáp treo Hòn Thơm', 'Bãi Sao', 'Nam đảo'],
+      },
+      {
+        title: 'Grand World - Tự do',
+        description:
+          'Tham quan Grand World, tự do nghỉ dưỡng hoặc trải nghiệm thêm các show, tối dạo chợ đêm Phú Quốc.',
+        accommodation: 'Resort/khách sạn Phú Quốc theo gói',
+        transport: 'Xe du lịch',
+        activities: ['Grand World', 'Tự do nghỉ dưỡng', 'Chợ đêm Phú Quốc'],
+      },
+      {
+        title: 'Phú Quốc - TP.HCM',
+        description:
+          'Tự do mua đặc sản, xe tiễn ra sân bay Phú Quốc bay về TP.HCM.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Mua đặc sản', 'Bay Phú Quốc - TP.HCM'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi TP.HCM - Phú Quốc hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành tùy hãng.',
+      },
+      {
+        question: 'Đi Phú Quốc mùa nào đẹp?',
+        answer:
+          'Khoảng tháng 11 đến tháng 4 biển êm, nắng đẹp, thuận lợi cho tắm biển và các hoạt động đảo.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Cáp treo Hòn Thơm khứ hồi', 'Vé Grand World', 'Xe đưa đón sân bay'],
+      optional: ['Các trò chơi công viên biển nâng cấp nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi TP.HCM - Phú Quốc + xe tham quan',
+      vehicleTypeEn: 'Round-trip Ho Chi Minh City - Phu Quoc flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Phú Quốc',
+      operatorEn: 'Domestic airline plus Phu Quoc partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Phú Quốc.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Phu Quoc airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('nha-trang'), {
+    tourCode: 'VN-NTR-051',
+    name: 'Nha Trang Biển Xanh 3 Ngày 2 Đêm (Bay Từ Hà Nội)',
+    intro:
+      'Trọn gói bay thẳng Hà Nội - Nha Trang, tận hưởng biển xanh, tour 4 đảo, tắm bùn khoáng và di sản Tháp Bà Ponagar.',
+    focus: 'biển đảo Nha Trang, tour 4 đảo, tắm bùn khoáng và Tháp Bà Ponagar',
+    suitableFor:
+      'khách miền Bắc muốn trọn gói bay thẳng, gia đình và nhóm bạn thích biển',
+    price: 5_690_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 70,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Bay thẳng khứ hồi Hà Nội - Nha Trang, xe đón tại sân bay Cam Ranh',
+      'Tour 4 đảo và lặn ngắm san hô vịnh Nha Trang',
+      'Tắm bùn khoáng nóng thư giãn',
+      'Tham quan Tháp Bà Ponagar và nhà thờ Núi',
+    ],
+    gallery: [...IMAGES.nhaTrang],
+    itinerary: [
+      {
+        title: 'Hà Nội - Nha Trang - Tháp Bà Ponagar',
+        description:
+          'Đón khách tại sân bay Nội Bài, bay vào Cam Ranh, xe đón về Nha Trang nhận phòng, chiều tham quan Tháp Bà Ponagar và nhà thờ Núi.',
+        accommodation: 'Khách sạn Nha Trang theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay Hà Nội - Nha Trang', 'Tháp Bà Ponagar', 'Nhà thờ Núi'],
+      },
+      {
+        title: 'Tour 4 đảo - Tắm bùn',
+        description:
+          'Đi cano tour 4 đảo, lặn ngắm san hô và tắm biển, chiều trải nghiệm tắm bùn khoáng nóng thư giãn.',
+        accommodation: 'Khách sạn Nha Trang theo gói',
+        transport: 'Xe du lịch và cano',
+        activities: ['Tour 4 đảo', 'Lặn ngắm san hô', 'Tắm bùn khoáng'],
+      },
+      {
+        title: 'Nha Trang - Hà Nội',
+        description:
+          'Tự do tắm biển buổi sáng, mua đặc sản, xe tiễn ra sân bay Cam Ranh bay về Hà Nội.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Tắm biển', 'Mua đặc sản', 'Bay Nha Trang - Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi Hà Nội - Nha Trang (sân bay Cam Ranh) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Sân bay Cam Ranh cách trung tâm Nha Trang bao xa?',
+        answer:
+          'Khoảng 35km, xe đưa đón mất chừng 45 phút theo cung đường ven biển rất đẹp.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Cano tour 4 đảo', 'Vé Tháp Bà Ponagar', 'Xe đưa đón sân bay'],
+      optional: ['Vé tắm bùn khoáng nâng cấp nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi Hà Nội - Nha Trang + xe tham quan',
+      vehicleTypeEn: 'Round-trip Hanoi - Nha Trang flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Nha Trang',
+      operatorEn: 'Domestic airline plus Nha Trang partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Cam Ranh.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Cam Ranh airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('nha-trang'), {
+    tourCode: 'VN-NTR-052',
+    name: 'Nha Trang Biển Xanh 3 Ngày 2 Đêm (Bay Từ TP.HCM)',
+    intro:
+      'Trọn gói bay thẳng TP.HCM - Nha Trang, tận hưởng biển xanh, tour 4 đảo, tắm bùn khoáng và di sản Tháp Bà Ponagar.',
+    focus: 'biển đảo Nha Trang, tour 4 đảo, tắm bùn khoáng và Tháp Bà Ponagar',
+    suitableFor:
+      'khách miền Nam muốn trọn gói bay thẳng, gia đình và nhóm bạn thích biển',
+    price: 5_190_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 70,
+    tourType: 'Nghỉ Dưỡng',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Bay thẳng khứ hồi TP.HCM - Nha Trang, xe đón tại sân bay Cam Ranh',
+      'Tour 4 đảo và lặn ngắm san hô vịnh Nha Trang',
+      'Tắm bùn khoáng nóng thư giãn',
+      'Tham quan Tháp Bà Ponagar và nhà thờ Núi',
+    ],
+    gallery: rotateGallery([...IMAGES.nhaTrang], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Nha Trang - Tháp Bà Ponagar',
+        description:
+          'Đón khách tại sân bay Tân Sơn Nhất, bay vào Cam Ranh, xe đón về Nha Trang nhận phòng, chiều tham quan Tháp Bà Ponagar và nhà thờ Núi.',
+        accommodation: 'Khách sạn Nha Trang theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay TP.HCM - Nha Trang', 'Tháp Bà Ponagar', 'Nhà thờ Núi'],
+      },
+      {
+        title: 'Tour 4 đảo - Tắm bùn',
+        description:
+          'Đi cano tour 4 đảo, lặn ngắm san hô và tắm biển, chiều trải nghiệm tắm bùn khoáng nóng thư giãn.',
+        accommodation: 'Khách sạn Nha Trang theo gói',
+        transport: 'Xe du lịch và cano',
+        activities: ['Tour 4 đảo', 'Lặn ngắm san hô', 'Tắm bùn khoáng'],
+      },
+      {
+        title: 'Nha Trang - TP.HCM',
+        description:
+          'Tự do tắm biển buổi sáng, mua đặc sản, xe tiễn ra sân bay Cam Ranh bay về TP.HCM.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Tắm biển', 'Mua đặc sản', 'Bay Nha Trang - TP.HCM'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi TP.HCM - Nha Trang (sân bay Cam Ranh) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Sân bay Cam Ranh cách trung tâm Nha Trang bao xa?',
+        answer:
+          'Khoảng 35km, xe đưa đón mất chừng 45 phút theo cung đường ven biển rất đẹp.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Cano tour 4 đảo', 'Vé Tháp Bà Ponagar', 'Xe đưa đón sân bay'],
+      optional: ['Vé tắm bùn khoáng nâng cấp nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi TP.HCM - Nha Trang + xe tham quan',
+      vehicleTypeEn: 'Round-trip Ho Chi Minh City - Nha Trang flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Nha Trang',
+      operatorEn: 'Domestic airline plus Nha Trang partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Cam Ranh.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Cam Ranh airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('quy-nhon'), {
+    tourCode: 'VN-UIH-053',
+    name: 'Quy Nhơn Eo Gió - Kỳ Co 3 Ngày 2 Đêm (Bay Từ Hà Nội)',
+    intro:
+      'Trọn gói bay thẳng Hà Nội - Quy Nhơn, khám phá Eo Gió, biển Kỳ Co và các điểm check-in hoang sơ của xứ Nẫu.',
+    focus: 'biển hoang sơ Eo Gió, Kỳ Co, Tháp Đôi và Ghềnh Ráng Tiên Sa',
+    suitableFor:
+      'khách miền Bắc muốn trọn gói bay thẳng, nhóm bạn và gia đình thích khám phá',
+    price: 5_390_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 65,
+    tourType: 'Khám Phá',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Bay thẳng khứ hồi Hà Nội - Quy Nhơn, xe đón tại sân bay Phù Cát',
+      'Cano ra biển Kỳ Co nước xanh ngọc bích',
+      'Check-in Eo Gió - một trong những cung biển đẹp nhất',
+      'Tham quan Tháp Đôi và Ghềnh Ráng Tiên Sa',
+    ],
+    gallery: [...IMAGES.quyNhon],
+    itinerary: [
+      {
+        title: 'Hà Nội - Quy Nhơn - Ghềnh Ráng',
+        description:
+          'Đón khách tại sân bay Nội Bài, bay vào Phù Cát, xe đón về Quy Nhơn nhận phòng, chiều thăm Ghềnh Ráng Tiên Sa và mộ Hàn Mặc Tử.',
+        accommodation: 'Khách sạn Quy Nhơn theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay Hà Nội - Quy Nhơn', 'Ghềnh Ráng Tiên Sa', 'Tháp Đôi'],
+      },
+      {
+        title: 'Eo Gió - Kỳ Co',
+        description:
+          'Tham quan Eo Gió, đi cano ra biển Kỳ Co tắm biển và lặn ngắm san hô, thưởng thức hải sản địa phương.',
+        accommodation: 'Khách sạn Quy Nhơn theo gói',
+        transport: 'Xe du lịch và cano',
+        activities: ['Eo Gió', 'Biển Kỳ Co', 'Lặn ngắm san hô'],
+      },
+      {
+        title: 'Quy Nhơn - Hà Nội',
+        description:
+          'Tự do tắm biển buổi sáng, mua đặc sản xứ Nẫu, xe tiễn ra sân bay Phù Cát bay về Hà Nội.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Tắm biển', 'Mua đặc sản', 'Bay Quy Nhơn - Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi Hà Nội - Quy Nhơn (sân bay Phù Cát) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Biển Kỳ Co di chuyển thế nào?',
+        answer:
+          'Khách đi cano hoặc đường bộ kết hợp; lịch cano phụ thuộc thời tiết biển và sẽ được sắp xếp linh hoạt.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Cano ra biển Kỳ Co', 'Vé tham quan Eo Gió, Tháp Đôi', 'Xe đưa đón sân bay'],
+      optional: ['Trải nghiệm lặn bình khí nâng cấp nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi Hà Nội - Quy Nhơn + xe tham quan',
+      vehicleTypeEn: 'Round-trip Hanoi - Quy Nhon flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Quy Nhơn',
+      operatorEn: 'Domestic airline plus Quy Nhon partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Phù Cát.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Phu Cat airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('quy-nhon'), {
+    tourCode: 'VN-UIH-054',
+    name: 'Quy Nhơn Eo Gió - Kỳ Co 3 Ngày 2 Đêm (Bay Từ TP.HCM)',
+    intro:
+      'Trọn gói bay thẳng TP.HCM - Quy Nhơn, khám phá Eo Gió, biển Kỳ Co và các điểm check-in hoang sơ của xứ Nẫu.',
+    focus: 'biển hoang sơ Eo Gió, Kỳ Co, Tháp Đôi và Ghềnh Ráng Tiên Sa',
+    suitableFor:
+      'khách miền Nam muốn trọn gói bay thẳng, nhóm bạn và gia đình thích khám phá',
+    price: 4_890_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 65,
+    tourType: 'Khám Phá',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Bay thẳng khứ hồi TP.HCM - Quy Nhơn, xe đón tại sân bay Phù Cát',
+      'Cano ra biển Kỳ Co nước xanh ngọc bích',
+      'Check-in Eo Gió - một trong những cung biển đẹp nhất',
+      'Tham quan Tháp Đôi và Ghềnh Ráng Tiên Sa',
+    ],
+    gallery: rotateGallery([...IMAGES.quyNhon], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Quy Nhơn - Ghềnh Ráng',
+        description:
+          'Đón khách tại sân bay Tân Sơn Nhất, bay vào Phù Cát, xe đón về Quy Nhơn nhận phòng, chiều thăm Ghềnh Ráng Tiên Sa và mộ Hàn Mặc Tử.',
+        accommodation: 'Khách sạn Quy Nhơn theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay TP.HCM - Quy Nhơn', 'Ghềnh Ráng Tiên Sa', 'Tháp Đôi'],
+      },
+      {
+        title: 'Eo Gió - Kỳ Co',
+        description:
+          'Tham quan Eo Gió, đi cano ra biển Kỳ Co tắm biển và lặn ngắm san hô, thưởng thức hải sản địa phương.',
+        accommodation: 'Khách sạn Quy Nhơn theo gói',
+        transport: 'Xe du lịch và cano',
+        activities: ['Eo Gió', 'Biển Kỳ Co', 'Lặn ngắm san hô'],
+      },
+      {
+        title: 'Quy Nhơn - TP.HCM',
+        description:
+          'Tự do tắm biển buổi sáng, mua đặc sản xứ Nẫu, xe tiễn ra sân bay Phù Cát bay về TP.HCM.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Tắm biển', 'Mua đặc sản', 'Bay Quy Nhơn - TP.HCM'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi TP.HCM - Quy Nhơn (sân bay Phù Cát) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Biển Kỳ Co di chuyển thế nào?',
+        answer:
+          'Khách đi cano hoặc đường bộ kết hợp; lịch cano phụ thuộc thời tiết biển và sẽ được sắp xếp linh hoạt.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Cano ra biển Kỳ Co', 'Vé tham quan Eo Gió, Tháp Đôi', 'Xe đưa đón sân bay'],
+      optional: ['Trải nghiệm lặn bình khí nâng cấp nếu khách chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi TP.HCM - Quy Nhơn + xe tham quan',
+      vehicleTypeEn: 'Round-trip Ho Chi Minh City - Quy Nhon flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Quy Nhơn',
+      operatorEn: 'Domestic airline plus Quy Nhon partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Phù Cát.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Phu Cat airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('hue'), {
+    tourCode: 'VN-HUE-055',
+    name: 'Huế Cố Đô Di Sản 3 Ngày 2 Đêm (Bay Từ Hà Nội)',
+    intro:
+      'Trọn gói bay thẳng Hà Nội - Huế, khám phá Đại Nội, lăng tẩm các vua Nguyễn, chùa Thiên Mụ và ẩm thực cố đô.',
+    focus: 'di sản cố đô Huế, Đại Nội, lăng tẩm và sông Hương',
+    suitableFor:
+      'khách miền Bắc muốn trọn gói bay thẳng, khách yêu văn hóa và gia đình',
+    price: 5_290_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 65,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'Hà Nội',
+    highlights: [
+      'Bay thẳng khứ hồi Hà Nội - Huế, xe đón tại sân bay Phú Bài',
+      'Tham quan Đại Nội - Hoàng thành triều Nguyễn',
+      'Viếng lăng Khải Định và lăng Tự Đức',
+      'Du thuyền sông Hương nghe ca Huế',
+    ],
+    gallery: [...IMAGES.hue],
+    itinerary: [
+      {
+        title: 'Hà Nội - Huế - Đại Nội',
+        description:
+          'Đón khách tại sân bay Nội Bài, bay vào Phú Bài, xe đón về Huế nhận phòng, chiều tham quan Đại Nội và chùa Thiên Mụ.',
+        accommodation: 'Khách sạn Huế theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay Hà Nội - Huế', 'Đại Nội', 'Chùa Thiên Mụ'],
+      },
+      {
+        title: 'Lăng tẩm - Ca Huế sông Hương',
+        description:
+          'Tham quan lăng Khải Định và lăng Tự Đức, chiều tự do, tối du thuyền sông Hương nghe ca Huế.',
+        accommodation: 'Khách sạn Huế theo gói',
+        transport: 'Xe du lịch và thuyền rồng',
+        activities: ['Lăng Khải Định', 'Lăng Tự Đức', 'Ca Huế sông Hương'],
+      },
+      {
+        title: 'Chợ Đông Ba - Huế - Hà Nội',
+        description:
+          'Dạo chợ Đông Ba mua đặc sản, thưởng thức ẩm thực Huế, xe tiễn ra sân bay Phú Bài bay về Hà Nội.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Chợ Đông Ba', 'Ẩm thực Huế', 'Bay Huế - Hà Nội'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi Hà Nội - Huế (sân bay Phú Bài) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Có thể ghép thêm Đà Nẵng - Hội An không?',
+        answer:
+          'Có thể. Huế cách Đà Nẵng khoảng 100km; khách muốn đi liên tuyến có thể liên hệ để được tư vấn nối tour.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé Đại Nội', 'Vé lăng Khải Định và lăng Tự Đức', 'Xe đưa đón sân bay'],
+      optional: ['Vé du thuyền nghe ca Huế nếu không ghi rõ trong gói đã chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi Hà Nội - Huế + xe tham quan',
+      vehicleTypeEn: 'Round-trip Hanoi - Hue flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Huế',
+      operatorEn: 'Domestic airline plus Hue partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Phú Bài.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Phu Bai airport.',
+    },
+  }),
+  createGeneratedDomesticTour(findDestination('hue'), {
+    tourCode: 'VN-HUE-056',
+    name: 'Huế Cố Đô Di Sản 3 Ngày 2 Đêm (Bay Từ TP.HCM)',
+    intro:
+      'Trọn gói bay thẳng TP.HCM - Huế, khám phá Đại Nội, lăng tẩm các vua Nguyễn, chùa Thiên Mụ và ẩm thực cố đô.',
+    focus: 'di sản cố đô Huế, Đại Nội, lăng tẩm và sông Hương',
+    suitableFor:
+      'khách miền Nam muốn trọn gói bay thẳng, khách yêu văn hóa và gia đình',
+    price: 5_490_000,
+    duration: '3 ngày 2 đêm',
+    availableSeats: 65,
+    tourType: 'Văn Hóa & Lịch Sử',
+    departurePoint: 'TP.HCM',
+    highlights: [
+      'Bay thẳng khứ hồi TP.HCM - Huế, xe đón tại sân bay Phú Bài',
+      'Tham quan Đại Nội - Hoàng thành triều Nguyễn',
+      'Viếng lăng Khải Định và lăng Tự Đức',
+      'Du thuyền sông Hương nghe ca Huế',
+    ],
+    gallery: rotateGallery([...IMAGES.hue], 1),
+    itinerary: [
+      {
+        title: 'TP.HCM - Huế - Đại Nội',
+        description:
+          'Đón khách tại sân bay Tân Sơn Nhất, bay vào Phú Bài, xe đón về Huế nhận phòng, chiều tham quan Đại Nội và chùa Thiên Mụ.',
+        accommodation: 'Khách sạn Huế theo gói',
+        transport: 'Máy bay và xe du lịch',
+        activities: ['Bay TP.HCM - Huế', 'Đại Nội', 'Chùa Thiên Mụ'],
+      },
+      {
+        title: 'Lăng tẩm - Ca Huế sông Hương',
+        description:
+          'Tham quan lăng Khải Định và lăng Tự Đức, chiều tự do, tối du thuyền sông Hương nghe ca Huế.',
+        accommodation: 'Khách sạn Huế theo gói',
+        transport: 'Xe du lịch và thuyền rồng',
+        activities: ['Lăng Khải Định', 'Lăng Tự Đức', 'Ca Huế sông Hương'],
+      },
+      {
+        title: 'Chợ Đông Ba - Huế - TP.HCM',
+        description:
+          'Dạo chợ Đông Ba mua đặc sản, thưởng thức ẩm thực Huế, xe tiễn ra sân bay Phú Bài bay về TP.HCM.',
+        transport: 'Xe du lịch và máy bay',
+        activities: ['Chợ Đông Ba', 'Ẩm thực Huế', 'Bay Huế - TP.HCM'],
+      },
+    ],
+    faqs: [
+      {
+        question: 'Giá tour đã gồm vé máy bay chưa?',
+        answer:
+          'Đã gồm vé máy bay khứ hồi TP.HCM - Huế (sân bay Phú Bài) hạng phổ thông theo đoàn. Giờ bay xác nhận trước ngày khởi hành.',
+      },
+      {
+        question: 'Có thể ghép thêm Đà Nẵng - Hội An không?',
+        answer:
+          'Có thể. Huế cách Đà Nẵng khoảng 100km; khách muốn đi liên tuyến có thể liên hệ để được tư vấn nối tour.',
+      },
+    ],
+    ticketPolicy: {
+      included: ['Vé Đại Nội', 'Vé lăng Khải Định và lăng Tự Đức', 'Xe đưa đón sân bay'],
+      optional: ['Vé du thuyền nghe ca Huế nếu không ghi rõ trong gói đã chọn'],
+    },
+    transport: {
+      ...DEFAULT_DOMESTIC_TRANSPORT,
+      type: TransportType.FLIGHT,
+      vehicleType: 'Vé máy bay khứ hồi TP.HCM - Huế + xe tham quan',
+      vehicleTypeEn: 'Round-trip Ho Chi Minh City - Hue flight plus tour coach',
+      operator: 'Hãng hàng không nội địa + đối tác Huế',
+      operatorEn: 'Domestic airline plus Hue partner',
+      notes: 'Giờ bay phụ thuộc xác nhận của hãng; xe đón tại sân bay Phú Bài.',
+      notesEn: 'Flight times subject to airline confirmation; pick-up at Phu Bai airport.',
+    },
+  }),
 ];
 
 // Điểm khởi hành/đón là hub khi khách xuất phát từ thành phố trung tâm (lái xe
@@ -3763,10 +4667,20 @@ export async function seedDomesticTours(prisma: PrismaClient) {
     // điểm đến. Công ty đặt tại Hà Nội → Miền Bắc & Miền Trung khởi hành từ Hà Nội;
     // Miền Nam từ TP.HCM (đã có sẵn tuyến phía Nam). Tránh dữ liệu "đi Đà Nẵng, khởi
     // hành từ Đà Nẵng" và để bộ lọc theo điểm khởi hành (HN/HCM) hoạt động đúng.
-    const departureHub =
-      item.destination.region === 'Miền Nam'
+    // Tôn trọng hub mà tour bay thẳng tự khai báo (Hà Nội/TP.HCM) để một điểm đến có
+    // thể có nhiều điểm khởi hành (VD: Đà Nẵng/Phú Quốc bay từ cả hai miền). Nếu tour
+    // không tự khai hub thì mặc định theo miền của điểm đến.
+    const declaredHub =
+      item.tour.departurePoint === 'TP.HCM'
         ? { vi: 'TP.HCM', en: 'Ho Chi Minh City' }
-        : { vi: 'Hà Nội', en: 'Hanoi' };
+        : item.tour.departurePoint === 'Hà Nội'
+          ? { vi: 'Hà Nội', en: 'Hanoi' }
+          : null;
+    const departureHub =
+      declaredHub ??
+      (item.destination.region === 'Miền Nam'
+        ? { vi: 'TP.HCM', en: 'Ho Chi Minh City' }
+        : { vi: 'Hà Nội', en: 'Hanoi' });
 
     // Tour lái xe được từ hub → giữ hub; tour bay tới (điểm khởi hành gốc là
     // thành phố điểm đến) → dùng đúng thành phố đó cho khớp boardingPoint + itinerary.

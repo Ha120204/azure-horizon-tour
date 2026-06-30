@@ -25,6 +25,12 @@ export default function MarketingPage() {
 
       <MarketingCampaignOverview
         drafts={marketing.campaignDrafts}
+        filter={marketing.campaignFilter}
+        counts={marketing.campaignCounts}
+        meta={marketing.campaignMeta}
+        page={marketing.campaignPage}
+        onFilterChange={marketing.changeCampaignFilter}
+        onPageChange={marketing.setCampaignPage}
         onCreateCampaign={marketing.openCreateCampaign}
         onEditCampaign={marketing.openEditCampaign}
         onScheduleCampaign={marketing.openScheduleCampaign}

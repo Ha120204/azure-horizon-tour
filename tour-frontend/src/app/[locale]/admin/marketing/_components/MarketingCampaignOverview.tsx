@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { campaignStatusConfig, campaignTypeConfig } from '../_lib/config';
+import { campaignFilters, campaignStatusConfig, campaignTypeConfig } from '../_lib/config';
+import type { CampaignFilterKey } from '../_lib/config';
 import { formatDate } from '../_lib/helpers';
-import type { CampaignDraft } from '../_lib/types';
+import type { CampaignCounts, CampaignDraft, Meta } from '../_lib/types';
 
 const PROCESS_STEPS = [
   ['edit_note', 'Tạo bản nháp', 'Soạn tiêu đề, dòng xem trước và nội dung chính.'],
@@ -14,6 +14,12 @@ const PROCESS_STEPS = [
 
 interface MarketingCampaignOverviewProps {
   drafts: CampaignDraft[];
+  filter: CampaignFilterKey;
+  counts: CampaignCounts;
+  meta: Meta;
+  page: number;
+  onFilterChange: (key: CampaignFilterKey) => void;
+  onPageChange: (page: number) => void;
   onCreateCampaign: () => void;
   onEditCampaign: (draft: CampaignDraft) => void;
   onScheduleCampaign: (draft: CampaignDraft) => void;
@@ -23,15 +29,19 @@ interface MarketingCampaignOverviewProps {
 
 export function MarketingCampaignOverview({
   drafts,
+  filter,
+  counts,
+  meta,
+  page,
+  onFilterChange,
+  onPageChange,
   onCreateCampaign,
   onEditCampaign,
   onScheduleCampaign,
   onDeleteDraft,
   onCancelCampaign,
 }: MarketingCampaignOverviewProps) {
-  const [showAllCampaigns, setShowAllCampaigns] = useState(false);
-  const visibleCampaigns = showAllCampaigns ? drafts : drafts.slice(0, 4);
-  const hasHiddenCampaigns = drafts.length > 4;
+  const noCampaignsAtAll = counts.all === 0;
 
   return (
     <section className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-4 mb-7">
@@ -41,10 +51,35 @@ export function MarketingCampaignOverview({
             <h2 className="text-base font-extrabold text-slate-950">Chiến dịch gần đây</h2>
             <p className="text-xs text-slate-500 mt-0.5">Bản nháp và trạng thái gửi được đồng bộ từ hệ thống.</p>
           </div>
-          <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full">{drafts.length} chiến dịch</span>
+          <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full">{counts.all} chiến dịch</span>
         </div>
-        <div className="p-4 space-y-3">
-          {drafts.length === 0 ? (
+        {!noCampaignsAtAll && (
+          <div className="px-4 pt-3 flex flex-wrap gap-2">
+            {campaignFilters.map(({ key, label }) => {
+              const isActive = filter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onFilterChange(key)}
+                  aria-pressed={isActive}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:border-blue-200 hover:text-blue-700'
+                  }`}
+                >
+                  {label}
+                  <span className={`tabular-nums rounded-full px-1.5 py-0.5 text-[10px] ${isActive ? 'bg-white/25 text-white' : 'bg-slate-200/70 text-slate-600'}`}>
+                    {counts[key]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {noCampaignsAtAll ? (
+          <div className="p-4">
             <button
               onClick={onCreateCampaign}
               className="w-full rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-8 text-center hover:border-blue-300 hover:bg-blue-50/60 transition-colors"
@@ -53,9 +88,18 @@ export function MarketingCampaignOverview({
               <p className="text-sm font-bold text-slate-800">Chưa có chiến dịch</p>
               <p className="text-xs text-slate-500 mt-1">Bấm để tạo bản nháp email đầu tiên.</p>
             </button>
-          ) : (
-            visibleCampaigns.map(draft => (
-              <CampaignCard
+          </div>
+        ) : drafts.length === 0 ? (
+          <div className="p-4">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-8 text-center">
+              <span className="material-symbols-outlined text-3xl text-slate-300 mb-1">inbox</span>
+              <p className="text-sm font-bold text-slate-700">Không có chiến dịch trong nhóm này</p>
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-100 px-2">
+            {drafts.map(draft => (
+              <CampaignRow
                 key={draft.id}
                 campaign={draft}
                 onEdit={onEditCampaign}
@@ -63,23 +107,35 @@ export function MarketingCampaignOverview({
                 onDeleteDraft={onDeleteDraft}
                 onCancelCampaign={onCancelCampaign}
               />
-            ))
-          )}
+            ))}
+          </ul>
+        )}
 
-          {hasHiddenCampaigns && (
+        {!noCampaignsAtAll && meta.totalPages > 1 && (
+          <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
             <button
               type="button"
-              onClick={() => setShowAllCampaigns(current => !current)}
-              aria-expanded={showAllCampaigns}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600 transition-colors hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {showAllCampaigns ? 'Thu gọn' : `Xem tất cả ${drafts.length} chiến dịch`}
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                {showAllCampaigns ? 'expand_less' : 'expand_more'}
-              </span>
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">chevron_left</span>
+              Trước
             </button>
-          )}
-        </div>
+            <span className="text-xs font-semibold text-slate-500 tabular-nums">
+              Trang {page}/{meta.totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= meta.totalPages}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-600 transition-colors hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Sau
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">chevron_right</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl bg-white border border-slate-100 text-slate-900 shadow-sm overflow-hidden">
@@ -105,7 +161,7 @@ export function MarketingCampaignOverview({
   );
 }
 
-interface CampaignCardProps {
+interface CampaignRowProps {
   campaign: CampaignDraft;
   onEdit: (campaign: CampaignDraft) => void;
   onSchedule: (campaign: CampaignDraft) => void;
@@ -113,168 +169,101 @@ interface CampaignCardProps {
   onCancelCampaign: (campaign: CampaignDraft) => void;
 }
 
-function CampaignCard({
+function CampaignRow({
   campaign,
   onEdit,
   onSchedule,
   onDeleteDraft,
   onCancelCampaign,
-}: CampaignCardProps) {
+}: CampaignRowProps) {
   const typeConfig = campaignTypeConfig[campaign.type];
   const statusConfig = campaignStatusConfig[campaign.status];
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 hover:border-blue-100 hover:shadow-sm transition-all">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${typeConfig.tone}`}>
-              <span className="material-symbols-outlined text-[15px]" aria-hidden="true">{typeConfig.icon}</span>
-              {typeConfig.label}
-            </span>
-            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${statusConfig.tone}`}>{statusConfig.label}</span>
-          </div>
-          <h3 className="font-extrabold text-slate-950 truncate">{campaign.name}</h3>
-          <p className="text-sm text-slate-500 truncate mt-1">{campaign.subject}</p>
-          <CampaignDeliverySummary campaign={campaign} />
-        </div>
+    <li className="flex items-center gap-3 px-2 py-3 hover:bg-slate-50/70 transition-colors">
+      <span
+        className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${typeConfig.tone}`}
+        title={typeConfig.label}
+      >
+        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{typeConfig.icon}</span>
+      </span>
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          {campaign.status === 'DRAFT' && (
-            <div className="relative group/tip">
-              <button
-                onClick={() => onSchedule(campaign)}
-                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors"
-                aria-label={`Lên lịch gửi ${campaign.name}`}
-              >
-                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">event_upcoming</span>
-              </button>
-              <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
-                Lên lịch gửi
-                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
-              </span>
-            </div>
-          )}
-          {campaign.status === 'SCHEDULED' && (
-            <div className="relative group/tip">
-              <button
-                onClick={() => onCancelCampaign(campaign)}
-                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 transition-colors"
-                aria-label={`Hủy lịch gửi ${campaign.name}`}
-              >
-                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">event_busy</span>
-              </button>
-              <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
-                Hủy lịch gửi
-                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
-              </span>
-            </div>
-          )}
-          {campaign.status === 'DRAFT' && (
-            <>
-              <div className="relative group/tip">
-                <button
-                  onClick={() => onEdit(campaign)}
-                  className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors"
-                  aria-label={`Mở bản nháp ${campaign.name}`}
-                >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">edit</span>
-                </button>
-                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
-                  Mở bản nháp
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
-                </span>
-              </div>
-              <div className="relative group/tip">
-                <button
-                  onClick={() => onDeleteDraft(campaign.id)}
-                  className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-colors"
-                  aria-label={`Xóa bản nháp ${campaign.name}`}
-                >
-                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
-                </button>
-                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
-                  Xóa bản nháp
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
-                </span>
-              </div>
-            </>
-          )}
+          <h3 className="truncate font-bold text-slate-900">{campaign.name}</h3>
+          <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusConfig.tone}`}>{statusConfig.label}</span>
         </div>
+        <p className="mt-0.5 truncate text-xs text-slate-400">{campaignSummaryLine(campaign)}</p>
       </div>
+      <div className="flex flex-shrink-0 items-center gap-1.5">
+        {campaign.status === 'DRAFT' && (
+          <>
+            <ActionButton icon="event_upcoming" label="Lên lịch gửi" tone="emerald" onClick={() => onSchedule(campaign)} />
+            <ActionButton icon="edit" label="Mở bản nháp" tone="blue" onClick={() => onEdit(campaign)} />
+            <ActionButton icon="delete" label="Xóa bản nháp" tone="rose" onClick={() => onDeleteDraft(campaign.id)} />
+          </>
+        )}
+        {campaign.status === 'SCHEDULED' && (
+          <ActionButton icon="event_busy" label="Hủy lịch gửi" tone="amber" onClick={() => onCancelCampaign(campaign)} />
+        )}
+      </div>
+    </li>
+  );
+}
+
+function campaignSummaryLine(campaign: CampaignDraft): string {
+  const recipients = campaign.recipientEstimate.toLocaleString('vi-VN');
+  switch (campaign.status) {
+    case 'SENDING': {
+      const processed = (campaign.processedCount ?? 0).toLocaleString('vi-VN');
+      const progress = campaign.recipientEstimate > 0
+        ? Math.min(100, Math.round(((campaign.processedCount ?? 0) / campaign.recipientEstimate) * 100))
+        : 0;
+      return `Đang gửi ${processed}/${recipients} · ${progress}%`;
+    }
+    case 'SENT':
+      return `${(campaign.sentCount ?? 0).toLocaleString('vi-VN')} đã gửi · ${(campaign.failedCount ?? 0).toLocaleString('vi-VN')} lỗi · ${formatDate(campaign.sentAt ?? campaign.updatedAt)}`;
+    case 'FAILED':
+      return campaign.errorMessage ? `Lỗi: ${campaign.errorMessage}` : `Gửi lỗi · ${formatDate(campaign.sentAt ?? campaign.updatedAt)}`;
+    case 'CANCELLED':
+      return `Đã hủy lúc ${formatDate(campaign.cancelledAt ?? campaign.updatedAt)}`;
+    case 'SCHEDULED':
+      return `${recipients} người nhận · gửi lúc ${formatDate(campaign.scheduledAt ?? campaign.updatedAt)}`;
+    default:
+      return `${recipients} người nhận · cập nhật ${formatDate(campaign.updatedAt)}`;
+  }
+}
+
+const ACTION_TONES = {
+  blue: 'hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700',
+  emerald: 'hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700',
+  amber: 'hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700',
+  rose: 'hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700',
+} as const;
+
+function ActionButton({
+  icon,
+  label,
+  tone,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  tone: keyof typeof ACTION_TONES;
+  onClick: () => void;
+}) {
+  return (
+    <div className="relative group/tip">
+      <button
+        onClick={onClick}
+        aria-label={label}
+        className={`flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors ${ACTION_TONES[tone]}`}
+      >
+        <span className="material-symbols-outlined text-[17px]" aria-hidden="true">{icon}</span>
+      </button>
+      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[10px] font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/tip:opacity-100 z-20">
+        {label}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+      </span>
     </div>
-  );
-}
-
-function CampaignDeliverySummary({ campaign }: { campaign: CampaignDraft }) {
-  const recipientEstimate = campaign.recipientEstimate;
-  const processedCount = campaign.processedCount ?? 0;
-  const sentCount = campaign.sentCount ?? 0;
-  const failedCount = campaign.failedCount ?? 0;
-  const progress = recipientEstimate > 0
-    ? Math.min(100, Math.round((processedCount / recipientEstimate) * 100))
-    : campaign.status === 'SENDING' ? 0 : 100;
-
-  if (campaign.status === 'SENDING') {
-    return (
-      <div className="mt-3 max-w-md">
-        <div className="flex items-center justify-between gap-3 text-xs font-bold">
-          <span className="text-amber-700">
-            Đã xử lý {processedCount.toLocaleString('vi-VN')}/{recipientEstimate.toLocaleString('vi-VN')}
-          </span>
-          <span className="tabular-nums text-slate-400">{progress}%</span>
-        </div>
-        <div
-          className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"
-          role="progressbar"
-          aria-label={`Tiến độ gửi chiến dịch ${campaign.name}`}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={progress}
-        >
-          <div className="h-full rounded-full bg-amber-500 transition-[width] duration-300" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-          <ResultMetric icon="check_circle" label={`${sentCount.toLocaleString('vi-VN')} thành công`} tone="text-emerald-600" />
-          <ResultMetric icon="error" label={`${failedCount.toLocaleString('vi-VN')} thất bại`} tone="text-rose-600" />
-        </div>
-      </div>
-    );
-  }
-
-  if (campaign.status === 'SENT' || campaign.status === 'FAILED') {
-    return (
-      <div className="mt-3">
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-          <ResultMetric icon="check_circle" label={`${sentCount.toLocaleString('vi-VN')} gửi thành công`} tone="text-emerald-600" />
-          <ResultMetric icon="error" label={`${failedCount.toLocaleString('vi-VN')} gửi thất bại`} tone="text-rose-600" />
-        </div>
-        <p className="mt-2 text-xs text-slate-400">
-          {campaign.status === 'FAILED' && campaign.errorMessage
-            ? campaign.errorMessage
-            : `Hoàn tất ${formatDate(campaign.sentAt ?? campaign.updatedAt)}`}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <p className="mt-2 text-xs text-slate-400">
-      {recipientEstimate.toLocaleString('vi-VN')} người nhận dự kiến · {
-        campaign.status === 'CANCELLED'
-          ? `hủy lúc ${formatDate(campaign.cancelledAt ?? campaign.updatedAt)}`
-          : campaign.scheduledAt
-            ? `gửi lúc ${formatDate(campaign.scheduledAt)}`
-            : `cập nhật ${formatDate(campaign.updatedAt)}`
-      }
-    </p>
-  );
-}
-
-function ResultMetric({ icon, label, tone }: { icon: string; label: string; tone: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1 font-bold ${tone}`}>
-      <span className="material-symbols-outlined text-[15px]" aria-hidden="true">{icon}</span>
-      {label}
-    </span>
   );
 }

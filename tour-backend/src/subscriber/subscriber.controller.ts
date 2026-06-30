@@ -84,8 +84,16 @@ export class SubscriberController {
   @Get('campaigns')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
-  async getCampaigns() {
-    return this.subscriberService.getCampaigns();
+  async getCampaigns(
+    @Query('page')   page?:   string,
+    @Query('limit')  limit?:  string,
+    @Query('filter') filter?: 'active' | 'sent' | 'closed' | 'all',
+  ) {
+    return this.subscriberService.getCampaigns({
+      page:   page  ? parseInt(page)  : 1,
+      limit:  limit ? parseInt(limit) : 5,
+      filter: filter ?? 'active',
+    });
   }
 
   // Admin/Super Admin: POST /subscriber/campaigns — tạo bản nháp

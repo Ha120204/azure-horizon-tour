@@ -75,6 +75,13 @@ export interface BackendMarketingCampaign {
   errorMessage?: string;
 }
 
+export interface CampaignCounts {
+  active: number;
+  sent: number;
+  closed: number;
+  all: number;
+}
+
 export interface CampaignForm {
   name: string;
   type: CampaignType;

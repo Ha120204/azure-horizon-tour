@@ -415,7 +415,7 @@ export class AiToolService {
       return 'empty';
     }
     if (toolName === 'get_cancellation_policy') {
-      if ('canCancel' in r) return `canCancel=${r.canCancel} refund=${r.refundPercent ?? 0}%`;
+      if ('canCancel' in r) return `canCancel=${Boolean(r.canCancel)} refund=${Number(r.refundPercent ?? 0)}%`;
       return 'not_found';
     }
     return 'ok';

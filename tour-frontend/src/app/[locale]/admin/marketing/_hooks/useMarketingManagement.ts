@@ -5,6 +5,7 @@ import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { EMPTY_CAMPAIGN_FORM, EMPTY_STATS } from '../_lib/config';
+import type { CampaignFilterKey } from '../_lib/config';
 import { exportSubscribersCsv } from '../_lib/exportCsv';
 import {
   buildLocalScheduleValue,
@@ -15,6 +16,7 @@ import {
 } from '../_lib/helpers';
 import type {
   BackendMarketingCampaign,
+  CampaignCounts,
   CampaignDraft,
   CampaignErrors,
   CampaignForm,
@@ -27,6 +29,8 @@ import type {
 import { toastEmitter } from '@/lib/http/toastEmitter';
 
 const CAMPAIGN_TYPES: CampaignType[] = ['PROMOTION', 'TRAVEL_STORY', 'NEWSLETTER'];
+const CAMPAIGN_PAGE_SIZE = 5;
+const EMPTY_CAMPAIGN_COUNTS: CampaignCounts = { active: 0, sent: 0, closed: 0, all: 0 };
 
 const toCampaignDraft = (campaign: BackendMarketingCampaign): CampaignDraft => ({
   id: campaign.id,
@@ -79,6 +83,10 @@ export function useMarketingManagement() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [backendCampaigns, setBackendCampaigns] = useState<CampaignDraft[]>([]);
+  const [campaignFilter, setCampaignFilter] = useState<CampaignFilterKey>('active');
+  const [campaignPage, setCampaignPage] = useState(1);
+  const [campaignMeta, setCampaignMeta] = useState<Meta>({ total: 0, page: 1, limit: CAMPAIGN_PAGE_SIZE, totalPages: 1 });
+  const [campaignCounts, setCampaignCounts] = useState<CampaignCounts>(EMPTY_CAMPAIGN_COUNTS);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [campaignForm, setCampaignForm] = useState<CampaignForm>(EMPTY_CAMPAIGN_FORM);
@@ -111,16 +119,26 @@ export function useMarketingManagement() {
   }, [search]);
 
   const fetchCampaigns = useCallback(async () => {
-    const res = await fetchWithAuth(`${API_BASE_URL}/subscriber/campaigns`);
+    const qs = new URLSearchParams({
+      page: String(campaignPage),
+      limit: String(CAMPAIGN_PAGE_SIZE),
+      filter: campaignFilter,
+    });
+    const res = await fetchWithAuth(`${API_BASE_URL}/subscriber/campaigns?${qs}`);
     if (!res.ok) throw new Error('Không thể tải danh sách chiến dịch');
     const json = await res.json();
-    const campaigns = Array.isArray(json?.data)
-      ? json.data
-      : Array.isArray(json)
-        ? json
-        : [];
+    const campaigns = Array.isArray(json?.data) ? json.data : [];
     setBackendCampaigns((campaigns as BackendMarketingCampaign[]).map(toCampaignDraft));
-  }, []);
+    if (json?.meta) {
+      setCampaignMeta({
+        total: json.meta.total ?? 0,
+        page: json.meta.page ?? campaignPage,
+        limit: json.meta.limit ?? CAMPAIGN_PAGE_SIZE,
+        totalPages: json.meta.totalPages ?? 1,
+      });
+      if (json.meta.counts) setCampaignCounts({ ...EMPTY_CAMPAIGN_COUNTS, ...json.meta.counts });
+    }
+  }, [campaignFilter, campaignPage]);
 
   const fetchStats = useCallback(async () => {
     const res = await fetchWithAuth(`${API_BASE_URL}/subscriber/stats`);
@@ -141,7 +159,6 @@ export function useMarketingManagement() {
       const [listRes] = await Promise.all([
         fetchWithAuth(`${API_BASE_URL}/subscriber?${qs}`),
         fetchStats(),
-        fetchCampaigns(),
       ]);
       if (!listRes.ok) throw new Error('Không thể tải danh sách người đăng ký');
       const json = await listRes.json();
@@ -159,16 +176,24 @@ export function useMarketingManagement() {
     } finally {
       setIsLoading(false);
     }
-  }, [debouncedSearch, fetchCampaigns, fetchStats, limit, page, showToast, status]);
+  }, [debouncedSearch, fetchStats, limit, page, showToast, status]);
 
   useEffect(() => {
     void fetchSubscribers();
   }, [fetchSubscribers]);
 
+  useEffect(() => {
+    void fetchCampaigns();
+  }, [fetchCampaigns]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchSubscribers(), fetchCampaigns()]);
+  }, [fetchCampaigns, fetchSubscribers]);
+
   useAdminAutoRefresh({
     intervalMs: 90 * 1000,
     pause: Boolean(composerOpen || deleteTarget || scheduleTarget || cancelCampaignTarget || isDeleting || isSendingTest || isScheduling || isCancellingCampaign || isSavingCampaign || loadingId),
-    onRefresh: fetchSubscribers,
+    onRefresh: refreshAll,
   });
 
   const filteredSummary = useMemo(() => {
@@ -226,6 +251,16 @@ export function useMarketingManagement() {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [backendCampaigns],
   );
+
+  const changeCampaignFilter = useCallback((next: CampaignFilterKey) => {
+    setCampaignFilter(next);
+    setCampaignPage(1);
+  }, []);
+
+  // Lùi trang khi xóa/hủy làm tổng số trang co lại dưới trang hiện tại
+  useEffect(() => {
+    if (campaignPage > campaignMeta.totalPages) setCampaignPage(campaignMeta.totalPages);
+  }, [campaignMeta.totalPages, campaignPage]);
 
   const openCreateCampaign = useCallback(() => {
     setEditingCampaignId(null);
@@ -495,6 +530,10 @@ export function useMarketingManagement() {
     deleteTarget,
     isDeleting,
     campaignDrafts,
+    campaignFilter,
+    campaignPage,
+    campaignMeta,
+    campaignCounts,
     composerOpen,
     editingCampaignId,
     campaignForm,
@@ -532,6 +571,8 @@ export function useMarketingManagement() {
     openScheduleCampaign,
     scheduleCampaign,
     cancelScheduledCampaign,
+    changeCampaignFilter,
+    setCampaignPage,
     toggleStatusFilter,
     changeStatus,
     handleToggleActive,

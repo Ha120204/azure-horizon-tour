@@ -247,7 +247,7 @@ export function useConcierge() {
 
                     for (const part of parts) {
                         if (!part.startsWith('data: ')) continue;
-                        let event: { searching?: boolean; token?: string; done?: boolean; tourCard?: Message['tourCard']; sessionId?: string; error?: string; errorType?: string; followUps?: string[] };
+                        let event: { searching?: boolean; token?: string; done?: boolean; tourCards?: Message['tourCards']; sessionId?: string; error?: string; errorType?: string; followUps?: string[] };
                         try { event = JSON.parse(part.slice(6)); } catch { continue; }
 
                         if (event.searching) {
@@ -288,7 +288,7 @@ export function useConcierge() {
                             setCooldown(false);
                             setMessages((prev) => prev.map((m) =>
                                 m.id === aiMsgId
-                                    ? { ...m, tourCard: event.tourCard ?? m.tourCard, followUps: event.followUps }
+                                    ? { ...m, tourCards: event.tourCards ?? m.tourCards, followUps: event.followUps }
                                     : m,
                             ));
                             if (event.sessionId) {

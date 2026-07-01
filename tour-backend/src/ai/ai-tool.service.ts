@@ -137,13 +137,21 @@ export class AiToolService {
   private queryTours(where: Prisma.TourWhereInput) {
     return this.prisma.tour.findMany({
       where,
-      include: { destination: true },
+      include: {
+        destination: true,
+        departures: {
+          where: { isActive: true, departureDate: { gte: new Date() } },
+          orderBy: { departureDate: 'asc' },
+          take: 1,
+        },
+      },
       take: 5,
       orderBy: { price: 'asc' },
     });
   }
 
-  private mapTour(t: Prisma.TourGetPayload<{ include: { destination: true } }>) {
+  private mapTour(t: Prisma.TourGetPayload<{ include: { destination: true; departures: true } }>) {
+    const nextDeparture = t.departures?.[0]?.departureDate;
     return {
       id: t.id,
       name: t.name,
@@ -152,7 +160,7 @@ export class AiToolService {
       departurePoint: t.departurePoint || '',
       price: t.price,
       duration: t.duration,
-      startDate: t.startDate.toISOString().split('T')[0],
+      startDate: (nextDeparture ?? t.startDate).toISOString().split('T')[0],
       availableSeats: t.availableSeats,
       imageUrl: t.imageUrl,
       averageRating: t.averageRating,

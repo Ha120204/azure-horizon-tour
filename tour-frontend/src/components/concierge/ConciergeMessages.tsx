@@ -103,47 +103,45 @@ export default function ConciergeMessages({
                                 </div>
                             )}
 
-                            {/* Tour Card */}
-                            {msg.tourCard?.image && (
-                                <div className="ml-11 w-[calc(100%-2.75rem)]">
-                                    <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-500 group">
-                                        <div className="relative h-48 overflow-hidden">
-                                            <Image
-                                                alt={msg.tourCard.name || 'Tour'}
-                                                src={msg.tourCard.image}
-                                                fill
-                                                sizes="100vw"
-                                                className="object-cover group-hover:scale-105 transition-transform duration-700"
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).src =
-                                                        'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=80';
-                                                }}
-                                            />
-                                            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-lg">
-                                                <span className="text-primary font-bold text-sm tracking-tight">
-                                                    {msg.tourCard.price}
-                                                </span>
+                            {/* Tour Cards */}
+                            {msg.tourCards && msg.tourCards.length > 0 && (
+                                <div className={`ml-11 w-[calc(100%-2.75rem)] ${msg.tourCards.length > 1 ? 'flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory' : ''}`}>
+                                    {msg.tourCards.map((card, idx) => card.image && (
+                                        <div key={card.id ?? idx} className={`bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-500 group ${msg.tourCards!.length > 1 ? 'min-w-[220px] max-w-[220px] snap-start flex-shrink-0' : 'w-full'}`}>
+                                            <div className="relative h-36 overflow-hidden">
+                                                <Image
+                                                    alt={card.name || 'Tour'}
+                                                    src={card.image}
+                                                    fill
+                                                    sizes="220px"
+                                                    className="object-cover group-hover:scale-105 transition-transform duration-700"
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).src =
+                                                            'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=80';
+                                                    }}
+                                                />
+                                                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded-full shadow">
+                                                    <span className="text-primary font-bold text-xs tracking-tight">{card.price}</span>
+                                                </div>
+                                            </div>
+                                            <div className="p-3">
+                                                <h3 className="mb-3 font-headline text-sm font-bold text-slate-900 line-clamp-2">{card.name}</h3>
+                                                {card.id ? (
+                                                    <Link
+                                                        href={`/${language}/tour/${card.id}`}
+                                                        onClick={() => { handleTourCardClick(card.id); setIsOpen(false); }}
+                                                        className="block w-full text-center bg-primary hover:bg-primary-container text-white py-2 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors"
+                                                    >
+                                                        {t('conciergeApp.viewTourDetail')}
+                                                    </Link>
+                                                ) : (
+                                                    <button className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 py-2 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors">
+                                                        {t('conciergeApp.viewItinerary')}
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="p-4">
-                                            <h3 className="mb-4 font-headline text-lg font-bold text-slate-900">
-                                                {msg.tourCard.name}
-                                            </h3>
-                                            {msg.tourCard.id ? (
-                                                <Link
-                                                    href={`/${language}/tour/${msg.tourCard.id}`}
-                                                    onClick={() => { handleTourCardClick(msg.tourCard!.id); setIsOpen(false); }}
-                                                    className="block w-full text-center bg-primary hover:bg-primary-container text-white py-3 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors"
-                                                >
-                                                    {t('conciergeApp.viewTourDetail')}
-                                                </Link>
-                                            ) : (
-                                                <button className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 py-3 rounded-full font-label text-xs uppercase tracking-widest font-bold transition-colors">
-                                                    {t('conciergeApp.viewItinerary')}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
                             )}
 

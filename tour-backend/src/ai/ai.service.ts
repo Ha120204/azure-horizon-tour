@@ -10,11 +10,21 @@ const LLMGATE_LEGACY_BASE_URLS = new Set([
   'https://api.llmgate.app/v1',
 ]);
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown AI error';
-}
 
 type TourCard = { id?: number; name?: string; price?: string; image?: string };
+
+function extractTourCards(text: string): { cards: TourCard[]; cleaned: string } {
+  const cards: TourCard[] = [];
+  const rx = /<<<TOUR_CARD>>>([\s\S]*?)<<<END_TOUR_CARD>>>/g;
+  let cleaned = text;
+  let match: RegExpExecArray | null;
+  while ((match = rx.exec(text)) !== null) {
+    try { cards.push(JSON.parse(match[1].trim())); } catch { /* skip malformed */ }
+  }
+  if (cards.length) cleaned = text.replace(/<<<TOUR_CARD>>>[\s\S]*?<<<END_TOUR_CARD>>>/g, '').trim();
+  return { cards, cleaned };
+}
+
 
 interface AiError { message?: string; status?: number; code?: number }
 
@@ -259,27 +269,17 @@ export class AiService {
   ) {
     return messages.map((msg) => {
       let text = msg.content;
-      let tourCard: TourCard | undefined = undefined;
-
+      let tourCards: TourCard[] | undefined = undefined;
       if (msg.role === 'model') {
-        const cardMatch = text.match(
-          /<<<TOUR_CARD>>>([\s\S]*?)<<<END_TOUR_CARD>>>/,
-        );
-        if (cardMatch?.[1]) {
-          try {
-            tourCard = JSON.parse(cardMatch[1].trim());
-            text = text.replace(cardMatch[0], '').trim();
-          } catch (e) {
-            console.error('[AI] Failed to parse TOUR_CARD in history:', getErrorMessage(e));
-          }
-        }
+        const { cards, cleaned } = extractTourCards(text);
+        if (cards.length) { tourCards = cards; text = cleaned; }
       }
 
       return {
         id: msg.id.toString(),
         role: msg.role === 'model' ? 'ai' : 'user',
         text,
-        tourCard,
+        tourCards,
       };
     });
   }
@@ -331,22 +331,9 @@ export class AiService {
   private async parseAndSaveResponse(
     rawText: string,
     sessionId: string,
-  ): Promise<{ reply: string; tourCard?: TourCard; sessionId: string }> {
-    let reply = rawText;
-    let tourCard: TourCard | undefined = undefined;
-
-    // Extract JSON Tour Card from response.
-    const cardMatch = rawText.match(
-      /<<<TOUR_CARD>>>([\s\S]*?)<<<END_TOUR_CARD>>>/,
-    );
-    if (cardMatch?.[1]) {
-      try {
-        tourCard = JSON.parse(cardMatch[1].trim());
-        reply = rawText.replace(cardMatch[0], '').trim();
-      } catch (e) {
-        console.error('[AI] Failed to parse JSON TourCard:', getErrorMessage(e));
-      }
-    }
+  ): Promise<{ reply: string; tourCards?: TourCard[]; sessionId: string }> {
+    const { cards, cleaned } = extractTourCards(rawText);
+    const reply = cleaned || 'Xin lỗi, tôi không thể trả lời lúc này.';
 
     // Store the original response, including TOUR_CARD, so history can restore it.
     await this.prisma.chatMessage.create({
@@ -355,8 +342,8 @@ export class AiService {
     await this.touchChatSession(sessionId);
 
     return {
-      reply: reply || 'Xin lỗi, tôi không thể trả lời lúc này.',
-      tourCard,
+      reply,
+      tourCards: cards.length ? cards : undefined,
       sessionId,
     };
   }
@@ -425,6 +412,11 @@ QUY TRÌNH TƯ VẤN ĐIỂM ĐẾN (giống tổng đài du lịch):
 - Nếu khách trả lời "tất cả điểm khởi hành" hoặc không nêu điểm xuất phát → bỏ trống departurePoint (không lọc), tìm rộng tất cả. KHÔNG nhầm "tất cả điểm khởi hành" là điểm đến.
 - Nếu khách đã nói rõ ngay từ đầu (đủ điểm khởi hành/thời gian/số người) thì tìm luôn, không hỏi lại.
 
+PHẠM VI HỖ TRỢ — QUAN TRỌNG:
+- Bạn CHỈ hỗ trợ các chủ đề liên quan đến du lịch và dịch vụ của Azure Horizon: tìm tour, đặt tour, booking, thanh toán, hủy tour, gợi ý điểm đến, lịch trình, ngân sách du lịch.
+- Khi khách hỏi bất cứ điều gì NGOÀI phạm vi trên (chuyện ăn uống cá nhân, tình cảm, sức khỏe, chính trị, giải trí, hỏi thăm AI có cảm xúc không, v.v.) → từ chối nhẹ nhàng, vui vẻ, rồi gợi ý quay lại chủ đề du lịch. KHÔNG đi sâu vào chủ đề ngoài lề dù khách hỏi thêm.
+- Ví dụ xử lý đúng: "Mình không ăn cơm được đâu 😄 Nhưng mình luôn sẵn sàng hỗ trợ bạn về tour du lịch. Bạn đang muốn tìm tour hay tra cứu booking?"
+
 NGUYÊN TẮC DỮ LIỆU:
 - Không bịa tên tour, giá, ngày khởi hành, số ghế, trạng thái booking hoặc chính sách.
 - Khi nói về tour/booking có trong hệ thống, phải dựa trên tool.
@@ -486,18 +478,27 @@ CHÍNH SÁCH HỦY (CANCELLATION):
 - Khi khách hỏi cho MỘT mã đơn cụ thể → gọi "get_cancellation_policy" và trả lời đúng theo số liệu nhận về (canCancel, refundPercent, estimatedRefundAmount, daysUntilDeparture, cancelUnavailableReason). Nếu thiếu mã, hỏi mã hoặc dùng "check_my_bookings" để khách chọn.
 
 ĐỊNH DẠNG TOUR_CARD:
-- BẮT BUỘC chèn TOUR_CARD ở cuối câu trả lời mỗi khi bạn nhấn mạnh/giới thiệu ĐÚNG MỘT tour cụ thể — đặc biệt khi "search_tours" chỉ trả về 1 tour phù hợp — để khách bấm xem chi tiết ngay. Vẫn viết phần text mô tả tour như bình thường, rồi đặt block TOUR_CARD ngay sau.
+- BẮT BUỘC chèn TOUR_CARD cho TỪNG tour ngay sau phần text mô tả khi "search_tours" trả về kết quả (1 đến 4 tour). Mỗi tour một block riêng biệt, đặt tất cả các block liên tiếp ở cuối câu trả lời.
 - Lấy "id" và "image" đúng từ dữ liệu tool (image dùng imageUrl của tour, không để trống, không bịa).
+- Ví dụ khi có 2 tour:
 <<<TOUR_CARD>>>
 {
-  "id": <số id tour>,
-  "name": "Tên tour đúng trong dữ liệu",
-  "price": "Giá hiển thị ngắn gọn",
-  "image": "URL ảnh của tour"
+  "id": 1,
+  "name": "Tên tour A",
+  "price": "3,65 triệu/người",
+  "image": "https://..."
+}
+<<<END_TOUR_CARD>>>
+<<<TOUR_CARD>>>
+{
+  "id": 2,
+  "name": "Tên tour B",
+  "price": "5,95 triệu/người",
+  "image": "https://..."
 }
 <<<END_TOUR_CARD>>>
 
-Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đang liệt kê từ 2 tour trở lên (khi đó để khách chọn 1 tour rồi mới hiện card cho tour đó).`;
+Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour trong kết quả, hoặc kết quả từ tool rỗng.`;
   }
   // Fallback to secondary model when the primary model fails.
   private classifyAiError(
@@ -606,7 +607,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     sessionId: string,
     userId: number | null,
     originalError: unknown,
-  ): Promise<{ reply: string; tourCard?: TourCard; sessionId: string }> {
+  ): Promise<{ reply: string; tourCards?: TourCard[]; sessionId: string }> {
     this.logAiErrorContext('Primary model', this.primaryModel, originalError);
     this.logger.warn(`[AI] Switching to fallback model: ${this.fallbackModel}`);
     try {
@@ -815,7 +816,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     anonId?: string | null,
     language?: string | null,
     currency?: string | null,
-  ): Promise<{ reply: string; tourCard?: TourCard; sessionId?: string }> {
+  ): Promise<{ reply: string; tourCards?: TourCard[]; sessionId?: string }> {
     const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language, currency);
 
     if (prep.limitExceeded) {
@@ -839,7 +840,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
   // Là async generator: `yield` từng sự kiện cho controller đẩy xuống client:
   //   { searching:true } → đang tra cứu (sau lượt 1, trước lượt 2)
   //   { token:'...' }    → từng mẩu chữ của câu trả lời
-  //   { done:true, tourCard, followUps } → kết thúc, kèm thẻ tour + gợi ý câu hỏi tiếp
+  //   { done:true, tourCards, followUps } → kết thúc, kèm thẻ tour + gợi ý câu hỏi tiếp
   // Phần dưới có xử lý HOLD_BACK: giữ lại 14 ký tự cuối để marker <<<TOUR_CARD>>> không
   // bị phát ra màn hình khi bị cắt ngang giữa 2 chunk stream.
   // ════════════════════════════════════════════════════════════════════════════
@@ -854,7 +855,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
   ): AsyncGenerator<
     | { searching: true }
     | { token: string }
-    | { done: true; tourCard?: TourCard; sessionId: string; followUps?: string[] }
+    | { done: true; tourCards?: TourCard[]; sessionId: string; followUps?: string[] }
     | { error: string; errorType: string }
   > {
     const prep = await this.prepareConversation(userMessage, sessionId, userId, currentTourId, anonId, language, currency);
@@ -886,7 +887,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     if (!resolveResult.needsStream) {
       const result = await this.parseAndSaveResponse(resolveResult.directResponse, currentSessionId);
       if (result.reply) yield { token: result.reply };
-      yield { done: true, tourCard: result.tourCard, sessionId: currentSessionId, followUps: this.buildFollowUpSuggestions([]) };
+      yield { done: true, tourCards: result.tourCards, sessionId: currentSessionId, followUps: this.buildFollowUpSuggestions([]) };
       return;
     }
 
@@ -963,7 +964,7 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
 
       const result = await this.parseAndSaveResponse(fullText, currentSessionId);
       const followUps = this.buildFollowUpSuggestions(resolveResult.toolsUsed);
-      yield { done: true, tourCard: result.tourCard, sessionId: currentSessionId, followUps };
+      yield { done: true, tourCards: result.tourCards, sessionId: currentSessionId, followUps };
     } catch (streamError: unknown) {
       this.logAiErrorContext('Stream final-answer', streamModels[0], streamError);
       yield { error: this.buildUserFacingErrorMessage(streamError), errorType: this.classifyAiError(streamError) };

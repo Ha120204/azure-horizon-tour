@@ -3,12 +3,12 @@ export type Message = {
     role: 'user' | 'ai';
     text?: string;
     textKey?: string;
-    tourCard?: {
+    tourCards?: {
         id?: number;
         name?: string;
         price: string;
         image: string;
-    };
+    }[];
     followUps?: string[];
     isError?: boolean;
 };

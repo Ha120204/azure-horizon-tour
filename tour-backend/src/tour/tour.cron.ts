@@ -13,6 +13,14 @@ export class TourCronService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [TOUR - CRON KẾT THÚC TOUR] Chạy 0h hằng ngày. 2 bước tuần tự:
+  //   1. Ẩn chuyến khởi hành đã qua ngày (isActive → false) — không cho đặt thêm.
+  //   2. Chuyển PUBLISHED → COMPLETED khi không còn chuyến tương lai:
+  //      • Tour CÓ chuyến: không còn chuyến nào isActive=true + tương lai → COMPLETED.
+  //      • Tour KHÔNG có chuyến: fallback startDate đã qua → COMPLETED (tương thích ngược).
+  // COMPLETED là trạng thái cuối (soft), không bao giờ public lại được.
+  // ════════════════════════════════════════════════════════════════════════════
   /**
    * Run every day at midnight (00:00:00)
    * Auto-update PUBLISHED tours to COMPLETED if their startDate is in the past.

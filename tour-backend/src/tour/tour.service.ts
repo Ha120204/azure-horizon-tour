@@ -43,6 +43,12 @@ export class TourService {
     return destination.id;
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [TOUR - TẠO TOUR] Server quyết định trạng thái dựa trên role, KHÔNG tin client.
+  // STAFF: luôn bị ép về DRAFT dù gửi status='PUBLISHED' trong payload.
+  // ADMIN: được chọn status (mặc định DRAFT); có thể tạo PUBLISHED nếu đủ điều kiện.
+  // Muốn tạo thẳng PUBLISHED/PENDING_REVIEW → phải qua requirePublishableTour.
+  // ════════════════════════════════════════════════════════════════════════════
   async create(
     createTourDto: CreateTourDto,
     creatorId?: number,

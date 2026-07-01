@@ -74,6 +74,13 @@ type PublishableTourFields = {
 const DRAFT_DESTINATION_NAME = 'Chưa xác định';
 const hasText = (value?: string | null) => Boolean(value?.trim());
 
+// ════════════════════════════════════════════════════════════════════════════
+// [TOUR - CỔNG CHẤT LƯỢNG] Gom TẤT CẢ lỗi vào mảng errors rồi throw 1 lần —
+// người dùng thấy toàn bộ thiếu sót cùng lúc, không phải sửa từng cái một.
+// Gọi ở MỌI điểm chuyển sang PENDING_REVIEW/PUBLISHED: submit, approve, publish.
+// options.requireDepartures/requirePackages: false khi tạo nháp (chưa cần),
+// true khi gửi duyệt/approve/publish (bắt buộc có chuyến + gói hợp lệ).
+// ════════════════════════════════════════════════════════════════════════════
 export const requirePublishableTour = (
   tour: PublishableTourFields,
   options: { requireDepartures?: boolean; requirePackages?: boolean } = {},

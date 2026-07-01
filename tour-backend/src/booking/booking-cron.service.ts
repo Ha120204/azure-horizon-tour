@@ -35,6 +35,10 @@ export class BookingCronService {
 
     constructor(private readonly bookingService: BookingService) {}
 
+    // ════════════════════════════════════════════════════════════════════════════
+    // [CRON - DỌN ĐƠN QUÁ HẠN] @Cron mỗi 5 phút — NestJS Schedule tự gọi, không cần trigger thủ công.
+    // → gọi bookingService.cancelExpiredBookings() → hủy đơn + hoàn ghế → bust Next.js cache.
+    // ════════════════════════════════════════════════════════════════════════════
     /**
      * Chạy mỗi 5 phút.
      * Quét tất cả booking PENDING + UNPAID đã tạo quá 15 phút → Tự hủy + hoàn trả ghế.

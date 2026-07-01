@@ -40,6 +40,12 @@ export class BookingPaymentController {
     private readonly bookingPaymentService: BookingPaymentService,
   ) {}
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [PAYOS - ĐƯỜNG 3 / RETURN URL (nhánh dự phòng redirect)] Chỉ kích hoạt khi
+  // PayOS không trả qrCode và FE phải window.location.href sang trang PayOS.
+  // KHÔNG tin ?status=PAID trên URL (bẫy 1: trình duyệt mang về, có thể bị giả).
+  // Gọi handlePayosReturn → hỏi thẳng PayOS trạng thái thật → mới redirect FE.
+  // ════════════════════════════════════════════════════════════════════════════
   /**
    * PayOS Return Handler
    * Khi khách hàng quét mã QR xong (hoặc bấm hủy), PayOS sẽ redirect trình duyệt
@@ -71,6 +77,13 @@ export class BookingPaymentController {
     }
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [PAYOS - ĐƯỜNG 1 / WEBHOOK] Kênh đáng tin nhất: PayOS server gọi thẳng tới server
+  // mình (server-to-server), không qua trình duyệt → khách không can thiệp được.
+  // Bước 1: verifyWebhook kiểm dấu HMAC (bẫy 2). Bước 2: handlePayosReturn chốt đơn.
+  // Phải dùng @Res() + res.status(200).json(): bypass TransformInterceptor (PayOS đòi
+  // chính xác { success:true } ở root) + ép HTTP 200 (NestJS @Post mặc định trả 201).
+  // ════════════════════════════════════════════════════════════════════════════
   /**
    * PayOS Webhook Handler
    * PayOS server tự động POST dữ liệu tới endpoint này khi có biến động thanh toán.

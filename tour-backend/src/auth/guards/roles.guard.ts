@@ -32,9 +32,14 @@ export class RolesGuard implements CanActivate {
       return false;
     }
 
-    // SUPER_ADMIN bị giới hạn ở các khu vận hành (controller gắn @SuperAdminArea):
-    // chỉ được XEM (GET) và chỉ khi đã tự bật quyền cho khu đó. Các route governance
-    // (không gắn area) giữ nguyên hành vi cũ.
+    // ════════════════════════════════════════════════════════════════════════════
+    // [AUTH - PHÒNG THỦ 2 LỚP cho SUPER_ADMIN]
+    //   Khu VẬN HÀNH (controller gắn @SuperAdminArea): return SỚM tại đây.
+    //     → superAdminCanAccessArea() chỉ cho GET + đã tự bật quyền → ghi thì false → 403.
+    //     → KHÔNG chạy xuống roles.includes() dù @Roles có liệt kê SUPER_ADMIN.
+    //   Khu GOVERNANCE (user/settings/audit — không gắn area): rơi xuống roles.includes()
+    //     → SUPER_ADMIN ghi được (quản lý admin, audit... là việc đúng của nó).
+    // ════════════════════════════════════════════════════════════════════════════
     if (role === 'SUPER_ADMIN') {
       const area = this.reflector.getAllAndOverride<SuperAdminArea>(
         SUPER_ADMIN_AREA_KEY,

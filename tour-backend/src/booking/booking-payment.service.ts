@@ -234,6 +234,12 @@ export class BookingPaymentService {
 
   // ─── Luồng PayOS — Sync ───────────────────────────────────────────────────
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [PAYOS - ĐƯỜNG 2 / POLLING 4s] Kênh khách THỰC SỰ dùng ở chế độ QR nhúng.
+  // Khách quét QR bằng app ngân hàng, không rời tab → return URL không kích hoạt.
+  // Frontend gọi endpoint này mỗi 4s: backend hỏi PayOS (bẫy 1 — không tin client)
+  // → nếu PAID → confirmBookingAsPaid (idempotent, bẫy 3) → gửi email → trả synced:true.
+  // ════════════════════════════════════════════════════════════════════════════
   /**
    * [CUSTOMER] Hỏi PayOS xem đã thanh toán chưa — dùng cho inline QR modal.
    * Chỉ hoạt động khi booking thuộc về userId và đang PENDING+UNPAID.

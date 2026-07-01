@@ -56,6 +56,19 @@ export class BookingCancellationService {
     return departure?.departureDate ?? booking.tour.startDate;
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [HỦY - CHÍNH SÁCH HOÀN TIỀN THEO BẬC] ⭐ BÀI LIVE-CODE HAY BỊ YÊU CẦU NHẤT.
+  // Thứ tự if/else if là bất biến — điều kiện hẹp nhất PHẢI đặt trước:
+  //   1. CANCELLED / CANCEL_REQUESTED / DEPARTING_TODAY / COMPLETED → không hủy được.
+  //   2. Chưa thanh toán (paymentStatus ≠ PAID) → hủy được nhưng hoàn 0đ.
+  //   3. Đã trả tiền → tính bậc:
+  //      • ≤24h sau khi đặt → 100% (quyền đổi ý — xét ĐẦU TIÊN, kể cả tour mai đi).
+  //      • còn ≥7 ngày → 80%   (EIGHTY_REFUND).
+  //      • còn 3–6 ngày → 50%  (HALF_REFUND).
+  //      • còn <3 ngày  → 0%   (NO_REFUND).
+  // estimatedRefundAmount = Math.round(totalPrice * refundPercent / 100).
+  // Đổi chính sách: CHỈ sửa trong hàm này, không rải logic ra nơi khác.
+  // ════════════════════════════════════════════════════════════════════════════
   buildCancellationPolicy(booking: {
     status: BookingStatus;
     paymentStatus: PaymentStatus;
@@ -118,6 +131,22 @@ export class BookingCancellationService {
 
   // ─── Public methods ────────────────────────────────────────────────────────
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [HỦY - YÊU CẦU HỦY CỦA KHÁCH] 2 nhánh tách biệt hoàn toàn:
+  //
+  //   NHÁNH 1 — Đơn PENDING (chưa thanh toán):
+  //     $transaction: updateMany(status='PENDING') + count=0 guard (idempotent)
+  //     → releaseSeats (trả ghế) → hủy link PayOS → báo admin.
+  //     Không liên quan hoàn tiền; kết thúc ngay.
+  //
+  //   NHÁNH 2 — Đơn CONFIRMED/PAID:
+  //     KHÔNG hủy ngay vì đã có tiền. Chuyển sang CANCEL_REQUESTED,
+  //     lưu sẵn refundAmount (tính từ buildCancellationPolicy) + refundBankDetails
+  //     (STK nhận tiền khách nhập) → admin duyệt qua approveCancellation.
+  //
+  // Vì sao dùng updateMany thay vì update ở nhánh 1? → atomic check-and-set:
+  // nếu status đã đổi (race condition khác thay đổi trước), count=0 → throw.
+  // ════════════════════════════════════════════════════════════════════════════
   async requestCancellation(
     bookingId: number,
     userId: number,
@@ -217,6 +246,16 @@ export class BookingCancellationService {
     return { message: 'Yeu cau huy da duoc ghi nhan, dang cho xu ly', refundAmount, refundNote };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [HỦY - ADMIN DUYỆT HỦY: CANCEL_REQUESTED → CANCELLED] Bước 1 trong quy trình hoàn tiền 2 bước.
+  // Trong 1 $transaction:
+  //   • booking → CANCELLED + releaseSeats (trả ghế).
+  //   • ⭐ ĐIỂM TINH TẾ: refundedAt = refundAmount > 0 ? null : new Date()
+  //       → Có tiền hoàn: refundedAt = null (chưa chuyển, chờ Bước 2 confirmRefund).
+  //       → Không có tiền hoàn (0đ): coi như xong luôn, set refundedAt = now.
+  //   • Tạo PaymentTransaction gateway='MANUAL' status='PENDING' ref='REFUND-...'
+  //     → "phiếu hoàn" để confirmRefund chốt sau + để audit.
+  // ════════════════════════════════════════════════════════════════════════════
   async approveCancellation(bookingId: number, adminNote?: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
@@ -265,11 +304,18 @@ export class BookingCancellationService {
     return { message: 'Da duyet huy booking va hoan tra ghe', refundAmount };
   }
 
-  /**
-   * [ADMIN] Xác nhận đã CHUYỂN KHOẢN hoàn tiền cho khách (thủ công).
-   * PayOS không hỗ trợ refund qua API nên khoản hoàn được chuyển ngoài hệ thống;
-   * bước này chốt giao dịch refund PENDING → SUCCESS và đánh dấu booking.refundedAt.
-   */
+  // ════════════════════════════════════════════════════════════════════════════
+  // [HỦY - ADMIN XÁC NHẬN ĐÃ CHUYỂN KHOẢN: Bước 2 / Cuối] PayOS KHÔNG refund qua API.
+  // Admin chuyển khoản tay ngoài hệ thống, vào đây bấm xác nhận để hệ thống "chốt sổ".
+  // Trong 1 $transaction:
+  //   • updateMany điều kiện {status:'CANCELLED', refundedAt: null} → count=0 throw
+  //     (idempotency guard: bấm 2 lần cũng chỉ hoàn 1 lần).
+  //   • Set refundedAt = now → mốc "tiền đã tới tay khách".
+  //   • PaymentTransaction PENDING → SUCCESS, ghi confirmedSource='REFUND_MANUAL'
+  //     + evidenceUrl (ảnh biên lai CK) → audit trail đầy đủ.
+  //   • Gửi email sendRefundCompleted cho khách (trong try/catch riêng — lỗi email
+  //     không làm rollback giao dịch).
+  // ════════════════════════════════════════════════════════════════════════════
   async confirmRefund(
     bookingId: number,
     actorId: number,
@@ -363,6 +409,11 @@ export class BookingCancellationService {
     return { message: 'Da xac nhan hoan tien cho khach', refundAmount };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [HỦY - ADMIN TỪ CHỐI: CANCEL_REQUESTED → CONFIRMED] Đơn quay về hiệu lực.
+  // status → CONFIRMED, xóa cancelReason/cancelRequestedAt/refundAmount.
+  // Ghi rejectReason vào refundNote để khách biết vì sao bị từ chối.
+  // ════════════════════════════════════════════════════════════════════════════
   async rejectCancellation(bookingId: number, rejectReason: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
@@ -391,6 +442,12 @@ export class BookingCancellationService {
     return { message: 'Da tu choi yeu cau huy, booking tiep tuc hieu luc' };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [HỦY - ADMIN CHỦ ĐỘNG HỦY] Admin hủy bất kỳ đơn nào (không qua luồng khách xin hủy).
+  // Dùng cùng buildCancellationPolicy → cùng bậc hoàn tiền.
+  // Nếu đơn chưa thanh toán: hủy link PayOS nếu là PAYOS + không tạo phiếu hoàn.
+  // Nếu đơn đã thanh toán (refundAmount > 0): tạo phiếu hoàn PENDING → confirmRefund chốt sau.
+  // ════════════════════════════════════════════════════════════════════════════
   async adminCancelBooking(bookingId: number, adminId: number, reason: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },

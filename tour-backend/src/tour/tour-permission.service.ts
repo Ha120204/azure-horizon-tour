@@ -10,6 +10,13 @@ import { PrismaService } from '../prisma/prisma.service';
 export class TourPermissionService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [TOUR - PHÂN QUYỀN SỬA NỘI DUNG] Nguồn sự thật duy nhất cho "ai sửa được tour nào".
+  // Các service nội dung (ảnh, FAQ, lịch trình, gói...) gọi hàm này thay vì tự kiểm.
+  //   ADMIN/SUPER_ADMIN: sửa được mọi tour, mọi trạng thái.
+  //   STAFF: CHỈ sửa tour của mình (createdById) VÀ CHỈ khi DRAFT hoặc REJECTED.
+  //          Đã PUBLISHED/PENDING_REVIEW → ForbiddenException (tour đang chạy/chờ duyệt).
+  // ════════════════════════════════════════════════════════════════════════════
   async assertCanMutateTour(
     tourId: number,
     requesterId?: number,

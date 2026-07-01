@@ -107,6 +107,13 @@ export class AuthService {
     }
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AUTH - ĐĂNG NHẬP] Xác minh email + mật khẩu → phát 2 JWT dưới dạng HttpOnly cookie.
+  // Điểm bảo mật cốt lõi:
+  //   • bcrypt.compare() — so hash, KHÔNG so chuỗi thô. DB lộ thì attacker vẫn không có pass gốc.
+  //   • "Invalid email or password" — CỐ TÌNH mơ hồ, attacker không dò được email nào tồn tại.
+  //   • tokenVersion nhúng vào payload → JwtStrategy dùng để phát hiện token cũ bị thu hồi.
+  // ════════════════════════════════════════════════════════════════════════════
   // =========================================================
   // ĐĂNG NHẬP (email + password)
   // =========================================================
@@ -146,6 +153,11 @@ export class AuthService {
     return { user: result, access_token, refresh_token };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AUTH - OTP QUÊN MẬT KHẨU] Sinh OTP 6 số bằng crypto.randomInt (không dự đoán được),
+  // hash SHA-256 rồi lưu DB — không lưu raw OTP. Hết hạn 10 phút. Dùng 1 lần.
+  // Nếu DB bị đọc: attacker chỉ có hash, không có OTP gốc để nhập vào form.
+  // ════════════════════════════════════════════════════════════════════════════
   async forgotPassword(email: string, locale: 'vi' | 'en' = 'vi') {
     const user = await this.prisma.user.findUnique({ where: { email } });
 
@@ -193,6 +205,14 @@ export class AuthService {
     return { message: 'OTP verified successfully.' };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AUTH - RESET MẬT KHẨU + THU HỒI PHIÊN] Xác minh OTP LẦN 2 (HTTP stateless:
+  // verify-otp và reset-password là 2 request riêng, server không nhớ bước trước —
+  // attacker có thể bỏ qua verify-otp và gọi thẳng reset-password, nên PHẢI kiểm tra lại).
+  // Sau khi đặt mật khẩu: authTokenVersion++ → mọi token cũ trên MỌI thiết bị bị từ chối
+  // ngay lập tức khi JwtStrategy.validate() phát hiện lệch version. Đây là câu trả lời
+  // chuẩn cho "JWT stateless, làm sao thu hồi khi bị lộ?".
+  // ════════════════════════════════════════════════════════════════════════════
   async resetPassword(email: string, otp: string, newPassword: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordResetToken || !user.passwordResetExpiry) {
@@ -336,7 +356,10 @@ export class AuthService {
     }
   }
 
-  // Thêm hàm Đổi mật khẩu
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AUTH - ĐỔI MẬT KHẨU + THU HỒI PHIÊN] Xác minh mật khẩu cũ (bcrypt) trước khi đổi.
+  // authTokenVersion++ ngay sau khi đổi → cùng cơ chế thu hồi phiên với resetPassword.
+  // ════════════════════════════════════════════════════════════════════════════
   async changePassword(userId: number, currentPass: string, newPass: string) {
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId } });

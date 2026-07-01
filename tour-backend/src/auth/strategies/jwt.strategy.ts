@@ -26,6 +26,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AUTH - XÁC THỰC MỖI REQUEST] Passport gọi validate() sau khi giải mã JWT thành công.
+  // 3 bước kiểm tra bắt buộc (thiếu 1 bước là hở bảo mật):
+  //   BƯỚC 1 — user còn tồn tại & chưa bị xóa mềm? → ngăn tài khoản đã khoá tiếp tục dùng token.
+  //   BƯỚC 2 — tokenVersion trong token === authTokenVersion trong DB? → phát hiện token cũ bị
+  //             thu hồi sau khi đổi/reset mật khẩu (cơ chế stateless thay cho blacklist).
+  //   BƯỚC 3 — giá trị return được Passport gán vào req.user → RolesGuard đọc tiếp.
+  // ════════════════════════════════════════════════════════════════════════════
   async validate(payload: { sub: number; email?: string; role?: string; tokenVersion?: number }) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },

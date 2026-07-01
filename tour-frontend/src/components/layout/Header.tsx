@@ -216,10 +216,14 @@ export default function Header() {
         };
     }, [searchQuery, language]);
 
-    // Đóng menu mobile khi đổi route (vd: nút back trình duyệt)
-    useEffect(() => {
+    // Đóng menu mobile khi đổi route (vd: nút back trình duyệt).
+    // Điều chỉnh state NGAY trong lúc render thay vì trong useEffect — tránh cascading
+    // render (lint react-hooks/set-state-in-effect) mà vẫn bắt được mọi lần đổi pathname.
+    const [prevPathname, setPrevPathname] = useState(pathname);
+    if (pathname !== prevPathname) {
+        setPrevPathname(pathname);
         setIsMobileMenuOpen(false);
-    }, [pathname]);
+    }
 
     // Khi menu mobile mở: Esc để đóng, khóa cuộn nền, tự đóng nếu kéo rộng ≥ lg
     useEffect(() => {
@@ -288,7 +292,7 @@ export default function Header() {
         { href: '/promotions', key: 'nav.promotions' },
         { href: '/journal', key: 'nav.journal' },
         { href: '/about', key: 'nav.about' },
-        { href: '/contact', key: 'nav.contact' },
+        { href: '/contact', key: 'nav.contact' }
     ];
     const translatedRole = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || userRole === 'STAFF' || userRole === 'CUSTOMER'
         ? userRole

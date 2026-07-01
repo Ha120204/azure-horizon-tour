@@ -68,6 +68,13 @@ export class TourWorkflowService {
     });
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [TOUR - GỬI DUYỆT: DRAFT/REJECTED → PENDING_REVIEW] 3 lớp kiểm tra tuần tự:
+  //   1. Đúng CHỦ tour (createdById === requesterId) — STAFF chỉ gửi tour của mình.
+  //   2. Đúng trạng thái nguồn (phải là DRAFT hoặc REJECTED) — không gửi lại tour đang chờ.
+  //   3. requirePublishableTour — cổng chất lượng: đủ thông tin + chuyến + gói.
+  // Thiếu bất kỳ lớp nào → ném lỗi, không chuyển trạng thái.
+  // ════════════════════════════════════════════════════════════════════════════
   async submitForReview(id: number, requesterId: number) {
     const tour = await this.findTourForPublishability(id);
     if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);
@@ -150,6 +157,13 @@ export class TourWorkflowService {
     };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [TOUR - DUYỆT / TỪ CHỐI: PENDING_REVIEW → PUBLISHED | REJECTED]
+  // approve: requirePublishableTour LẦN 2 (dữ liệu có thể đổi sau khi STAFF submit)
+  //   → PUBLISHED + 2 việc chạy nền: embedTourAsync (AI vector) + revalidateTourCache (Next.js ISR).
+  // reject: bắt buộc có note lý do → REJECTED + lưu reviewNote để STAFF biết sửa gì.
+  //   Khi STAFF gửi lại, reviewNote bị xóa (reviewNote: null).
+  // ════════════════════════════════════════════════════════════════════════════
   async reviewTour(
     id: number,
     reviewerId: number,
@@ -194,6 +208,12 @@ export class TourWorkflowService {
     return updated;
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [TOUR - PUBLISH THẲNG: DRAFT → PUBLISHED (bỏ qua bước duyệt)]
+  // ADMIN tự tạo tour → không cần ai duyệt → publish trực tiếp.
+  // Chặn duy nhất: không public lại tour COMPLETED (đã kết thúc vĩnh viễn).
+  // Sau publish: cùng 2 việc nền với reviewTour approve (embedTourAsync + revalidate).
+  // ════════════════════════════════════════════════════════════════════════════
   async publishTour(id: number, publisherId: number) {
     const tour = await this.findTourForPublishability(id);
     if (!tour) throw new NotFoundException(`Không tìm thấy tour #${id}`);

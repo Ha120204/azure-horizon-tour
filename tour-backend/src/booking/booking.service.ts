@@ -178,6 +178,14 @@ export class BookingService {
     return this.assistedDraftService.markVoucherAsUsed(tx, userId, voucherCode);
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [BOOKING - TẠO ĐƠN] 8 bước trong 1 $transaction nguyên tử:
+  //   1 tour tồn tại → 2 departure + sơ bộ ghế → 3 package lấy basePrice
+  //   → 4 tính tổng tiền → 5 atomic claim voucher → 6 validate tuổi vs loại
+  //   → 7 reserveSeatsAtomically (trái tim chống race) → 8 tạo booking PENDING
+  // Bất kỳ bước nào throw → $transaction ROLLBACK toàn bộ → không mất ghế.
+  // Sau transaction: PAYOS → tạo link → trả checkoutUrl; IN_STORE → báo admin.
+  // ════════════════════════════════════════════════════════════════════════════
   async create(userId: number | null, dto: CreateBookingDto, ip: string) {
     void ip;
     const finalUserId = Number(userId);
@@ -442,6 +450,14 @@ export class BookingService {
     };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [PAYOS - XÁC NHẬN THANH TOÁN + IDEMPOTENCY] Hàm trung tâm dùng chung cho
+  // cả 3 đường: webhook (đường 1), polling customerCheckPayment (đường 2), return URL (đường 3).
+  //   Bẫy 1: KHÔNG tin query → gọi getPaymentInfo hỏi THẲNG PayOS trạng thái thật.
+  //   Bẫy 3: updateMany với status notIn['CONFIRMED','CANCELLED'] → atomic idempotency guard:
+  //     count=1 = thắng → ghi PaymentTransaction + gửi email;
+  //     count=0 = đã xử lý rồi → return sớm, không làm thêm gì.
+  // ════════════════════════════════════════════════════════════════════════════
   /**
    * Xử lý khi người dùng quay về từ trang PayOS (hoặc Webhook gọi)
    * Gọi thẳng API PayOS để xác nhận trạng thái thực tế, không tin query params
@@ -638,6 +654,13 @@ export class BookingService {
     return this.passengerService.updateBookingPassengersByStaff(bookingId, dto);
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [BOOKING - IDEMPOTENT CANCEL + HOÀN GHẾ] Dùng chung cho PayOS cancel,
+  // webhook cancel, cron tự hủy — 3 luồng có thể gọi cùng 1 đơn đồng thời.
+  // Chống double-restore: updateMany với status notIn['CONFIRMED','CANCELLED'] →
+  // nếu đơn đã CANCELLED rồi (bị xử lý bởi request khác) count=0 → return sớm,
+  // không cộng ghế thêm lần nữa. Cùng kỹ thuật atomic với reserveSeatsAtomically.
+  // ════════════════════════════════════════════════════════════════════════════
   /**
    * Cancel a specific booking and restore seats to the tour.
    * Shared by: PayOS cancel, Webhook cancel, and Cron job auto-cancel.
@@ -740,6 +763,11 @@ export class BookingService {
     });
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [BOOKING - CRON DỌN ĐƠN QUÁ HẠN] Được gọi bởi BookingCronService mỗi 5 phút.
+  // Quét đơn PENDING/UNPAID quá holdExpiresAt → cancelAndRestoreSeats() hoàn ghế.
+  // Giải phóng ghế bị "treo" khi khách đặt mà không thanh toán (PayOS 15 phút).
+  // ════════════════════════════════════════════════════════════════════════════
   /**
    * CRON JOB: Quét đơn hàng PENDING quá 15 phút và tự động hủy + hoàn trả ghế.
    * Được gọi bởi @nestjs/schedule mỗi 5 phút.

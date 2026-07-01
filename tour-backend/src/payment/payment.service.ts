@@ -48,6 +48,13 @@ export class PaymentService implements OnApplicationBootstrap {
     }, 5000);
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [PAYOS - TẠO LINK THANH TOÁN] 2 ràng buộc bắt buộc của PayOS API:
+  //   • amount phải là số nguyên VND (Math.round ở booking.service) — PayOS từ chối số lẻ.
+  //   • description ≤ 25 ký tự — cắt substring(0,25) trước khi gọi.
+  // returnUrl + cancelUrl đều về /booking/payos-return (backend xử lý → redirect FE).
+  // Phản hồi có qrCode (chế độ QR nhúng) hoặc checkoutUrl (nhánh redirect PayOS).
+  // ════════════════════════════════════════════════════════════════════════════
   async createPaymentRequest(orderCode: number, amount: number, description: string): Promise<PaymentLinkResult> {
     const backendUrl = this.configService.get<string>('BACKEND_URL', 'http://localhost:3000');
     // PayOS giới hạn trường description tối đa 25 ký tự — cắt để tránh lỗi API.
@@ -87,6 +94,12 @@ export class PaymentService implements OnApplicationBootstrap {
     return this.payos.paymentRequests.cancel(orderCode, cancellationReason);
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [PAYOS - KIỂM DẤU HMAC / CHỐNG WEBHOOK GIẢ] SDK tính lại chữ ký từ
+  // (nội dung gói tin + PAYOS_CHECKSUM_KEY) rồi so với dấu PayOS gửi kèm.
+  // Khớp → đúng là PayOS gửi → tin. Lệch → giả mạo/bị sửa → ném lỗi → bỏ qua.
+  // Kẻ gian không có checksumKey → không tạo được dấu hợp lệ → không qua được bước này.
+  // ════════════════════════════════════════════════════════════════════════════
   async verifyWebhook(webhookBody: Parameters<PayOS['webhooks']['verify']>[0]) {
     return this.payos.webhooks.verify(webhookBody);
   }

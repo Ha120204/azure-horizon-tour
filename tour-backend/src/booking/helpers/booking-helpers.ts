@@ -103,6 +103,12 @@ export function calcAgeAt(dob: string, referenceDate = new Date()): number | nul
   return age;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// [BOOKING - CHỐNG KHAI GIAN TUỔI / PAYLOAD FORGE] Tính tuổi thực từ DOB
+// TẠI NGÀY KHỞI HÀNH (không phải ngày đặt) rồi đối chiếu với loại khai báo.
+// Vì sao tại ngày khởi hành? Một em bé có thể qua mốc tuổi giữa lúc đặt và lúc đi.
+// Kẻ gian gửi payload type='Infant' cho người 20 tuổi → giá chỉ 10% → bị chặn.
+// ════════════════════════════════════════════════════════════════════════════
 /**
  * Validate tuổi thực tế (từ DOB) khớp với loại hành khách được khai báo.
  * Chống lại payload forge: ai đó gửi type='Infant (<4)' cho người lớn
@@ -247,6 +253,16 @@ type SeatReservationInput = {
   seats: number;
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// [BOOKING - ATOMIC CONDITIONAL UPDATE / TRÁI TIM CHỐNG RACE CONDITION]
+// Gộp "kiểm tra còn ghế" + "trừ ghế" vào MỘT câu UPDATE duy nhất (không tách thành 2 bước):
+//   WHERE availableSeats >= seats   ← điều kiện nằm TRONG câu ghi
+//   SET availableSeats -= seats     ← hành động trong cùng câu
+// DB tự khóa dòng khi thực thi UPDATE → 2 request đồng thời:
+//   Request A chạy trước → ghế về 0; Request B phải chờ → thấy 0 >= N là sai → count=0 → từ chối.
+// count=0 = điều kiện không thỏa = hết ghế → ném SeatsUnavailableException (409).
+// Đây là "check-and-set" — không cần lock thủ công, an toàn hơn read-then-write.
+// ════════════════════════════════════════════════════════════════════════════
 export async function reserveSeatsAtomically(
   tx: SeatReservationTx,
   { tourId, departureId, seats }: SeatReservationInput,
@@ -364,6 +380,12 @@ export function isAssistedDraftStatus(value: string): boolean {
 
 // ─── Pricing helpers ──────────────────────────────────────────────────────────
 
+// ════════════════════════════════════════════════════════════════════════════
+// [BOOKING - BẢNG GIÁ HÀNH KHÁCH] Nguồn sự thật duy nhất: adult ×1, child ×0.7, infant ×0.1.
+// Có alias (ADULT/CHILD/INFANT) để khớp cả 2 format payload (chuỗi Viator-style và enum-style).
+// Đổi giá: CHỈ sửa ở đây. Nếu cần UI frontend hiển thị đúng: sửa thêm map song song
+// ở tour-frontend/src/lib/booking/passengerPricing.ts (điểm cộng khi nói với giảng viên).
+// ════════════════════════════════════════════════════════════════════════════
 /**
  * Nguồn sự thật duy nhất cho hệ số giá hành khách (backend).
  * Gồm cả alias key (ADULT/CHILD/INFANT) để tương thích với nhiều format payload.

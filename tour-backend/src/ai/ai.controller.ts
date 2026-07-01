@@ -114,6 +114,9 @@ export class AiController {
     const userId = req.user?.userId ?? null;
     const anonId = userId ? undefined : this.ensureAnonId(req, res);
 
+    // [AI - SSE] Bật chế độ Server-Sent Events: giữ kết nối mở để "nhỏ giọt" dữ liệu.
+    // Content-Type text/event-stream + keep-alive = báo trình duyệt đây là stream;
+    // X-Accel-Buffering:no = tắt buffer của proxy để token tới client ngay, không bị gom.
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -121,6 +124,7 @@ export class AiController {
     res.flushHeaders();
 
     try {
+      // Mỗi sự kiện từ generator được ghi theo định dạng SSE: "data: <json>\n\n".
       for await (const event of this.aiService.chatStream(body.message.trim(), body.sessionId, userId, body.currentTourId, anonId, body.language, body.currency)) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }

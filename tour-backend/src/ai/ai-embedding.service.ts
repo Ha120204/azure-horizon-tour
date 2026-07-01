@@ -164,6 +164,13 @@ export class AiEmbeddingService {
     return { total: tours.length, done, failed };
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AI - SEMANTIC SEARCH / VECTOR] Tìm tour theo Ý NGHĨA (không theo từ khóa).
+  // Embed câu hỏi của khách thành vector 1536 chiều, rồi dùng toán tử <=> của pgvector
+  // (cosine distance) tìm tour có vector GẦN NGHĨA nhất (distance < ngưỡng), lấy top 5.
+  // Nhờ vậy "nơi nghỉ yên tĩnh gần biển" vẫn ra tour dù không trùng từ khóa nào.
+  // Vector của tour được tạo lúc DUYỆT tour (embedTour) — xem luồng ⑤.
+  // ════════════════════════════════════════════════════════════════════════════
   async semanticSearch(
     query: string,
     minSeats: number = 1,

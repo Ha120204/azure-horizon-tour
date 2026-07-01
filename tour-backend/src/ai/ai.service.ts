@@ -18,7 +18,13 @@ type TourCard = { id?: number; name?: string; price?: string; image?: string };
 
 interface AiError { message?: string; status?: number; code?: number }
 
-// Tool definitions in OpenAI-compatible format for LLMGate.
+// ══════════════════════════════════════════════════════════════════════════════
+// [AI - FUNCTION CALLING] Khai báo 4 "tool" (công cụ) cho LLM.
+// Đây là cốt lõi chống-bịa (RAG): LLM KHÔNG tự nghĩ ra dữ liệu, mà khi cần nó "xin
+// gọi" một trong các tool này; backend chạy tool (đọc DB thật) rồi đưa kết quả lại.
+// Mỗi tool khai báo name + description + parameters theo chuẩn OpenAI để LLM biết
+// KHI NÀO gọi và truyền THAM SỐ gì.
+// ══════════════════════════════════════════════════════════════════════════════
 const TOUR_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: 'function',
@@ -370,7 +376,12 @@ export class AiService {
     }
   }
 
-  // System prompt.
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AI - SYSTEM PROMPT] "Luật chơi" nhồi vào đầu mỗi cuộc chat (prompt engineering).
+  // Vì hành vi LLM điều khiển bằng chỉ dẫn ngôn ngữ (không phải code), đoạn này quy
+  // định: trả lời đúng ngôn ngữ khách, CẤM bịa tên/giá/ngày, khi nào gọi tool nào,
+  // cách quy đổi tiền, và định dạng thẻ tour (TOUR_CARD). Đây là lớp "grounding".
+  // ════════════════════════════════════════════════════════════════════════════
   private buildSystemPrompt(
     currentTour?: { id: number; name: string } | null,
     language?: string | null,
@@ -410,6 +421,8 @@ QUY TRÌNH TƯ VẤN ĐIỂM ĐẾN (giống tổng đài du lịch):
 - LUÔN ĐỌC LẠI TOÀN BỘ hội thoại trước khi hỏi. Điểm đến thường được khách nêu NGAY Ở TIN NHẮN ĐẦU TIÊN (ví dụ "tôi muốn đi Nhật Bản") → đó chính là destination, phải GHI NHỚ xuyên suốt cuộc trò chuyện. TUYỆT ĐỐI KHÔNG hỏi lại điểm đến nếu khách đã nêu ở bất kỳ tin nhắn nào trước đó.
 - Khi khách mới chỉ nêu mong muốn đi một nơi (ví dụ "tôi muốn đi Đà Nẵng") mà chưa cho đủ thông tin, hãy hỏi gọn trong MỘT lượt 3-4 ý quan trọng trước khi liệt kê tour: (1) khởi hành từ đâu, (2) dự kiến đi tháng nào / mấy ngày, (3) đi mấy người, (4) ngân sách dự kiến mỗi người (nếu khách chưa nói). Hỏi ngắn gọn, lịch sự, không hỏi lại thứ khách đã cung cấp.
 - Khi đã đủ thông tin (điểm đến đã biết từ tin nhắn trước + điểm khởi hành + thời gian + số người), gọi NGAY "search_tours" với destination lấy từ tin nhắn trước đó — KHÔNG hỏi thêm gì nữa. Liệt kê dạng: tên tour · ngày khởi hành gần nhất · giá/người · thời lượng, kết thúc bằng một câu hỏi mời khách xem chi tiết hoặc xem thêm lựa chọn. Nếu chỉ có ĐÚNG 1 tour phù hợp → bắt buộc đính kèm TOUR_CARD (xem mục ĐỊNH DẠNG TOUR_CARD) để khách bấm xem ngay.
+- VÍ DỤ BẮT BUỘC PHẢI LÀM ĐÚNG: Khách nhắn "tôi muốn đi Đà Nẵng" (tin 1) → bạn hỏi thêm thông tin → khách trả lời "khởi hành Hà Nội, tháng 7, 2 người, 5 triệu" (tin 2) → phải gọi NGAY search_tours với destination="Đà Nẵng" (lấy từ tin 1). TUYỆT ĐỐI KHÔNG hỏi "bạn muốn đi đâu?" vì điểm đến đã có ở tin trước.
+- Nếu khách trả lời "tất cả điểm khởi hành" hoặc không nêu điểm xuất phát → bỏ trống departurePoint (không lọc), tìm rộng tất cả. KHÔNG nhầm "tất cả điểm khởi hành" là điểm đến.
 - Nếu khách đã nói rõ ngay từ đầu (đủ điểm khởi hành/thời gian/số người) thì tìm luôn, không hỏi lại.
 
 NGUYÊN TẮC DỮ LIỆU:
@@ -703,8 +716,13 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     return ['Gợi ý tour theo sở thích', 'Điểm đến phổ biến nhất'];
   }
 
-  // Run first LLM call + tool resolution. Returns resolved messages ready for a streaming
-  // final-answer call, or a directResponse string if no tools were invoked.
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AI - LƯỢT 1 LLM] Bước cốt lõi của function calling.
+  // Gọi LLM lần 1 kèm danh sách tool + tool_choice:'auto' (để LLM TỰ quyết có cần
+  // dữ liệu không). Nếu LLM "xin gọi tool" → backend THỰC THI tool (đọc DB thật) rồi
+  // nhét kết quả vào hội thoại, trả về để LƯỢT 2 tổng hợp thành câu trả lời.
+  // Nếu không cần tool (chào hỏi/tư vấn chung) → trả thẳng câu trả lời, khỏi lượt 2.
+  // ════════════════════════════════════════════════════════════════════════════
   private async resolveToolCallsOnly(
     model: string,
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
@@ -783,7 +801,12 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
     return { limitExceeded: false, currentSessionId, messages };
   }
 
-  // Main chat function using the OpenAI-compatible LLMGate flow.
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AI - LUỒNG KHÔNG STREAMING] Trả về CẢ câu một lần (dùng cho POST /ai/chat).
+  // Trình tự: prepareConversation (tạo/khôi phục phiên + lưu tin nhắn + dựng messages)
+  // → runModelChat (lượt 1 chọn tool + lượt 2 tổng hợp) → parseAndSaveResponse (tách
+  // thẻ tour + lưu). Lỗi model chính → chatWithFallback (đổi sang model dự phòng).
+  // ════════════════════════════════════════════════════════════════════════════
   async chat(
     userMessage: string,
     sessionId?: string,
@@ -811,7 +834,15 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour, hoặc đ
       return this.chatWithFallback(messages, currentSessionId, userId || null, error);
     }
   }
-  // Streaming chat — yields tokens as they arrive from the LLM.
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AI - LUỒNG STREAMING / SSE] Trả lời NHỎ GIỌT từng chữ (dùng cho POST /ai/chat/stream).
+  // Là async generator: `yield` từng sự kiện cho controller đẩy xuống client:
+  //   { searching:true } → đang tra cứu (sau lượt 1, trước lượt 2)
+  //   { token:'...' }    → từng mẩu chữ của câu trả lời
+  //   { done:true, tourCard, followUps } → kết thúc, kèm thẻ tour + gợi ý câu hỏi tiếp
+  // Phần dưới có xử lý HOLD_BACK: giữ lại 14 ký tự cuối để marker <<<TOUR_CARD>>> không
+  // bị phát ra màn hình khi bị cắt ngang giữa 2 chunk stream.
+  // ════════════════════════════════════════════════════════════════════════════
   async *chatStream(
     userMessage: string,
     sessionId?: string,

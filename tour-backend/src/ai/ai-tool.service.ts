@@ -160,7 +160,15 @@ export class AiToolService {
     };
   }
 
-  // Tool: search tours in the database.
+  // ════════════════════════════════════════════════════════════════════════════
+  // [AI - TOOL search_tours: TÌM TOUR 3 TẦNG] Nơi thể hiện RAG + vector rõ nhất.
+  // Để hiếm khi trả "không tìm thấy", backend thử lần lượt:
+  //   TẦNG 1 — khớp ĐẦY ĐỦ bộ lọc (điểm đến + giá + loại + tháng + đủ ghế).
+  //   TẦNG 2 — NỚI dần bộ lọc phụ (ngân sách → loại → thời gian), gắn cờ _relaxed để
+  //            LLM nói thật "đã nới tiêu chí X".
+  //   TẦNG 3 — SEMANTIC SEARCH (vector/pgvector): tìm theo Ý NGHĨA khi từ khóa trượt.
+  //   TẦNG 4 — thực sự rỗng → báo không có.
+  // ════════════════════════════════════════════════════════════════════════════
   private async executeSearchTours(args: Record<string, unknown>) {
     const a = args as SearchToursArgs;
     const party = a.partySize ? Number(a.partySize) : null;

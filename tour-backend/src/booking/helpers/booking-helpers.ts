@@ -400,6 +400,22 @@ export const PASSENGER_MULTIPLIERS: Record<string, number> = {
   INFANT: 0.1,
 };
 
+// Giá đơn vị sau khi áp flash sale: khi departure có giá thấp hơn tour.price (giá gốc),
+// giảm cùng TỶ LỆ đó lên giá gói khách chọn (mọi gói cùng % giảm).
+// Phải đồng bộ với frontend getSaleAdjustedUnitPrice trong lib/booking/passengerPricing.ts.
+export function getSaleAdjustedUnitPrice(
+  packagePrice: number,
+  tourPrice: number | null | undefined,
+  departurePrice: number | null | undefined,
+): number {
+  const dep = Number(departurePrice);
+  const regular = Number(tourPrice);
+  if (Number.isFinite(dep) && Number.isFinite(regular) && regular > 0 && dep < regular) {
+    return Math.round(packagePrice * (dep / regular));
+  }
+  return packagePrice;
+}
+
 export function getPassengerTotal(
   basePrice: number,
   people: number,

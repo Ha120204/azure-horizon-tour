@@ -259,6 +259,7 @@ export function LogsFilterBar({
 interface LogsAdvancedFilterPanelProps {
     roleFilter: string;
     severityFilter: string;
+    isSuperAdmin: boolean;
     onRoleFilterChange: (value: string) => void;
     onSeverityFilterChange: (value: string) => void;
 }
@@ -266,11 +267,15 @@ interface LogsAdvancedFilterPanelProps {
 export function LogsAdvancedFilterPanel({
     roleFilter,
     severityFilter,
+    isSuperAdmin,
     onRoleFilterChange,
     onSeverityFilterChange,
 }: LogsAdvancedFilterPanelProps) {
     const [isOpen, setIsOpen] = useState(Boolean(roleFilter || severityFilter));
     const activeCount = [roleFilter, severityFilter].filter(Boolean).length;
+    const roleOptions = isSuperAdmin
+        ? ROLE_FILTER_OPTIONS
+        : ROLE_FILTER_OPTIONS.filter(option => option.value !== 'SUPER_ADMIN');
 
     return (
         <section className="mb-3 rounded-xl border border-outline-variant/20 bg-surface-container-lowest shadow-sm">
@@ -302,7 +307,7 @@ export function LogsAdvancedFilterPanel({
                 <div className="grid gap-3 border-t border-outline-variant/15 px-3 py-3 sm:grid-cols-2">
                     <LogSelect
                         value={roleFilter}
-                        options={ROLE_FILTER_OPTIONS}
+                        options={roleOptions}
                         onChange={onRoleFilterChange}
                         ariaLabel="Lọc nhật ký theo vai trò người thực hiện"
                         menuClassName="min-w-full"

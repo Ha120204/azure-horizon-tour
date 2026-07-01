@@ -18,7 +18,7 @@ import { clearClientUserStorage, fetchAuthProfile } from '@/lib/auth/authSession
 import type { PassengerType } from '@/lib/booking/passengerDetails';
 import type { TourDepartureTransport } from '@/types';
 import { getPassengerNameError, validatePassengerIdentityNo } from '@/lib/booking/passengerDetails';
-import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
+import { PASSENGER_MULTIPLIERS, getSaleAdjustedUnitPrice } from '@/lib/booking/passengerPricing';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
 
 interface Passenger {
@@ -520,8 +520,12 @@ function CheckoutContent() {
     }, [tourIdStr, packageIdStr, departureIdStr, language, router]);
 
     // 3. THIẾT LẬP BẢNG GIÁ ĐỘNG DỰA TRÊN GIÁ PACKAGE (mô hình Hướng A)
-    // Package.price là giá toàn phần, không cộng departure.price nữa.
-    const basePrice = selectedPackage?.price ?? tourData?.price ?? 0;
+    // Package.price là giá toàn phần; nếu ngày đang flash sale thì giảm cùng tỷ lệ.
+    const basePrice = getSaleAdjustedUnitPrice(
+        selectedPackage?.price ?? tourData?.price ?? 0,
+        tourData?.price,
+        selectedDeparture?.price,
+    );
 
     const PRICES = {
         'Adult (12+)': basePrice * PASSENGER_MULTIPLIERS['Adult (12+)'],

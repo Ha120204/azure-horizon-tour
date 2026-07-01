@@ -50,6 +50,7 @@ export default function SystemLogsPage() {
             <LogsAdvancedFilterPanel
                 roleFilter={logs.roleFilter}
                 severityFilter={logs.severityFilter}
+                isSuperAdmin={logs.isSuperAdmin}
                 onRoleFilterChange={logs.changeRoleFilter}
                 onSeverityFilterChange={logs.changeSeverityFilter}
             />

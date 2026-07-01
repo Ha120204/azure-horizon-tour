@@ -19,7 +19,7 @@ export function useSystemLogs() {
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const [canExport] = useState<boolean>(() => {
+    const [isSuperAdmin] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('userRole') === 'SUPER_ADMIN';
     });
@@ -401,7 +401,8 @@ export function useSystemLogs() {
         isLoading,
         loadError,
         isExporting,
-        canExport,
+        canExport: isSuperAdmin,
+        isSuperAdmin,
         copiedLogId,
         copyErrorLogId,
         linkedLogError,

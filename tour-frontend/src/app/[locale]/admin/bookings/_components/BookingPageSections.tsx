@@ -197,7 +197,7 @@ export function BookingPageHeader({
           {isExporting ? (
             <><span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>Đang xuất…</>
           ) : (
-            <><span className="material-symbols-outlined text-[18px]">table_view</span>Xuất Excel</>
+            <><span className="material-symbols-outlined text-[18px]">download</span>Xuất CSV</>
           )}
         </button>
         <button

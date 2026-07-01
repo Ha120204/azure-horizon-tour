@@ -49,7 +49,7 @@ export class AiToolService {
     args: SearchToursArgs,
     opts: { price: boolean; tourType: boolean; month: boolean },
   ): Prisma.TourWhereInput {
-    const { destination, departurePoint, minPrice, maxPrice, tourType, startMonth, startMonthFrom, partySize } = args;
+    const { destination, departurePoint, minPrice, maxPrice, tourType, partySize } = args;
     const party = partySize ? Number(partySize) : null;
 
     const whereClause: Prisma.TourWhereInput = {
@@ -101,20 +101,8 @@ export class AiToolService {
 
     // Lọc tháng khởi hành: hoặc ĐÚNG một tháng (startMonth), hoặc TỪ một tháng trở đi
     // không chặn trên (startMonthFrom — cho yêu cầu "từ tháng X đổ đi").
-    if (opts.month && (startMonth || startMonthFrom)) {
-      const now = new Date();
-      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      let range: { gte: Date; lt?: Date };
-      if (startMonthFrom) {
-        const month = Number(startMonthFrom);
-        // Lấy đầu tháng X năm nay; nếu tháng đó đã qua thì tính từ đầu tháng hiện tại.
-        const candidate = new Date(now.getFullYear(), month - 1, 1);
-        range = { gte: candidate < startOfThisMonth ? startOfThisMonth : candidate };
-      } else {
-        const month = Number(startMonth);
-        const year = now.getMonth() + 1 > month ? now.getFullYear() + 1 : now.getFullYear();
-        range = { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) };
-      }
+    const range = opts.month ? this.monthRange(args) : null;
+    if (range) {
       // Ưu tiên khớp theo NGÀY KHỞI HÀNH cụ thể (TourDeparture còn đủ ghế),
       // fallback về Tour.startDate cho tour chưa tạo lịch khởi hành chi tiết.
       whereClause.OR = [
@@ -134,13 +122,32 @@ export class AiToolService {
     return whereClause;
   }
 
-  private queryTours(where: Prisma.TourWhereInput) {
+  // Khoảng ngày khởi hành khách yêu cầu: đúng một tháng (startMonth) hoặc từ một
+  // tháng trở đi không chặn trên (startMonthFrom). Trả null nếu khách không nêu tháng.
+  private monthRange(args: SearchToursArgs): { gte: Date; lt?: Date } | null {
+    const { startMonth, startMonthFrom } = args;
+    if (!startMonth && !startMonthFrom) return null;
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (startMonthFrom) {
+      const month = Number(startMonthFrom);
+      const candidate = new Date(now.getFullYear(), month - 1, 1);
+      return { gte: candidate < startOfThisMonth ? startOfThisMonth : candidate };
+    }
+    const month = Number(startMonth);
+    const year = now.getMonth() + 1 > month ? now.getFullYear() + 1 : now.getFullYear();
+    return { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) };
+  }
+
+  // depRange: khi khách lọc theo tháng, hiển thị ngày khởi hành KHỚP tháng đó (không
+  // phải ngày gần nhất tổng thể), để LLM trả đúng ngày khách hỏi. Null = ngày gần nhất.
+  private queryTours(where: Prisma.TourWhereInput, depRange?: { gte: Date; lt?: Date } | null) {
     return this.prisma.tour.findMany({
       where,
       include: {
         destination: true,
         departures: {
-          where: { isActive: true, departureDate: { gte: new Date() } },
+          where: { isActive: true, departureDate: depRange ?? { gte: new Date() } },
           orderBy: { departureDate: 'asc' },
           take: 1,
         },
@@ -182,7 +189,8 @@ export class AiToolService {
     const party = a.partySize ? Number(a.partySize) : null;
 
     // 1) Tìm với đầy đủ bộ lọc khách đưa.
-    const tours = await this.queryTours(this.buildTourWhere(a, { price: true, tourType: true, month: true }));
+    const monthRange = this.monthRange(a);
+    const tours = await this.queryTours(this.buildTourWhere(a, { price: true, tourType: true, month: true }), monthRange);
     if (tours.length > 0) {
       return tours.map((t) => this.mapTour(t));
     }
@@ -205,7 +213,8 @@ export class AiToolService {
         if (!filter.given) continue;
         keep[filter.key] = false;
         dropped.push(filter.label);
-        const relaxed = await this.queryTours(this.buildTourWhere(a, keep));
+        // Khi vẫn giữ lọc tháng thì hiển thị ngày khớp tháng; nếu đã nới tháng thì ngày gần nhất.
+        const relaxed = await this.queryTours(this.buildTourWhere(a, keep), keep.month ? monthRange : null);
         if (relaxed.length > 0) {
           return relaxed.map((t) => ({ ...this.mapTour(t), _relaxed: true, _relaxedFilters: [...dropped] }));
         }

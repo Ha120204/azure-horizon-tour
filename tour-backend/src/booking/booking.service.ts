@@ -33,6 +33,7 @@ import {
   generateBookingCode,
   getErrorMessage,
   getPassengerTotal,
+  getSaleAdjustedUnitPrice,
   IN_STORE_MAX_HOLD_HOURS,
   isPayosDuplicateError,
   normalizePassengers,
@@ -270,10 +271,13 @@ export class BookingService {
       ) {
         throw new BadRequestException('Gói dịch vụ không hợp lệ hoặc đã ngừng cung cấp');
       }
-      // basePrice = giá toàn phần của gói (không cộng thêm departure.price).
-      // departure.price vẫn được dùng để fallback cho các flow cũ nếu cần,
-      // nhưng với mô hình package-first, package.price là giá cuối cùng.
-      const basePrice = selectedPackage.price;
+      // basePrice = giá toàn phần của gói; nếu ngày khởi hành đang flash sale
+      // (departure.price < tour.price) thì giảm cùng tỷ lệ lên giá gói.
+      const basePrice = getSaleAdjustedUnitPrice(
+        selectedPackage.price,
+        tour.price,
+        selectedDeparture?.price,
+      );
 
       let totalPrice = getPassengerTotal(
         basePrice,

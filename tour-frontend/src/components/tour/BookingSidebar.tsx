@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Tour, TourPackage, TourDeparture } from '@/types';
 import DepartureCalendarModal from './DepartureCalendarModal';
 import TransportSummaryCard from './TransportSummaryCard';
-import { PASSENGER_MULTIPLIERS } from '@/lib/booking/passengerPricing';
+import { PASSENGER_MULTIPLIERS, getSaleAdjustedUnitPrice } from '@/lib/booking/passengerPricing';
 import { DEFAULT_PUBLIC_SETTINGS, fetchPublicSettings } from '@/lib/settings/publicSettings';
 
 const LOW_SEAT_THRESHOLD = 10;
@@ -50,8 +50,12 @@ export default function BookingSidebarNew({
     const hasPackages = (tour?.packages?.length ?? 0) > 0;
 
     // Giá hiện tại: package.price là giá toàn phần (mô hình Hướng A / Klook).
-    // Không cộng thêm departure.price nữa.
-    const effectivePrice = selectedPackage?.price ?? 0;
+    // Nếu ngày đang flash sale (departure.price < tour.price) → giảm cùng tỷ lệ lên giá gói.
+    const effectivePrice = getSaleAdjustedUnitPrice(
+        selectedPackage?.price ?? 0,
+        tour?.price,
+        selectedDeparture?.price,
+    );
 
     // Giá thấp nhất (dùng cho "Từ X đ") = giá của package đầu tiên (sortOrder thấp nhất)
     const minPackagePrice = tour?.packages?.length

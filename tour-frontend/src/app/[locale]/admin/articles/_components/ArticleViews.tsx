@@ -256,20 +256,32 @@ function IndeterminateCheckbox({
   );
 }
 
+interface ArticleGridViewProps extends SharedArticleViewProps {
+  meta: ArticleMeta;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}
+
 export function ArticleGridView({
   articles,
   isLoading,
+  hasFilter,
   isAdmin,
   canWrite,
   userId,
   isSubmitting,
+  meta,
+  pageSize,
   onCreate,
   onOpenEdit,
   onToggleFeatured,
   onReview,
   onSubmit,
   onDelete,
-}: SharedArticleViewProps) {
+  onPageChange,
+  onPageSizeChange,
+}: ArticleGridViewProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -287,36 +299,49 @@ export function ArticleGridView({
     );
   }
 
-  if (articles.length === 0) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-        <div className="col-span-full py-24 text-center">
-          <p className="font-bold text-on-surface">Không có bài viết nào</p>
-          <button onClick={onCreate} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold mx-auto hover:bg-primary/90 outline-none">
-            <span className="material-symbols-outlined text-[16px]">post_add</span>{isAdmin ? 'Tạo bài viết' : 'Tạo bản nháp'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-      {articles.map(article => (
-        <ArticleGridCard
-          key={article.id}
-          article={article}
-          isAdmin={isAdmin}
-          canWrite={canWrite}
-          userId={userId}
-          isSubmitting={isSubmitting}
-          onOpenEdit={onOpenEdit}
-          onToggleFeatured={onToggleFeatured}
-          onReview={onReview}
-          onSubmit={onSubmit}
-          onDelete={onDelete}
+    <div className="space-y-5">
+      {articles.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="col-span-full py-24 text-center">
+            <p className="font-bold text-on-surface">Không có bài viết nào</p>
+            <button onClick={onCreate} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-semibold mx-auto hover:bg-primary/90 outline-none">
+              <span className="material-symbols-outlined text-[16px]">post_add</span>{isAdmin ? 'Tạo bài viết' : 'Tạo bản nháp'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {articles.map(article => (
+            <ArticleGridCard
+              key={article.id}
+              article={article}
+              isAdmin={isAdmin}
+              canWrite={canWrite}
+              userId={userId}
+              isSubmitting={isSubmitting}
+              onOpenEdit={onOpenEdit}
+              onToggleFeatured={onToggleFeatured}
+              onReview={onReview}
+              onSubmit={onSubmit}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm py-3 px-6">
+        <AdminPagination
+          currentPage={meta.currentPage}
+          totalPages={meta.totalPages}
+          totalItems={meta.totalItems}
+          pageSize={pageSize}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          itemLabel={hasFilter ? 'kết quả' : 'bài viết'}
+          pageSizeOptions={[10, 20, 50]}
         />
-      ))}
+      </div>
     </div>
   );
 }

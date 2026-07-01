@@ -1,5 +1,6 @@
 import React from 'react';
 import { TourPackage } from '@/types';
+import { getSaleAdjustedUnitPrice } from '@/lib/booking/passengerPricing';
 
 type TranslationFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -8,6 +9,8 @@ interface PackageCardProps {
     selected: boolean;
     onSelect: () => void;
     formatPrice: (n: number) => string;
+    tourPrice: number;
+    departurePrice: number | null | undefined;
     t: TranslationFn;
 }
 
@@ -16,8 +19,12 @@ export default function PackageCard({
     selected,
     onSelect,
     formatPrice,
+    tourPrice,
+    departurePrice,
     t,
 }: PackageCardProps) {
+    const salePrice = getSaleAdjustedUnitPrice(pkg.price, tourPrice, departurePrice);
+    const isOnSale = pkg.price > 0 && salePrice < pkg.price;
     const BADGE_STYLES: Record<string, string> = {
         'POPULAR': 'bg-orange-100 text-orange-700 border-orange-200',
         'BEST VALUE': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -59,8 +66,13 @@ export default function PackageCard({
                     </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    {isOnSale && (
+                        <p className="text-xs font-medium text-on-surface-variant line-through leading-none">
+                            {formatPrice(pkg.price)}
+                        </p>
+                    )}
                     <p className="text-lg font-extrabold text-primary leading-none">
-                        {pkg.price > 0 ? formatPrice(pkg.price) : t('tour_detail.packageFree')}
+                        {pkg.price > 0 ? formatPrice(isOnSale ? salePrice : pkg.price) : t('tour_detail.packageFree')}
                     </p>
                     {pkg.price > 0 && <p className="text-[10px] text-on-surface-variant">{t('tour_detail.packagePerPerson')}</p>}
                     {pkg.badge && (

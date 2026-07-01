@@ -192,7 +192,7 @@ export function BookingPageHeader({
           id="export-bookings-btn"
           onClick={onExport}
           disabled={isExporting}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 disabled:opacity-60 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-lowest text-on-surface-variant text-sm font-semibold hover:bg-surface-container hover:text-on-surface disabled:opacity-60 transition-all shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {isExporting ? (
             <><span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>Đang xuất…</>

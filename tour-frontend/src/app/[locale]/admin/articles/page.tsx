@@ -100,12 +100,16 @@ export default function ArticleManagementPage() {
           canWrite={article.canWrite}
           userId={article.userId}
           isSubmitting={article.isSubmitting}
+          meta={article.meta}
+          pageSize={article.pageSize}
           onCreate={article.openCreate}
           onOpenEdit={article.openEdit}
           onToggleFeatured={article.handleToggleFeatured}
           onReview={article.setReviewTarget}
           onSubmit={article.setSubmitTarget}
           onDelete={article.setDeleteTarget}
+          onPageChange={article.setPage}
+          onPageSizeChange={article.changePageSize}
         />
       )}
 

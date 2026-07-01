@@ -242,6 +242,8 @@ export default function TourDetailClient({
                                             selected={selectedPackage?.id === pkg.id}
                                             onSelect={() => setSelectedPackage(pkg)}
                                             formatPrice={formatPrice}
+                                            tourPrice={tour.price}
+                                            departurePrice={selectedDeparture?.price}
                                             t={t}
                                         />
                                     ))}

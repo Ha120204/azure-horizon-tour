@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BookingCancellationService } from '../booking/booking-cancellation.service';
+import { normalizeSearchText } from '../tour/tour-helpers';
 import { AiEmbeddingService } from './ai-embedding.service';
 
 interface SearchToursArgs { destination?: string; departurePoint?: string; minPrice?: number; maxPrice?: number; tourType?: string; startMonth?: number; startMonthFrom?: number; partySize?: number }
@@ -48,6 +49,10 @@ export class AiToolService {
   private buildTourWhere(
     args: SearchToursArgs,
     opts: { price: boolean; tourType: boolean; month: boolean },
+    matches: { destinationTourIds: number[]; departureTourIds: number[] } = {
+      destinationTourIds: [],
+      departureTourIds: [],
+    },
   ): Prisma.TourWhereInput {
     const { destination, departurePoint, minPrice, maxPrice, tourType, partySize } = args;
     const party = partySize ? Number(partySize) : null;
@@ -64,24 +69,39 @@ export class AiToolService {
     if (destination) {
       // Mỗi token phải khớp ít nhất một trường (AND giữa các token, OR giữa các trường)
       // → gõ gần đúng tên tour, sai dấu gạch hay thiếu/thừa chữ vẫn tìm ra.
-      andConditions.push(
-        ...this.toSearchTerms(destination).map((term) => ({
-          OR: [
-            { name: { contains: term, mode: 'insensitive' as const } },
-            { destination: { name: { contains: term, mode: 'insensitive' as const } } },
-            { destination: { region: { contains: term, mode: 'insensitive' as const } } },
-          ],
-        })),
-      );
+      // Nhánh id-in là fallback KHỚP KHÔNG DẤU (vd "Hoi An" → "Hội An") vì Prisma
+      // `contains`+insensitive chỉ bỏ hoa/thường, không bỏ dấu tiếng Việt.
+      const destTokenMatch = this.toSearchTerms(destination).map((term) => ({
+        OR: [
+          { name: { contains: term, mode: 'insensitive' as const } },
+          { destination: { name: { contains: term, mode: 'insensitive' as const } } },
+          { destination: { region: { contains: term, mode: 'insensitive' as const } } },
+        ],
+      }));
+      andConditions.push({
+        OR: [
+          { AND: destTokenMatch },
+          ...(matches.destinationTourIds.length > 0
+            ? [{ id: { in: matches.destinationTourIds } }]
+            : []),
+        ],
+      });
     }
 
     if (departurePoint) {
       // Lọc theo điểm khởi hành mặc định của tour (Tour.departurePoint).
-      andConditions.push(
-        ...this.toSearchTerms(departurePoint).map((term) => ({
-          departurePoint: { contains: term, mode: 'insensitive' as const },
-        })),
-      );
+      // Nhánh id-in: fallback khớp không dấu như phần điểm đến.
+      const depTokenMatch = this.toSearchTerms(departurePoint).map((term) => ({
+        departurePoint: { contains: term, mode: 'insensitive' as const },
+      }));
+      andConditions.push({
+        OR: [
+          { AND: depTokenMatch },
+          ...(matches.departureTourIds.length > 0
+            ? [{ id: { in: matches.departureTourIds } }]
+            : []),
+        ],
+      });
     }
 
     if (andConditions.length > 0) {
@@ -120,6 +140,48 @@ export class AiToolService {
     }
 
     return whereClause;
+  }
+
+  // Quét accent-insensitive (bỏ dấu tiếng Việt) trên tập tour PUBLISHED để tìm id
+  // khớp điểm đến / điểm khởi hành khi khách gõ không dấu ("Hoi An" → "Hội An").
+  // Đồng bộ cách làm với tour.service (normalizeSearchText). Số tour ít nên quét đủ rẻ.
+  private async resolveAccentInsensitiveMatches(
+    destination?: string,
+    departurePoint?: string,
+  ): Promise<{ destinationTourIds: number[]; departureTourIds: number[] }> {
+    const tokenize = (value?: string) =>
+      value ? normalizeSearchText(value).split(/\s+/).filter((t) => t.length >= 2) : [];
+    const destTokens = tokenize(destination);
+    const depTokens = tokenize(departurePoint);
+    if (destTokens.length === 0 && depTokens.length === 0) {
+      return { destinationTourIds: [], departureTourIds: [] };
+    }
+
+    const candidates = await this.prisma.tour.findMany({
+      where: { status: 'PUBLISHED', deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        departurePoint: true,
+        destination: { select: { name: true, region: true } },
+      },
+    });
+
+    const destinationTourIds: number[] = [];
+    const departureTourIds: number[] = [];
+    for (const tour of candidates) {
+      if (destTokens.length > 0) {
+        const text = normalizeSearchText(
+          `${tour.name} ${tour.destination?.name ?? ''} ${tour.destination?.region ?? ''}`,
+        );
+        if (destTokens.every((tok) => text.includes(tok))) destinationTourIds.push(tour.id);
+      }
+      if (depTokens.length > 0) {
+        const text = normalizeSearchText(tour.departurePoint ?? '');
+        if (depTokens.every((tok) => text.includes(tok))) departureTourIds.push(tour.id);
+      }
+    }
+    return { destinationTourIds, departureTourIds };
   }
 
   // Khoảng ngày khởi hành khách yêu cầu: đúng một tháng (startMonth) hoặc từ một
@@ -188,9 +250,12 @@ export class AiToolService {
     const a = args as SearchToursArgs;
     const party = a.partySize ? Number(a.partySize) : null;
 
+    // Khớp không dấu (1 lần, dùng lại cho mọi tầng nới lỏng).
+    const matches = await this.resolveAccentInsensitiveMatches(a.destination, a.departurePoint);
+
     // 1) Tìm với đầy đủ bộ lọc khách đưa.
     const monthRange = this.monthRange(a);
-    const tours = await this.queryTours(this.buildTourWhere(a, { price: true, tourType: true, month: true }), monthRange);
+    const tours = await this.queryTours(this.buildTourWhere(a, { price: true, tourType: true, month: true }, matches), monthRange);
     if (tours.length > 0) {
       return tours.map((t) => this.mapTour(t));
     }
@@ -214,7 +279,7 @@ export class AiToolService {
         keep[filter.key] = false;
         dropped.push(filter.label);
         // Khi vẫn giữ lọc tháng thì hiển thị ngày khớp tháng; nếu đã nới tháng thì ngày gần nhất.
-        const relaxed = await this.queryTours(this.buildTourWhere(a, keep), keep.month ? monthRange : null);
+        const relaxed = await this.queryTours(this.buildTourWhere(a, keep, matches), keep.month ? monthRange : null);
         if (relaxed.length > 0) {
           return relaxed.map((t) => ({ ...this.mapTour(t), _relaxed: true, _relaxedFilters: [...dropped] }));
         }

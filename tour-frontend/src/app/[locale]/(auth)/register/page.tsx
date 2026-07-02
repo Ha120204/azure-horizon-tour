@@ -113,7 +113,10 @@ export default function RegisterPage() {
     const handleGoogleRegister = () => {
         if (isGoogleLoading || isSubmitting) return;
         setIsGoogleLoading(true);
-        window.location.href = `${API_BASE_URL}/auth/google`;
+        const googleUrl = redirectTarget
+            ? `${API_BASE_URL}/auth/google?from=${encodeURIComponent(redirectTarget)}`
+            : `${API_BASE_URL}/auth/google`;
+        window.location.href = googleUrl;
     };
 
     return (

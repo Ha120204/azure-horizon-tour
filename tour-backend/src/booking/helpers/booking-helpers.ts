@@ -137,12 +137,12 @@ export function validatePassengerAgeVsType(
       `Hành khách khai báo là Người lớn (Adult) nhưng tuổi thực tại ngày khởi hành là ${age} tuổi. Vui lòng chọn đúng loại hành khách.`,
     );
   }
-  if (normalized === 'Child (4-11)' && (age < 4 || age > 11)) {
+  if (normalized === 'Child (4-11)' && (age < 2 || age > 11)) {
     throw new BadRequestException(
       `Hành khách khai báo là Trẻ em (Child) nhưng tuổi thực tại ngày khởi hành là ${age} tuổi. Vui lòng chọn đúng loại hành khách.`,
     );
   }
-  if (normalized === 'Infant (<4)' && age >= 4) {
+  if (normalized === 'Infant (<4)' && age >= 2) {
     throw new BadRequestException(
       `Hành khách khai báo là Em bé (Infant) nhưng tuổi thực tại ngày khởi hành là ${age} tuổi. Vui lòng chọn đúng loại hành khách.`,
     );
@@ -381,8 +381,10 @@ export function isAssistedDraftStatus(value: string): boolean {
 // ─── Pricing helpers ──────────────────────────────────────────────────────────
 
 // ════════════════════════════════════════════════════════════════════════════
-// [BOOKING - BẢNG GIÁ HÀNH KHÁCH] Nguồn sự thật duy nhất: adult ×1, child ×0.7, infant ×0.1.
+// [BOOKING - BẢNG GIÁ HÀNH KHÁCH] Nguồn sự thật duy nhất: adult ×1, child ×0.75, infant ×0.1.
 // Có alias (ADULT/CHILD/INFANT) để khớp cả 2 format payload (chuỗi Viator-style và enum-style).
+// LƯU Ý: phần "(4-11)"/"(<4)" trong key chỉ là ĐỊNH DANH nội bộ ổn định (đã lưu trong DB booking cũ),
+// KHÔNG phải mốc tuổi thật. Mốc tuổi thật là Child 2-11, Infant 0-2, thực thi ở validatePassengerAgeVsType.
 // Đổi giá: CHỈ sửa ở đây. Nếu cần UI frontend hiển thị đúng: sửa thêm map song song
 // ở tour-frontend/src/lib/booking/passengerPricing.ts (điểm cộng khi nói với giảng viên).
 // ════════════════════════════════════════════════════════════════════════════
@@ -393,10 +395,10 @@ export function isAssistedDraftStatus(value: string): boolean {
  */
 export const PASSENGER_MULTIPLIERS: Record<string, number> = {
   'Adult (12+)': 1,
-  'Child (4-11)': 0.7,
+  'Child (4-11)': 0.75,
   'Infant (<4)': 0.1,
   ADULT: 1,
-  CHILD: 0.7,
+  CHILD: 0.75,
   INFANT: 0.1,
 };
 

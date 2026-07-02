@@ -31,8 +31,8 @@ export function getPassengerAgeError(type: PassengerType, dob: string): string |
   if (age === null) return 'Ngày sinh không hợp lệ.';
   if (age < 0) return 'Ngày sinh không được là ngày trong tương lai.';
   if (type === 'Adult (12+)' && age < 12) return `Người lớn phải từ 12 tuổi trở lên. Tuổi hiện tại: ${age} tuổi.`;
-  if (type === 'Child (4-11)' && (age < 4 || age > 11)) return `Trẻ em phải từ 4-11 tuổi. Tuổi hiện tại: ${age} tuổi.`;
-  if (type === 'Infant (<4)' && age >= 4) return `Em bé phải dưới 4 tuổi. Tuổi hiện tại: ${age} tuổi.`;
+  if (type === 'Child (4-11)' && (age < 2 || age > 11)) return `Trẻ em phải từ 2-11 tuổi. Tuổi hiện tại: ${age} tuổi.`;
+  if (type === 'Infant (<4)' && age >= 2) return `Em bé phải dưới 2 tuổi. Tuổi hiện tại: ${age} tuổi.`;
   return null;
 }
 
@@ -47,12 +47,12 @@ function formatDateBoundary(yearOffset: number) {
 export function getPassengerMinDate(type: PassengerType): string {
   if (type === 'Adult (12+)') return formatDateBoundary(-120);
   if (type === 'Child (4-11)') return formatDateBoundary(-11);
-  return formatDateBoundary(-3);
+  return formatDateBoundary(-2);
 }
 
 export function getPassengerMaxDate(type: PassengerType): string {
   if (type === 'Adult (12+)') return formatDateBoundary(-12);
-  if (type === 'Child (4-11)') return formatDateBoundary(-4);
+  if (type === 'Child (4-11)') return formatDateBoundary(-2);
   return formatDateBoundary(0);
 }
 

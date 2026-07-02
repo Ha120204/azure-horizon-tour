@@ -40,8 +40,8 @@ function dobBounds(type: PassengerType, ref: Date) {
     const y = ref.getFullYear();
     const tail = `${pad(ref.getMonth() + 1)}-${pad(ref.getDate())}`;
     if (type === 'Adult (12+)') return { min: `${y - 120}-${tail}`, max: `${y - 12}-${tail}` };
-    if (type === 'Child (4-11)') return { min: `${y - 11}-${tail}`, max: `${y - 4}-${tail}` };
-    return { min: `${y - 3}-${tail}`, max: `${y}-${tail}` };
+    if (type === 'Child (4-11)') return { min: `${y - 11}-${tail}`, max: `${y - 2}-${tail}` };
+    return { min: `${y - 2}-${tail}`, max: `${y}-${tail}` };
 }
 
 function getIdentityIcon(value: string) {

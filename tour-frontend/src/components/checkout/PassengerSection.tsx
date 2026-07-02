@@ -90,8 +90,8 @@ function getAgeError(type: PassengerType, dob: string, referenceDate?: Date): st
     if (age === null) return 'Ngày sinh không hợp lệ.';
     if (age < 0) return 'Ngày sinh không được là ngày trong tương lai.';
     if (type === 'Adult (12+)' && age < 12) return `Người lớn phải từ 12 tuổi trở lên tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
-    if (type === 'Child (4-11)' && (age < 4 || age > 11)) return `Trẻ em phải từ 4–11 tuổi tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
-    if (type === 'Infant (<4)' && age >= 4) return `Em bé phải dưới 4 tuổi tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
+    if (type === 'Child (4-11)' && (age < 2 || age > 11)) return `Trẻ em phải từ 2–11 tuổi tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
+    if (type === 'Infant (<4)' && age >= 2) return `Em bé phải dưới 2 tuổi tại ngày khởi hành. Tuổi lúc đi: ${age} tuổi.`;
     return null;
 }
 
@@ -111,7 +111,7 @@ function getMinDate(type: PassengerType, referenceDate?: Date): string {
         return `${y - 11}-${mm}-${dd}`;
     }
     // Infant
-    return `${y - 3}-${mm}-${dd}`;
+    return `${y - 2}-${mm}-${dd}`;
 }
 
 function getMaxDate(type: PassengerType, referenceDate?: Date): string {
@@ -124,10 +124,10 @@ function getMaxDate(type: PassengerType, referenceDate?: Date): string {
         return `${y - 12}-${mm}-${dd}`;
     }
     if (type === 'Child (4-11)') {
-        // 4 đến 11 tuổi tại ngày khởi hành → max DOB = referenceDate - 4 năm
-        return `${y - 4}-${mm}-${dd}`;
+        // 2 đến 11 tuổi tại ngày khởi hành → max DOB = referenceDate - 2 năm
+        return `${y - 2}-${mm}-${dd}`;
     }
-    // Infant <4 tại ngày khởi hành → max DOB = referenceDate
+    // Infant <2 tại ngày khởi hành → max DOB = referenceDate
     return `${y}-${mm}-${dd}`;
 }
 
@@ -610,7 +610,7 @@ export default function PassengerSection({
                                 const isActive = activeFormType === type;
                                 const icon = type.includes('Child') ? 'child_care' : type.includes('Infant') ? 'baby_changing_station' : 'person';
                                 const translatedType = type === 'Adult (12+)' ? t('checkout.adult') : type === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant');
-                                const ageRange = type === 'Adult (12+)' ? '12+' : type === 'Child (4-11)' ? '4–11' : '<4';
+                                const ageRange = type === 'Adult (12+)' ? '12+' : type === 'Child (4-11)' ? '2–11' : '<2';
 
                                 // Infant không tính ghế nhưng không được vượt quá số người lớn
                                 const isDisabled = type === 'Infant (<4)' ? isInfantFull : isSeatFull;
@@ -679,7 +679,7 @@ export default function PassengerSection({
                                     <h4 className="font-headline font-bold text-lg text-primary">
                                         {isEditingPassenger ? t('checkout.editPassenger') : t('checkout.enterInfoFor')} {activeFormType === 'Adult (12+)' ? t('checkout.adult') : activeFormType === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant')}
                                         <span className="ml-2 text-sm font-normal text-on-surface-variant">
-                                            ({activeFormType === 'Adult (12+)' ? '>=12' : activeFormType === 'Child (4-11)' ? '4-11' : '<4'} {t('checkout.yearsOld')})
+                                            ({activeFormType === 'Adult (12+)' ? '>=12' : activeFormType === 'Child (4-11)' ? '2-11' : '<2'} {t('checkout.yearsOld')})
                                         </span>
                                     </h4>
                                     <button
@@ -872,7 +872,7 @@ export default function PassengerSection({
                             {draft.map((passenger, idx) => {
                                 const type = passenger.type as PassengerType;
                                 const typeLabel = type === 'Adult (12+)' ? t('checkout.adult') : type === 'Child (4-11)' ? t('checkout.child') : t('checkout.infant');
-                                const ageRange = type === 'Adult (12+)' ? '>=12' : type === 'Child (4-11)' ? '4-11' : '<4';
+                                const ageRange = type === 'Adult (12+)' ? '>=12' : type === 'Child (4-11)' ? '2-11' : '<2';
                                 const rowErr = draftErrors[idx] ?? {};
                                 const age = passenger.dob ? calcAge(passenger.dob, referenceDate) : null;
                                 return (

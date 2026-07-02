@@ -278,6 +278,10 @@ export class AuthController {
     if (from === 'admin' && isAdminRole) {
       const adminPath = role === 'SUPER_ADMIN' ? '/admin/super' : '/admin';
       callbackUrl.searchParams.set('redirect', adminPath);
+    } else if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')) {
+      // Khách bấm Google từ trang cần đăng nhập (vd checkout) → giữ đích quay lại.
+      // Callback FE còn lọc lại bằng getSafeRedirectPath nên không mở open-redirect.
+      callbackUrl.searchParams.set('redirect', from);
     }
 
     res.redirect(callbackUrl.toString());

@@ -1,8 +1,10 @@
 // Phải đồng bộ với backend PASSENGER_MULTIPLIERS trong
 // tour-backend/src/booking/helpers/booking-helpers.ts
+// LƯU Ý: "(4-11)"/"(<4)" trong key chỉ là định danh nội bộ ổn định (đã lưu ở booking cũ),
+// KHÔNG phải mốc tuổi thật. Mốc thật: Child 2-11, Infant 0-2 (thực thi ở passengerDetails/PassengerSection).
 export const PASSENGER_MULTIPLIERS = {
   'Adult (12+)': 1,
-  'Child (4-11)': 0.7,
+  'Child (4-11)': 0.75,
   'Infant (<4)': 0.1,
 } as const;
 

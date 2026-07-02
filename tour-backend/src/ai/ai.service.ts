@@ -158,6 +158,8 @@ export class AiService {
   private primaryModel: string;
   private fallbackModel: string;
   private baseURL?: string;
+  // Tỷ giá quy đổi USD→VND (khớp với VND_TO_USD_RATE ở frontend LocaleContext).
+  private static readonly VND_PER_USD = 26331;
 
   constructor(
     private readonly configService: ConfigService,
@@ -331,21 +333,63 @@ export class AiService {
   private async parseAndSaveResponse(
     rawText: string,
     sessionId: string,
+    fallbackCards?: TourCard[],
   ): Promise<{ reply: string; tourCards?: TourCard[]; sessionId: string }> {
     const { cards, cleaned } = extractTourCards(rawText);
     const reply = cleaned || 'Xin lỗi, tôi không thể trả lời lúc này.';
 
-    // Store the original response, including TOUR_CARD, so history can restore it.
+    // Ưu tiên thẻ do LLM tự chèn; nếu LLM quên chèn mà tool search_tours có kết quả
+    // thì dùng thẻ backend tự dựng (deterministic) — đảm bảo LUÔN có card khi tìm ra tour.
+    const effectiveCards = cards.length ? cards : (fallbackCards ?? []);
+
+    // Lưu nội dung KÈM marker TOUR_CARD để lịch sử khôi phục lại được thẻ. Khi phải dùng
+    // fallback (LLM không chèn), tự ghép marker vào bản lưu để mở lại session vẫn thấy thẻ.
+    let contentToStore = rawText;
+    if (!cards.length && effectiveCards.length) {
+      const cardBlocks = effectiveCards
+        .map((card) => `<<<TOUR_CARD>>>\n${JSON.stringify(card)}\n<<<END_TOUR_CARD>>>`)
+        .join('\n');
+      contentToStore = `${cleaned}\n${cardBlocks}`;
+    }
     await this.prisma.chatMessage.create({
-      data: { sessionId, role: 'model', content: rawText },
+      data: { sessionId, role: 'model', content: contentToStore },
     });
     await this.touchChatSession(sessionId);
 
     return {
       reply,
-      tourCards: cards.length ? cards : undefined,
+      tourCards: effectiveCards.length ? effectiveCards : undefined,
       sessionId,
     };
+  }
+
+  // Dựng thẻ tour trực tiếp từ kết quả tool search_tours (id + imageUrl + giá VND thật),
+  // format giá theo ngôn ngữ câu trả lời. Dùng khi LLM không tự chèn <<<TOUR_CARD>>>.
+  private buildTourCardsFromSearch(
+    rows: Record<string, unknown>[],
+    language?: string | null,
+  ): TourCard[] {
+    const seen = new Set<number>();
+    const cards: TourCard[] = [];
+    for (const row of rows) {
+      const id = Number(row.id);
+      const image = typeof row.imageUrl === 'string' ? row.imageUrl : '';
+      if (!id || !image || seen.has(id)) continue;
+      seen.add(id);
+      const priceVnd = Number(row.price) || 0;
+      const price =
+        language === 'en'
+          ? `≈ $${Math.round(priceVnd / AiService.VND_PER_USD).toLocaleString('en-US')}/person`
+          : `${(priceVnd / 1_000_000).toFixed(2).replace('.', ',')} triệu/người`;
+      cards.push({
+        id,
+        name: typeof row.name === 'string' ? row.name : undefined,
+        price,
+        image,
+      });
+      if (cards.length >= 4) break;
+    }
+    return cards;
   }
   // Lấy ngữ cảnh tour của trang khách đang mở (id + tên) để nhúng vào system prompt.
   private async getCurrentTourContext(
@@ -377,7 +421,7 @@ export class AiService {
     const uiLangLabel = language === 'en' ? 'English (tiếng Anh)' : 'tiếng Việt';
     const uiCurrency = currency === 'USD' ? 'USD' : 'VND';
     // Tỷ giá quy đổi USD→VND (khớp với VND_TO_USD_RATE ở frontend LocaleContext).
-    const VND_PER_USD = 26331;
+    const VND_PER_USD = AiService.VND_PER_USD;
     const today = new Date().toLocaleDateString('vi-VN', {
       weekday: 'long',
       year: 'numeric',
@@ -607,17 +651,20 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour trong kế
     model: string,
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     userId: number | null,
-  ): Promise<string> {
+  ): Promise<{ rawText: string; searchResults: Record<string, unknown>[] }> {
     const resolved = await this.resolveToolCallsOnly(model, messages, userId);
     if (!resolved.needsStream) {
-      return resolved.directResponse;
+      return { rawText: resolved.directResponse, searchResults: resolved.searchResults };
     }
 
     const finalResponse = await this.executeChatCompletion(model, {
       messages: resolved.messagesForStream,
       max_tokens: 1024,
     });
-    return finalResponse.choices[0]?.message?.content || '';
+    return {
+      rawText: finalResponse.choices[0]?.message?.content || '',
+      searchResults: resolved.searchResults,
+    };
   }
 
   private async chatWithFallback(
@@ -625,17 +672,18 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour trong kế
     sessionId: string,
     userId: number | null,
     originalError: unknown,
+    language?: string | null,
   ): Promise<{ reply: string; tourCards?: TourCard[]; sessionId: string }> {
     this.logAiErrorContext('Primary model', this.primaryModel, originalError);
     this.logger.warn(`[AI] Switching to fallback model: ${this.fallbackModel}`);
     try {
-      const rawText = await this.runModelChat(
+      const { rawText, searchResults } = await this.runModelChat(
         this.fallbackModel,
         messages,
         userId,
       );
       this.logger.log('[AI] Fallback model responded successfully.');
-      return this.parseAndSaveResponse(rawText, sessionId);
+      return this.parseAndSaveResponse(rawText, sessionId, this.buildTourCardsFromSearch(searchResults, language));
     } catch (fallbackError: unknown) {
       this.logAiErrorContext(
         'Fallback model',
@@ -747,8 +795,8 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour trong kế
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     userId: number | null,
   ): Promise<
-    | { needsStream: true; messagesForStream: OpenAI.Chat.ChatCompletionMessageParam[]; toolsUsed: string[] }
-    | { needsStream: false; directResponse: string; toolsUsed: string[] }
+    | { needsStream: true; messagesForStream: OpenAI.Chat.ChatCompletionMessageParam[]; toolsUsed: string[]; searchResults: Record<string, unknown>[] }
+    | { needsStream: false; directResponse: string; toolsUsed: string[]; searchResults: Record<string, unknown>[] }
   > {
     const response = await this.executeChatCompletion(model, {
       messages,
@@ -765,18 +813,23 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour trong kế
         .map((tc) => this.aiToolService.getFunctionToolCall(tc)?.name)
         .filter((n): n is string => Boolean(n));
       const updatedMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages, choice.message];
+      const searchResults: Record<string, unknown>[] = [];
       for (const toolCall of toolCalls) {
+        const fnName = this.aiToolService.getFunctionToolCall(toolCall)?.name;
         const fnResult = await this.aiToolService.executeTourTool(toolCall, userId);
+        if (fnName === 'search_tours' && Array.isArray(fnResult)) {
+          searchResults.push(...(fnResult as Record<string, unknown>[]));
+        }
         updatedMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
           content: JSON.stringify(fnResult),
         });
       }
-      return { needsStream: true, messagesForStream: updatedMessages, toolsUsed };
+      return { needsStream: true, messagesForStream: updatedMessages, toolsUsed, searchResults };
     }
 
-    return { needsStream: false, directResponse: choice?.message?.content || '', toolsUsed: [] };
+    return { needsStream: false, directResponse: choice?.message?.content || '', toolsUsed: [], searchResults: [] };
   }
 
   // Số tin nhắn user tối đa mỗi session trước khi yêu cầu mở cuộc trò chuyện mới.
@@ -846,11 +899,11 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour trong kế
 
     const { currentSessionId, messages } = prep;
     try {
-      const rawText = await this.runModelChat(this.primaryModel, messages, userId || null);
-      return this.parseAndSaveResponse(rawText, currentSessionId);
+      const { rawText, searchResults } = await this.runModelChat(this.primaryModel, messages, userId || null);
+      return this.parseAndSaveResponse(rawText, currentSessionId, this.buildTourCardsFromSearch(searchResults, language));
     } catch (error: unknown) {
       this.logAiErrorContext('Chat flow', this.primaryModel, error);
-      return this.chatWithFallback(messages, currentSessionId, userId || null, error);
+      return this.chatWithFallback(messages, currentSessionId, userId || null, error, language);
     }
   }
   // ════════════════════════════════════════════════════════════════════════════
@@ -980,7 +1033,11 @@ Chỉ KHÔNG dùng TOUR_CARD khi: đang chat thường chưa có tour trong kế
         emittedChars = flushEnd;
       }
 
-      const result = await this.parseAndSaveResponse(fullText, currentSessionId);
+      const result = await this.parseAndSaveResponse(
+        fullText,
+        currentSessionId,
+        this.buildTourCardsFromSearch(resolveResult.searchResults, language),
+      );
       const followUps = this.buildFollowUpSuggestions(resolveResult.toolsUsed);
       yield { done: true, tourCards: result.tourCards, sessionId: currentSessionId, followUps };
     } catch (streamError: unknown) {

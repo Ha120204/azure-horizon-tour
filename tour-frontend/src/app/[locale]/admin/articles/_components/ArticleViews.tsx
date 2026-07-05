@@ -24,6 +24,7 @@ interface ArticleListViewProps extends SharedArticleViewProps {
   onToggleCurrentPage: () => void;
   onClearSelection: () => void;
   onBulkAction: (action: ArticleBulkAction, options?: ArticleBulkActionOptions) => void;
+  onExport: () => void;
   onSortChange: (key: ArticleSortKey) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
@@ -73,6 +74,7 @@ export function ArticleListView({
   onToggleCurrentPage,
   onClearSelection,
   onBulkAction,
+  onExport,
   onSortChange,
   onPageChange,
   onPageSizeChange,
@@ -90,6 +92,7 @@ export function ArticleListView({
         isLoading={isBulkActionLoading}
         onClear={onClearSelection}
         onBulkAction={onBulkAction}
+        onExport={onExport}
       />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1180px] text-left border-collapse">

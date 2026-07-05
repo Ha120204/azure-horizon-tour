@@ -115,6 +115,7 @@ export default function BookingManagementPage() {
           onSaveBookingNote={booking.saveBookingNote}
           onPageChange={booking.setPage}
           onPageSizeChange={booking.changePageSize}
+          showToast={booking.showToast}
         />
       </section>
 

@@ -11,6 +11,7 @@ import {
   PAY_CFG,
   STATUS_CFG,
 } from '../_lib/config';
+import { exportSelectedBookingsCsv } from '../_lib/exportCsv';
 import { canRemindPayment, copyPhone, fmt, fmtDate, fmtDateTime, getInitials, toTelHref, toZaloPhone } from '../_lib/helpers';
 import type { Booking, Meta } from '../_lib/types';
 
@@ -34,6 +35,7 @@ interface BookingTableProps {
   onSaveBookingNote: (booking: Booking, note: string) => void | Promise<void>;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  showToast: (msg: string, ok?: boolean) => void;
 }
 
 export function BookingTable({
@@ -56,6 +58,7 @@ export function BookingTable({
   onSaveBookingNote,
   onPageChange,
   onPageSizeChange,
+  showToast,
 }: BookingTableProps) {
   const [noteTarget, setNoteTarget] = useState<Booking | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
@@ -102,6 +105,15 @@ export function BookingTable({
     }
   };
 
+  const handleExportSelected = () => {
+    const exportedCount = exportSelectedBookingsCsv(selectedBookings);
+    if (exportedCount === 0) {
+      showToast('Chưa có đơn nào để xuất.', false);
+      return;
+    }
+    showToast(`Đã xuất ${exportedCount} đơn ra CSV.`);
+  };
+
   return (
     <>
       <div id="bookings-table" className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden">
@@ -124,6 +136,14 @@ export function BookingTable({
             <p className="text-xs text-on-surface-variant">{payableSelectedBookings.length} đơn có thể nhắc thanh toán PayOS</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportSelected}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-outline-variant/20 bg-white px-4 py-2 text-sm font-bold text-on-surface-variant transition-colors hover:bg-surface-container"
+            >
+              <span className="material-symbols-outlined text-[16px]">download</span>
+              Xuất CSV ({selectedCount})
+            </button>
             <button
               type="button"
               onClick={handleBulkRemind}

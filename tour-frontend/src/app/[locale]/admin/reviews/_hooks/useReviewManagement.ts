@@ -8,6 +8,7 @@ import { useAdminRealtime } from '@/hooks/admin/useAdminRealtime';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { EMPTY_ADMIN_STATS } from '../_lib/config';
+import { exportReviewsCsv } from '../_lib/exportCsv';
 import type { AdminStats, Meta, Review, ReviewKpiItem } from '../_lib/types';
 
 const REVIEW_REALTIME_TYPES = ['review_good', 'review_bad'] as const;
@@ -148,6 +149,15 @@ export function useReviewManagement() {
         () => reviews.filter((review) => selected.includes(review.id)),
         [reviews, selected],
     );
+
+    const exportSelectedReviews = useCallback(() => {
+        const exportedCount = exportReviewsCsv(selectedReviews);
+        if (exportedCount === 0) {
+            showToast('Chưa có đánh giá nào để xuất', false);
+            return;
+        }
+        showToast(`Đã xuất ${exportedCount} đánh giá ra CSV`);
+    }, [selectedReviews, showToast]);
 
     const handleToggleVisibility = useCallback(async (review: Review) => {
         setLoadingId(review.id);
@@ -428,6 +438,7 @@ export function useReviewManagement() {
         toggleSelect,
         toggleSelectAll,
         clearSelection,
+        exportSelectedReviews,
         handleToggleVisibility,
         handleDelete,
         handleReply,

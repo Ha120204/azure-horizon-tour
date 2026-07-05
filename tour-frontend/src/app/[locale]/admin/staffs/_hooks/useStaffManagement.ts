@@ -5,6 +5,7 @@ import { useAdminAutoRefresh } from '@/hooks/admin/useAdminAutoRefresh';
 import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import { roleConfig } from '../_lib/config';
+import { exportStaffCsv } from '../_lib/exportCsv';
 import {
     formatDateToISOInputValue,
     getApiMessage,
@@ -426,6 +427,15 @@ export function useStaffManagement() {
         setSelectedStaffIds(new Set());
     }, []);
 
+    const exportSelectedStaff = useCallback(() => {
+        const exportedCount = exportStaffCsv(selectedStaffUsers);
+        if (exportedCount === 0) {
+            showToast('Chưa có tài khoản nào để xuất.', 'error');
+            return;
+        }
+        showToast(`Đã xuất ${exportedCount} tài khoản ra CSV.`);
+    }, [selectedStaffUsers, showToast]);
+
     const requestBulkStatusChange = useCallback((status: BulkStatusAction) => {
         const targetCount = selectedStaffUsers.filter(user => (
             status === 'active' ? user.status === 'Deactivated' : user.status === 'Active'
@@ -581,6 +591,7 @@ export function useStaffManagement() {
         toggleSelectedStaff,
         toggleCurrentPageSelection,
         clearSelection,
+        exportSelectedStaff,
         requestBulkStatusChange,
         handleBulkStatusChange,
     };

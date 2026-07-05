@@ -15,6 +15,7 @@ interface ArticleSelectionBarProps {
   isLoading: boolean;
   onClear: () => void;
   onBulkAction: (action: ArticleBulkAction, options?: ArticleBulkActionOptions) => void;
+  onExport: () => void;
 }
 
 export function ArticleSelectionBar({
@@ -26,6 +27,7 @@ export function ArticleSelectionBar({
   isLoading,
   onClear,
   onBulkAction,
+  onExport,
 }: ArticleSelectionBarProps) {
   const [confirmAction, setConfirmAction] = useState<ConfirmableBulkAction | null>(null);
 
@@ -56,6 +58,15 @@ export function ArticleSelectionBar({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={isLoading}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface px-3 text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary outline-none"
+            >
+              <span className="material-symbols-outlined text-[14px]" aria-hidden="true">download</span>
+              Xuất CSV ({selectedCount})
+            </button>
             {canWrite ? (
               <>
                 {publishCount > 0 && (

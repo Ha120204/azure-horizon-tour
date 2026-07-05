@@ -4,39 +4,34 @@ import { PAY_CFG, STATUS_CFG } from './config';
 import { fmtDate } from './helpers';
 import type { Booking } from './types';
 
-export async function exportBookingsCsv(queryString: string): Promise<number> {
-  const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/all?${queryString}`);
-  const json = await res.json();
-  if (!res.ok) throw new Error();
+const BOOKING_EXPORT_HEADERS = [
+  'Mã Đặt Tour', 'Khách Hàng', 'Email', 'Tour', 'Điểm Đến',
+  'Số Người', 'Đơn Giá (₫)', 'Voucher', 'Giảm Giá (₫)',
+  'Tổng Tiền (₫)', 'Trạng Thái', 'Thanh Toán', 'Ngày Đặt',
+];
 
-  const payload = json?.data ?? json;
-  const allBookings: Booking[] = payload.bookings ?? [];
-  if (allBookings.length === 0) return 0;
+const bookingToRow = (booking: Booking) => [
+  booking.bookingCode,
+  booking.user.fullName,
+  booking.user.email,
+  booking.tour?.name ?? '',
+  booking.tour?.destination?.name ?? '',
+  booking.numberOfPeople,
+  booking.unitPriceAtBooking,
+  booking.voucherCode ?? '',
+  booking.discountAmount,
+  booking.totalPrice,
+  STATUS_CFG[booking.status]?.label ?? booking.status,
+  PAY_CFG[booking.paymentStatus]?.label ?? booking.paymentStatus,
+  fmtDate(booking.createdAt),
+];
 
-  const headers = [
-    'Mã Đặt Tour', 'Khách Hàng', 'Email', 'Tour', 'Điểm Đến',
-    'Số Người', 'Đơn Giá (₫)', 'Voucher', 'Giảm Giá (₫)',
-    'Tổng Tiền (₫)', 'Trạng Thái', 'Thanh Toán', 'Ngày Đặt',
-  ];
+function downloadBookingsCsv(bookings: Booking[]): number {
+  if (bookings.length === 0) return 0;
 
-  const rows = allBookings.map(booking => [
-    booking.bookingCode,
-    booking.user.fullName,
-    booking.user.email,
-    booking.tour?.name ?? '',
-    booking.tour?.destination?.name ?? '',
-    booking.numberOfPeople,
-    booking.unitPriceAtBooking,
-    booking.voucherCode ?? '',
-    booking.discountAmount,
-    booking.totalPrice,
-    STATUS_CFG[booking.status]?.label ?? booking.status,
-    PAY_CFG[booking.paymentStatus]?.label ?? booking.paymentStatus,
-    fmtDate(booking.createdAt),
-  ]);
-
-  const BOM = '\uFEFF';
-  const csvContent = BOM + [headers, ...rows]
+  const rows = bookings.map(bookingToRow);
+  const BOM = '﻿';
+  const csvContent = BOM + [BOOKING_EXPORT_HEADERS, ...rows]
     .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\r\n');
 
@@ -49,5 +44,19 @@ export async function exportBookingsCsv(queryString: string): Promise<number> {
   link.click();
   URL.revokeObjectURL(url);
 
-  return allBookings.length;
+  return bookings.length;
+}
+
+export async function exportBookingsCsv(queryString: string): Promise<number> {
+  const res = await fetchWithAuth(`${API_BASE_URL}/booking/admin/all?${queryString}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error();
+
+  const payload = json?.data ?? json;
+  const allBookings: Booking[] = payload.bookings ?? [];
+  return downloadBookingsCsv(allBookings);
+}
+
+export function exportSelectedBookingsCsv(bookings: Booking[]): number {
+  return downloadBookingsCsv(bookings);
 }

@@ -64,6 +64,7 @@ export default function StaffManagementPage() {
                 itemLabel={itemLabel}
                 isBulkUpdating={staff.isBulkUpdating}
                 onRequestStatusChange={staff.requestBulkStatusChange}
+                onExport={staff.exportSelectedStaff}
                 onClear={staff.clearSelection}
             />
 

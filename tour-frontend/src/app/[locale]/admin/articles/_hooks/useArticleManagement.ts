@@ -7,6 +7,7 @@ import { API_BASE_URL } from '@/lib/http/constants';
 import { fetchWithAuth } from '@/lib/http/fetchWithAuth';
 import type { Article } from '../_components/ArticleDrawer';
 import { EMPTY_STATS } from '../_lib/config';
+import { exportArticlesCsv } from '../_lib/exportCsv';
 import { getCatCfg } from '../_lib/helpers';
 import { buildArticleKpiCards } from '../_lib/kpis';
 import type {
@@ -198,6 +199,15 @@ export function useArticleManagement() {
   const clearArticleSelection = useCallback(() => {
     setSelectedArticleIds(new Set());
   }, []);
+
+  const exportSelectedArticles = useCallback(() => {
+    const exportedCount = exportArticlesCsv(selectedArticles);
+    if (exportedCount === 0) {
+      showToast('Chưa có bài viết nào để xuất.', false);
+      return;
+    }
+    showToast(`Đã xuất ${exportedCount} bài viết ra CSV.`);
+  }, [selectedArticles, showToast]);
 
   const fetchTrash = useCallback(async () => {
     if (!isAdmin) return;
@@ -582,6 +592,7 @@ export function useArticleManagement() {
     toggleSelectedArticle,
     toggleCurrentPageSelection,
     clearArticleSelection,
+    exportSelectedArticles,
     handleBulkAction,
     resetFilters,
     viewWorkflowStatus,

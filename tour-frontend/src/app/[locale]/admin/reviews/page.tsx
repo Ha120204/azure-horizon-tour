@@ -57,6 +57,7 @@ export default function ReviewManagementPage() {
                 bulkLoading={review.bulkLoading}
                 onBulkVisibility={review.handleBulkVisibility}
                 onBulkDelete={() => review.setDeleteTarget(review.selected)}
+                onExport={review.exportSelectedReviews}
                 onClear={review.clearSelection}
             />
 

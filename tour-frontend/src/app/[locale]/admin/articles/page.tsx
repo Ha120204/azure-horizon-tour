@@ -85,6 +85,7 @@ export default function ArticleManagementPage() {
           onToggleCurrentPage={article.toggleCurrentPageSelection}
           onClearSelection={article.clearArticleSelection}
           onBulkAction={article.handleBulkAction}
+          onExport={article.exportSelectedArticles}
           onSortChange={article.changeSort}
           onPageChange={article.setPage}
           onPageSizeChange={article.changePageSize}

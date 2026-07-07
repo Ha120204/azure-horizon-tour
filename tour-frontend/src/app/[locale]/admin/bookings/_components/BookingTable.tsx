@@ -800,6 +800,10 @@ function BookingCancelDialog({ booking, onClose, onCancel }: BookingCancelDialog
     setIsSubmitting(true);
     try {
       await onCancel(booking, trimmedReason);
+    } catch {
+      // Lỗi đã được toast + danh sách đã refresh ở cancelBooking. Đóng dialog vì
+      // retry vô ích khi đơn đã bị hủy/đổi trạng thái; tránh unhandledRejection.
+      onClose();
     } finally {
       setIsSubmitting(false);
     }

@@ -7,6 +7,7 @@ import { CONFIRMED_SOURCE_LABEL } from '../_lib/config';
 import { canRemindPayment, fmtDateTime, getErrorMessage, getVisibleTransactions } from '../_lib/helpers';
 import type { Booking, BookingConfirmSource } from '../_lib/types';
 import { BookingEditForm } from './BookingEditForm';
+import { PaymentQrCode } from './PaymentQrCode';
 
 // ─── Booking Action Bar ───────────────────────────────────────────────────────
 // Renders the modal footer: feedback banners, quick-action buttons, and the
@@ -204,6 +205,7 @@ export function BookingActionBar({
         numberOfPeople: booking.numberOfPeople,
         voucherCode: booking.voucherCode ?? '',
         internalNote: `Tạo lại từ đơn ${booking.bookingCode}`,
+        paymentMethod: booking.paymentMethod,
       },
     }));
     onClose();
@@ -289,6 +291,17 @@ export function BookingActionBar({
           </button>
         )}
       </div>
+
+      {/* Mã QR để nhân viên tải gửi khách qua Zalo/chat (đơn PayOS chưa thanh toán) */}
+      {latestPaymentRequest && (
+        <div className="mb-3">
+          <PaymentQrCode
+            qrCodeData={latestPaymentRequest.qrCodeUrl}
+            paymentUrl={latestPaymentRequest.paymentUrl}
+            bookingCode={booking.bookingCode}
+          />
+        </div>
+      )}
 
       {/* ── CASE: CHỜ DUYỆT HỦY (admin duyệt / từ chối) ── */}
       {canHandleCancelRequest ? (

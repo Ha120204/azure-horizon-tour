@@ -34,8 +34,6 @@ function SummaryChecklistRow({
 interface AssistedBookingSidebarProps {
   estimatedTotal: number;
   totalPassengerCount: number;
-  baseTourPrice: number;
-  packageSurcharge: number;
   estimatedUnitPrice: number;
   voucherStatus: string;
   hasVoucher: boolean;
@@ -46,8 +44,6 @@ interface AssistedBookingSidebarProps {
 export function AssistedBookingSidebar({
   estimatedTotal,
   totalPassengerCount,
-  baseTourPrice,
-  packageSurcharge,
   estimatedUnitPrice,
   voucherStatus,
   hasVoucher,
@@ -71,16 +67,8 @@ export function AssistedBookingSidebar({
             <span className="font-semibold text-blue-900/60">Số khách</span>
             <span className="font-black text-blue-950">{totalPassengerCount}</span>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-semibold text-blue-900/60">Giá tour/người</span>
-            <span className="font-black text-blue-950">{fmt(baseTourPrice)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-semibold text-blue-900/60">Phụ thu gói</span>
-            <span className="font-black text-blue-950">{packageSurcharge > 0 ? `+${fmt(packageSurcharge)}` : fmt(0)}</span>
-          </div>
           <div className="flex items-center justify-between gap-3 border-t border-blue-100 pt-2">
-            <span className="font-semibold text-blue-900/60">Đơn giá sau phụ thu</span>
+            <span className="font-semibold text-blue-900/60">Đơn giá/người</span>
             <span className="font-black text-blue-950">{fmt(estimatedUnitPrice)}</span>
           </div>
           <div className="flex items-center justify-between gap-3">

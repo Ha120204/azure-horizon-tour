@@ -455,12 +455,12 @@ export function getPassengerBreakdown(
   });
 
   const parts = [
-    counts['Adult (12+)'] ? `${counts['Adult (12+)']} nguoi lon` : '',
-    counts['Child (4-11)'] ? `${counts['Child (4-11)']} tre em` : '',
-    counts['Infant (<4)'] ? `${counts['Infant (<4)']} em be` : '',
+    counts['Adult (12+)'] ? `${counts['Adult (12+)']} người lớn` : '',
+    counts['Child (4-11)'] ? `${counts['Child (4-11)']} trẻ em` : '',
+    counts['Infant (<4)'] ? `${counts['Infant (<4)']} em bé` : '',
   ].filter(Boolean);
 
-  return parts.length ? parts.join(', ') : `${fallbackPeople} khach`;
+  return parts.length ? parts.join(', ') : `${fallbackPeople} khách`;
 }
 
 // ─── Code generators ──────────────────────────────────────────────────────────
@@ -507,22 +507,22 @@ export function buildPaymentRequestContent(
   paymentUrl: string,
 ): string {
   return [
-    'Azure Horizon xac nhan thong tin dat tour cua anh/chi:',
+    'Azure Horizon xác nhận thông tin đặt tour của anh/chị:',
     '',
-    `Ma dat tour: ${payload.bookingCode}`,
-    `Khach hang: ${payload.customerName}`,
+    `Mã đặt tour: ${payload.bookingCode}`,
+    `Khách hàng: ${payload.customerName}`,
     `Tour: ${payload.tourName}`,
-    `Khoi hanh: ${payload.startDate}`,
-    `Thoi gian: ${payload.duration}`,
-    `Hanh khach: ${payload.passengerBreakdown}`,
-    payload.discountAmount ? `Giam gia: -${payload.discountAmount}` : '',
-    `Tong thanh toan: ${payload.totalPrice}`,
-    `Han thanh toan: ${payload.deadlineText}`,
+    `Khởi hành: ${payload.startDate}`,
+    `Thời gian: ${payload.duration}`,
+    `Hành khách: ${payload.passengerBreakdown}`,
+    payload.discountAmount ? `Giảm giá: -${payload.discountAmount}` : '',
+    `Tổng thanh toán: ${payload.totalPrice}`,
+    `Hạn thanh toán: ${payload.deadlineText}`,
     '',
-    'Vui long kiem tra thong tin. Neu dung, anh/chi thanh toan tai:',
+    'Vui lòng kiểm tra thông tin. Nếu đúng, anh/chị thanh toán tại:',
     paymentUrl,
     '',
-    'Neu thong tin chua dung, vui long phan hoi voi nhan vien tu van truoc khi thanh toan.',
+    'Nếu thông tin chưa đúng, vui lòng phản hồi với nhân viên tư vấn trước khi thanh toán.',
   ]
     .filter(Boolean)
     .join('\n');

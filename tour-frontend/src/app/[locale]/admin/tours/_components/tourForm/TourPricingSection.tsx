@@ -106,8 +106,8 @@ export function TourPricingSection({
             />
           </div>
           <p className={helperTextClass}>
-            Dùng làm sức chứa mặc định nếu ngày khởi hành chưa đặt số ghế
-            riêng.
+            Dùng cho tour không có lịch khởi hành cụ thể. Mỗi lịch khởi hành đặt
+            số ghế riêng của lịch đó.
           </p>
           {errors.availableSeats && (
             <p className="text-error text-xs mt-1 flex items-center gap-1">

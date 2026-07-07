@@ -182,17 +182,19 @@ export class MailService {
     totalPrice: string;
     discountAmount?: string;
     paymentUrl: string;
-    qrCodeUrl?: string;
+    // Chuỗi VietQR thô từ PayOS (không phải URL). Quét ra chuyển khoản điền sẵn.
+    qrCodeData?: string;
     deadlineText: string;
   }) {
-    const qrMarkup = data.qrCodeUrl
-      ? `<img src="${data.qrCodeUrl}" alt="QR thanh toan" width="180" height="180" style="display:block;border-radius:12px;" />`
-      : `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.paymentUrl)}" alt="QR thanh toan" width="180" height="180" style="display:block;border-radius:12px;" />`;
+    // Email tĩnh không chạy JS được, nên sinh ảnh QR qua dịch vụ ảnh QR:
+    // ưu tiên chuỗi VietQR (khách quét ra chuyển khoản thật), fallback là link thanh toán.
+    const qrSource = data.qrCodeData || data.paymentUrl;
+    const qrMarkup = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrSource)}" alt="QR thanh toan" width="180" height="180" style="display:block;border-radius:12px;" />`;
 
     const mailOptions = {
       from: `"Azure Horizon" <${this.configService.get('MAIL_USER')}>`,
       to: data.to,
-      subject: `Xac nhan thong tin dat tour va thanh toan - ${data.bookingCode}`,
+      subject: `Xác nhận thông tin đặt tour và thanh toán - ${data.bookingCode}`,
       html: buildPaymentRequestHtml({ ...data, qrMarkup }),
     };
     const info: unknown = await this.transporter.sendMail(mailOptions);

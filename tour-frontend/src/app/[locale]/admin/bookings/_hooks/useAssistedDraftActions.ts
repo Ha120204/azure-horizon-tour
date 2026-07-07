@@ -120,6 +120,7 @@ export function useAssistedDraftActions({
         customerIdentityNo: form.customerIdentityNo.trim() || undefined,
         sourceChannel: form.sourceChannel,
         confirmationChannel: form.confirmationChannel,
+        paymentMethod: form.paymentMethod || undefined,
         emailForTicket: form.emailForTicket.trim() || form.customerEmail.trim() || undefined,
         tourId: form.tourId ? Number(form.tourId) : undefined,
         departureId: form.departureId ? Number(form.departureId) : undefined,

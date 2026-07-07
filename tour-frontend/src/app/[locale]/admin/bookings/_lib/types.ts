@@ -214,6 +214,7 @@ export interface AssistedDraft {
   customerIdentityNo?: string | null;
   sourceChannel: string;
   confirmationChannel?: string | null;
+  paymentMethod?: string | null;
   emailForTicket?: string | null;
   tourId?: number | null;
   packageId?: number | null;
@@ -261,6 +262,7 @@ export type AssistedDraftForm = {
   customerIdentityNo: string;
   sourceChannel: string;
   confirmationChannel: string;
+  paymentMethod: string;
   emailForTicket: string;
   tourId: string;
   departureId: string;

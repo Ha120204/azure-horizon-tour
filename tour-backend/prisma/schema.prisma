@@ -499,6 +499,8 @@ model AssistedBookingDraft {
   customerIdentityNo  String?
   sourceChannel       String         @default("LIVE_CHAT")
   confirmationChannel String         @default("ZALO")
+  // Không @default: bắt buộc staff xác nhận với khách trước khi gửi duyệt (xem assertAssistedDraftReadyForApproval).
+  paymentMethod       PaymentMethod?
   emailForTicket      String?
   sourceTicketId      Int?
   sourceTicket        SupportTicket? @relation(fields: [sourceTicketId], references: [id], onDelete: SetNull)

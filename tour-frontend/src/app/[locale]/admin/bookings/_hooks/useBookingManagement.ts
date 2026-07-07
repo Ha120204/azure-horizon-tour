@@ -446,6 +446,9 @@ export function useBookingManagement() {
       showToast(`Đã hủy đơn ${booking.bookingCode}`);
     } catch (error: unknown) {
       showToast(getErrorMessage(error, 'Không hủy được booking'), false);
+      // Đơn có thể đã bị hủy bởi cron (hết hạn giữ chỗ) hoặc luồng khác — refresh để
+      // danh sách phản ánh đúng trạng thái thật thay vì kẹt ở trạng thái cũ.
+      await fetchBookings().catch(() => {});
       throw error;
     }
   }, [fetchBookings, fetchPaymentStats, showToast]);

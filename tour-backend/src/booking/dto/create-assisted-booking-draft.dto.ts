@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -35,6 +36,12 @@ export class CreateAssistedBookingDraftDto {
   @IsOptional()
   @IsString()
   confirmationChannel?: string;
+
+  // Không có mặc định — staff phải hỏi khách chọn PAYOS hay trả tại quầy
+  // trước khi gửi duyệt (xem assertAssistedDraftReadyForApproval).
+  @IsOptional()
+  @IsIn(['PAYOS', 'IN_STORE'])
+  paymentMethod?: string;
 
   @IsOptional()
   @IsString()

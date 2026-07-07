@@ -31,9 +31,11 @@ import type {
 } from './types';
 import {
   asPassengerInputs,
+  calcSeatCount,
   normalizePassengers,
   isAssistedDraftStatus,
   getPassengerTotal,
+  getSaleAdjustedUnitPrice,
   formatMoney,
   getPassengerBreakdown,
   generateBookingCode,
@@ -53,6 +55,7 @@ type AssistedDraftValidationSource = {
   customerPhone?: string | null;
   customerIdentityNo?: string | null;
   confirmationChannel?: string | null;
+  paymentMethod?: string | null;
   emailForTicket?: string | null;
   tourId?: number | null;
   departureId?: number | null;
@@ -100,6 +103,20 @@ function normalizeAssistedConfirmationChannel(value?: string | null) {
   )
     ? normalized
     : 'MANUAL';
+}
+
+// KHÔNG có fallback mặc định (khác 2 hàm normalize trên) — nếu staff chưa hỏi
+// khách hoặc gõ sai, trả về null để assertAssistedDraftReadyForApproval chặn lại,
+// thay vì âm thầm chọn hộ PAYOS.
+function normalizeAssistedPaymentMethod(
+  value?: string | null,
+): 'PAYOS' | 'IN_STORE' | null {
+  const normalized = String(value ?? '')
+    .trim()
+    .toUpperCase();
+  return normalized === 'PAYOS' || normalized === 'IN_STORE'
+    ? normalized
+    : null;
 }
 
 @Injectable()
@@ -187,12 +204,17 @@ export class AssistedDraftService {
       throw new BadRequestException(
         'Số điện thoại người đại diện chưa đúng định dạng Việt Nam',
       );
-    if (
-      draft.customerIdentityNo?.trim() &&
-      !/^\d{12}$/.test(draft.customerIdentityNo.trim())
-    )
+    if (!draft.customerIdentityNo?.trim())
+      throw new BadRequestException(
+        'Cần nhập CCCD người đại diện (12 chữ số) trước khi gửi duyệt',
+      );
+    if (!/^\d{12}$/.test(draft.customerIdentityNo.trim()))
       throw new BadRequestException(
         'CCCD người đại diện phải gồm đúng 12 chữ số',
+      );
+    if (!normalizeAssistedPaymentMethod(draft.paymentMethod))
+      throw new BadRequestException(
+        'Cần xác nhận phương thức thanh toán với khách trước khi gửi duyệt',
       );
     const confirmationChannel = normalizeAssistedConfirmationChannel(
       draft.confirmationChannel,
@@ -247,6 +269,10 @@ export class AssistedDraftService {
         'Tour này đã diễn ra, không thể tạo booking đặt hộ',
       );
 
+    // Số ghế thực cần giữ = người lớn + trẻ em; em bé ngồi lòng không chiếm ghế
+    // (đồng nhất với luồng khách tự đặt qua calcSeatCount).
+    const seatCount = calcSeatCount(dto.passengers, dto.numberOfPeople);
+
     let selectedDeparture: TourDeparture | null = null;
     if (dto.departureId) {
       selectedDeparture = await tx.tourDeparture.findUnique({
@@ -258,14 +284,18 @@ export class AssistedDraftService {
         !selectedDeparture.isActive
       )
         throw new BadRequestException('Lịch khởi hành không hợp lệ');
-      if (selectedDeparture.availableSeats < dto.numberOfPeople)
+      if (selectedDeparture.availableSeats < seatCount)
         throw new BadRequestException(
-          'Lịch khởi hành không còn đủ chỗ cho đoàn này',
+          `Lịch khởi hành chỉ còn ${selectedDeparture.availableSeats} chỗ, đoàn cần ${seatCount} chỗ (chưa tính em bé)`,
         );
-    } else if (tour.availableSeats < dto.numberOfPeople) {
-      throw new BadRequestException('Tour không còn đủ chỗ cho đoàn này');
+    } else if (tour.availableSeats < seatCount) {
+      throw new BadRequestException(
+        `Tour chỉ còn ${tour.availableSeats} chỗ, đoàn cần ${seatCount} chỗ (chưa tính em bé)`,
+      );
     }
 
+    // Giá gói là giá TOÀN PHẦN (đồng nhất luồng khách tự đặt), áp giảm cùng tỷ lệ flash-sale;
+    // KHÔNG cộng dồn lên tour.price. Không chọn gói → dùng giá gốc departure/tour.
     let basePrice = selectedDeparture?.price ?? tour.price;
     if (dto.packageId) {
       const pkg = await tx.tourPackage.findUnique({
@@ -273,7 +303,11 @@ export class AssistedDraftService {
       });
       if (!pkg || pkg.tourId !== tour.id || !pkg.isActive)
         throw new BadRequestException('Gói tour không hợp lệ');
-      basePrice += pkg.price;
+      basePrice = getSaleAdjustedUnitPrice(
+        pkg.price,
+        tour.price,
+        selectedDeparture?.price,
+      );
     }
 
     let totalPrice = getPassengerTotal(
@@ -530,7 +564,7 @@ export class AssistedDraftService {
         booking.discountAmount > 0
           ? formatMoney(booking.discountAmount)
           : undefined,
-      deadlineText: `truoc ${holdExpiresAt.toLocaleString('vi-VN')}`,
+      deadlineText: `trước ${holdExpiresAt.toLocaleString('vi-VN')}`,
     };
 
     let paymentRequest: PaymentLinkResult;
@@ -548,10 +582,10 @@ export class AssistedDraftService {
           channel: normalizedChannel,
           recipient,
           status: 'FAILED',
-          subject: `Yeu cau thanh toan ${booking.bookingCode}`,
+          subject: `Yêu cầu thanh toán ${booking.bookingCode}`,
           content: buildPaymentRequestContent(
             payload,
-            'Khong tao duoc link thanh toan.',
+            'Không tạo được link thanh toán.',
           ),
           errorMessage: getErrorMessage(error),
           createdById: actorUserId,
@@ -584,12 +618,12 @@ export class AssistedDraftService {
         channel: normalizedChannel,
         recipient,
         status: normalizedChannel === 'NO_SEND' ? 'SKIPPED' : 'PENDING',
-        subject: `Yeu cau thanh toan ${booking.bookingCode}`,
+        subject: `Yêu cầu thanh toán ${booking.bookingCode}`,
         content,
         paymentUrl: paymentRequest.checkoutUrl,
-        qrCodeUrl:
-          paymentRequest.qrCode ||
-          `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(paymentRequest.checkoutUrl)}`,
+        // Lưu CHUỖI VietQR thô từ PayOS (không phải URL ảnh) — tầng hiển thị
+        // (email/admin) tự render thành ảnh QR. Null nếu PayOS không trả QR.
+        qrCodeUrl: paymentRequest.qrCode ?? null,
         createdById: actorUserId,
       },
     });
@@ -606,8 +640,8 @@ export class AssistedDraftService {
             ...payload,
             to: emailRecipient,
             paymentUrl: paymentRequest.checkoutUrl,
-            qrCodeUrl:
-              paymentRequest.qrCode || notification.qrCodeUrl || undefined,
+            // Chuỗi VietQR thô; mail service tự dựng ảnh QR từ chuỗi này.
+            qrCodeData: paymentRequest.qrCode || undefined,
           });
           notification = await this.prisma.bookingNotification.update({
             where: { id: notification.id },
@@ -640,6 +674,7 @@ export class AssistedDraftService {
       confirmationChannel: normalizeAssistedConfirmationChannel(
         dto.confirmationChannel,
       ),
+      paymentMethod: normalizeAssistedPaymentMethod(dto.paymentMethod),
       emailForTicket:
         dto.emailForTicket?.trim().toLowerCase() ||
         dto.customerEmail?.trim().toLowerCase() ||
@@ -678,6 +713,7 @@ export class AssistedDraftService {
           customerIdentityNo: payload.customerIdentityNo,
           sourceChannel: payload.sourceChannel,
           confirmationChannel: payload.confirmationChannel,
+          paymentMethod: payload.paymentMethod,
           emailForTicket: payload.emailForTicket,
           sourceTicketId: payload.sourceTicketId || null,
           tourId: payload.tourId || null,
@@ -731,6 +767,10 @@ export class AssistedDraftService {
         dto.confirmationChannel !== undefined
           ? normalizeAssistedConfirmationChannel(dto.confirmationChannel)
           : normalizeAssistedConfirmationChannel(existing.confirmationChannel),
+      paymentMethod:
+        dto.paymentMethod !== undefined
+          ? normalizeAssistedPaymentMethod(dto.paymentMethod)
+          : normalizeAssistedPaymentMethod(existing.paymentMethod),
       emailForTicket:
         dto.emailForTicket?.trim().toLowerCase() ||
         dto.customerEmail?.trim().toLowerCase() ||
@@ -800,9 +840,20 @@ export class AssistedDraftService {
     if (actorRole === 'STAFF') where.createdByStaffId = actorUserId;
     if (status && status !== 'ALL') {
       const normalizedStatus = status.toUpperCase();
-      if (!isAssistedDraftStatus(normalizedStatus))
-        throw new BadRequestException('Trạng thái bản nháp không hợp lệ');
-      where.status = normalizedStatus as AssistedDraftStatus;
+      // ACTIVE = nháp đang xử lý (mặc định khu bản nháp): ẩn đơn đã tạo (CONVERTED) và đã từ chối.
+      if (normalizedStatus === 'ACTIVE') {
+        where.status = {
+          in: [
+            AssistedDraftStatus.DRAFT,
+            AssistedDraftStatus.PENDING_APPROVAL,
+            AssistedDraftStatus.NEEDS_REVISION,
+          ],
+        };
+      } else {
+        if (!isAssistedDraftStatus(normalizedStatus))
+          throw new BadRequestException('Trạng thái bản nháp không hợp lệ');
+        where.status = normalizedStatus as AssistedDraftStatus;
+      }
     }
     if (search) {
       where.OR = [
@@ -1016,6 +1067,15 @@ export class AssistedDraftService {
       if (draft.convertedBooking)
         throw new BadRequestException('Bản nháp này đã tạo booking');
       this.assertAssistedDraftReadyForApproval(draft);
+      // Tái thẩm định ngay tại điểm dùng (không tin lại kết quả assert ở trên) —
+      // đồng thời giúp TS thu hẹp kiểu về 'PAYOS' | 'IN_STORE', bỏ null.
+      const paymentMethod = normalizeAssistedPaymentMethod(
+        draft.paymentMethod,
+      );
+      if (!paymentMethod)
+        throw new BadRequestException(
+          'Cần xác nhận phương thức thanh toán với khách trước khi duyệt',
+        );
 
       const tourId = draft.tourId!;
       const quote = await this.calculateAssistedQuote(tx, {
@@ -1035,7 +1095,7 @@ export class AssistedDraftService {
       await reserveSeatsAtomically(tx, {
         tourId,
         departureId: draft.departureId,
-        seats: draft.numberOfPeople,
+        seats: calcSeatCount(draft.passengers, draft.numberOfPeople),
       });
 
       const departure = draft.departureId
@@ -1046,7 +1106,7 @@ export class AssistedDraftService {
         : null;
       const { holdMinutes } = await this.settingsService.getBookingPolicy();
       const holdExpiresAt = calculateBookingHoldExpiresAt({
-        paymentMethod: 'PAYOS',
+        paymentMethod,
         departureDate: departure?.departureDate ?? quote.tour.startDate,
         holdMinutes,
       });
@@ -1062,6 +1122,7 @@ export class AssistedDraftService {
           unitPriceAtBooking: quote.basePrice,
           voucherCode: quote.voucherCode,
           discountAmount: quote.discountAmount,
+          paymentMethod,
           contactInfo: {
             name: draft.customerName,
             email: draft.customerEmail,
@@ -1113,6 +1174,24 @@ export class AssistedDraftService {
 
       return { draft: updatedDraft, booking };
     });
+
+    // IN_STORE: khách đã hẹn trả tiền mặt/chuyển khoản tại quầy — chỉ ghi nhận
+    // phiếu thu chờ xử lý, KHÔNG gọi PayOS/gửi link thanh toán online.
+    if (result.booking.paymentMethod === 'IN_STORE') {
+      await this.prisma.paymentTransaction.create({
+        data: {
+          bookingId: result.booking.id,
+          gateway: 'MANUAL',
+          amount: Math.round(result.booking.totalPrice),
+          status: 'PENDING',
+        },
+      });
+      return {
+        draft: this.formatAssistedDraft(result.draft),
+        booking: result.booking,
+        paymentRequest: null,
+      };
+    }
 
     const paymentRequestResult = await this.createPaymentRequestForBooking(
       result.booking.id,

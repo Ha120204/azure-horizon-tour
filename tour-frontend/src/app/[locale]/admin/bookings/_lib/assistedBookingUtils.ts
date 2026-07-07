@@ -40,6 +40,7 @@ export type CreateAssistedDraftEventDetail = {
   numberOfPeople?: number;
   voucherCode?: string;
   internalNote?: string;
+  paymentMethod?: string;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ export const EMPTY_FORM: AssistedDraftForm = {
   customerIdentityNo: '',
   sourceChannel: 'LIVE_CHAT',
   confirmationChannel: 'ZALO',
+  paymentMethod: '',
   emailForTicket: '',
   tourId: '',
   departureId: '',
@@ -164,8 +166,12 @@ export function validateDraftForApproval(draft: AssistedDraft, tours: TourOption
   else if (!isValidEmail(customerEmail)) issues.push(`Email người đại diện không hợp lệ: ${customerEmail}.`);
   if (!customerPhone) issues.push('Thiếu số điện thoại người đại diện.');
   else if (!isValidVietnamPhone(customerPhone)) issues.push(`Số điện thoại không đúng định dạng Việt Nam: ${customerPhone}.`);
-  if (customerIdentityNo && !isValidCccd(customerIdentityNo)) issues.push('CCCD phải gồm đúng 12 chữ số.');
+  if (!customerIdentityNo) issues.push('Thiếu CCCD người đại diện (12 chữ số).');
+  else if (!isValidCccd(customerIdentityNo)) issues.push('CCCD phải gồm đúng 12 chữ số.');
   if (emailForTicket && !isValidEmail(emailForTicket)) issues.push(`Email nhận vé không hợp lệ: ${emailForTicket}.`);
+  if (draft.paymentMethod !== 'PAYOS' && draft.paymentMethod !== 'IN_STORE') {
+    issues.push('Chưa xác nhận phương thức thanh toán với khách.');
+  }
   if (!CONFIRMATION_CHANNEL_OPTIONS.some(o => o.value === confirmationChannel)) issues.push('Kênh gửi xác nhận không hợp lệ.');
   if (confirmationChannel === 'EMAIL' && !emailForTicket && !customerEmail) issues.push('Kênh email cần email nhận vé hoặc email người đại diện.');
   if (!draft.tourId) issues.push('Chưa chọn tour cần đặt hộ.');

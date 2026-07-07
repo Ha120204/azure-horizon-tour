@@ -320,7 +320,7 @@ export function BookingDetailView({
     complete: Boolean(asStr(p?.fullName) && asStr(p?.dob) && asStr(p?.gender)),
   }));
   const incompletePassengerCount = booking.incompletePassengerCount ?? passengerRows.filter(r => !r.complete).length;
-  const canEditPassengers = (canWrite || (canRecordPayment ?? false)) && booking.status !== 'CANCELLED' && passengerList.length > 1;
+  const canEditPassengers = (canWrite || (canRecordPayment ?? false)) && booking.status !== 'CANCELLED' && (passengerList.length > 1 || incompletePassengerCount > 0);
   const passengerTypeLabel = (type: string) => {
     const t = type.toUpperCase();
     if (t.startsWith('CHILD')) return 'Trẻ em';

@@ -77,10 +77,17 @@ export const CONFIRMATION_CHANNEL_OPTIONS: DraftSelectOption[] = [
   { value: 'NO_SEND', label: 'Không gửi ngay', description: 'Chỉ tạo booking, chưa gửi yêu cầu thanh toán', icon: 'notifications_off' },
 ];
 
+// Không có option "mặc định" — bắt buộc staff chọn dựa trên câu trả lời thật của khách,
+// khác PAYMENT_METHOD_CFG (dùng để hiển thị badge, có key rỗng cho fallback hiển thị).
+export const PAYMENT_METHOD_OPTIONS: DraftSelectOption[] = [
+  { value: 'PAYOS', label: 'PayOS (chuyển khoản/QR online)', description: 'Gửi link/QR thanh toán online cho khách', icon: 'account_balance' },
+  { value: 'IN_STORE', label: 'Tại quầy', description: 'Khách hẹn trả tiền mặt/chuyển khoản tại quầy, staff xác nhận thu tiền sau', icon: 'storefront' },
+];
+
 export const DRAFT_FIELD_ORDER: (keyof AssistedDraftFormErrors)[] = [
   'customerName', 'customerEmail', 'customerPhone', 'tourId',
   'adultCount', 'childCount', 'infantCount', 'departureId',
-  'customerIdentityNo', 'sourceChannel', 'confirmationChannel',
+  'customerIdentityNo', 'sourceChannel', 'confirmationChannel', 'paymentMethod',
   'emailForTicket', 'packageId', 'voucherCode', 'specialRequests', 'internalNote',
 ];
 

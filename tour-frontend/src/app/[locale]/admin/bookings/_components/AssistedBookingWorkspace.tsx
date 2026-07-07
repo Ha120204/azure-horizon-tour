@@ -10,6 +10,7 @@ import { UnsavedChangesDialog } from '@/components/admin/UnsavedChangesDialog';
 import {
   CONFIRMATION_CHANNEL_OPTIONS,
   PASSENGER_PRICING,
+  PAYMENT_METHOD_OPTIONS,
   SOURCE_CHANNEL_OPTIONS,
   passengerTypeOrder,
 } from '../_lib/config';
@@ -54,6 +55,7 @@ const DRAFT_FIELD_LABELS: Record<keyof AssistedDraftForm, string> = {
   customerIdentityNo: 'CCCD',
   sourceChannel: 'Nguồn',
   confirmationChannel: 'Kênh gửi xác nhận',
+  paymentMethod: 'Phương thức thanh toán',
   emailForTicket: 'Email nhận vé điện tử',
   tourId: 'Tour',
   departureId: 'Lịch khởi hành',
@@ -93,8 +95,8 @@ export function AssistedBookingWorkspace({
     completionActionText, completionButtonLabel,
     selectedTour, selectedTourDepartures,
     departureOptions, packageOptions,
-    baseTourPrice, packageSurcharge, estimatedUnitPrice,
-    adultCount, totalPassengerCount, estimatedTotal,
+    estimatedUnitPrice,
+    adultCount, totalPassengerCount, seatCapacity, remainingSeats, estimatedTotal,
     generatedPassengerRows,
     voucherStatus,
     summaryChecklistItems, missingSummaryCount,
@@ -161,7 +163,7 @@ export function AssistedBookingWorkspace({
       </p>
     ) : null;
   return (
-    <section id="assisted-booking-workspace" className="mb-8 overflow-hidden rounded-2xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
+    <section id="assisted-booking-workspace" className="mb-8 overflow-visible rounded-2xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
@@ -334,6 +336,20 @@ export function AssistedBookingWorkspace({
                         />
                         {fieldError('customerPhone')}
                       </label>
+                      <label className="space-y-2" data-draft-field="customerIdentityNo">
+                        <span className={draftLabelClass}>CCCD người đại diện {requiredMark}</span>
+                        <input
+                          value={form.customerIdentityNo}
+                          onChange={e => updateForm('customerIdentityNo', e.target.value.replace(/\D/g, '').slice(0, 12))}
+                          inputMode="numeric"
+                          maxLength={12}
+                          placeholder="12 chữ số"
+                          className={fieldClass('customerIdentityNo')}
+                          aria-invalid={Boolean(submitErrors.customerIdentityNo)}
+                        />
+                        <p className="text-[11px] font-semibold text-slate-500">Bắt buộc đủ 12 chữ số khi gửi duyệt. Có thể để trống khi chỉ lưu nháp.</p>
+                        {fieldError('customerIdentityNo')}
+                      </label>
                     </div>
                   </section>
 
@@ -452,6 +468,37 @@ export function AssistedBookingWorkspace({
                       {fieldError('tourId')}
                     </div>
 
+                    <div className="space-y-2" data-draft-field="departureId">
+                      <span className={draftLabelClass}>Lịch khởi hành {selectedTourDepartures.length > 0 ? requiredMark : null}</span>
+                      <DraftSelect
+                        value={form.departureId}
+                        options={departureOptions}
+                        onChange={value => updateForm('departureId', value)}
+                        ariaLabel="Chọn lịch khởi hành"
+                        className={fieldClass('departureId')}
+                        hasError={Boolean(submitErrors.departureId)}
+                      />
+                      {fieldError('departureId')}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-2" data-draft-field="packageId">
+                        <span className={draftLabelClass}>Gói tour</span>
+                        <DraftSelect
+                          value={form.packageId}
+                          options={packageOptions}
+                          onChange={value => updateForm('packageId', value)}
+                          ariaLabel="Chọn gói tour"
+                          className={fieldClass('packageId')}
+                          hasError={Boolean(submitErrors.packageId)}
+                        />
+                      </div>
+                      <label className="space-y-2" data-draft-field="voucherCode">
+                        <span className={draftLabelClass}>Voucher</span>
+                        <input value={form.voucherCode} onChange={e => updateForm('voucherCode', e.target.value)} placeholder="Nhập mã nếu có" className={fieldClass('voucherCode')} />
+                      </label>
+                    </div>
+
                     <div className="space-y-2">
                       <span className={draftLabelClass}>Cơ cấu khách đi tour {requiredMark}</span>
                       <p className="text-xs font-semibold leading-5 text-slate-500">
@@ -495,7 +542,7 @@ export function AssistedBookingWorkspace({
                                   onClick={() => updatePassengerCount(key, String(value + 1))}
                                   aria-label={`Tăng số lượng ${cfg.label.toLowerCase()}`}
                                   className="grid h-full w-11 place-items-center text-slate-500 transition-colors hover:text-blue-700 disabled:opacity-35"
-                                  disabled={key === 'infantCount' && value >= adultCount}
+                                  disabled={(key === 'infantCount' && value >= adultCount) || (key !== 'infantCount' && seatCapacity !== null && remainingSeats === 0)}
                                 >
                                   <span className="material-symbols-outlined text-[18px]">add</span>
                                 </button>
@@ -505,6 +552,13 @@ export function AssistedBookingWorkspace({
                           );
                         })}
                       </div>
+                      {seatCapacity !== null && (
+                        <p className={`text-xs font-bold ${remainingSeats === 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                          {remainingSeats === 0
+                            ? `Đã đạt tối đa ${seatCapacity} ghế của lịch khởi hành đang chọn (em bé ngồi lòng, không tính ghế)`
+                            : `Chỉ còn ${remainingSeats}/${seatCapacity} ghế cho lịch khởi hành đang chọn (em bé ngồi lòng, không tính ghế)`}
+                        </p>
+                      )}
                     </div>
 
                     <section className="space-y-3">
@@ -740,45 +794,6 @@ export function AssistedBookingWorkspace({
                         })}
                       </div>
                     </section>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <label className="space-y-2">
-                        <span className={draftLabelClass}>Tổng khách đi tour</span>
-                        <input type="number" min={1} value={totalPassengerCount} readOnly className={fieldClass('adultCount')} aria-invalid={Boolean(submitErrors.adultCount || submitErrors.infantCount)} />
-                        {fieldError('adultCount')}
-                        {fieldError('infantCount')}
-                      </label>
-                      <div className="space-y-2 sm:col-span-2" data-draft-field="departureId">
-                        <span className={draftLabelClass}>Lịch khởi hành {selectedTourDepartures.length > 0 ? requiredMark : null}</span>
-                        <DraftSelect
-                          value={form.departureId}
-                          options={departureOptions}
-                          onChange={value => updateForm('departureId', value)}
-                          ariaLabel="Chọn lịch khởi hành"
-                          className={fieldClass('departureId')}
-                          hasError={Boolean(submitErrors.departureId)}
-                        />
-                        {fieldError('departureId')}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-2" data-draft-field="packageId">
-                        <span className={draftLabelClass}>Gói tour</span>
-                        <DraftSelect
-                          value={form.packageId}
-                          options={packageOptions}
-                          onChange={value => updateForm('packageId', value)}
-                          ariaLabel="Chọn gói tour"
-                          className={fieldClass('packageId')}
-                          hasError={Boolean(submitErrors.packageId)}
-                        />
-                      </div>
-                      <label className="space-y-2" data-draft-field="voucherCode">
-                        <span className={draftLabelClass}>Voucher</span>
-                        <input value={form.voucherCode} onChange={e => updateForm('voucherCode', e.target.value)} placeholder="Nhập mã nếu có" className={fieldClass('voucherCode')} />
-                      </label>
-                    </div>
                   </section>
 
                   <section className="space-y-4">
@@ -787,20 +802,6 @@ export function AssistedBookingWorkspace({
                       <h4 className="text-sm font-black text-slate-950">Thông tin xác nhận</h4>
                     </div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <label className="space-y-2" data-draft-field="customerIdentityNo">
-                        <span className={draftLabelClass}>CCCD người đại diện</span>
-                        <input
-                          value={form.customerIdentityNo}
-                          onChange={e => updateForm('customerIdentityNo', e.target.value.replace(/\D/g, '').slice(0, 12))}
-                          inputMode="numeric"
-                          maxLength={12}
-                          placeholder="12 chữ số"
-                          className={fieldClass('customerIdentityNo')}
-                          aria-invalid={Boolean(submitErrors.customerIdentityNo)}
-                        />
-                        <p className="text-[11px] font-semibold text-slate-500">Không bắt buộc khi lưu hoặc gửi duyệt. Nếu nhập, cần đủ 12 chữ số.</p>
-                        {fieldError('customerIdentityNo')}
-                      </label>
                       <div className="space-y-2" data-draft-field="sourceChannel">
                         <span className={draftLabelClass}>Nguồn</span>
                         <DraftSelect
@@ -822,6 +823,19 @@ export function AssistedBookingWorkspace({
                           className={fieldClass('confirmationChannel')}
                           hasError={Boolean(submitErrors.confirmationChannel)}
                         />
+                      </div>
+                      <div className="space-y-2" data-draft-field="paymentMethod">
+                        <span className={draftLabelClass}>Phương thức thanh toán {requiredMark}</span>
+                        <DraftSelect
+                          value={form.paymentMethod}
+                          options={PAYMENT_METHOD_OPTIONS}
+                          onChange={value => updateForm('paymentMethod', value)}
+                          placeholder="Hỏi khách rồi chọn PayOS hoặc tại quầy"
+                          ariaLabel="Chọn phương thức thanh toán"
+                          className={fieldClass('paymentMethod')}
+                          hasError={Boolean(submitErrors.paymentMethod)}
+                        />
+                        {fieldError('paymentMethod')}
                       </div>
                       <label className="space-y-2" data-draft-field="emailForTicket">
                         <span className={draftLabelClass}>Email nhận vé điện tử</span>
@@ -846,8 +860,6 @@ export function AssistedBookingWorkspace({
                 <AssistedBookingSidebar
                   estimatedTotal={estimatedTotal}
                   totalPassengerCount={totalPassengerCount}
-                  baseTourPrice={baseTourPrice}
-                  packageSurcharge={packageSurcharge}
                   estimatedUnitPrice={estimatedUnitPrice}
                   voucherStatus={voucherStatus}
                   hasVoucher={!!form.voucherCode.trim()}

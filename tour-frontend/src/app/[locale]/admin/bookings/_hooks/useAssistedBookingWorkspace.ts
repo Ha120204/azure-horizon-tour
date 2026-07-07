@@ -11,9 +11,11 @@ import {
   parsePastedPassengers,
 } from '@/lib/booking/passengerDetails';
 import { PASSENGER_PRICING } from '../_lib/config';
+import { getSaleAdjustedUnitPrice } from '@/lib/booking/passengerPricing';
 import {
   CONFIRMATION_CHANNEL_OPTIONS,
   DRAFT_FIELD_ORDER,
+  PAYMENT_METHOD_OPTIONS,
   SOURCE_CHANNEL_OPTIONS,
   getSelectOptionLabel,
 } from '../_lib/config';
@@ -116,13 +118,13 @@ export interface UseAssistedBookingWorkspaceReturn {
   selectedPackage: { id: number; name: string; price: number; isActive?: boolean } | undefined;
   departureOptions: DraftSelectOption[];
   packageOptions: DraftSelectOption[];
-  baseTourPrice: number;
-  packageSurcharge: number;
   estimatedUnitPrice: number;
   adultCount: number;
   childCount: number;
   infantCount: number;
   totalPassengerCount: number;
+  seatCapacity: number | null;
+  remainingSeats: number | null;
   estimatedTotal: number;
   effectivePassengerDrafts: DraftPassenger[];
   generatedPassengerRows: GeneratedPassengerRow[];
@@ -197,7 +199,7 @@ export function useAssistedBookingWorkspace({
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [editingDraft, setEditingDraft] = useState<AssistedDraft | null>(null);
   const [viewingDraft, setViewingDraft] = useState<AssistedDraft | null>(null);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ACTIVE');
   const [search, setSearch] = useState('');
   const [isTourPickerOpen, setIsTourPickerOpen] = useState(false);
   const [tourQuery, setTourQuery] = useState('');
@@ -207,6 +209,8 @@ export function useAssistedBookingWorkspace({
   const [passengerDrafts, setPassengerDrafts] = useState<DraftPassenger[]>([{ type: 'Adult (12+)' }]);
   const [useRepresentativeAsFirstPassenger, setUseRepresentativeAsFirstPassenger] = useState(true);
   const [editingPassengerIndex, setEditingPassengerIndex] = useState<number | null>(null);
+  // Tour đã được tự chọn gói mặc định — chống set lặp và cho phép người dùng chủ động bỏ chọn gói.
+  const [autoPackagedTourId, setAutoPackagedTourId] = useState('');
   const [form, setForm] = useState<AssistedDraftForm>({ ...EMPTY_FORM });
 
   const { drafts, setDrafts, tours, role, isLoading, fetchDrafts } = useAssistedDraftData({
@@ -228,6 +232,15 @@ export function useAssistedBookingWorkspace({
   const selectedDeparture = selectedTourDepartures.find(d => String(d.id) === form.departureId);
   const selectedPackage = selectedTour?.packages?.find(p => String(p.id) === form.packageId);
 
+  // Mặc định chọn gói đầu tiên khi tour vừa tải xong danh sách gói (gói = giá toàn phần).
+  // Điều chỉnh state ngay trong render có guard (pattern React, không dùng effect); guard theo
+  // autoPackagedTourId để không set lặp và vẫn cho người dùng chủ động chọn "Không chọn gói".
+  const firstActivePackageId = selectedTour?.packages?.find(p => p.isActive !== false)?.id;
+  if (firstActivePackageId && !form.packageId && autoPackagedTourId !== form.tourId) {
+    setAutoPackagedTourId(form.tourId);
+    setForm(prev => (prev.packageId ? prev : { ...prev, packageId: String(firstActivePackageId) }));
+  }
+
   const departureOptions: DraftSelectOption[] = [
     {
       value: '',
@@ -237,36 +250,59 @@ export function useAssistedBookingWorkspace({
         : 'Dùng lịch mặc định nếu tour không có ngày riêng',
       icon: 'event_available',
     },
-    ...selectedTourDepartures.map((departure, index) => ({
-      value: String(departure.id ?? ''),
-      label: `${fmtDate(departure.departureDate)} · còn ${departure.availableSeats ?? 0} ghế`,
-      description: `${fmt(departure.price ?? selectedTour?.price ?? 0)} · Lịch #${index + 1}`,
-      icon: 'calendar_month',
-    })),
+    ...selectedTourDepartures.map((departure, index) => {
+      const seats = departure.availableSeats ?? 0;
+      const soldOut = seats <= 0;
+      return {
+        value: String(departure.id ?? ''),
+        // Lịch hết chỗ bị vô hiệu hóa ngay trong dropdown, không cho chọn (thay vì
+        // chỉ báo lỗi lúc gửi duyệt). Backend vẫn chặn lại bằng reserveSeatsAtomically.
+        label: soldOut
+          ? `${fmtDate(departure.departureDate)} · hết chỗ`
+          : `${fmtDate(departure.departureDate)} · còn ${seats} ghế`,
+        description: `${fmt(departure.price ?? selectedTour?.price ?? 0)} · Lịch #${index + 1}`,
+        icon: 'calendar_month',
+        disabled: soldOut,
+      };
+    }),
   ];
 
   const packageOptions: DraftSelectOption[] = [
     {
       value: '',
-      label: 'Không chọn gói phụ thu',
-      description: 'Dùng cấu hình giá mặc định của tour',
+      label: 'Không chọn gói (dùng giá gốc tour)',
+      description: 'Tính theo giá gốc của tour',
       icon: 'inventory_2',
     },
     ...(selectedTour?.packages ?? []).map(pkg => ({
       value: String(pkg.id),
       label: getPackageDisplayName(pkg.name),
-      description: `Phụ thu +${fmt(pkg.price)}`,
+      description: `Giá trọn gói ${fmt(pkg.price)}`,
       icon: 'package_2',
     })),
   ];
 
   const baseTourPrice = selectedDeparture?.price ?? selectedTour?.price ?? 0;
-  const packageSurcharge = selectedPackage?.price ?? 0;
-  const estimatedUnitPrice = baseTourPrice + packageSurcharge;
+  // Giá gói là giá TOÀN PHẦN (đồng nhất luồng khách tự đặt), áp giảm theo tỷ lệ flash-sale.
+  // Không chọn gói → dùng giá gốc tour/lịch.
+  const estimatedUnitPrice = selectedPackage
+    ? getSaleAdjustedUnitPrice(selectedPackage.price, selectedTour?.price, selectedDeparture?.price)
+    : baseTourPrice;
   const adultCount = Math.max(1, parsePassengerCount(form.adultCount, 1));
   const childCount = parsePassengerCount(form.childCount);
   const infantCount = parsePassengerCount(form.infantCount);
   const totalPassengerCount = adultCount + childCount + infantCount;
+  // Số ghế thực chiếm = người lớn + trẻ em; em bé ngồi lòng nên KHÔNG tính ghế
+  // (đồng nhất với luồng khách tự đặt: seatCount = adult + child).
+  const seatedPassengerCount = adultCount + childCount;
+  // Số ghế còn lại của lịch/tour đang chọn (null = chưa chọn tour → chưa giới hạn).
+  const seatCapacity = selectedDeparture
+    ? selectedDeparture.availableSeats ?? 0
+    : selectedTour
+      ? selectedTour.availableSeats ?? 0
+      : null;
+  const remainingSeats =
+    seatCapacity === null ? null : Math.max(0, seatCapacity - seatedPassengerCount);
   const estimatedTotal =
     adultCount * estimatedUnitPrice * PASSENGER_PRICING['Adult (12+)'].multiplier +
     childCount * estimatedUnitPrice * PASSENGER_PRICING['Child (4-11)'].multiplier +
@@ -338,7 +374,7 @@ export function useAssistedBookingWorkspace({
     {
       label: 'Người đại diện',
       value: form.customerName.trim() || 'Chưa nhập',
-      done: Boolean(form.customerName.trim() && form.customerEmail.trim() && form.customerPhone.trim()),
+      done: Boolean(form.customerName.trim() && form.customerEmail.trim() && form.customerPhone.trim() && form.customerIdentityNo.trim()),
     },
     { label: 'Tour', value: selectedTour?.name ?? 'Chưa chọn', done: Boolean(selectedTour) },
     {
@@ -372,6 +408,11 @@ export function useAssistedBookingWorkspace({
       label: 'Kênh xác nhận',
       value: getSelectOptionLabel(CONFIRMATION_CHANNEL_OPTIONS, form.confirmationChannel),
       done: Boolean(form.confirmationChannel),
+    },
+    {
+      label: 'Phương thức thanh toán',
+      value: form.paymentMethod ? getSelectOptionLabel(PAYMENT_METHOD_OPTIONS, form.paymentMethod) : 'Chưa hỏi khách',
+      done: Boolean(form.paymentMethod),
     },
   ];
 
@@ -424,7 +465,9 @@ export function useAssistedBookingWorkspace({
     if (form.emailForTicket.trim() && !isValidEmail(form.emailForTicket)) errors.emailForTicket = 'Email nhận vé chưa đúng định dạng';
     if (!form.customerPhone.trim()) errors.customerPhone = 'Nhập số điện thoại để staff/admin liên hệ';
     else if (!isValidVietnamPhone(form.customerPhone)) errors.customerPhone = 'Số điện thoại chưa đúng định dạng Việt Nam';
-    if (form.customerIdentityNo.trim() && !isValidCccd(form.customerIdentityNo)) errors.customerIdentityNo = 'CCCD phải gồm đúng 12 chữ số';
+    if (!form.customerIdentityNo.trim()) errors.customerIdentityNo = `Nhập CCCD người đại diện (12 chữ số) trước khi ${completionActionText}`;
+    else if (!isValidCccd(form.customerIdentityNo)) errors.customerIdentityNo = 'CCCD phải gồm đúng 12 chữ số';
+    if (!form.paymentMethod) errors.paymentMethod = `Hỏi khách và chọn phương thức thanh toán trước khi ${completionActionText}`;
     if (!form.tourId) errors.tourId = 'Chọn tour cần đặt hộ';
     if (form.confirmationChannel === 'EMAIL' && !form.emailForTicket.trim() && !form.customerEmail.trim()) {
       errors.emailForTicket = 'Cần email để gửi xác nhận thanh toán';
@@ -474,7 +517,14 @@ export function useAssistedBookingWorkspace({
       const next = { ...prev };
       const min = key === 'adultCount' ? 1 : 0;
       const cleaned = value.replace(/\D/g, '');
-      const parsed = cleaned === '' ? min : Math.max(min, Number(cleaned));
+      let parsed = cleaned === '' ? min : Math.max(min, Number(cleaned));
+      // Chỉ người lớn + trẻ em chiếm ghế; em bé ngồi lòng nên không bị giới hạn theo ghế.
+      if (seatCapacity !== null && key !== 'infantCount') {
+        const otherSeated =
+          (key === 'adultCount' ? 0 : Math.max(1, parsePassengerCount(prev.adultCount, 1))) +
+          (key === 'childCount' ? 0 : parsePassengerCount(prev.childCount));
+        parsed = Math.min(parsed, Math.max(min, seatCapacity - otherSeated));
+      }
       next[key] = String(parsed);
       if (key === 'adultCount') {
         const adults = Math.max(1, parsed);
@@ -557,6 +607,7 @@ export function useAssistedBookingWorkspace({
     setIsTourPickerOpen(false);
     setUseRepresentativeAsFirstPassenger(true);
     setEditingPassengerIndex(null);
+    setAutoPackagedTourId('');
     setPassengerDrafts(buildPassengerDraftPayload(nextForm));
     setForm(nextForm);
   };
@@ -612,6 +663,7 @@ export function useAssistedBookingWorkspace({
       customerIdentityNo: '',
       sourceChannel: 'WEBSITE',
       confirmationChannel: 'ZALO',
+      paymentMethod: detail.paymentMethod === 'IN_STORE' ? 'IN_STORE' : detail.paymentMethod === 'PAYOS' ? 'PAYOS' : '',
       emailForTicket: detail.customerEmail ?? '',
       tourId: detail.tourId ? String(detail.tourId) : '',
       departureId: '',
@@ -630,6 +682,7 @@ export function useAssistedBookingWorkspace({
     setIsTourPickerOpen(false);
     setUseRepresentativeAsFirstPassenger(true);
     setEditingPassengerIndex(null);
+    setAutoPackagedTourId('');
     setPassengerDrafts(buildPassengerDraftPayload(nextForm));
     setForm(nextForm);
     setIsWorkspaceOpen(true);
@@ -669,6 +722,7 @@ export function useAssistedBookingWorkspace({
     setIsTourPickerOpen(false);
     setUseRepresentativeAsFirstPassenger(firstAdultUsesRepresentative);
     setEditingPassengerIndex(null);
+    setAutoPackagedTourId('');
     const nextForm: AssistedDraftForm = {
       customerName: draft.customerName ?? '',
       customerEmail: draft.customerEmail ?? '',
@@ -676,6 +730,7 @@ export function useAssistedBookingWorkspace({
       customerIdentityNo: draft.customerIdentityNo ?? '',
       sourceChannel: draft.sourceChannel || 'LIVE_CHAT',
       confirmationChannel: draft.confirmationChannel || 'ZALO',
+      paymentMethod: draft.paymentMethod === 'IN_STORE' ? 'IN_STORE' : draft.paymentMethod === 'PAYOS' ? 'PAYOS' : '',
       emailForTicket: draft.emailForTicket ?? draft.customerEmail ?? '',
       tourId: draft.tourId ? String(draft.tourId) : '',
       departureId: draft.departureId ? String(draft.departureId) : '',
@@ -743,13 +798,13 @@ export function useAssistedBookingWorkspace({
     selectedPackage,
     departureOptions,
     packageOptions,
-    baseTourPrice,
-    packageSurcharge,
     estimatedUnitPrice,
     adultCount,
     childCount,
     infantCount,
     totalPassengerCount,
+    seatCapacity,
+    remainingSeats,
     estimatedTotal,
     effectivePassengerDrafts,
     generatedPassengerRows,

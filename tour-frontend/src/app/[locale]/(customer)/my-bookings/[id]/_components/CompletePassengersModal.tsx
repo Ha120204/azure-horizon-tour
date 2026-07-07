@@ -66,9 +66,18 @@ export function CompletePassengersModal({ bookingId, passengers, departureDate, 
     const [pasteText, setPasteText] = useState('');
     const [pasteInfo, setPasteInfo] = useState('');
 
-    // Cho sửa tất cả hành khách đi cùng (#2 trở đi), kể cả người đã có thông tin.
-    // Người đại diện (#1) được giữ nguyên, không sửa ở đây.
+    const isComplete = (p?: BookingPassenger) =>
+        Boolean(p?.fullName?.trim() && p?.dob?.trim() && p?.gender?.trim());
+
+    // Sửa được: hành khách đi cùng (#2 trở đi) — và NGƯỜI ĐẠI DIỆN (#1) nếu đang thiếu.
+    // Luồng đặt hộ tạo người đại diện chỉ có tên/CCCD (thiếu ngày sinh/giới tính) nên
+    // #1 có thể "thiếu" và cần cho điền, thay vì mặc định coi #1 luôn đủ như luồng khách tự đặt.
     const editableIndexes = passengers
+        .map((_, idx) => idx)
+        .filter(idx => idx >= 1 || !isComplete(passengers[idx]));
+
+    // Dán từ Excel chỉ áp cho hành khách đi cùng (#2 trở đi); người đại diện điền tay.
+    const pasteTargetIndexes = passengers
         .map((_, idx) => idx)
         .filter(idx => idx >= 1);
 
@@ -89,7 +98,7 @@ export function CompletePassengersModal({ bookingId, passengers, departureDate, 
             return;
         }
         setDraft(prev => prev.map((p, idx) => {
-            const pos = editableIndexes.indexOf(idx);
+            const pos = pasteTargetIndexes.indexOf(idx);
             if (pos < 0 || pos >= rows.length) return p;
             const r = rows[pos];
             return {
@@ -102,9 +111,9 @@ export function CompletePassengersModal({ bookingId, passengers, departureDate, 
             };
         }));
         setErrors({});
-        const filled = Math.min(rows.length, editableIndexes.length);
-        const extraNote = rows.length > editableIndexes.length
-            ? (isVietnamese ? ` (dán ${rows.length} dòng nhưng chỉ có ${editableIndexes.length} chỗ — đã bỏ phần dư)` : ` (${rows.length} rows pasted, only ${editableIndexes.length} slots — extras ignored)`)
+        const filled = Math.min(rows.length, pasteTargetIndexes.length);
+        const extraNote = rows.length > pasteTargetIndexes.length
+            ? (isVietnamese ? ` (dán ${rows.length} dòng nhưng chỉ có ${pasteTargetIndexes.length} chỗ — đã bỏ phần dư)` : ` (${rows.length} rows pasted, only ${pasteTargetIndexes.length} slots — extras ignored)`)
             : '';
         setPasteInfo((isVietnamese ? `Đã điền ${filled} hành khách — vui lòng kiểm tra lại.` : `Filled ${filled} travelers — please review.`) + extraNote);
         setPasteText('');
@@ -139,6 +148,13 @@ export function CompletePassengersModal({ bookingId, passengers, departureDate, 
                 const idErr = validatePassengerIdentityNo(p.identityType || 'CCCD', p.identityNo.trim(), t);
                 if (idErr) { nextErrors[idx] = idErr; continue; }
             }
+        }
+        // Người đại diện (#1) bắt buộc đủ họ tên + ngày sinh + giới tính (backend cũng chặn) —
+        // báo rõ ở client thay vì để server trả lỗi khó hiểu sau khi bấm lưu.
+        if (editableIndexes.includes(0) && !nextErrors[0] && !isComplete(draft[0])) {
+            nextErrors[0] = isVietnamese
+                ? 'Người đại diện cần đủ họ tên, ngày sinh và giới tính.'
+                : 'The lead traveler needs full name, date of birth and gender.';
         }
         if (Object.keys(nextErrors).length > 0) {
             setErrors(nextErrors);
@@ -188,7 +204,7 @@ export function CompletePassengersModal({ bookingId, passengers, departureDate, 
 
                 <div className="flex-1 space-y-6 overflow-y-auto p-5 sm:p-6">
                     {/* Dán từ Excel — đổ nhanh thông tin nhiều hành khách */}
-                    {editableIndexes.length > 0 && (
+                    {pasteTargetIndexes.length > 0 && (
                         <div className="rounded-xl border border-outline-variant/20 bg-surface-container-low/40">
                             <button
                                 type="button"
@@ -270,6 +286,11 @@ export function CompletePassengersModal({ bookingId, passengers, departureDate, 
                                         {isVietnamese ? `Hành khách ${idx + 1}` : `Passenger ${idx + 1}`}
                                     </span>
                                     <span className="rounded-md border border-outline-variant/30 bg-white px-2 py-0.5 text-[11px] font-bold text-on-surface-variant">{typeLabel}</span>
+                                    {idx === 0 && (
+                                        <span className="rounded-md border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-bold text-primary">
+                                            {isVietnamese ? 'Người đại diện' : 'Lead traveler'}
+                                        </span>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

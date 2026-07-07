@@ -6,6 +6,7 @@ import type { AssistedDraft, AssistedDraftAction, DraftSelectOption } from '../_
 import { DraftSelect } from './DraftSelect';
 
 const DRAFT_STATUS_FILTER_OPTIONS: DraftSelectOption[] = [
+  { value: 'ACTIVE', label: 'Đang xử lý', icon: 'pending_actions' },
   { value: '', label: 'Tất cả trạng thái', icon: 'filter_list' },
   { value: 'DRAFT', label: 'Bản nháp', icon: 'draft' },
   { value: 'PENDING_APPROVAL', label: 'Chờ duyệt', icon: 'hourglass_top' },

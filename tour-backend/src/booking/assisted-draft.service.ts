@@ -264,10 +264,6 @@ export class AssistedDraftService {
       where: { id: dto.tourId, deletedAt: null },
     });
     if (!tour) throw new NotFoundException('Không tìm thấy tour');
-    if (tour.startDate < new Date())
-      throw new BadRequestException(
-        'Tour này đã diễn ra, không thể tạo booking đặt hộ',
-      );
 
     // Số ghế thực cần giữ = người lớn + trẻ em; em bé ngồi lòng không chiếm ghế
     // (đồng nhất với luồng khách tự đặt qua calcSeatCount).
@@ -293,6 +289,14 @@ export class AssistedDraftService {
         `Tour chỉ còn ${tour.availableSeats} chỗ, đoàn cần ${seatCount} chỗ (chưa tính em bé)`,
       );
     }
+
+    // "Đã diễn ra" xét theo NGÀY KHỞI HÀNH đã chọn (không phải tour.startDate gốc) —
+    // đồng bộ luồng khách tự đặt: tour có ngày gốc quá khứ vẫn đặt được lịch tương lai.
+    const effectiveStartDate = selectedDeparture?.departureDate ?? tour.startDate;
+    if (effectiveStartDate < new Date())
+      throw new BadRequestException(
+        'Lịch khởi hành đã qua, không thể tạo booking đặt hộ',
+      );
 
     // Giá gói là giá TOÀN PHẦN (đồng nhất luồng khách tự đặt), áp giảm cùng tỷ lệ flash-sale;
     // KHÔNG cộng dồn lên tour.price. Không chọn gói → dùng giá gốc departure/tour.

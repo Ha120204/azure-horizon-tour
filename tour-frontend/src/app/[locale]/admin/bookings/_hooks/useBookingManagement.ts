@@ -270,12 +270,18 @@ export function useBookingManagement() {
     lastBookingSignature.current = buildBookingSignature(payload);
     setSelectedBooking(prev => (prev ? list.find(b => b.id === prev.id) ?? prev : null));
   }, [getBookingsPayload, buildBookingSignature]);
+  // Realtime (webhook PayOS về): đồng bộ cả danh sách LẪN đơn đang mở trong modal
+  // (refreshDetail) + payment stats → đơn tự flip sang "Đã thanh toán" ngay, không cần bấm
+  // làm mới, và không nháy spinner cả bảng (refreshDetail không bật isLoading).
+  const refreshFromRealtime = useCallback(async () => {
+    await Promise.all([refreshDetail(), fetchPaymentStats()]);
+  }, [refreshDetail, fetchPaymentStats]);
   const shouldRefreshFromRealtime = useCallback((detail: { resourceType: string; href?: string | null }) => (
     detail.resourceType === 'Booking' || detail.href?.startsWith('/admin/bookings') === true
   ), []);
 
   useAdminRealtime({
-    onRefresh: refreshBookingsAndPaymentStats,
+    onRefresh: refreshFromRealtime,
     shouldRefresh: shouldRefreshFromRealtime,
   });
 

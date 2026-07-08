@@ -460,72 +460,97 @@ function BookingSummary({
     bookingStatus: { label: string; tone: string } | null;
     paymentStatus: { label: string; tone: string } | null;
 }) {
+    const [expanded, setExpanded] = useState(true);
+    const hasDetails = Boolean(selected.bookingRef);
+
     return (
         <div className={`col-span-2 rounded-2xl border p-3.5 ${linkedBooking ? 'border-primary/20 bg-primary/5' : selected.bookingRef ? 'border-orange-200 bg-orange-50' : 'border-outline-variant/30 bg-surface-container-low'}`}>
             <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-outline">Booking ref</p>
-                            <p className="mt-1 font-mono text-sm font-black tracking-wide text-slate-950">{selected.bookingRef || 'Chưa liên kết booking'}</p>
-                        </div>
-                        {linkedBooking && (
-                            <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-100">
-                                Đã khớp
-                            </span>
-                        )}
+                <button
+                    type="button"
+                    onClick={() => hasDetails && setExpanded((v) => !v)}
+                    disabled={!hasDetails}
+                    aria-expanded={expanded}
+                    className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left disabled:cursor-default"
+                >
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-outline">Booking ref</p>
+                        <p className="mt-1 font-mono text-sm font-black tracking-wide text-slate-950">{selected.bookingRef || 'Chưa liên kết booking'}</p>
                     </div>
-
-                    {linkedBooking && bookingStatus && paymentStatus ? (
-                        <div className="mt-4 space-y-3">
-                            <div>
-                                <p className="line-clamp-2 text-sm font-black leading-5 text-slate-950">{linkedBooking.tourName}</p>
-                                <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-semibold text-on-surface-variant">
-                                    <span>Khởi hành {fmtDate(linkedBooking.departureDate ?? linkedBooking.tourStartDate)}</span>
-                                    <span className="text-outline">·</span>
-                                    <span>{linkedBooking.tourDuration}</span>
-                                </p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="rounded-xl bg-surface/80 p-2.5">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Đơn hàng</p>
-                                    <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black ring-1 ${bookingStatus.tone}`}>
-                                        {bookingStatus.label}
-                                    </span>
-                                </div>
-                                <div className="rounded-xl bg-surface/80 p-2.5">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Thanh toán</p>
-                                    <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black ring-1 ${paymentStatus.tone}`}>
-                                        {paymentStatus.label}
-                                    </span>
-                                </div>
-                                <div className="rounded-xl bg-surface/80 p-2.5">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Số khách</p>
-                                    <p className="mt-1 text-sm font-black text-slate-950">{linkedBooking.numberOfPeople}</p>
-                                </div>
-                                <div className="rounded-xl bg-surface/80 p-2.5">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Tổng tiền</p>
-                                    <p className="mt-1 text-sm font-black text-slate-950">{fmtMoney(linkedBooking.totalPrice)}</p>
-                                </div>
-                            </div>
-                            <Link
-                                href={`./bookings?search=${encodeURIComponent(linkedBooking.bookingCode)}`}
-                                className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-black text-on-primary transition hover:bg-primary-container focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
-                            >
-                                Mở đơn đặt
-                                <span className="material-symbols-outlined text-[17px]">open_in_new</span>
-                            </Link>
-                        </div>
-                    ) : selected.bookingRef ? (
-                        <div className="mt-3 rounded-xl border border-orange-200 bg-surface/80 p-3 text-xs font-semibold leading-5 text-orange-700">
-                            Không tìm thấy đơn đặt tương ứng. Cần hỏi lại khách mã đặt chỗ chính xác.
-                        </div>
-                    ) : (
-                        <p className="mt-2 text-xs font-semibold text-outline">Ticket này không yêu cầu đối soát đơn đặt.</p>
+                    {linkedBooking && (
+                        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-100">
+                            Đã khớp
+                        </span>
+                    )}
+                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                    <span className="material-symbols-outlined mt-0.5 text-[18px] text-outline">confirmation_number</span>
+                    {hasDetails && (
+                        <button
+                            type="button"
+                            onClick={() => setExpanded((v) => !v)}
+                            aria-expanded={expanded}
+                            aria-label={expanded ? 'Thu gọn thông tin đơn đặt' : 'Mở rộng thông tin đơn đặt'}
+                            className="grid h-6 w-6 place-items-center rounded-full text-outline transition hover:bg-surface/80 hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        >
+                            <span className={`material-symbols-outlined text-[18px] transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true">
+                                expand_more
+                            </span>
+                        </button>
                     )}
                 </div>
-                <span className="material-symbols-outlined mt-0.5 text-[18px] text-outline">confirmation_number</span>
             </div>
+
+            {hasDetails && expanded && (
+                linkedBooking && bookingStatus && paymentStatus ? (
+                    <div className="mt-4 space-y-3">
+                        <div>
+                            <p className="line-clamp-2 text-sm font-black leading-5 text-slate-950">{linkedBooking.tourName}</p>
+                            <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-semibold text-on-surface-variant">
+                                <span>Khởi hành {fmtDate(linkedBooking.departureDate ?? linkedBooking.tourStartDate)}</span>
+                                <span className="text-outline">·</span>
+                                <span>{linkedBooking.tourDuration}</span>
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="rounded-xl bg-surface/80 p-2.5">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Đơn hàng</p>
+                                <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black ring-1 ${bookingStatus.tone}`}>
+                                    {bookingStatus.label}
+                                </span>
+                            </div>
+                            <div className="rounded-xl bg-surface/80 p-2.5">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Thanh toán</p>
+                                <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black ring-1 ${paymentStatus.tone}`}>
+                                    {paymentStatus.label}
+                                </span>
+                            </div>
+                            <div className="rounded-xl bg-surface/80 p-2.5">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Số khách</p>
+                                <p className="mt-1 text-sm font-black text-slate-950">{linkedBooking.numberOfPeople}</p>
+                            </div>
+                            <div className="rounded-xl bg-surface/80 p-2.5">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-outline">Tổng tiền</p>
+                                <p className="mt-1 text-sm font-black text-slate-950">{fmtMoney(linkedBooking.totalPrice)}</p>
+                            </div>
+                        </div>
+                        <Link
+                            href={`./bookings?search=${encodeURIComponent(linkedBooking.bookingCode)}`}
+                            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-black text-on-primary transition hover:bg-primary-container focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+                        >
+                            Mở đơn đặt
+                            <span className="material-symbols-outlined text-[17px]">open_in_new</span>
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="mt-3 rounded-xl border border-orange-200 bg-surface/80 p-3 text-xs font-semibold leading-5 text-orange-700">
+                        Không tìm thấy đơn đặt tương ứng. Cần hỏi lại khách mã đặt chỗ chính xác.
+                    </div>
+                )
+            )}
+            {!hasDetails && (
+                <p className="mt-2 text-xs font-semibold text-outline">Ticket này không yêu cầu đối soát đơn đặt.</p>
+            )}
         </div>
     );
 }

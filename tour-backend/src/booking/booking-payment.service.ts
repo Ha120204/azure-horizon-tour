@@ -11,7 +11,11 @@ import { PaymentService } from '../payment/payment.service';
 import { MailService } from '../mail/mail.service';
 import { AssistedDraftService } from './assisted-draft.service';
 import type { TransactionClient } from './types';
-import { getErrorMessage } from './helpers/booking-helpers';
+import {
+  getErrorMessage,
+  formatVnDate,
+  formatVnDateTime,
+} from './helpers/booking-helpers';
 import { AdminNotificationService } from '../admin-notification/admin-notification.service';
 import type {
   ConfirmInStoreDto,
@@ -172,7 +176,7 @@ export class BookingPaymentService {
           customerName: fullBooking.user.fullName,
           bookingCode: fullBooking.bookingCode,
           tourName: fullBooking.tour.name,
-          startDate: fullBooking.tour.startDate.toLocaleDateString('vi-VN'),
+          startDate: formatVnDate(fullBooking.tour.startDate),
           duration: fullBooking.tour.duration,
           numberOfPeople: fullBooking.numberOfPeople,
           totalPrice: `${fullBooking.totalPrice.toLocaleString('vi-VN')}₫`,
@@ -491,7 +495,7 @@ export class BookingPaymentService {
       : null;
     const transferredAtText =
       transferredAt && !Number.isNaN(transferredAt.getTime())
-        ? transferredAt.toLocaleString('vi-VN')
+        ? formatVnDateTime(transferredAt)
         : null;
     const issueDetails = [
       'Khách báo đã chuyển khoản nhưng hệ thống chưa ghi nhận.',

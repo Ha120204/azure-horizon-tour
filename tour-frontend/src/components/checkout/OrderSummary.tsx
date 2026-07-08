@@ -231,14 +231,14 @@ export default function OrderSummary({
 
     return (
         <div className="lg:col-span-4 sticky top-28">
-            <div className="bg-white rounded-2xl ambient-shadow border border-outline-variant/20 overflow-hidden flex flex-col">
-                <div className="bg-surface-container-low p-6 border-b border-outline-variant/20">
+            <div className="bg-white rounded-2xl ambient-shadow border border-outline-variant/20 overflow-hidden flex flex-col max-h-[calc(100vh-7.5rem)]">
+                <div className="shrink-0 bg-surface-container-low p-6 border-b border-outline-variant/20">
                     <h2 className="font-headline text-lg font-bold text-on-surface flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary">receipt_long</span>
                         {t('checkout.orderSummary')}
                     </h2>
                 </div>
-                <div className="p-6 space-y-6">
+                <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
                     {/* Tour Info */}
                     <div className="flex gap-4 items-start">
                         <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-xl shrink-0 shadow-sm overflow-hidden">
@@ -451,9 +451,11 @@ export default function OrderSummary({
                             </div>
                         )}
                     </div>
+                </div>
 
+                <div className="shrink-0 space-y-4 border-t border-outline-variant/20 bg-white p-6">
                     {/* Total */}
-                    <div className="pt-4 mt-2 border-t-2 border-primary/10">
+                    <div>
                         {appliedVoucher && (
                             <div className="flex justify-between items-center mb-2 text-sm">
                                 <span className="text-on-surface-variant">{t('checkout.subtotal')}</span>

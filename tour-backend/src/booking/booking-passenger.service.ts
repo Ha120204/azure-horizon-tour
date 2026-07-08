@@ -19,6 +19,7 @@ import {
   isPassengerComplete,
   normalizePassengerType,
   validatePassengerAgeVsType,
+  formatVnDate,
 } from './helpers/booking-helpers';
 
 @Injectable()
@@ -216,7 +217,7 @@ export class BookingPassengerService {
           resourceType: 'Booking',
           resourceId: booking.id,
           title: 'Đơn sắp khởi hành còn thiếu thông tin hành khách',
-          body: `Đơn ${booking.bookingCode} còn ${incompleteCount} hành khách chưa có thông tin — cần đôn đốc/điền hộ trước ${deadline.toLocaleDateString('vi-VN')}.`,
+          body: `Đơn ${booking.bookingCode} còn ${incompleteCount} hành khách chưa có thông tin — cần đôn đốc/điền hộ trước ${formatVnDate(deadline)}.`,
           href: '/admin/bookings',
           severity: 'warning',
           targetRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'],
@@ -241,9 +242,9 @@ export class BookingPassengerService {
             customerName: contact?.fullName?.trim() || booking.user.fullName || 'Quy khach',
             bookingCode: booking.bookingCode,
             tourName: booking.tour.name,
-            startDate: departureDate.toLocaleDateString('vi-VN'),
+            startDate: formatVnDate(departureDate),
             incompleteCount,
-            deadlineText: deadline.toLocaleDateString('vi-VN'),
+            deadlineText: formatVnDate(deadline),
             bookingUrl: `${frontendUrl}/vi/my-bookings/${booking.id}#passenger-details`,
           });
           const sentNow = new Date();
@@ -326,9 +327,9 @@ export class BookingPassengerService {
         customerName: contact?.fullName?.trim() || booking.user.fullName || 'Quy khach',
         bookingCode: booking.bookingCode,
         tourName: booking.tour.name,
-        startDate: departureDate.toLocaleDateString('vi-VN'),
+        startDate: formatVnDate(departureDate),
         incompleteCount,
-        deadlineText: deadline.toLocaleDateString('vi-VN'),
+        deadlineText: formatVnDate(deadline),
         bookingUrl: `${frontendUrl}/vi/my-bookings/${booking.id}#passenger-details`,
       });
     }

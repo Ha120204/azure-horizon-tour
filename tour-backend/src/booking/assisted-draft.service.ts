@@ -37,6 +37,8 @@ import {
   getPassengerTotal,
   getSaleAdjustedUnitPrice,
   formatMoney,
+  formatVnDate,
+  formatVnDateTime,
   getPassengerBreakdown,
   generateBookingCode,
   generateAssistedDraftCode,
@@ -557,7 +559,7 @@ export class AssistedDraftService {
       customerName:
         booking.assistedDraft?.customerName || booking.user.fullName,
       tourName: booking.tour.name,
-      startDate: booking.tour.startDate.toLocaleDateString('vi-VN'),
+      startDate: formatVnDate(booking.tour.startDate),
       duration: booking.tour.duration,
       passengerBreakdown: getPassengerBreakdown(
         booking.passengers,
@@ -568,7 +570,7 @@ export class AssistedDraftService {
         booking.discountAmount > 0
           ? formatMoney(booking.discountAmount)
           : undefined,
-      deadlineText: `trước ${holdExpiresAt.toLocaleString('vi-VN')}`,
+      deadlineText: `trước ${formatVnDateTime(holdExpiresAt)}`,
     };
 
     let paymentRequest: PaymentLinkResult;

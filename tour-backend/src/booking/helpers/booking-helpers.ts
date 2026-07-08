@@ -438,6 +438,16 @@ export function formatMoney(amount: number): string {
   return `${Math.round(amount).toLocaleString('vi-VN')} đ`;
 }
 
+// Server chạy ở UTC (VPS/Docker không set TZ) — toLocaleString('vi-VN') mặc định
+// dùng giờ hệ thống nên lệch 7 tiếng so với giờ Việt Nam. Luôn ép timeZone rõ ràng.
+export function formatVnDateTime(date: Date): string {
+  return date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
+export function formatVnDate(date: Date): string {
+  return date.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
 export function getPassengerBreakdown(
   passengers: unknown,
   fallbackPeople: number,

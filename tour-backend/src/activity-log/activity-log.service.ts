@@ -255,7 +255,7 @@ export class ActivityLogService {
         const headers = ['ID', 'Thời gian', 'Hành động', 'Tài nguyên', 'Đối tượng', 'Mô tả', 'Người dùng', 'Email', 'Vai trò', 'IP'];
         const rows = data.map(log => [
             log.id,
-            new Date(log.createdAt).toLocaleString('vi-VN'),
+            new Date(log.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
             log.action,
             log.resource,
             log.targetName || '',
